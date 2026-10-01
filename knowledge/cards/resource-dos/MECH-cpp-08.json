@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-cpp-08",
+  "family": "RESOURCE-DOS",
+  "title": "远端控制分配: new[]/容器预留受攻击者控制",
+  "preconditions": [
+    "远端控制分配: new[]/容器预留受攻击者控制"
+  ],
+  "dangerous_transitions": [
+    "远端控制分配: new[]/容器预留受攻击者控制"
+  ],
+  "sink_semantics": [
+    "new[] 攻击者控制长度"
+  ],
+  "counterevidence": [
+    "A guard dominates the sensitive operation for every relevant path.",
+    "The effective principal cannot control the source or the impact is not security relevant.",
+    "容器自动增长的累积量级以对象图内部急切分配为准 (成员缓冲/嵌套对象) | 顶层对象尺寸低估 3-4 个数量级的形态必须按构造器链枚举"
+  ],
+  "language_applicability": [
+    "cpp"
+  ],
+  "verification_recipe": [
+    "Trace the relevant source cue to the new[] 攻击者控制长度 operation.",
+    "Establish attacker control, effective principal, guards, and security impact.",
+    "Test the listed counterevidence and record source anchors for every edge."
+  ],
+  "provenance": [
+    "PROV-cpp-08-8ec4cab236fa"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "seeded"
+}

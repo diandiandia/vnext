@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-python-04",
+  "family": "INJECTION",
+  "title": "CWE-94 Code Injection",
+  "preconditions": [
+    "外部输入被当作代码生成/执行"
+  ],
+  "dangerous_transitions": [
+    "外部输入被当作代码生成/执行"
+  ],
+  "sink_semantics": [
+    "eval/动态代码加载点"
+  ],
+  "counterevidence": [
+    "A guard dominates the sensitive operation for every relevant path.",
+    "The effective principal cannot control the source or the impact is not security relevant.",
+    "动态代码入口即信任边界"
+  ],
+  "language_applicability": [
+    "python"
+  ],
+  "verification_recipe": [
+    "Trace the relevant source cue to the eval/动态代码加载点 operation.",
+    "Establish attacker control, effective principal, guards, and security impact.",
+    "Test the listed counterevidence and record source anchors for every edge."
+  ],
+  "provenance": [
+    "PROV-python-04-bafb75e1127c"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "seeded"
+}

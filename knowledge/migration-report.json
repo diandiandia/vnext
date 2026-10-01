@@ -1,0 +1,346 @@
+{
+  "schema_version": "1.0",
+  "portfolio_version": "portfolio-2026-09-v1",
+  "publish_state": "approved",
+  "languages": {
+    "c": {
+      "source_candidates": 19,
+      "selected_issue_ids": [
+        "c-issue-01",
+        "c-issue-02",
+        "c-issue-03",
+        "c-issue-04",
+        "c-issue-05",
+        "c-issue-06",
+        "c-issue-07",
+        "c-issue-08",
+        "c-issue-09",
+        "c-issue-10"
+      ],
+      "primary_cwe_count": 10,
+      "evidence_states": {
+        "battle_observed": 5,
+        "seeded": 5
+      },
+      "excluded_for_project_tokens": [],
+      "excluded_for_semantic_scope": {},
+      "excluded_false_positive_lessons": {}
+    },
+    "cpp": {
+      "source_candidates": 12,
+      "selected_issue_ids": [
+        "cpp-issue-01",
+        "cpp-issue-02",
+        "cpp-issue-03",
+        "cpp-issue-04",
+        "cpp-issue-05",
+        "cpp-issue-06",
+        "cpp-issue-07",
+        "cpp-issue-08",
+        "cpp-issue-09",
+        "cpp-issue-10"
+      ],
+      "primary_cwe_count": 10,
+      "evidence_states": {
+        "seeded": 10
+      },
+      "excluded_for_project_tokens": [],
+      "excluded_for_semantic_scope": {},
+      "excluded_false_positive_lessons": {}
+    },
+    "csharp": {
+      "source_candidates": 13,
+      "selected_issue_ids": [
+        "csharp-issue-01",
+        "csharp-issue-02",
+        "csharp-issue-03",
+        "csharp-issue-04",
+        "csharp-issue-05",
+        "csharp-issue-06",
+        "csharp-issue-07",
+        "csharp-issue-08",
+        "csharp-issue-09",
+        "csharp-issue-10"
+      ],
+      "primary_cwe_count": 10,
+      "evidence_states": {
+        "seeded": 10
+      },
+      "excluded_for_project_tokens": [],
+      "excluded_for_semantic_scope": {},
+      "excluded_false_positive_lessons": {}
+    },
+    "go": {
+      "source_candidates": 18,
+      "selected_issue_ids": [
+        "go-issue-01",
+        "go-issue-02",
+        "go-issue-03",
+        "go-issue-04",
+        "go-issue-05",
+        "go-issue-06",
+        "go-issue-07",
+        "go-issue-08",
+        "go-issue-09",
+        "go-issue-10"
+      ],
+      "primary_cwe_count": 10,
+      "evidence_states": {
+        "seeded": 4,
+        "battle_observed": 6
+      },
+      "excluded_for_project_tokens": [],
+      "excluded_for_semantic_scope": {},
+      "excluded_false_positive_lessons": {
+        "INV-go-018": "counterevidence/false-positive lesson (ReadFile slice bounds use capacity), not a vulnerability mechanism"
+      }
+    },
+    "java": {
+      "source_candidates": 21,
+      "selected_issue_ids": [
+        "java-issue-01",
+        "java-issue-02",
+        "java-issue-03",
+        "java-issue-04",
+        "java-issue-05",
+        "java-issue-06",
+        "java-issue-07",
+        "java-issue-08",
+        "java-issue-09",
+        "java-issue-10"
+      ],
+      "primary_cwe_count": 10,
+      "evidence_states": {
+        "seeded": 3,
+        "battle_observed": 7
+      },
+      "excluded_for_project_tokens": [],
+      "excluded_for_semantic_scope": {},
+      "excluded_false_positive_lessons": {}
+    },
+    "rust": {
+      "source_candidates": 12,
+      "selected_issue_ids": [
+        "rust-issue-01",
+        "rust-issue-02",
+        "rust-issue-03",
+        "rust-issue-04",
+        "rust-issue-05",
+        "rust-issue-06",
+        "rust-issue-07",
+        "rust-issue-08",
+        "rust-issue-09",
+        "rust-issue-10"
+      ],
+      "primary_cwe_count": 10,
+      "evidence_states": {
+        "seeded": 10
+      },
+      "excluded_for_project_tokens": [],
+      "excluded_for_semantic_scope": {},
+      "excluded_false_positive_lessons": {}
+    },
+    "python": {
+      "source_candidates": 13,
+      "selected_issue_ids": [
+        "python-issue-01",
+        "python-issue-02",
+        "python-issue-03",
+        "python-issue-04",
+        "python-issue-05",
+        "python-issue-06",
+        "python-issue-07",
+        "python-issue-08",
+        "python-issue-09",
+        "python-issue-10"
+      ],
+      "primary_cwe_count": 10,
+      "evidence_states": {
+        "seeded": 10
+      },
+      "excluded_for_project_tokens": [],
+      "excluded_for_semantic_scope": {},
+      "excluded_false_positive_lessons": {}
+    },
+    "javascript": {
+      "source_candidates": 12,
+      "selected_issue_ids": [
+        "javascript-issue-01",
+        "javascript-issue-02",
+        "javascript-issue-03",
+        "javascript-issue-04",
+        "javascript-issue-05",
+        "javascript-issue-06",
+        "javascript-issue-07",
+        "javascript-issue-08",
+        "javascript-issue-09",
+        "javascript-issue-10"
+      ],
+      "primary_cwe_count": 10,
+      "evidence_states": {
+        "seeded": 10
+      },
+      "excluded_for_project_tokens": [],
+      "excluded_for_semantic_scope": {},
+      "excluded_false_positive_lessons": {}
+    },
+    "kotlin": {
+      "source_candidates": 11,
+      "selected_issue_ids": [
+        "kotlin-issue-01",
+        "kotlin-issue-02",
+        "kotlin-issue-03",
+        "kotlin-issue-04",
+        "kotlin-issue-05",
+        "kotlin-issue-06",
+        "kotlin-issue-07",
+        "kotlin-issue-08",
+        "kotlin-issue-09",
+        "kotlin-issue-10"
+      ],
+      "primary_cwe_count": 10,
+      "evidence_states": {
+        "seeded": 10
+      },
+      "excluded_for_project_tokens": [],
+      "excluded_for_semantic_scope": {},
+      "excluded_false_positive_lessons": {}
+    },
+    "scala": {
+      "source_candidates": 11,
+      "selected_issue_ids": [
+        "scala-issue-01",
+        "scala-issue-02",
+        "scala-issue-03",
+        "scala-issue-04",
+        "scala-issue-05",
+        "scala-issue-06",
+        "scala-issue-07",
+        "scala-issue-08",
+        "scala-issue-09",
+        "scala-issue-10"
+      ],
+      "primary_cwe_count": 10,
+      "evidence_states": {
+        "seeded": 10
+      },
+      "excluded_for_project_tokens": [],
+      "excluded_for_semantic_scope": {},
+      "excluded_false_positive_lessons": {}
+    },
+    "php": {
+      "source_candidates": 12,
+      "selected_issue_ids": [
+        "php-issue-01",
+        "php-issue-02",
+        "php-issue-03",
+        "php-issue-04",
+        "php-issue-05",
+        "php-issue-06",
+        "php-issue-07",
+        "php-issue-08",
+        "php-issue-09",
+        "php-issue-10"
+      ],
+      "primary_cwe_count": 10,
+      "evidence_states": {
+        "seeded": 10
+      },
+      "excluded_for_project_tokens": [],
+      "excluded_for_semantic_scope": {},
+      "excluded_false_positive_lessons": {}
+    },
+    "ruby": {
+      "source_candidates": 13,
+      "selected_issue_ids": [
+        "ruby-issue-01",
+        "ruby-issue-02",
+        "ruby-issue-03",
+        "ruby-issue-04",
+        "ruby-issue-05",
+        "ruby-issue-06",
+        "ruby-issue-07",
+        "ruby-issue-08",
+        "ruby-issue-09",
+        "ruby-issue-10"
+      ],
+      "primary_cwe_count": 10,
+      "evidence_states": {
+        "seeded": 10
+      },
+      "excluded_for_project_tokens": [],
+      "excluded_for_semantic_scope": {},
+      "excluded_false_positive_lessons": {}
+    },
+    "swift": {
+      "source_candidates": 11,
+      "selected_issue_ids": [
+        "swift-issue-01",
+        "swift-issue-02",
+        "swift-issue-03",
+        "swift-issue-04",
+        "swift-issue-05",
+        "swift-issue-06",
+        "swift-issue-07",
+        "swift-issue-08",
+        "swift-issue-09",
+        "swift-issue-10"
+      ],
+      "primary_cwe_count": 10,
+      "evidence_states": {
+        "seeded": 10
+      },
+      "excluded_for_project_tokens": [],
+      "excluded_for_semantic_scope": {},
+      "excluded_false_positive_lessons": {}
+    },
+    "shell": {
+      "source_candidates": 11,
+      "selected_issue_ids": [
+        "shell-issue-01",
+        "shell-issue-02",
+        "shell-issue-03",
+        "shell-issue-04",
+        "shell-issue-05",
+        "shell-issue-06",
+        "shell-issue-07",
+        "shell-issue-08",
+        "shell-issue-09",
+        "shell-issue-10"
+      ],
+      "primary_cwe_count": 10,
+      "evidence_states": {
+        "seeded": 10
+      },
+      "excluded_for_project_tokens": [],
+      "excluded_for_semantic_scope": {
+        "INV-shell-003": "generic no-shell command-injection row overlaps shell-native interpreter injection; replaced by an explicitly seeded shell word-splitting mechanism",
+        "INV-shell-009": "generic access-control category lacks shell-specific source/sink semantics",
+        "INV-shell-010": "generic authorization category lacks shell-specific source/sink semantics",
+        "INV-shell-011": "web-style user-controlled object-key authorization is not a portable shell mechanism"
+      },
+      "excluded_false_positive_lessons": {}
+    },
+    "typescript": {
+      "source_candidates": 10,
+      "selected_issue_ids": [
+        "typescript-issue-01",
+        "typescript-issue-02",
+        "typescript-issue-03",
+        "typescript-issue-04",
+        "typescript-issue-05",
+        "typescript-issue-06",
+        "typescript-issue-07",
+        "typescript-issue-08",
+        "typescript-issue-09",
+        "typescript-issue-10"
+      ],
+      "evidence_states": {
+        "seeded": 10
+      },
+      "excluded_for_project_tokens": []
+    }
+  },
+  "excluded_project_specific_entries": [],
+  "typescript_derivation": "javascript patterns; marked seeded and runtime-specific pitfalls added"
+}

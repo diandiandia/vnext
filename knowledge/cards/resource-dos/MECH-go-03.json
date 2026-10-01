@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-go-03",
+  "family": "RESOURCE-DOS",
+  "title": "管理面配置装载端点无界整读 (修复残留形态)",
+  "preconditions": [
+    "同库其他端点已封顶而本端点未封顶 = 修复的不完全覆盖残留"
+  ],
+  "dangerous_transitions": [
+    "同库其他端点已封顶而本端点未封顶 = 修复的不完全覆盖残留"
+  ],
+  "sink_semantics": [
+    "配置装载 handler 的 io.Copy/ReadAll 无 MaxBytesReader"
+  ],
+  "counterevidence": [
+    "A guard dominates the sensitive operation for every relevant path.",
+    "The effective principal cannot control the source or the impact is not security relevant.",
+    "端点级字节预算必须与功能面逐一对照, 不能以'同功能端点已封顶'推定"
+  ],
+  "language_applicability": [
+    "go"
+  ],
+  "verification_recipe": [
+    "Trace the relevant source cue to the 配置装载 handler 的 io.Copy/ReadAll 无 MaxBytesReader operation.",
+    "Establish attacker control, effective principal, guards, and security impact.",
+    "Test the listed counterevidence and record source anchors for every edge."
+  ],
+  "provenance": [
+    "PROV-go-03-f53f1a5a4a64"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "battle_observed"
+}

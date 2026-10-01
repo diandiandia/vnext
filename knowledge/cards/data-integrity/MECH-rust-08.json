@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-rust-08",
+  "family": "DATA-INTEGRITY",
+  "title": "CWE-20 Improper Input Validation",
+  "preconditions": [
+    "输入校验缺失或不足"
+  ],
+  "dangerous_transitions": [
+    "输入校验缺失或不足"
+  ],
+  "sink_semantics": [
+    "外部输入消费点"
+  ],
+  "counterevidence": [
+    "A guard dominates the sensitive operation for every relevant path.",
+    "The effective principal cannot control the source or the impact is not security relevant.",
+    "输入校验与消费点同层"
+  ],
+  "language_applicability": [
+    "rust"
+  ],
+  "verification_recipe": [
+    "Trace the relevant source cue to the 外部输入消费点 operation.",
+    "Establish attacker control, effective principal, guards, and security impact.",
+    "Test the listed counterevidence and record source anchors for every edge."
+  ],
+  "provenance": [
+    "PROV-rust-08-855dee12c572"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "seeded"
+}

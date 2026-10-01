@@ -1,0 +1,349 @@
+{
+  "schema_version": "1.0",
+  "profile_id": "PROFILE-c-portfolio-2026-09-v1",
+  "language_id": "c",
+  "portfolio_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "entries": [
+    {
+      "issue_id": "c-issue-01",
+      "rank": 1,
+      "title": "解析器边界计算: 长度/索引字段驱动内存访问",
+      "family": "MEMORY-SAFETY",
+      "weakness_refs": [
+        "CWE-787"
+      ],
+      "mechanism_card_ids": [
+        "MECH-c-01"
+      ],
+      "source_cues": [
+        "解析器边界计算: 长度/索引字段驱动内存访问"
+      ],
+      "sink_cues": [
+        "长度字段驱动的 memcpy/索引"
+      ],
+      "language_pitfalls": [
+        "长度字段极值 + 截断矩阵实证是声称类强制 (parser_fuzz 模板) | 有符号下溢语义保留/边界指针语义在 stub 复刻时必须逐字保留 | 序列化/反序列化读取器的尺寸计算必须 size_t 且逐项溢出检查; 计数 ≤ 剩余输入/单元素最小占用——int 算术回绕 = 小分配大写入"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "长度字段极值 + 截断矩阵实证是声称类强制 (parser_fuzz 模板) | 有符号下溢语义保留/边界指针语义在 stub 复刻时必须逐字保留 | 序列化/反序列化读取器的尺寸计算必须 size_t 且逐项溢出检查; 计数 ≤ 剩余输入/单元素最小占用——int 算术回绕 = 小分配大写入"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the 长度字段驱动的 memcpy/索引 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-c-01-0c6b344c8af4"
+      ]
+    },
+    {
+      "issue_id": "c-issue-02",
+      "rank": 2,
+      "title": "CWE-416 Use After Free",
+      "family": "MEMORY-SAFETY",
+      "weakness_refs": [
+        "CWE-416"
+      ],
+      "mechanism_card_ids": [
+        "MECH-c-02"
+      ],
+      "source_cues": [
+        "释放后使用: 悬垂指针被解引用"
+      ],
+      "sink_cues": [
+        "释放点与后续解引用点"
+      ],
+      "language_pitfalls": [
+        "释放后引用计数/所有权转移逐点核对"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "释放后引用计数/所有权转移逐点核对"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the 释放点与后续解引用点 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-c-02-35cdac3effbb"
+      ]
+    },
+    {
+      "issue_id": "c-issue-03",
+      "rank": 3,
+      "title": "CWE-125 Out-of-bounds Read",
+      "family": "MEMORY-SAFETY",
+      "weakness_refs": [
+        "CWE-125"
+      ],
+      "mechanism_card_ids": [
+        "MECH-c-03"
+      ],
+      "source_cues": [
+        "边界外读取: 索引/长度越界访问"
+      ],
+      "sink_cues": [
+        "缓冲读点: 索引/长度驱动读取"
+      ],
+      "language_pitfalls": [
+        "索引上界与缓冲长度同源核对"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "索引上界与缓冲长度同源核对"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the 缓冲读点: 索引/长度驱动读取 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-c-03-8787d2d2bd51"
+      ]
+    },
+    {
+      "issue_id": "c-issue-04",
+      "rank": 4,
+      "title": "CWE-476 NULL Pointer Dereference",
+      "family": "MEMORY-SAFETY",
+      "weakness_refs": [
+        "CWE-476"
+      ],
+      "mechanism_card_ids": [
+        "MECH-c-04"
+      ],
+      "source_cues": [
+        "空指针解引用"
+      ],
+      "sink_cues": [
+        "指针解引用点(缺空检查)"
+      ],
+      "language_pitfalls": [
+        "解引用前空检查或前置不变量"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "解引用前空检查或前置不变量"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the 指针解引用点(缺空检查) operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-c-04-b2a7cc3b3f1e"
+      ]
+    },
+    {
+      "issue_id": "c-issue-05",
+      "rank": 5,
+      "title": "CWE-120 Classic Buffer Overflow",
+      "family": "MEMORY-SAFETY",
+      "weakness_refs": [
+        "CWE-120"
+      ],
+      "mechanism_card_ids": [
+        "MECH-c-05"
+      ],
+      "source_cues": [
+        "缓冲拷贝未检查输入大小"
+      ],
+      "sink_cues": [
+        "定长缓冲拷贝点: strcpy/gets 族"
+      ],
+      "language_pitfalls": [
+        "拷贝长度≤目标容量必须机械可证"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "拷贝长度≤目标容量必须机械可证"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the 定长缓冲拷贝点: strcpy/gets 族 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-c-05-cbd1d6beea7e"
+      ]
+    },
+    {
+      "issue_id": "c-issue-06",
+      "rank": 6,
+      "title": "CWE-121 Stack-based Buffer Overflow",
+      "family": "MEMORY-SAFETY",
+      "weakness_refs": [
+        "CWE-121"
+      ],
+      "mechanism_card_ids": [
+        "MECH-c-06"
+      ],
+      "source_cues": [
+        "栈缓冲溢出: 无界拷贝"
+      ],
+      "sink_cues": [
+        "栈缓冲拷贝点"
+      ],
+      "language_pitfalls": [
+        "栈缓冲拷贝长度检查"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "栈缓冲拷贝长度检查"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the 栈缓冲拷贝点 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-c-06-a83b4ffa7942"
+      ]
+    },
+    {
+      "issue_id": "c-issue-07",
+      "rank": 7,
+      "title": "资源门禁强制点=计数分配器包装层: 裸 malloc/mmap/第三方分配器站点逐一枚举——限额类缺陷的旁路族",
+      "family": "RESOURCE-DOS",
+      "weakness_refs": [
+        "CWE-789"
+      ],
+      "mechanism_card_ids": [
+        "MECH-c-07"
+      ],
+      "source_cues": [
+        "资源门禁强制点=计数分配器包装层: 裸 malloc/mmap/第三方分配器站点逐一枚举——限额类缺陷的旁路族"
+      ],
+      "sink_cues": [
+        "malloc 家族"
+      ],
+      "language_pitfalls": [
+        "分配请求 ≠ 资源耗尽: 提交内存受输入限制时判 Low (PREC-ALLOC-VIRTUAL-001) | 累积型 (逐块预留) 与一次性分配的量级判定不同 | 子执行上下文 (worker/线程/子 rt) 的资源参数继承矩阵逐项核对; 哨兵值 (0/-1/非法) 语义 fail-open 还是 fail-closed"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "分配请求 ≠ 资源耗尽: 提交内存受输入限制时判 Low (PREC-ALLOC-VIRTUAL-001) | 累积型 (逐块预留) 与一次性分配的量级判定不同 | 子执行上下文 (worker/线程/子 rt) 的资源参数继承矩阵逐项核对; 哨兵值 (0/-1/非法) 语义 fail-open 还是 fail-closed"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the malloc 家族 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-c-07-5c595fa8611f"
+      ]
+    },
+    {
+      "issue_id": "c-issue-08",
+      "rank": 8,
+      "title": "vendored 状态机: 续接分支/暂停恢复语义",
+      "family": "STATE",
+      "weakness_refs": [
+        "CWE-696"
+      ],
+      "mechanism_card_ids": [
+        "MECH-c-08"
+      ],
+      "source_cues": [
+        "vendored 状态机: 续接分支/暂停恢复语义"
+      ],
+      "sink_cues": [
+        "状态机转移点"
+      ],
+      "language_pitfalls": [
+        "『死代码/不可达』类阻断对 vendored 状态机必须做状态机级复核 (逐状态转移行核实) | 续接分支被 verifier 判死代码为假的高发形态"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "『死代码/不可达』类阻断对 vendored 状态机必须做状态机级复核 (逐状态转移行核实) | 续接分支被 verifier 判死代码为假的高发形态"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the 状态机转移点 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-c-08-45e1fa089a3c"
+      ]
+    },
+    {
+      "issue_id": "c-issue-09",
+      "rank": 9,
+      "title": "集群同步协议默认无认证 (无 secret 机制载体)",
+      "family": "AUTHN",
+      "weakness_refs": [
+        "CWE-306"
+      ],
+      "mechanism_card_ids": [
+        "MECH-c-09"
+      ],
+      "source_cues": [
+        "集群同步协议默认无认证 (无 secret 机制载体)"
+      ],
+      "sink_cues": [
+        "入站同步监听的三段纯文本握手 (版本/主机名/对端名)"
+      ],
+      "language_pitfalls": [
+        "判据: 配置启用即攻击面; '无认证是可选关闭的默认' 与 '无认证机制载体' 是两种强度——grep 全文件无 secret/sign/hmac 标识符才可下后者结论"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "判据: 配置启用即攻击面; '无认证是可选关闭的默认' 与 '无认证机制载体' 是两种强度——grep 全文件无 secret/sign/hmac 标识符才可下后者结论"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the 入站同步监听的三段纯文本握手 (版本/主机名/对端名) operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-c-09-2ebdb946a155"
+      ]
+    },
+    {
+      "issue_id": "c-issue-10",
+      "rank": 10,
+      "title": "协议滥用节流阈值默认 0=fail-open (上游 opt-in 加固)",
+      "family": "RESOURCE-DOS",
+      "weakness_refs": [
+        "CWE-770"
+      ],
+      "mechanism_card_ids": [
+        "MECH-c-10"
+      ],
+      "source_cues": [
+        "协议滥用节流阈值默认 0=fail-open (上游 opt-in 加固)"
+      ],
+      "sink_cues": [
+        "glitch 计数 + thres&&门控的强制路径"
+      ],
+      "language_pitfalls": [
+        "量级驱动权判据: 默认配置 sink 零强制效果 + 每事件成本为协议固有处理 → 不得报 remote 级 DoS, 按防御规避内核/加固缺口口径 (CK-MAGNITUDE-OWNERSHIP)"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "量级驱动权判据: 默认配置 sink 零强制效果 + 每事件成本为协议固有处理 → 不得报 remote 级 DoS, 按防御规避内核/加固缺口口径 (CK-MAGNITUDE-OWNERSHIP)"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the glitch 计数 + thres&&门控的强制路径 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-c-10-7a2cfe267ebb"
+      ]
+    }
+  ]
+}

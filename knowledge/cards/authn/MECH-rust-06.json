@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-rust-06",
+  "family": "AUTHN",
+  "title": "CWE-863 Incorrect Authorization",
+  "preconditions": [
+    "授权判定错误(对象/角色归属错配)"
+  ],
+  "dangerous_transitions": [
+    "授权判定错误(对象/角色归属错配)"
+  ],
+  "sink_semantics": [
+    "授权判定分支"
+  ],
+  "counterevidence": [
+    "A guard dominates the sensitive operation for every relevant path.",
+    "The effective principal cannot control the source or the impact is not security relevant.",
+    "授权对象/角色归属逐点核对"
+  ],
+  "language_applicability": [
+    "rust"
+  ],
+  "verification_recipe": [
+    "Trace the relevant source cue to the 授权判定分支 operation.",
+    "Establish attacker control, effective principal, guards, and security impact.",
+    "Test the listed counterevidence and record source anchors for every edge."
+  ],
+  "provenance": [
+    "PROV-rust-06-cc94ad89c24a"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "seeded"
+}

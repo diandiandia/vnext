@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-java-03",
+  "family": "INJECTION",
+  "title": "日志注入: 用户可控值进日志记录 (控制字符/伪造记录行/敏感头)",
+  "preconditions": [
+    "用户可控值 (client_id/用户名/URL 参数) 写入日志无消毒; 访问日志记录敏感头 (Authorization/Cookie)"
+  ],
+  "dangerous_transitions": [
+    "用户可控值 (client_id/用户名/URL 参数) 写入日志无消毒; 访问日志记录敏感头 (Authorization/Cookie)"
+  ],
+  "sink_semantics": [
+    "logger 调用点 + 用户可控参数; access log 头记录点"
+  ],
+  "counterevidence": [
+    "A guard dominates the sensitive operation for every relevant path.",
+    "The effective principal cannot control the source or the impact is not security relevant.",
+    "消毒修复常单点——同族其他日志调用点未消毒是 fix-variant 形态; access log 掩码默认空列表 = 无掩码"
+  ],
+  "language_applicability": [
+    "java"
+  ],
+  "verification_recipe": [
+    "Trace the relevant source cue to the logger 调用点 + 用户可控参数; access log 头记录点 operation.",
+    "Establish attacker control, effective principal, guards, and security impact.",
+    "Test the listed counterevidence and record source anchors for every edge."
+  ],
+  "provenance": [
+    "PROV-java-03-10ac0766e0e0"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "battle_observed"
+}

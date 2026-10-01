@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-java-09",
+  "family": "RESOURCE-DOS",
+  "title": "无界集合累积: 分页参数直通 skip/limit 无钳制 (java 形态)",
+  "preconditions": [
+    "HTTP 分页参数 (first/max) 直通 skip/limit 无上界钳制; skip-before-limit 顺序的放大杠杆; provider 侧全量物化在 limit 之前"
+  ],
+  "dangerous_transitions": [
+    "HTTP 分页参数 (first/max) 直通 skip/limit 无上界钳制; skip-before-limit 顺序的放大杠杆; provider 侧全量物化在 limit 之前"
+  ],
+  "sink_semantics": [
+    "skip/limit 流操作点; provider 全量遍历点"
+  ],
+  "counterevidence": [
+    "A guard dominates the sensitive operation for every relevant path.",
+    "The effective principal cannot control the source or the impact is not security relevant.",
+    "first 是独立放大杠杆 (skip 施加于 limit 之前); 只钳 max 不钳 first 的常规缓解不完整; 默认请求 (max=10) 也强制全量遍历的形态"
+  ],
+  "language_applicability": [
+    "java"
+  ],
+  "verification_recipe": [
+    "Trace the relevant source cue to the skip/limit 流操作点; provider 全量遍历点 operation.",
+    "Establish attacker control, effective principal, guards, and security impact.",
+    "Test the listed counterevidence and record source anchors for every edge."
+  ],
+  "provenance": [
+    "PROV-java-09-e1b20d9776d4"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "battle_observed"
+}

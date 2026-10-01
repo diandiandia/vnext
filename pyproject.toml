@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "reachable-audit-vnext"
+version = "0.1.0"
+description = "Campaign-scale orchestration core for reachable vulnerability audits"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "Proprietary"}
+dependencies = []
+
+[project.scripts]
+reachable-audit = "reachable_audit.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+pythonpath = ["src"]

@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-javascript-05",
+  "family": "RESOURCE-DOS",
+  "title": "CWE-770 Allocation of Resources Without Limits or Throttling",
+  "preconditions": [
+    "资源分配无上限或无节流"
+  ],
+  "dangerous_transitions": [
+    "资源分配无上限或无节流"
+  ],
+  "sink_semantics": [
+    "分配/队列/累积点"
+  ],
+  "counterevidence": [
+    "A guard dominates the sensitive operation for every relevant path.",
+    "The effective principal cannot control the source or the impact is not security relevant.",
+    "上限/节流在累积点之前"
+  ],
+  "language_applicability": [
+    "javascript"
+  ],
+  "verification_recipe": [
+    "Trace the relevant source cue to the 分配/队列/累积点 operation.",
+    "Establish attacker control, effective principal, guards, and security impact.",
+    "Test the listed counterevidence and record source anchors for every edge."
+  ],
+  "provenance": [
+    "PROV-javascript-05-2dd583a7c9f1"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "seeded"
+}

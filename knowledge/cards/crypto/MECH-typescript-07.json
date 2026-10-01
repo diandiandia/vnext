@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-typescript-07",
+  "family": "CRYPTO",
+  "title": "Unsafe cryptographic algorithm or parameter selection in a TypeScript runtime",
+  "preconditions": [
+    "request/config values select algorithm, digest, key, IV, or mode",
+    "serialized keys/parameters cross a runtime trust boundary"
+  ],
+  "dangerous_transitions": [
+    "untrusted algorithm/parameter choice reaches a cryptographic primitive",
+    "weak mode or reused nonce is accepted by configuration"
+  ],
+  "sink_semantics": [
+    "node:crypto createCipheriv/createDecipheriv/createSign/createVerify",
+    "WebCrypto subtle.importKey/sign/verify algorithm dictionaries"
+  ],
+  "counterevidence": [
+    "Algorithm and parameter choices are fixed or allowlisted with validated key/nonce constraints."
+  ],
+  "language_applicability": [
+    "typescript"
+  ],
+  "verification_recipe": [
+    "Trace algorithm and parameter sources to the exact Node/WebCrypto primitive.",
+    "Check key length, mode, nonce uniqueness, tag verification, and error behavior."
+  ],
+  "provenance": [
+    "PROV-typescript-07-3b70ea627f79"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "seeded"
+}

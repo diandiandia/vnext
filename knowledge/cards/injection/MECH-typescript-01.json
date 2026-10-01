@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-typescript-01",
+  "family": "INJECTION",
+  "title": "Node.js child_process command construction from untrusted input",
+  "preconditions": [
+    "HTTP/RPC/message values flow into command arguments",
+    "TypeScript values cross erased type annotations or JavaScript interop"
+  ],
+  "dangerous_transitions": [
+    "attacker-controlled value is concatenated into a shell command",
+    "shell:true is selected or inherited at the process boundary"
+  ],
+  "sink_semantics": [
+    "node:child_process exec/execSync command string",
+    "execFile/spawn options including shell, argv, and executable path"
+  ],
+  "counterevidence": [
+    "Only a fixed executable is invoked with a fixed argv structure, shell:false, and validated values."
+  ],
+  "language_applicability": [
+    "typescript"
+  ],
+  "verification_recipe": [
+    "Trace untrusted values to child_process APIs and identify the exact API/overload/options.",
+    "Verify shell behavior, argument boundaries, executable selection, and platform-specific quoting.",
+    "Use a harmless sentinel command in an isolated harness and compare an argv-based negative control."
+  ],
+  "provenance": [
+    "PROV-typescript-01-75034d880527"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "seeded"
+}

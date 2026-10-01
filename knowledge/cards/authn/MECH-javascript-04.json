@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-javascript-04",
+  "family": "AUTHN",
+  "title": "CWE-862 Missing Authorization",
+  "preconditions": [
+    "敏感操作缺授权检查"
+  ],
+  "dangerous_transitions": [
+    "敏感操作缺授权检查"
+  ],
+  "sink_semantics": [
+    "敏感操作处理函数入口"
+  ],
+  "counterevidence": [
+    "A guard dominates the sensitive operation for every relevant path.",
+    "The effective principal cannot control the source or the impact is not security relevant.",
+    "缺授权≠设计意图——核实敏感操作清单"
+  ],
+  "language_applicability": [
+    "javascript"
+  ],
+  "verification_recipe": [
+    "Trace the relevant source cue to the 敏感操作处理函数入口 operation.",
+    "Establish attacker control, effective principal, guards, and security impact.",
+    "Test the listed counterevidence and record source anchors for every edge."
+  ],
+  "provenance": [
+    "PROV-javascript-04-0e1034170db7"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "seeded"
+}

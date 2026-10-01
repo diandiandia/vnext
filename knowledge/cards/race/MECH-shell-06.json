@@ -1,0 +1,33 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-shell-06",
+  "family": "RACE",
+  "title": "Filesystem check-then-use race in a privileged shell workflow",
+  "preconditions": [
+    "A path is tested/stat'ed and later opened, renamed, removed, or executed"
+  ],
+  "dangerous_transitions": [
+    "A path is tested/stat'ed and later opened, renamed, removed, or executed"
+  ],
+  "sink_semantics": [
+    "test/[[ -e ]]/stat followed by redirection, cp, mv, rm, chmod, or execution"
+  ],
+  "counterevidence": [
+    "Check whether an attacker can replace a path component or symlink between check and use; quoting alone does not prevent races."
+  ],
+  "language_applicability": [
+    "shell"
+  ],
+  "verification_recipe": [
+    "Trace the language-specific source cue to test/[[ -e ]]/stat followed by redirection, cp, mv, rm, chmod, or execution.",
+    "Establish attacker control, effective principal, guarding order, and security impact.",
+    "Test the stated language-specific counterevidence against source and runtime behavior."
+  ],
+  "provenance": [
+    "PROV-shell-06-9ce4379b3a02"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "seeded"
+}

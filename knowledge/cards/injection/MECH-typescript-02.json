@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-typescript-02",
+  "family": "INJECTION",
+  "title": "Dynamic code evaluation from untrusted TypeScript runtime values",
+  "preconditions": [
+    "untrusted data reaches an evaluation or module-loading input",
+    "generated JavaScript runtime values bypass static TypeScript types"
+  ],
+  "dangerous_transitions": [
+    "untrusted text is transformed into executable source",
+    "a dynamic evaluator consumes attacker-controlled source or code fragments"
+  ],
+  "sink_semantics": [
+    "eval and Function constructors",
+    "node:vm runIn* APIs and dynamic code-generation APIs"
+  ],
+  "counterevidence": [
+    "Only fixed reviewed source is evaluated and untrusted input remains data."
+  ],
+  "language_applicability": [
+    "typescript"
+  ],
+  "verification_recipe": [
+    "Trace attacker-controlled bytes through decoding, templating, and code generation to the evaluator.",
+    "Distinguish data arguments from source text and inspect sandbox/realm boundaries.",
+    "Use a harmless expression sentinel and a non-evaluating control."
+  ],
+  "provenance": [
+    "PROV-typescript-02-35ad011af30b"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "seeded"
+}

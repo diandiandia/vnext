@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-c-10",
+  "family": "RESOURCE-DOS",
+  "title": "协议滥用节流阈值默认 0=fail-open (上游 opt-in 加固)",
+  "preconditions": [
+    "协议滥用节流阈值默认 0=fail-open (上游 opt-in 加固)"
+  ],
+  "dangerous_transitions": [
+    "协议滥用节流阈值默认 0=fail-open (上游 opt-in 加固)"
+  ],
+  "sink_semantics": [
+    "glitch 计数 + thres&&门控的强制路径"
+  ],
+  "counterevidence": [
+    "A guard dominates the sensitive operation for every relevant path.",
+    "The effective principal cannot control the source or the impact is not security relevant.",
+    "量级驱动权判据: 默认配置 sink 零强制效果 + 每事件成本为协议固有处理 → 不得报 remote 级 DoS, 按防御规避内核/加固缺口口径 (CK-MAGNITUDE-OWNERSHIP)"
+  ],
+  "language_applicability": [
+    "c"
+  ],
+  "verification_recipe": [
+    "Trace the relevant source cue to the glitch 计数 + thres&&门控的强制路径 operation.",
+    "Establish attacker control, effective principal, guards, and security impact.",
+    "Test the listed counterevidence and record source anchors for every edge."
+  ],
+  "provenance": [
+    "PROV-c-10-7a2cfe267ebb"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "battle_observed"
+}

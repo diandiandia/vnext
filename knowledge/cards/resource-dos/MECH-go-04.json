@@ -1,0 +1,33 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-go-04",
+  "family": "RESOURCE-DOS",
+  "title": "Go HTTP middleware buffers complete responses without a size budget",
+  "preconditions": [
+    "Response interception, logging, or template middleware buffers a complete response without a byte limit"
+  ],
+  "dangerous_transitions": [
+    "Response interception, logging, or template middleware buffers a complete response without a byte limit"
+  ],
+  "sink_semantics": [
+    "HTTP response recorder or middleware response-body buffer"
+  ],
+  "counterevidence": [
+    "A limit applied after accumulation does not bound peak memory; distinguish attacker-controlled growth from a hardening-only concern."
+  ],
+  "language_applicability": [
+    "go"
+  ],
+  "verification_recipe": [
+    "Trace the language-specific source cue to HTTP response recorder or middleware response-body buffer.",
+    "Establish attacker control, effective principal, guarding order, and security impact.",
+    "Test the stated language-specific counterevidence against source and runtime behavior."
+  ],
+  "provenance": [
+    "PROV-go-04-cc4c0d65a003"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "battle_observed"
+}

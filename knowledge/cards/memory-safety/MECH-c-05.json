@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-c-05",
+  "family": "MEMORY-SAFETY",
+  "title": "CWE-120 Classic Buffer Overflow",
+  "preconditions": [
+    "缓冲拷贝未检查输入大小"
+  ],
+  "dangerous_transitions": [
+    "缓冲拷贝未检查输入大小"
+  ],
+  "sink_semantics": [
+    "定长缓冲拷贝点: strcpy/gets 族"
+  ],
+  "counterevidence": [
+    "A guard dominates the sensitive operation for every relevant path.",
+    "The effective principal cannot control the source or the impact is not security relevant.",
+    "拷贝长度≤目标容量必须机械可证"
+  ],
+  "language_applicability": [
+    "c"
+  ],
+  "verification_recipe": [
+    "Trace the relevant source cue to the 定长缓冲拷贝点: strcpy/gets 族 operation.",
+    "Establish attacker control, effective principal, guards, and security impact.",
+    "Test the listed counterevidence and record source anchors for every edge."
+  ],
+  "provenance": [
+    "PROV-c-05-cbd1d6beea7e"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "seeded"
+}

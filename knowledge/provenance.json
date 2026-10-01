@@ -1,0 +1,2871 @@
+{
+  "schema_version": "1.0",
+  "records": {
+    "PROV-c-01-0c6b344c8af4": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-c-003",
+      "source_digest_basis": {
+        "id": "INV-c-003",
+        "lang": "c",
+        "title": "解析器边界计算: 长度/索引字段驱动内存访问",
+        "family": "MEMORY-SAFETY",
+        "cwe": [
+          "CWE-787"
+        ],
+        "pattern": "解析器边界计算: 长度/索引字段驱动内存访问",
+        "sink_hint": "长度字段驱动的 memcpy/索引",
+        "pitfall": "长度字段极值 + 截断矩阵实证是声称类强制 (parser_fuzz 模板) | 有符号下溢语义保留/边界指针语义在 stub 复刻时必须逐字保留 | 序列化/反序列化读取器的尺寸计算必须 size_t 且逐项溢出检查; 计数 ≤ 剩余输入/单元素最小占用——int 算术回绕 = 小分配大写入"
+      },
+      "source_digest": "sha256:0c6b344c8af449b4e96bd58e2e8720f410280f5f63b0bea1ff716dd137ff6dca",
+      "evidence_state": "battle_observed",
+      "review_status": "approved"
+    },
+    "PROV-c-02-35cdac3effbb": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-c-009",
+      "source_digest_basis": {
+        "id": "INV-c-009",
+        "lang": "c",
+        "title": "CWE-416 Use After Free",
+        "family": "MEMORY-SAFETY",
+        "cwe": [
+          "CWE-416"
+        ],
+        "pattern": "释放后使用: 悬垂指针被解引用",
+        "sink_hint": "释放点与后续解引用点",
+        "pitfall": "释放后引用计数/所有权转移逐点核对"
+      },
+      "source_digest": "sha256:35cdac3effbb704cdc808949f879f0da51bbbfe46d366ed0859e36321853c293",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-c-03-8787d2d2bd51": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-c-010",
+      "source_digest_basis": {
+        "id": "INV-c-010",
+        "lang": "c",
+        "title": "CWE-125 Out-of-bounds Read",
+        "family": "MEMORY-SAFETY",
+        "cwe": [
+          "CWE-125"
+        ],
+        "pattern": "边界外读取: 索引/长度越界访问",
+        "sink_hint": "缓冲读点: 索引/长度驱动读取",
+        "pitfall": "索引上界与缓冲长度同源核对"
+      },
+      "source_digest": "sha256:8787d2d2bd51014a975a9afe87a92302e4e3a9d251459bf11e5ce97cc243026d",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-c-04-b2a7cc3b3f1e": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-c-012",
+      "source_digest_basis": {
+        "id": "INV-c-012",
+        "lang": "c",
+        "title": "CWE-476 NULL Pointer Dereference",
+        "family": "MEMORY-SAFETY",
+        "cwe": [
+          "CWE-476"
+        ],
+        "pattern": "空指针解引用",
+        "sink_hint": "指针解引用点(缺空检查)",
+        "pitfall": "解引用前空检查或前置不变量"
+      },
+      "source_digest": "sha256:b2a7cc3b3f1ee62480228c984fba6ee29758ad6d01c9f922698907d3aeb015d1",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-c-05-cbd1d6beea7e": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-c-011",
+      "source_digest_basis": {
+        "id": "INV-c-011",
+        "lang": "c",
+        "title": "CWE-120 Classic Buffer Overflow",
+        "family": "MEMORY-SAFETY",
+        "cwe": [
+          "CWE-120"
+        ],
+        "pattern": "缓冲拷贝未检查输入大小",
+        "sink_hint": "定长缓冲拷贝点: strcpy/gets 族",
+        "pitfall": "拷贝长度≤目标容量必须机械可证"
+      },
+      "source_digest": "sha256:cbd1d6beea7e90840497fb9692d49ede77ebf8f054b91dabc9ca221b0efd76b8",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-c-06-a83b4ffa7942": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-c-013",
+      "source_digest_basis": {
+        "id": "INV-c-013",
+        "lang": "c",
+        "title": "CWE-121 Stack-based Buffer Overflow",
+        "family": "MEMORY-SAFETY",
+        "cwe": [
+          "CWE-121"
+        ],
+        "pattern": "栈缓冲溢出: 无界拷贝",
+        "sink_hint": "栈缓冲拷贝点",
+        "pitfall": "栈缓冲拷贝长度检查"
+      },
+      "source_digest": "sha256:a83b4ffa79428e44a0f3869a3750af872254b52189d7df2b601c08e84333440a",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-c-07-5c595fa8611f": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-c-006",
+      "source_digest_basis": {
+        "id": "INV-c-006",
+        "lang": "c",
+        "title": "资源门禁强制点=计数分配器包装层: 裸 malloc/mmap/第三方分配器站点逐一枚举——限额类缺陷的旁路族",
+        "family": "RESOURCE-DOS",
+        "cwe": [
+          "CWE-789"
+        ],
+        "pattern": "资源门禁强制点=计数分配器包装层: 裸 malloc/mmap/第三方分配器站点逐一枚举——限额类缺陷的旁路族",
+        "sink_hint": "malloc 家族",
+        "pitfall": "分配请求 ≠ 资源耗尽: 提交内存受输入限制时判 Low (PREC-ALLOC-VIRTUAL-001) | 累积型 (逐块预留) 与一次性分配的量级判定不同 | 子执行上下文 (worker/线程/子 rt) 的资源参数继承矩阵逐项核对; 哨兵值 (0/-1/非法) 语义 fail-open 还是 fail-closed"
+      },
+      "source_digest": "sha256:5c595fa8611fe8c08d833d832d2e394ae6306e714956a41499ff3ea09306316c",
+      "evidence_state": "battle_observed",
+      "review_status": "approved"
+    },
+    "PROV-c-08-45e1fa089a3c": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-c-007",
+      "source_digest_basis": {
+        "id": "INV-c-007",
+        "lang": "c",
+        "title": "vendored 状态机: 续接分支/暂停恢复语义",
+        "family": "STATE",
+        "cwe": [
+          "CWE-696"
+        ],
+        "pattern": "vendored 状态机: 续接分支/暂停恢复语义",
+        "sink_hint": "状态机转移点",
+        "pitfall": "『死代码/不可达』类阻断对 vendored 状态机必须做状态机级复核 (逐状态转移行核实) | 续接分支被 verifier 判死代码为假的高发形态"
+      },
+      "source_digest": "sha256:45e1fa089a3ce4792bde29e44fd2211076d11f35eb3ed6f157a717458312addb",
+      "evidence_state": "battle_observed",
+      "review_status": "approved"
+    },
+    "PROV-c-09-2ebdb946a155": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-c-016",
+      "source_digest_basis": {
+        "id": "INV-c-016",
+        "lang": "c",
+        "title": "集群同步协议默认无认证 (无 secret 机制载体)",
+        "family": "AUTHN",
+        "cwe": [
+          "CWE-306"
+        ],
+        "pattern": "集群同步协议默认无认证 (无 secret 机制载体)",
+        "sink_hint": "入站同步监听的三段纯文本握手 (版本/主机名/对端名)",
+        "pitfall": "判据: 配置启用即攻击面; '无认证是可选关闭的默认' 与 '无认证机制载体' 是两种强度——grep 全文件无 secret/sign/hmac 标识符才可下后者结论"
+      },
+      "source_digest": "sha256:2ebdb946a155a215e00da6e8bf16821dc89bf5327c89cde52d8ce9d07dafa793",
+      "evidence_state": "battle_observed",
+      "review_status": "approved"
+    },
+    "PROV-c-10-7a2cfe267ebb": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-c-017",
+      "source_digest_basis": {
+        "id": "INV-c-017",
+        "lang": "c",
+        "title": "协议滥用节流阈值默认 0=fail-open (上游 opt-in 加固)",
+        "family": "RESOURCE-DOS",
+        "cwe": [
+          "CWE-770"
+        ],
+        "pattern": "协议滥用节流阈值默认 0=fail-open (上游 opt-in 加固)",
+        "sink_hint": "glitch 计数 + thres&&门控的强制路径",
+        "pitfall": "量级驱动权判据: 默认配置 sink 零强制效果 + 每事件成本为协议固有处理 → 不得报 remote 级 DoS, 按防御规避内核/加固缺口口径 (CK-MAGNITUDE-OWNERSHIP)"
+      },
+      "source_digest": "sha256:7a2cfe267ebb3c655d36b222ef3c7b8af6f03a917ec4381e8749cae851076e21",
+      "evidence_state": "battle_observed",
+      "review_status": "approved"
+    },
+    "PROV-cpp-01-c227252f8b8b": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-cpp-001",
+      "source_digest_basis": {
+        "id": "INV-cpp-001",
+        "lang": "cpp",
+        "title": "反序列化器尺寸字段无门: wire 字节解码的长度直接进入分配/写操作",
+        "family": "MEMORY-SAFETY",
+        "cwe": [
+          "CWE-787"
+        ],
+        "pattern": "反序列化器尺寸字段无门: wire 字节解码的长度直接进入分配/写操作",
+        "sink_hint": "GetUint30/varint 解码点",
+        "pitfall": "『快照/缓存为受信输入』是信任模型声明不是代码防御——防御纵深建议仍需尺寸门 (code-cache 侧 size<kHeaderSize 守卫先例) | 乘法回绕必须在分配前检查 (SignedMulOverflow), 回绕后小尺寸分配成立即越界写 | 后置 CHECK 不阻断首块写——检查点在写窗口之后属后置检查形态, 按 CK-POSTOP-INVARIANT 判缺陷"
+      },
+      "source_digest": "sha256:c227252f8b8b3d71490e3ffada0a41adadd143ae2bf8f910abbe356ebf859867",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-cpp-02-b0422205eecc": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-cpp-006",
+      "source_digest_basis": {
+        "id": "INV-cpp-006",
+        "lang": "cpp",
+        "title": "CWE-416 Use After Free",
+        "family": "MEMORY-SAFETY",
+        "cwe": [
+          "CWE-416"
+        ],
+        "pattern": "释放后使用: 悬垂指针被解引用",
+        "sink_hint": "释放点与后续解引用点",
+        "pitfall": "释放后引用计数/所有权转移逐点核对"
+      },
+      "source_digest": "sha256:b0422205eecc3d5a4037b04848133f7f09023978ac521cf10a251e76bc5d8def",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-cpp-03-af070a574c1f": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-cpp-007",
+      "source_digest_basis": {
+        "id": "INV-cpp-007",
+        "lang": "cpp",
+        "title": "CWE-125 Out-of-bounds Read",
+        "family": "MEMORY-SAFETY",
+        "cwe": [
+          "CWE-125"
+        ],
+        "pattern": "边界外读取: 索引/长度越界访问",
+        "sink_hint": "缓冲读点: 索引/长度驱动读取",
+        "pitfall": "索引上界与缓冲长度同源核对"
+      },
+      "source_digest": "sha256:af070a574c1f1621eddf52c702eda4fb772ac124a4f3a87bf034909add0c7934",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-cpp-04-976512724439": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-cpp-009",
+      "source_digest_basis": {
+        "id": "INV-cpp-009",
+        "lang": "cpp",
+        "title": "CWE-476 NULL Pointer Dereference",
+        "family": "MEMORY-SAFETY",
+        "cwe": [
+          "CWE-476"
+        ],
+        "pattern": "空指针解引用",
+        "sink_hint": "指针解引用点(缺空检查)",
+        "pitfall": "解引用前空检查或前置不变量"
+      },
+      "source_digest": "sha256:976512724439ca2725bc7595be66beca071a5d31e759c4e2461f752e8abd4135",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-cpp-05-7ab575d69154": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-cpp-008",
+      "source_digest_basis": {
+        "id": "INV-cpp-008",
+        "lang": "cpp",
+        "title": "CWE-120 Classic Buffer Overflow",
+        "family": "MEMORY-SAFETY",
+        "cwe": [
+          "CWE-120"
+        ],
+        "pattern": "缓冲拷贝未检查输入大小",
+        "sink_hint": "定长缓冲拷贝点: strcpy/gets 族",
+        "pitfall": "拷贝长度≤目标容量必须机械可证"
+      },
+      "source_digest": "sha256:7ab575d69154ddd64e04435e7d4e8acd70c576bb40e451e94e8b1cf13eab6c40",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-cpp-06-a5a2f0f5b7dd": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-cpp-010",
+      "source_digest_basis": {
+        "id": "INV-cpp-010",
+        "lang": "cpp",
+        "title": "CWE-121 Stack-based Buffer Overflow",
+        "family": "MEMORY-SAFETY",
+        "cwe": [
+          "CWE-121"
+        ],
+        "pattern": "栈缓冲溢出: 无界拷贝",
+        "sink_hint": "栈缓冲拷贝点",
+        "pitfall": "栈缓冲拷贝长度检查"
+      },
+      "source_digest": "sha256:a5a2f0f5b7ddb19e5d45d0b1ce32c273119d7c0f3041c44a4739d9353290229f",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-cpp-07-cd92cb693d5a": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-cpp-011",
+      "source_digest_basis": {
+        "id": "INV-cpp-011",
+        "lang": "cpp",
+        "title": "CWE-122 Heap-based Buffer Overflow",
+        "family": "MEMORY-SAFETY",
+        "cwe": [
+          "CWE-122"
+        ],
+        "pattern": "堆缓冲溢出: 无界拷贝",
+        "sink_hint": "堆缓冲拷贝点: 长度未检拷贝",
+        "pitfall": "堆缓冲拷贝长度检查"
+      },
+      "source_digest": "sha256:cd92cb693d5a41bb0319f1f2d37c788dfaf61f0e23606a9c34936f94a7e8da30",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-cpp-08-8ec4cab236fa": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-cpp-002",
+      "source_digest_basis": {
+        "id": "INV-cpp-002",
+        "lang": "cpp",
+        "title": "远端控制分配: new[]/容器预留受攻击者控制",
+        "family": "RESOURCE-DOS",
+        "cwe": [
+          "CWE-789"
+        ],
+        "pattern": "远端控制分配: new[]/容器预留受攻击者控制",
+        "sink_hint": "new[] 攻击者控制长度",
+        "pitfall": "容器自动增长的累积量级以对象图内部急切分配为准 (成员缓冲/嵌套对象) | 顶层对象尺寸低估 3-4 个数量级的形态必须按构造器链枚举"
+      },
+      "source_digest": "sha256:8ec4cab236fa5790abc0e172446f1ae9553796a0a1fe4b3d4f18bd026a81eb44",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-cpp-09-0c2639db4462": {
+      "source_type": "language_specific_seeded_refinement",
+      "source_record_id": "INV-cpp-003",
+      "refinement_id": "cpp-async-lifetime-contract-v1",
+      "source_digest_basis": {
+        "id": "INV-cpp-003",
+        "lang": "cpp",
+        "title": "Asynchronous task object destroyed before worker completion",
+        "family": "STATE",
+        "cwe": [
+          "CWE-696"
+        ],
+        "pattern": "An asynchronous worker retains access to an object that another thread can destroy or reset",
+        "sink_hint": "task lifetime termination, release, or reset while worker execution may still be active",
+        "pitfall": "A documented lifetime contract is counterevidence only if its preconditions are guaranteed and all callers obey them; inspect every API path and caller."
+      },
+      "source_digest": "sha256:0c2639db446203f260cce04465f04050fff46018252f93d31001ef030ec582a0",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-cpp-10-3efc74e5b54e": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-cpp-012",
+      "source_digest_basis": {
+        "id": "INV-cpp-012",
+        "lang": "cpp",
+        "title": "CWE-770 Allocation of Resources Without Limits or Throttling",
+        "family": "RESOURCE-DOS",
+        "cwe": [
+          "CWE-770"
+        ],
+        "pattern": "资源分配无上限或无节流",
+        "sink_hint": "分配/队列/累积点",
+        "pitfall": "上限/节流在累积点之前"
+      },
+      "source_digest": "sha256:3efc74e5b54e1875d4439611ea11317b94b735dcc2cb20f9f2ee79630c3001e3",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-csharp-01-49c950c80d73": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-csharp-003",
+      "source_digest_basis": {
+        "id": "INV-csharp-003",
+        "lang": "csharp",
+        "title": "反序列化输入面: 类型解析受攻击者控制 (多态类型开关)",
+        "family": "INJECTION",
+        "cwe": [
+          "CWE-502"
+        ],
+        "pattern": "反序列化输入面: 类型解析受攻击者控制 (多态类型开关)",
+        "sink_hint": "TypeNameHandling 类类型开关",
+        "pitfall": "默认拒绝/配置接受双侧对照: 默认关闭的开关必须按实际部署配置判定, 不得以代码零值推定 | 『仅受信通道』声称必须给出信源链证据"
+      },
+      "source_digest": "sha256:49c950c80d736032801ec0a20e6b8e7f2fbdacbba975277ecdcbb76b219dc681",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-csharp-02-c52290678b88": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-csharp-012",
+      "source_digest_basis": {
+        "id": "INV-csharp-012",
+        "lang": "csharp",
+        "title": "CWE-78 OS Command Injection",
+        "family": "INJECTION",
+        "cwe": [
+          "CWE-78"
+        ],
+        "pattern": "外部输入进入 OS 命令执行路径",
+        "sink_hint": "system/popen/exec 族调用点",
+        "pitfall": "命令构造与执行分离; 参数数组优先"
+      },
+      "source_digest": "sha256:c52290678b885377eda5d9e9907daf61fd7e955d756de14fd53607f2bd950cff",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-csharp-03-bd7f17c00a35": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-csharp-004",
+      "source_digest_basis": {
+        "id": "INV-csharp-004",
+        "lang": "csharp",
+        "title": "CWE-89 SQL Injection",
+        "family": "INJECTION",
+        "cwe": [
+          "CWE-89"
+        ],
+        "pattern": "外部输入拼接进 SQL 命令字符串",
+        "sink_hint": "SQL 语句构造/执行点",
+        "pitfall": "参数化查询优先; 拼接时必须枚举注入原语"
+      },
+      "source_digest": "sha256:bd7f17c00a355bd77d61a9161212e1d30ab994e09f8d8b744b61ffa2d3029054",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-csharp-04-a9f5ad3a9d03": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-csharp-001",
+      "source_digest_basis": {
+        "id": "INV-csharp-001",
+        "lang": "csharp",
+        "title": "安全配置默认可达性: 鉴权/防护开关键代码零值与实际提交值不一致",
+        "family": "AUTHN",
+        "cwe": [
+          "CWE-306"
+        ],
+        "pattern": "安全配置默认可达性: 鉴权/防护开关键代码零值与实际提交值不一致",
+        "sink_hint": "鉴权开关键",
+        "pitfall": "『默认可达』声称必须引用 shipped-config 盘点 (提交值 vs 代码零值) | 显式关闭也是提交值——不得把显式关闭误读为默认开启"
+      },
+      "source_digest": "sha256:a9f5ad3a9d033e8d911106d76bc1d52ef58072d5b393aa2341b8f58c2b60cda0",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-csharp-05-0724bbab828c": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-csharp-002",
+      "source_digest_basis": {
+        "id": "INV-csharp-002",
+        "lang": "csharp",
+        "title": "模块存在 ≠ 被导入: 依赖注入/动态加载路径的静默失效",
+        "family": "ERROR-HANDLING",
+        "cwe": [
+          "CWE-457"
+        ],
+        "pattern": "模块存在 ≠ 被导入: 依赖注入/动态加载路径的静默失效",
+        "sink_hint": "DI 容器注册点",
+        "pitfall": "broken_edge 类阻断必须核实导入注册链, 不得以模块存在推定 | 启动链正则与扫描器吞错路径双查"
+      },
+      "source_digest": "sha256:0724bbab828c9d0747df49908a9ca7cc701aad0ca2277f23b06aab94c5afc6d9",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-csharp-06-a970cdc89567": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-csharp-009",
+      "source_digest_basis": {
+        "id": "INV-csharp-009",
+        "lang": "csharp",
+        "title": "CWE-862 Missing Authorization",
+        "family": "AUTHN",
+        "cwe": [
+          "CWE-862"
+        ],
+        "pattern": "敏感操作缺授权检查",
+        "sink_hint": "敏感操作处理函数入口",
+        "pitfall": "缺授权≠设计意图——核实敏感操作清单"
+      },
+      "source_digest": "sha256:a970cdc89567daaa549b227401205f6c7909ada0c3605e18ba3fe20837f098a1",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-csharp-07-94ac69bb9f2f": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-csharp-010",
+      "source_digest_basis": {
+        "id": "INV-csharp-010",
+        "lang": "csharp",
+        "title": "CWE-770 Allocation of Resources Without Limits or Throttling",
+        "family": "RESOURCE-DOS",
+        "cwe": [
+          "CWE-770"
+        ],
+        "pattern": "资源分配无上限或无节流",
+        "sink_hint": "分配/队列/累积点",
+        "pitfall": "上限/节流在累积点之前"
+      },
+      "source_digest": "sha256:94ac69bb9f2f37f84234fca28969ba20efa3c10bf5b1711236f55869778099d9",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-csharp-08-adf07676b386": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-csharp-011",
+      "source_digest_basis": {
+        "id": "INV-csharp-011",
+        "lang": "csharp",
+        "title": "CWE-639 Authorization Bypass Through User-Controlled Key",
+        "family": "AUTHN",
+        "cwe": [
+          "CWE-639"
+        ],
+        "pattern": "用户可控键绕过授权(越权)",
+        "sink_hint": "按用户键取资源的查询点",
+        "pitfall": "资源归属键与访问者身份比对"
+      },
+      "source_digest": "sha256:adf07676b386de75a2e576044d21e802c27f76302ea3671ab90986ff1970da03",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-csharp-09-ec538adaeb9b": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-csharp-006",
+      "source_digest_basis": {
+        "id": "INV-csharp-006",
+        "lang": "csharp",
+        "title": "CWE-79 Cross-site Scripting",
+        "family": "WEB",
+        "cwe": [
+          "CWE-79"
+        ],
+        "pattern": "输出未净化的外部数据: 网页生成路径缺转义",
+        "sink_hint": "HTML 输出/模板渲染点",
+        "pitfall": "输出转义必须在渲染边界且覆盖上下文(HTML/属性/JS)"
+      },
+      "source_digest": "sha256:ec538adaeb9b62ecc3bfcd9342358fbefab2467acde2bc1a96e6f936f471d83a",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-csharp-10-cee9d6843700": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-csharp-007",
+      "source_digest_basis": {
+        "id": "INV-csharp-007",
+        "lang": "csharp",
+        "title": "CWE-22 Path Traversal",
+        "family": "WEB",
+        "cwe": [
+          "CWE-22"
+        ],
+        "pattern": "路径名未限制到受限目录: 穿越/跳目录",
+        "sink_hint": "文件路径构造与打开点",
+        "pitfall": "规范化/白名单/根约束三选一必须存在"
+      },
+      "source_digest": "sha256:cee9d684370060b5abcfcda2500acb2bd74ff6bde2f439a994c74a56f55e95d3",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-go-01-d2295c19e20d": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-go-003",
+      "source_digest_basis": {
+        "id": "INV-go-003",
+        "lang": "go",
+        "title": "CWE-78 OS Command Injection",
+        "family": "INJECTION",
+        "cwe": [
+          "CWE-78"
+        ],
+        "pattern": "外部输入进入 OS 命令执行路径",
+        "sink_hint": "system/popen/exec 族调用点",
+        "pitfall": "命令构造与执行分离; 参数数组优先"
+      },
+      "source_digest": "sha256:d2295c19e20da0566e5f38c96ea81510ddf870a29fd16f5fef2aef27e91f638c",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-go-02-ff9f07a88b9f": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-go-011",
+      "source_digest_basis": {
+        "id": "INV-go-011",
+        "lang": "go",
+        "title": "CWE-94 Code Injection",
+        "family": "INJECTION",
+        "cwe": [
+          "CWE-94"
+        ],
+        "pattern": "外部输入被当作代码生成/执行",
+        "sink_hint": "eval/动态代码加载点",
+        "pitfall": "动态代码入口即信任边界"
+      },
+      "source_digest": "sha256:ff9f07a88b9f9136842216f73fb751b8b25135f037775ba89a582b72c7de9028",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-go-03-f53f1a5a4a64": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-go-012",
+      "source_digest_basis": {
+        "id": "INV-go-012",
+        "lang": "go",
+        "title": "管理面配置装载端点无界整读 (修复残留形态)",
+        "family": "RESOURCE-DOS",
+        "cwe": [
+          "CWE-770"
+        ],
+        "pattern": "同库其他端点已封顶而本端点未封顶 = 修复的不完全覆盖残留",
+        "sink_hint": "配置装载 handler 的 io.Copy/ReadAll 无 MaxBytesReader",
+        "pitfall": "端点级字节预算必须与功能面逐一对照, 不能以'同功能端点已封顶'推定"
+      },
+      "source_digest": "sha256:f53f1a5a4a64779aef5d96ce2f552cdd6a08c0757fb83b573eaae47f2dcc6ea5",
+      "evidence_state": "battle_observed",
+      "review_status": "approved"
+    },
+    "PROV-go-04-cc4c0d65a003": {
+      "source_type": "language_specific_seeded_refinement",
+      "source_record_id": "INV-go-013",
+      "refinement_id": "go-http-response-buffer-budget-v1",
+      "source_digest_basis": {
+        "id": "INV-go-013",
+        "lang": "go",
+        "title": "Go HTTP middleware buffers complete responses without a size budget",
+        "family": "RESOURCE-DOS",
+        "cwe": [
+          "CWE-789"
+        ],
+        "pattern": "Response interception, logging, or template middleware buffers a complete response without a byte limit",
+        "sink_hint": "HTTP response recorder or middleware response-body buffer",
+        "pitfall": "A limit applied after accumulation does not bound peak memory; distinguish attacker-controlled growth from a hardening-only concern."
+      },
+      "source_digest": "sha256:cc4c0d65a0030408ed4b608e59a1c0e5e6a364a265447c9ac8fc143158be57ad",
+      "evidence_state": "battle_observed",
+      "review_status": "approved"
+    },
+    "PROV-go-05-8eac230c35b1": {
+      "source_type": "language_specific_seeded_refinement",
+      "source_record_id": "INV-go-014",
+      "refinement_id": "go-query-parse-fail-open-v1",
+      "source_digest_basis": {
+        "id": "INV-go-014",
+        "lang": "go",
+        "title": "Go query parse failure fails open in a routing or authorization decision",
+        "family": "NUMERIC",
+        "cwe": [
+          "CWE-697"
+        ],
+        "pattern": "A query parsing error is converted into a non-match or permissive result used by a routing or authorization gate",
+        "sink_hint": "query parser error handling that feeds a route matcher or access decision",
+        "pitfall": "Check malformed separators and escapes, partial parse results, and whether parse failure denies or accidentally permits the operation."
+      },
+      "source_digest": "sha256:8eac230c35b17611edb9287500255d56815a895fc117243a6622106d2d435ee6",
+      "evidence_state": "battle_observed",
+      "review_status": "approved"
+    },
+    "PROV-go-06-e843c8c64673": {
+      "source_type": "language_specific_seeded_refinement",
+      "source_record_id": "INV-go-015",
+      "refinement_id": "go-listener-cleanup-cwe-404-v1",
+      "source_digest_basis": {
+        "id": "INV-go-015",
+        "lang": "go",
+        "title": "Failed Go service reload leaves a provisional listener running",
+        "family": "ERROR-HANDLING",
+        "cwe": [
+          "CWE-404"
+        ],
+        "pattern": "A failed configuration reload leaves a newly started listener or goroutine active",
+        "sink_hint": "listener/server/goroutine lifecycle cleanup on failed reload paths",
+        "pitfall": "This is resource lifecycle cleanup, not use-after-free; trace every provisional start to rollback/shutdown."
+      },
+      "source_digest": "sha256:e843c8c646731f3d8edd68ee5fc34d25d01b076907d03fa855aa957de4518696",
+      "evidence_state": "battle_observed",
+      "review_status": "approved"
+    },
+    "PROV-go-07-62e6a4db4c97": {
+      "source_type": "language_specific_seeded_refinement",
+      "source_record_id": "CURATED-go-race-001",
+      "refinement_id": "go-goroutine-race-seeded-v1",
+      "source_digest_basis": {
+        "id": "CURATED-go-race-001",
+        "lang": "go",
+        "title": "Unsynchronized shared mutable state across Go goroutines",
+        "family": "RACE",
+        "cwe": [
+          "CWE-362"
+        ],
+        "pattern": "Concurrent goroutines access shared mutable state without a lock, atomic operation, or ownership handoff",
+        "sink_hint": "shared maps, slices, caches, and lifecycle fields crossing goroutine boundaries",
+        "pitfall": "The race detector only covers executed schedules; review all reads/writes and cancellation/close ordering."
+      },
+      "source_digest": "sha256:62e6a4db4c97d64178eb4c9e09131c39e62ca041f0fd084e89961a42eb79eb20",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-go-08-c0dbaf049643": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-go-016",
+      "source_digest_basis": {
+        "id": "INV-go-016",
+        "lang": "go",
+        "title": "配置目录 env 缺失回退 CWD 相对路径 + 写点无 O_NOFOLLOW",
+        "family": "DATA-INTEGRITY",
+        "cwe": [
+          "CWE-59"
+        ],
+        "pattern": "退化 env 几何 + 世界可写 CWD = 本地低权主体预置目录/symlink 链",
+        "sink_hint": "AppConfigDir/AppDataDir 回退 './app'; MkdirAll+WriteFile 无原子替换无跟链防护",
+        "pitfall": "权限位 (0700/0600) 防不住既有 inode 跟链写与异主目录放行; --resume 读回构成完整写→读链"
+      },
+      "source_digest": "sha256:c0dbaf0496437bccb0b88df465eeb1498f94764c4c96b4155d8603fdab4c491f",
+      "evidence_state": "battle_observed",
+      "review_status": "approved"
+    },
+    "PROV-go-09-3c66e3ba5e52": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-go-017",
+      "source_digest_basis": {
+        "id": "INV-go-017",
+        "lang": "go",
+        "title": "高权进程无交互静默安装预置 CA 至系统信任库",
+        "family": "DATA-INTEGRITY",
+        "cwe": [
+          "CWE-20"
+        ],
+        "pattern": "存储中既有 root.crt/root.key 原样采纳无来源校验 + 自动信任安装 = 主机级 MITM 基础",
+        "sink_hint": "truststore.Install 于 app Start 无条件执行 (root 无人工门)",
+        "pitfall": "'交互确认是人工门'的 drop 论据在 root+Linux 无交互场景不成立——按部署形态复核门的存在性"
+      },
+      "source_digest": "sha256:3c66e3ba5e52260412442ce89fe0361ac9c49744af518fc329f2dd23ee69b2b3",
+      "evidence_state": "battle_observed",
+      "review_status": "approved"
+    },
+    "PROV-go-10-2e3ef65c8605": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-go-007",
+      "source_digest_basis": {
+        "id": "INV-go-007",
+        "lang": "go",
+        "title": "CWE-918 Server-Side Request Forgery",
+        "family": "WEB",
+        "cwe": [
+          "CWE-918"
+        ],
+        "pattern": "服务端请求伪造: 外部输入驱动请求目标",
+        "sink_hint": "外部 URL 请求构造点",
+        "pitfall": "请求目标白名单/协议限制"
+      },
+      "source_digest": "sha256:2e3ef65c860545ba3064dcc0ea5119bedf3bafcbfdc2d22ac112082a9a547799",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-java-01-b1203e4bf5d1": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-java-002",
+      "source_digest_basis": {
+        "id": "INV-java-002",
+        "lang": "java",
+        "title": "反序列化输入面: 对象流反序列化受攻击者控制",
+        "family": "INJECTION",
+        "cwe": [
+          "CWE-502"
+        ],
+        "pattern": "反序列化输入面: 对象流反序列化受攻击者控制",
+        "sink_hint": "readObject/ObjectInputStream",
+        "pitfall": "反序列化过滤 (ObjectInputFilter 类) 缺省不启用——『默认防护』声称必须核实启用点 | gadget 链判定按可达类路径枚举, 不得以单类推定"
+      },
+      "source_digest": "sha256:b1203e4bf5d15f66620458bd53798453e51bcbd0ecb3e5aad13218f290804f89",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-java-02-75a0fcea49c5": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-java-013",
+      "source_digest_basis": {
+        "id": "INV-java-013",
+        "lang": "java",
+        "title": "Java 形态内存安全: 越界索引与截断 cast",
+        "family": "MEMORY-SAFETY",
+        "cwe": [
+          "CWE-129"
+        ],
+        "pattern": "枚举 ordinal 下标无界/数值窄化截断/文本构造器绕过校验门禁",
+        "sink_hint": "enumConstants[ordinal]/intValue() 窄化/parse 后下标",
+        "pitfall": "JVM 边界检查把后果限制为 AIOOBE/异常, 但截断 cast 的静默错值无告警——判级按实际后果而非 CWE 族; 结构校验门禁与文本构造器路径不一致即假设"
+      },
+      "source_digest": "sha256:75a0fcea49c5bf9d66b34c135486ab4961a7fde5812010259b8a659689bdb6cd",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-java-03-10ac0766e0e0": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-java-015",
+      "source_digest_basis": {
+        "id": "INV-java-015",
+        "lang": "java",
+        "title": "日志注入: 用户可控值进日志记录 (控制字符/伪造记录行/敏感头)",
+        "family": "INJECTION",
+        "cwe": [
+          "CWE-117"
+        ],
+        "pattern": "用户可控值 (client_id/用户名/URL 参数) 写入日志无消毒; 访问日志记录敏感头 (Authorization/Cookie)",
+        "sink_hint": "logger 调用点 + 用户可控参数; access log 头记录点",
+        "pitfall": "消毒修复常单点——同族其他日志调用点未消毒是 fix-variant 形态; access log 掩码默认空列表 = 无掩码"
+      },
+      "source_digest": "sha256:10ac0766e0e0e698e8278543ef8ee799147d48bb1d871fb42ffa5047bed89ce2",
+      "evidence_state": "battle_observed",
+      "review_status": "approved"
+    },
+    "PROV-java-04-6bd8a77ce8e6": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-java-003",
+      "source_digest_basis": {
+        "id": "INV-java-003",
+        "lang": "java",
+        "title": "CWE-89 SQL Injection",
+        "family": "INJECTION",
+        "cwe": [
+          "CWE-89"
+        ],
+        "pattern": "外部输入拼接进 SQL 命令字符串",
+        "sink_hint": "SQL 语句构造/执行点",
+        "pitfall": "参数化查询优先; 拼接时必须枚举注入原语"
+      },
+      "source_digest": "sha256:6bd8a77ce8e61add913c7e69c4f6bf5e48469682319c026224ed6af631dd770f",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-java-05-898617ca8089": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-java-018",
+      "source_digest_basis": {
+        "id": "INV-java-018",
+        "lang": "java",
+        "title": "空引用/越界解引用: 解析结果零长度元素未防御 (Java 形态 AIOOBE/NPE)",
+        "family": "ERROR-HANDLING",
+        "cwe": [
+          "CWE-476"
+        ],
+        "pattern": "split 后索引未检查长度 (尾随分隔符形态); DOM getFirstChild 空引用; 列表 get(0) 空列表; LDAP 属性值 substring/charAt/parseLong 未校验",
+        "sink_hint": "split/index 点; DOM 节点取值点; 外部数据属性解析点",
+        "pitfall": "Java String.split 移除尾随空串的语义是 AIOOBE 高发形态; 异常逃逸 vs 捕获的分支方向核实"
+      },
+      "source_digest": "sha256:898617ca80896c1dfe09bea96078c40ac5bafbfe22cbc468ea9afa74f6e4064e",
+      "evidence_state": "battle_observed",
+      "review_status": "approved"
+    },
+    "PROV-java-06-cc7ffd42b033": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-java-016",
+      "source_digest_basis": {
+        "id": "INV-java-016",
+        "lang": "java",
+        "title": "信任代理判定 fail-open: 未配置可信地址时恒真 + 客户端自置信任头被采信",
+        "family": "AUTHN",
+        "cwe": [
+          "CWE-290"
+        ],
+        "pattern": "isProxyTrusted 类判定未配置白名单时恒 true; 客户端可自置的信任头 (X-Forwarded-Trusted-Proxy 类) 直接设 true",
+        "sink_hint": "代理信任判定点; 头驱动的证书/身份查找门禁点",
+        "pitfall": "门禁不消费平台可信判定的形态 (平台契约短路); 证书头门禁的关闭条件与平台层加固无法代偿"
+      },
+      "source_digest": "sha256:cc7ffd42b033a0f584eea0b2ab388207a734d7d3fe194640d7e402032971a2ae",
+      "evidence_state": "battle_observed",
+      "review_status": "approved"
+    },
+    "PROV-java-07-b1449e8c6275": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-java-017",
+      "source_digest_basis": {
+        "id": "INV-java-017",
+        "lang": "java",
+        "title": "时序窗口: TOCTOU 检查与消费跨事务分离 / 并发窗口 (竞态窗口+会话过期+重放)",
+        "family": "RACE",
+        "cwe": [
+          "CWE-367"
+        ],
+        "pattern": "检查与撤销写入跨事务分离 (contains 检查→流结束才 put); 持久化旁路在 CAS 判定之外无条件执行; 单次使用语义的占位与消费时序窗口",
+        "sink_hint": "单次消费检查点; 撤销/持久化写入点; 锁获取与释放回调点",
+        "pitfall": "contains 只读检查与 put 原子写的窗口是默认形态——占位写前移是修复方向; 存量对象不受新保护机制覆盖 (开关翻转场景)"
+      },
+      "source_digest": "sha256:b1449e8c6275c0a5e239c79a5bbaea038daad5c90e8c6994b00ca2f9e03fe163",
+      "evidence_state": "battle_observed",
+      "review_status": "approved"
+    },
+    "PROV-java-08-d4d06dd540c1": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-java-019",
+      "source_digest_basis": {
+        "id": "INV-java-019",
+        "lang": "java",
+        "title": "类型混淆: 不可信 claim 强转 (JSON 类型攻击者可控)",
+        "family": "NUMERIC",
+        "cwe": [
+          "CWE-704"
+        ],
+        "pattern": "getOtherClaims 取值直接强转 String 无 instanceof; 验签前使用未验签 claim 字段",
+        "sink_hint": "claim 强转点",
+        "pitfall": "外层 catch 兜底只收敛为 400 不影响鉴权判定——按错误路径缺陷定位"
+      },
+      "source_digest": "sha256:d4d06dd540c11499426718a752dc5a7c621083df99596d648a3c5c34fcdd16f4",
+      "evidence_state": "battle_observed",
+      "review_status": "approved"
+    },
+    "PROV-java-09-e1b20d9776d4": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-java-020",
+      "source_digest_basis": {
+        "id": "INV-java-020",
+        "lang": "java",
+        "title": "无界集合累积: 分页参数直通 skip/limit 无钳制 (java 形态)",
+        "family": "RESOURCE-DOS",
+        "cwe": [
+          "CWE-789"
+        ],
+        "pattern": "HTTP 分页参数 (first/max) 直通 skip/limit 无上界钳制; skip-before-limit 顺序的放大杠杆; provider 侧全量物化在 limit 之前",
+        "sink_hint": "skip/limit 流操作点; provider 全量遍历点",
+        "pitfall": "first 是独立放大杠杆 (skip 施加于 limit 之前); 只钳 max 不钳 first 的常规缓解不完整; 默认请求 (max=10) 也强制全量遍历的形态"
+      },
+      "source_digest": "sha256:e1b20d9776d4921526e0e8c4d4ee0f64882ceac8806e4c77c095bd7472136e5c",
+      "evidence_state": "battle_observed",
+      "review_status": "approved"
+    },
+    "PROV-java-10-e28919f16e43": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-java-021",
+      "source_digest_basis": {
+        "id": "INV-java-021",
+        "lang": "java",
+        "title": "撤销策略未生效: 多层 notBefore/撤销校验维度缺失",
+        "family": "AUTHN",
+        "cwe": [
+          "CWE-303"
+        ],
+        "pattern": "realm/client/user 三级 notBefore 校验不完整的调用点; 撤销策略验证修复后未覆盖的兄弟路径",
+        "sink_hint": "TokenVerifier.withChecks(NotBeforeCheck) 调用点",
+        "pitfall": "同族调用点对比矩阵: 修复后带全维度 vs 未修复缺维度; 无生产调用者的缺陷形态按不可达处理"
+      },
+      "source_digest": "sha256:e28919f16e435d6cdfa66c8cc493a24445b2dc5ceacfa6894ff7ffe9b5b41a0b",
+      "evidence_state": "battle_observed",
+      "review_status": "approved"
+    },
+    "PROV-rust-01-2b0383160b4f": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-rust-001",
+      "source_digest_basis": {
+        "id": "INV-rust-001",
+        "lang": "rust",
+        "title": "unsafe 块边界: 安全不变量在 unsafe 内的自证义务",
+        "family": "MEMORY-SAFETY",
+        "cwe": [
+          "CWE-787"
+        ],
+        "pattern": "unsafe 块边界: 安全不变量在 unsafe 内的自证义务",
+        "sink_hint": "unsafe 块",
+        "pitfall": "内层安全不变量必须在 unsafe 块内自证——『外层已保证』声称必须给出作用域证据 | safe 包 unsafe 的边界检查归属双向核实 | safe Rust 解析器的递归/深度防护以解析器内建上限为机制 (嵌套块深度门), 非 unsafe 问题但仍属该格防护形态"
+      },
+      "source_digest": "sha256:2b0383160b4f6d65482143a1c7274f1f8b0f54c4af3370414777383ab8eab886",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-rust-02-e541f9accacb": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-rust-002",
+      "source_digest_basis": {
+        "id": "INV-rust-002",
+        "lang": "rust",
+        "title": "FFI 边界契约双侧核实: unsafe extern 的指针/长度契约承重在调用侧 (C++ CheckedInt/UTF-8 门) — unsafe 块自证义务的载体是跨语言调用契约而非 rust 侧单边",
+        "family": "MEMORY-SAFETY",
+        "cwe": [
+          "CWE-125"
+        ],
+        "pattern": "FFI 边界契约双侧核实: unsafe extern 的指针/长度契约承重在调用侧 (C++ CheckedInt/UTF-8 门) — unsafe 块自证义务的载体是跨语言调用契约而非 rust 侧单边",
+        "sink_hint": "unsafe 块",
+        "pitfall": "内层安全不变量必须在 unsafe 块内自证——『外层已保证』声称必须给出作用域证据 | safe 包 unsafe 的边界检查归属双向核实 | safe Rust 解析器的递归/深度防护以解析器内建上限为机制 (嵌套块深度门), 非 unsafe 问题但仍属该格防护形态"
+      },
+      "source_digest": "sha256:e541f9accacb3f13c5e24ad036ef02bb45fedd80c998416ee26878b0653064a3",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-rust-03-2cedccbfd155": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-rust-004",
+      "source_digest_basis": {
+        "id": "INV-rust-004",
+        "lang": "rust",
+        "title": "CWE-416 Use After Free",
+        "family": "MEMORY-SAFETY",
+        "cwe": [
+          "CWE-416"
+        ],
+        "pattern": "释放后使用: 悬垂指针被解引用",
+        "sink_hint": "释放点与后续解引用点",
+        "pitfall": "释放后引用计数/所有权转移逐点核对; safe Rust 下多数内存安全类不可达: 审计焦点=unsafe 块/FFI 边界"
+      },
+      "source_digest": "sha256:2cedccbfd155cefa9072c9b9ba956458934adf444a93edf911f9e45c1d03ea5b",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-rust-04-c9682e7af6c4": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-rust-006",
+      "source_digest_basis": {
+        "id": "INV-rust-006",
+        "lang": "rust",
+        "title": "CWE-770 Allocation of Resources Without Limits or Throttling",
+        "family": "RESOURCE-DOS",
+        "cwe": [
+          "CWE-770"
+        ],
+        "pattern": "资源分配无上限或无节流",
+        "sink_hint": "分配/队列/累积点",
+        "pitfall": "上限/节流在累积点之前"
+      },
+      "source_digest": "sha256:c9682e7af6c4714e26e800a867aae5ef20aa22fe4efa08fb2073565f3ab4df94",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-rust-05-5dc072580824": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-rust-009",
+      "source_digest_basis": {
+        "id": "INV-rust-009",
+        "lang": "rust",
+        "title": "CWE-284 Improper Access Control",
+        "family": "AUTHN",
+        "cwe": [
+          "CWE-284"
+        ],
+        "pattern": "访问控制缺失",
+        "sink_hint": "敏感资源访问入口",
+        "pitfall": "访问控制矩阵逐入口核对"
+      },
+      "source_digest": "sha256:5dc072580824a2503fd61c80ef490b6815df7402607c7604b7535b80b297fadb",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-rust-06-cc94ad89c24a": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-rust-010",
+      "source_digest_basis": {
+        "id": "INV-rust-010",
+        "lang": "rust",
+        "title": "CWE-863 Incorrect Authorization",
+        "family": "AUTHN",
+        "cwe": [
+          "CWE-863"
+        ],
+        "pattern": "授权判定错误(对象/角色归属错配)",
+        "sink_hint": "授权判定分支",
+        "pitfall": "授权对象/角色归属逐点核对"
+      },
+      "source_digest": "sha256:cc94ad89c24af6f00f16b9f8882fe69972bcc67d08dab465a5fae7c688634bd2",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-rust-07-65932ff6744f": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-rust-011",
+      "source_digest_basis": {
+        "id": "INV-rust-011",
+        "lang": "rust",
+        "title": "CWE-639 Authorization Bypass Through User-Controlled Key",
+        "family": "AUTHN",
+        "cwe": [
+          "CWE-639"
+        ],
+        "pattern": "用户可控键绕过授权(越权)",
+        "sink_hint": "按用户键取资源的查询点",
+        "pitfall": "资源归属键与访问者身份比对"
+      },
+      "source_digest": "sha256:65932ff6744f5a5b8c20e2890d1ebe5195165f7affb4451dc9f15cbaea822aa9",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-rust-08-855dee12c572": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-rust-007",
+      "source_digest_basis": {
+        "id": "INV-rust-007",
+        "lang": "rust",
+        "title": "CWE-20 Improper Input Validation",
+        "family": "DATA-INTEGRITY",
+        "cwe": [
+          "CWE-20"
+        ],
+        "pattern": "输入校验缺失或不足",
+        "sink_hint": "外部输入消费点",
+        "pitfall": "输入校验与消费点同层"
+      },
+      "source_digest": "sha256:855dee12c5723e1a3026aaaca6a3d60d23fcbdd40d901cfa2f5ac62a661d7e16",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-rust-09-08e18b2d49ed": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-rust-008",
+      "source_digest_basis": {
+        "id": "INV-rust-008",
+        "lang": "rust",
+        "title": "CWE-22 Path Traversal",
+        "family": "WEB",
+        "cwe": [
+          "CWE-22"
+        ],
+        "pattern": "路径名未限制到受限目录: 穿越/跳目录",
+        "sink_hint": "文件路径构造与打开点",
+        "pitfall": "规范化/白名单/根约束三选一必须存在"
+      },
+      "source_digest": "sha256:08e18b2d49edca1498119ac84d3484a7518899cca9bea551690864ccee8c81f4",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-rust-10-fadf8c7fe703": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-rust-012",
+      "source_digest_basis": {
+        "id": "INV-rust-012",
+        "lang": "rust",
+        "title": "CWE-918 Server-Side Request Forgery",
+        "family": "WEB",
+        "cwe": [
+          "CWE-918"
+        ],
+        "pattern": "服务端请求伪造: 外部输入驱动请求目标",
+        "sink_hint": "外部 URL 请求构造点",
+        "pitfall": "请求目标白名单/协议限制"
+      },
+      "source_digest": "sha256:fadf8c7fe703ba840bc1a2fa989385744d4bdc492cf37cb8b3b7a39c9bc06c6f",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-python-01-8399a95adada": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-python-001",
+      "source_digest_basis": {
+        "id": "INV-python-001",
+        "lang": "python",
+        "title": "反序列化输入面: 不可信字节流反序列化为对象图",
+        "family": "INJECTION",
+        "cwe": [
+          "CWE-502"
+        ],
+        "pattern": "反序列化输入面: 不可信字节流反序列化为对象图",
+        "sink_hint": "pickle.loads",
+        "pitfall": "序列化边界 ≠ 信任边界——文件来源/消息队列来源均不可推定受信 | 『仅受信输入』声称必须给出信源链证据行"
+      },
+      "source_digest": "sha256:8399a95adada47b1579562dfb26a601626b646ea2e94cdd1b659212939b765cb",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-python-02-23d153817fed": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-python-002",
+      "source_digest_basis": {
+        "id": "INV-python-002",
+        "lang": "python",
+        "title": "C 扩展边界: 共享 helper/allocator 的边界检查归属",
+        "family": "MEMORY-SAFETY",
+        "cwe": [
+          "CWE-787"
+        ],
+        "pattern": "C 扩展边界: 共享 helper/allocator 的边界检查归属",
+        "sink_hint": "C 扩展模块内存操作",
+        "pitfall": "边界检查必须沿调用链双向核实——被调函数内有检查 ≠ 调用者未挡, 反之亦然 | 判『缺检查/缺上界』前必须 Read 两侧源码并各引证据行"
+      },
+      "source_digest": "sha256:23d153817fed1f94d96f749acf02fe002e17cff92d4636ff09b73b92e7b46d87",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-python-03-b0c47fb57b3d": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-python-009",
+      "source_digest_basis": {
+        "id": "INV-python-009",
+        "lang": "python",
+        "title": "CWE-78 OS Command Injection",
+        "family": "INJECTION",
+        "cwe": [
+          "CWE-78"
+        ],
+        "pattern": "外部输入进入 OS 命令执行路径",
+        "sink_hint": "system/popen/exec 族调用点",
+        "pitfall": "命令构造与执行分离; 参数数组优先"
+      },
+      "source_digest": "sha256:b0c47fb57b3d4d719c0c95a7ef295e3e1720acb598a0903570b1fbd1f9214580",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-python-04-bafb75e1127c": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-python-010",
+      "source_digest_basis": {
+        "id": "INV-python-010",
+        "lang": "python",
+        "title": "CWE-94 Code Injection",
+        "family": "INJECTION",
+        "cwe": [
+          "CWE-94"
+        ],
+        "pattern": "外部输入被当作代码生成/执行",
+        "sink_hint": "eval/动态代码加载点",
+        "pitfall": "动态代码入口即信任边界"
+      },
+      "source_digest": "sha256:bafb75e1127cae32f441343c633892df4c0653ba6ca81a64af3dc132bd448b84",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-python-05-b24c5c389ead": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-python-005",
+      "source_digest_basis": {
+        "id": "INV-python-005",
+        "lang": "python",
+        "title": "CWE-89 SQL Injection",
+        "family": "INJECTION",
+        "cwe": [
+          "CWE-89"
+        ],
+        "pattern": "外部输入拼接进 SQL 命令字符串",
+        "sink_hint": "SQL 语句构造/执行点",
+        "pitfall": "参数化查询优先; 拼接时必须枚举注入原语"
+      },
+      "source_digest": "sha256:b24c5c389eadb61ba97db1816791cdf36849bc78f429c5ec64e2e4b0323d4924",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-python-06-62afad60cf46": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-python-003",
+      "source_digest_basis": {
+        "id": "INV-python-003",
+        "lang": "python",
+        "title": "多帧/多块格式状态机: 逐帧门禁与一次性门禁语义混淆",
+        "family": "STATE",
+        "cwe": [
+          "CWE-841"
+        ],
+        "pattern": "多帧/多块格式状态机: 逐帧门禁与一次性门禁语义混淆",
+        "sink_hint": "逐帧解析循环",
+        "pitfall": "一次性门禁检查 ≠ 状态机重入门禁——逐状态转移行核实 (逐帧/逐块形态) | 跳步/重放/乱序序对依赖必须逐项验证"
+      },
+      "source_digest": "sha256:62afad60cf463d8e9d8d4909219c57f87d55359e524540cf8b6681230e6f3ded",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-python-07-269cf7e01b17": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-python-007",
+      "source_digest_basis": {
+        "id": "INV-python-007",
+        "lang": "python",
+        "title": "CWE-862 Missing Authorization",
+        "family": "AUTHN",
+        "cwe": [
+          "CWE-862"
+        ],
+        "pattern": "敏感操作缺授权检查",
+        "sink_hint": "敏感操作处理函数入口",
+        "pitfall": "缺授权≠设计意图——核实敏感操作清单"
+      },
+      "source_digest": "sha256:269cf7e01b171b4c3c9643524988f7de2914345684f3aabc835442fe26a509bb",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-python-08-2aaebfd0cd36": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-python-013",
+      "source_digest_basis": {
+        "id": "INV-python-013",
+        "lang": "python",
+        "title": "CWE-770 Allocation of Resources Without Limits or Throttling",
+        "family": "RESOURCE-DOS",
+        "cwe": [
+          "CWE-770"
+        ],
+        "pattern": "资源分配无上限或无节流",
+        "sink_hint": "分配/队列/累积点",
+        "pitfall": "上限/节流在累积点之前"
+      },
+      "source_digest": "sha256:2aaebfd0cd36ec0b340f39106ce44ee77bca64377b3c55790993772d2b05b982",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-python-09-0fd8797c0162": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-python-004",
+      "source_digest_basis": {
+        "id": "INV-python-004",
+        "lang": "python",
+        "title": "CWE-79 Cross-site Scripting",
+        "family": "WEB",
+        "cwe": [
+          "CWE-79"
+        ],
+        "pattern": "输出未净化的外部数据: 网页生成路径缺转义",
+        "sink_hint": "HTML 输出/模板渲染点",
+        "pitfall": "输出转义必须在渲染边界且覆盖上下文(HTML/属性/JS)"
+      },
+      "source_digest": "sha256:0fd8797c01620ec5dfebb576f6a8b614f542e58485cfab261398ec97a0324370",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-python-10-d288fe404b07": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-python-006",
+      "source_digest_basis": {
+        "id": "INV-python-006",
+        "lang": "python",
+        "title": "CWE-352 Cross-Site Request Forgery",
+        "family": "WEB",
+        "cwe": [
+          "CWE-352"
+        ],
+        "pattern": "状态变更请求缺跨站请求伪造防护",
+        "sink_hint": "状态变更端点(写操作路由)",
+        "pitfall": "状态变更需同源/令牌校验"
+      },
+      "source_digest": "sha256:d288fe404b0778c06451a0a0f46f5b9b743b60c8f2879711e0a0e0086755b134",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-javascript-01-75034d880527": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-javascript-007",
+      "source_digest_basis": {
+        "id": "INV-javascript-007",
+        "lang": "javascript",
+        "title": "CWE-78 OS Command Injection",
+        "family": "INJECTION",
+        "cwe": [
+          "CWE-78"
+        ],
+        "pattern": "外部输入进入 OS 命令执行路径",
+        "sink_hint": "system/popen/exec 族调用点",
+        "pitfall": "命令构造与执行分离; 参数数组优先"
+      },
+      "source_digest": "sha256:75034d88052703044abc6705c9102d0f170acb7d7cc4c1ae150a1378f1a24539",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-javascript-02-35ad011af30b": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-javascript-008",
+      "source_digest_basis": {
+        "id": "INV-javascript-008",
+        "lang": "javascript",
+        "title": "CWE-94 Code Injection",
+        "family": "INJECTION",
+        "cwe": [
+          "CWE-94"
+        ],
+        "pattern": "外部输入被当作代码生成/执行",
+        "sink_hint": "eval/动态代码加载点",
+        "pitfall": "动态代码入口即信任边界"
+      },
+      "source_digest": "sha256:35ad011af30b580dcd5b58be6dbb7e6d483cefa7268f07259a0699e7a6471f10",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-javascript-03-c676db28071e": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-javascript-002",
+      "source_digest_basis": {
+        "id": "INV-javascript-002",
+        "lang": "javascript",
+        "title": "流式累积无上限: 数据事件逐块累积到内存",
+        "family": "RESOURCE-DOS",
+        "cwe": [
+          "CWE-400"
+        ],
+        "pattern": "流式累积无上限: 数据事件逐块累积到内存",
+        "sink_hint": "socket/stream 'data' 事件累积",
+        "pitfall": "分片到达序不可控——按到达累积的量级必须以上限为界 | 背压缺失 (消费者不停读) 使累积无平台期"
+      },
+      "source_digest": "sha256:c676db28071e8875add03cbbc84ab7e74295ef2248ad65aa4b3b57d5e53e67f6",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-javascript-04-0e1034170db7": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-javascript-005",
+      "source_digest_basis": {
+        "id": "INV-javascript-005",
+        "lang": "javascript",
+        "title": "CWE-862 Missing Authorization",
+        "family": "AUTHN",
+        "cwe": [
+          "CWE-862"
+        ],
+        "pattern": "敏感操作缺授权检查",
+        "sink_hint": "敏感操作处理函数入口",
+        "pitfall": "缺授权≠设计意图——核实敏感操作清单"
+      },
+      "source_digest": "sha256:0e1034170db7472cda5447cbce337689e14a73ede768c80a6576c8538920966a",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-javascript-05-2dd583a7c9f1": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-javascript-010",
+      "source_digest_basis": {
+        "id": "INV-javascript-010",
+        "lang": "javascript",
+        "title": "CWE-770 Allocation of Resources Without Limits or Throttling",
+        "family": "RESOURCE-DOS",
+        "cwe": [
+          "CWE-770"
+        ],
+        "pattern": "资源分配无上限或无节流",
+        "sink_hint": "分配/队列/累积点",
+        "pitfall": "上限/节流在累积点之前"
+      },
+      "source_digest": "sha256:2dd583a7c9f13a4379859412dfebf2510a94e6ee18076af635a74dbdb4c6dacb",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-javascript-06-01ab80f5d762": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-javascript-011",
+      "source_digest_basis": {
+        "id": "INV-javascript-011",
+        "lang": "javascript",
+        "title": "CWE-639 Authorization Bypass Through User-Controlled Key",
+        "family": "AUTHN",
+        "cwe": [
+          "CWE-639"
+        ],
+        "pattern": "用户可控键绕过授权(越权)",
+        "sink_hint": "按用户键取资源的查询点",
+        "pitfall": "资源归属键与访问者身份比对"
+      },
+      "source_digest": "sha256:01ab80f5d762ff8bb387fa0ad172b4876997c05842f33f097b5b7137b1983a26",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-javascript-07-3b70ea627f79": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-javascript-001",
+      "source_digest_basis": {
+        "id": "INV-javascript-001",
+        "lang": "javascript",
+        "title": "加密库参数校验: 算法/密钥参数未白名单化",
+        "family": "CRYPTO",
+        "cwe": [
+          "CWE-327"
+        ],
+        "pattern": "加密库参数校验: 算法/密钥参数未白名单化",
+        "sink_hint": "签名验证入口",
+        "pitfall": "弱算法回退链 (协商降级) 是主判轴——逐降级分支核实 | 『标准用法』声称必须对照库契约 (低阶点校验形态)"
+      },
+      "source_digest": "sha256:3b70ea627f7982119ed3a0853772ef41aa2d046260128735a8d09cf00252738e",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-javascript-08-29f99ec87426": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-javascript-003",
+      "source_digest_basis": {
+        "id": "INV-javascript-003",
+        "lang": "javascript",
+        "title": "CWE-79 Cross-site Scripting",
+        "family": "WEB",
+        "cwe": [
+          "CWE-79"
+        ],
+        "pattern": "输出未净化的外部数据: 网页生成路径缺转义",
+        "sink_hint": "HTML 输出/模板渲染点",
+        "pitfall": "输出转义必须在渲染边界且覆盖上下文(HTML/属性/JS)"
+      },
+      "source_digest": "sha256:29f99ec874264d384d0ed965781b29991c50e9b7a7417764e12b0bbbcae61d0b",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-javascript-09-581bbdb61c2a": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-javascript-004",
+      "source_digest_basis": {
+        "id": "INV-javascript-004",
+        "lang": "javascript",
+        "title": "CWE-352 Cross-Site Request Forgery",
+        "family": "WEB",
+        "cwe": [
+          "CWE-352"
+        ],
+        "pattern": "状态变更请求缺跨站请求伪造防护",
+        "sink_hint": "状态变更端点(写操作路由)",
+        "pitfall": "状态变更需同源/令牌校验"
+      },
+      "source_digest": "sha256:581bbdb61c2ae3ea33f0f570965b5dc608bb48b101a6af6331d44f7817505296",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-javascript-10-f1a0f1cd915a": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-javascript-006",
+      "source_digest_basis": {
+        "id": "INV-javascript-006",
+        "lang": "javascript",
+        "title": "CWE-22 Path Traversal",
+        "family": "WEB",
+        "cwe": [
+          "CWE-22"
+        ],
+        "pattern": "路径名未限制到受限目录: 穿越/跳目录",
+        "sink_hint": "文件路径构造与打开点",
+        "pitfall": "规范化/白名单/根约束三选一必须存在"
+      },
+      "source_digest": "sha256:f1a0f1cd915af708969ff6f96afeee8d96a7f78dfd87ca5470e7cb12f85581fd",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-kotlin-01-bdc34c4a1fde": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-kotlin-003",
+      "source_digest_basis": {
+        "id": "INV-kotlin-003",
+        "lang": "kotlin",
+        "title": "CWE-502 Deserialization of Untrusted Data",
+        "family": "INJECTION",
+        "cwe": [
+          "CWE-502"
+        ],
+        "pattern": "不可信数据反序列化",
+        "sink_hint": "反序列化读取入口",
+        "pitfall": "反序列化输入按不可信处理"
+      },
+      "source_digest": "sha256:bdc34c4a1fdef12ece1ad9ba2b4dd41d0f75b106d57f28570a3ead005e46622b",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-kotlin-02-a4ed4e4bc4bd": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-kotlin-002",
+      "source_digest_basis": {
+        "id": "INV-kotlin-002",
+        "lang": "kotlin",
+        "title": "CWE-89 SQL Injection",
+        "family": "INJECTION",
+        "cwe": [
+          "CWE-89"
+        ],
+        "pattern": "外部输入拼接进 SQL 命令字符串",
+        "sink_hint": "SQL 语句构造/执行点",
+        "pitfall": "参数化查询优先; 拼接时必须枚举注入原语"
+      },
+      "source_digest": "sha256:a4ed4e4bc4bd32005f5570dd9297a34c0d18f7ca24d191d9c3cb727f228e5b58",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-kotlin-03-78c19640d6a0": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-kotlin-001",
+      "source_digest_basis": {
+        "id": "INV-kotlin-001",
+        "lang": "kotlin",
+        "title": "流式接收累积无上限: 协程通道/流逐块累积",
+        "family": "RESOURCE-DOS",
+        "cwe": [
+          "CWE-400"
+        ],
+        "pattern": "流式接收累积无上限: 协程通道/流逐块累积",
+        "sink_hint": "Channel.receive 循环",
+        "pitfall": "协程取消与累积交互: 取消点缺失使累积持续 | 帧上限必须对每个分片帧 (含 continuation) 强制"
+      },
+      "source_digest": "sha256:78c19640d6a0a238f09dffb672988b664c25256d3d66c327193e25515861da13",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-kotlin-04-ab4bb9dbdfff": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-kotlin-007",
+      "source_digest_basis": {
+        "id": "INV-kotlin-007",
+        "lang": "kotlin",
+        "title": "CWE-862 Missing Authorization",
+        "family": "AUTHN",
+        "cwe": [
+          "CWE-862"
+        ],
+        "pattern": "敏感操作缺授权检查",
+        "sink_hint": "敏感操作处理函数入口",
+        "pitfall": "缺授权≠设计意图——核实敏感操作清单"
+      },
+      "source_digest": "sha256:ab4bb9dbdfff90dc2f651da9469738cec932126fb4f7cbf5f9aba317403641cd",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-kotlin-05-ca44cc8c2561": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-kotlin-009",
+      "source_digest_basis": {
+        "id": "INV-kotlin-009",
+        "lang": "kotlin",
+        "title": "CWE-770 Allocation of Resources Without Limits or Throttling",
+        "family": "RESOURCE-DOS",
+        "cwe": [
+          "CWE-770"
+        ],
+        "pattern": "资源分配无上限或无节流",
+        "sink_hint": "分配/队列/累积点",
+        "pitfall": "上限/节流在累积点之前"
+      },
+      "source_digest": "sha256:ca44cc8c25610aea9661ad641589d68956e3d02f35cea74b626e1dbcf53b9bec",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-kotlin-06-9261211f8c9d": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-kotlin-011",
+      "source_digest_basis": {
+        "id": "INV-kotlin-011",
+        "lang": "kotlin",
+        "title": "CWE-639 Authorization Bypass Through User-Controlled Key",
+        "family": "AUTHN",
+        "cwe": [
+          "CWE-639"
+        ],
+        "pattern": "用户可控键绕过授权(越权)",
+        "sink_hint": "按用户键取资源的查询点",
+        "pitfall": "资源归属键与访问者身份比对"
+      },
+      "source_digest": "sha256:9261211f8c9db22653b1896ffe213c1eebc4428a65dd5e0baeb1ae627efbb994",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-kotlin-07-ff72a7143ae3": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-kotlin-004",
+      "source_digest_basis": {
+        "id": "INV-kotlin-004",
+        "lang": "kotlin",
+        "title": "CWE-22 Path Traversal",
+        "family": "WEB",
+        "cwe": [
+          "CWE-22"
+        ],
+        "pattern": "路径名未限制到受限目录: 穿越/跳目录",
+        "sink_hint": "文件路径构造与打开点",
+        "pitfall": "规范化/白名单/根约束三选一必须存在"
+      },
+      "source_digest": "sha256:ff72a7143ae3431f4517242184f6d8c3f412031a23e5393b0c00cbae070e5abd",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-kotlin-08-78509ffe1d1e": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-kotlin-005",
+      "source_digest_basis": {
+        "id": "INV-kotlin-005",
+        "lang": "kotlin",
+        "title": "CWE-79 Cross-site Scripting",
+        "family": "WEB",
+        "cwe": [
+          "CWE-79"
+        ],
+        "pattern": "输出未净化的外部数据: 网页生成路径缺转义",
+        "sink_hint": "HTML 输出/模板渲染点",
+        "pitfall": "输出转义必须在渲染边界且覆盖上下文(HTML/属性/JS)"
+      },
+      "source_digest": "sha256:78509ffe1d1ea8e023e149b521e3d2992212c6e753357941efa5a71775e074cd",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-kotlin-09-d69a6cce56d4": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-kotlin-006",
+      "source_digest_basis": {
+        "id": "INV-kotlin-006",
+        "lang": "kotlin",
+        "title": "CWE-352 Cross-Site Request Forgery",
+        "family": "WEB",
+        "cwe": [
+          "CWE-352"
+        ],
+        "pattern": "状态变更请求缺跨站请求伪造防护",
+        "sink_hint": "状态变更端点(写操作路由)",
+        "pitfall": "状态变更需同源/令牌校验"
+      },
+      "source_digest": "sha256:d69a6cce56d4ffcdcbde594e26074d03fcf7fef925f08a4fb23c0f1e92c7d189",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-kotlin-10-383e191a0315": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-kotlin-008",
+      "source_digest_basis": {
+        "id": "INV-kotlin-008",
+        "lang": "kotlin",
+        "title": "CWE-918 Server-Side Request Forgery",
+        "family": "WEB",
+        "cwe": [
+          "CWE-918"
+        ],
+        "pattern": "服务端请求伪造: 外部输入驱动请求目标",
+        "sink_hint": "外部 URL 请求构造点",
+        "pitfall": "请求目标白名单/协议限制"
+      },
+      "source_digest": "sha256:383e191a0315624a19d08bf0ba37f4fae81a28898b800e127407dc0d17ee2131",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-scala-01-ee1d425ef866": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-scala-001",
+      "source_digest_basis": {
+        "id": "INV-scala-001",
+        "lang": "scala",
+        "title": "进程执行注入: 不可信数据进入进程执行路径",
+        "family": "INJECTION",
+        "cwe": [
+          "CWE-78"
+        ],
+        "pattern": "进程执行注入: 不可信数据进入进程执行路径",
+        "sink_hint": "Runtime.getRuntime.exec",
+        "pitfall": "字符串形态与参数数组形态的注入面不同——按实际调用形态判定 | 『参数化已防注入』声称必须核实底层 shell 是否介入"
+      },
+      "source_digest": "sha256:ee1d425ef866bd00a992fe43c043dbd5f2a9d94cd16dacf1ff0e85d0d6d3f68a",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-scala-02-d8f1b1439b92": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-scala-003",
+      "source_digest_basis": {
+        "id": "INV-scala-003",
+        "lang": "scala",
+        "title": "CWE-502 Deserialization of Untrusted Data",
+        "family": "INJECTION",
+        "cwe": [
+          "CWE-502"
+        ],
+        "pattern": "不可信数据反序列化",
+        "sink_hint": "反序列化读取入口",
+        "pitfall": "反序列化输入按不可信处理"
+      },
+      "source_digest": "sha256:d8f1b1439b924d046c825e3e4b7baa97547426e69e019e98873889bffa93e9df",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-scala-03-63c7f2ce8c2b": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-scala-002",
+      "source_digest_basis": {
+        "id": "INV-scala-002",
+        "lang": "scala",
+        "title": "CWE-89 SQL Injection",
+        "family": "INJECTION",
+        "cwe": [
+          "CWE-89"
+        ],
+        "pattern": "外部输入拼接进 SQL 命令字符串",
+        "sink_hint": "SQL 语句构造/执行点",
+        "pitfall": "参数化查询优先; 拼接时必须枚举注入原语"
+      },
+      "source_digest": "sha256:63c7f2ce8c2b44224723111aa2622b8239a39abb226c6a032024945ed7ad8d51",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-scala-04-efa987cb7629": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-scala-007",
+      "source_digest_basis": {
+        "id": "INV-scala-007",
+        "lang": "scala",
+        "title": "CWE-862 Missing Authorization",
+        "family": "AUTHN",
+        "cwe": [
+          "CWE-862"
+        ],
+        "pattern": "敏感操作缺授权检查",
+        "sink_hint": "敏感操作处理函数入口",
+        "pitfall": "缺授权≠设计意图——核实敏感操作清单"
+      },
+      "source_digest": "sha256:efa987cb7629f2016792409c482608de07abcd940611fdc676b0b794611720e1",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-scala-05-62c093761a1b": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-scala-009",
+      "source_digest_basis": {
+        "id": "INV-scala-009",
+        "lang": "scala",
+        "title": "CWE-770 Allocation of Resources Without Limits or Throttling",
+        "family": "RESOURCE-DOS",
+        "cwe": [
+          "CWE-770"
+        ],
+        "pattern": "资源分配无上限或无节流",
+        "sink_hint": "分配/队列/累积点",
+        "pitfall": "上限/节流在累积点之前"
+      },
+      "source_digest": "sha256:62c093761a1b8ec7198a835ccf48fddb866a699ef5cf1e05e41b2b5e1f63708b",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-scala-06-f1eebbfc9571": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-scala-011",
+      "source_digest_basis": {
+        "id": "INV-scala-011",
+        "lang": "scala",
+        "title": "CWE-639 Authorization Bypass Through User-Controlled Key",
+        "family": "AUTHN",
+        "cwe": [
+          "CWE-639"
+        ],
+        "pattern": "用户可控键绕过授权(越权)",
+        "sink_hint": "按用户键取资源的查询点",
+        "pitfall": "资源归属键与访问者身份比对"
+      },
+      "source_digest": "sha256:f1eebbfc9571ae5177711b84dab2396e9c357542a302df94775b2de61398708e",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-scala-07-bfc6b2291f15": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-scala-004",
+      "source_digest_basis": {
+        "id": "INV-scala-004",
+        "lang": "scala",
+        "title": "CWE-22 Path Traversal",
+        "family": "WEB",
+        "cwe": [
+          "CWE-22"
+        ],
+        "pattern": "路径名未限制到受限目录: 穿越/跳目录",
+        "sink_hint": "文件路径构造与打开点",
+        "pitfall": "规范化/白名单/根约束三选一必须存在"
+      },
+      "source_digest": "sha256:bfc6b2291f153efc295059a06373d7bc65a254b24b670e2c2226353840ff5c89",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-scala-08-ddc2bf7e2a1b": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-scala-005",
+      "source_digest_basis": {
+        "id": "INV-scala-005",
+        "lang": "scala",
+        "title": "CWE-79 Cross-site Scripting",
+        "family": "WEB",
+        "cwe": [
+          "CWE-79"
+        ],
+        "pattern": "输出未净化的外部数据: 网页生成路径缺转义",
+        "sink_hint": "HTML 输出/模板渲染点",
+        "pitfall": "输出转义必须在渲染边界且覆盖上下文(HTML/属性/JS)"
+      },
+      "source_digest": "sha256:ddc2bf7e2a1bf820206efc814fc2284573965a4fcdce83138bc351001632968d",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-scala-09-996693ed5e41": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-scala-006",
+      "source_digest_basis": {
+        "id": "INV-scala-006",
+        "lang": "scala",
+        "title": "CWE-352 Cross-Site Request Forgery",
+        "family": "WEB",
+        "cwe": [
+          "CWE-352"
+        ],
+        "pattern": "状态变更请求缺跨站请求伪造防护",
+        "sink_hint": "状态变更端点(写操作路由)",
+        "pitfall": "状态变更需同源/令牌校验"
+      },
+      "source_digest": "sha256:996693ed5e41e5c9bbf7e6684074a8656d7f65d22776ee580103f9d4967aa77f",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-scala-10-56cebc63938f": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-scala-008",
+      "source_digest_basis": {
+        "id": "INV-scala-008",
+        "lang": "scala",
+        "title": "CWE-918 Server-Side Request Forgery",
+        "family": "WEB",
+        "cwe": [
+          "CWE-918"
+        ],
+        "pattern": "服务端请求伪造: 外部输入驱动请求目标",
+        "sink_hint": "外部 URL 请求构造点",
+        "pitfall": "请求目标白名单/协议限制"
+      },
+      "source_digest": "sha256:56cebc63938f66fd841a73a83692c3649d5ac03bf066e010188a74a8463ba229",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-php-01-f05bbe93d917": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-php-002",
+      "source_digest_basis": {
+        "id": "INV-php-002",
+        "lang": "php",
+        "title": "动态代码执行: 不可信数据进入 eval/回调形态",
+        "family": "INJECTION",
+        "cwe": [
+          "CWE-94"
+        ],
+        "pattern": "动态代码执行: 不可信数据进入 eval/回调形态",
+        "sink_hint": "eval",
+        "pitfall": "回调形态 (动态函数名/类名) 与 eval 同族——不得漏判 | include 动态路径兼文件包含面, 双面登记"
+      },
+      "source_digest": "sha256:f05bbe93d91721809cb4ebd338fdcb9d416ecb35a428e01a0d48154d64a7f2da",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-php-02-0db3c29accc5": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-php-006",
+      "source_digest_basis": {
+        "id": "INV-php-006",
+        "lang": "php",
+        "title": "CWE-78 OS Command Injection",
+        "family": "INJECTION",
+        "cwe": [
+          "CWE-78"
+        ],
+        "pattern": "外部输入进入 OS 命令执行路径",
+        "sink_hint": "system/popen/exec 族调用点",
+        "pitfall": "命令构造与执行分离; 参数数组优先"
+      },
+      "source_digest": "sha256:0db3c29accc50072a9aacfba2862016363ba03e25ab13dc2701af314f6edb285",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-php-03-31c473c3377c": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-php-010",
+      "source_digest_basis": {
+        "id": "INV-php-010",
+        "lang": "php",
+        "title": "CWE-502 Deserialization of Untrusted Data",
+        "family": "INJECTION",
+        "cwe": [
+          "CWE-502"
+        ],
+        "pattern": "不可信数据反序列化",
+        "sink_hint": "反序列化读取入口",
+        "pitfall": "反序列化输入按不可信处理"
+      },
+      "source_digest": "sha256:31c473c3377c080ea3a1fb6838c1f6b8dcd13dc2c430db07cf9c03a7f1cdbbe9",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-php-04-fc483c2f9c04": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-php-004",
+      "source_digest_basis": {
+        "id": "INV-php-004",
+        "lang": "php",
+        "title": "CWE-89 SQL Injection",
+        "family": "INJECTION",
+        "cwe": [
+          "CWE-89"
+        ],
+        "pattern": "外部输入拼接进 SQL 命令字符串",
+        "sink_hint": "SQL 语句构造/执行点",
+        "pitfall": "参数化查询优先; 拼接时必须枚举注入原语"
+      },
+      "source_digest": "sha256:fc483c2f9c04ca32eee5208b4e271185628a03299248f3008d31c926883df6c0",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-php-05-dd7fe96bd7bd": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-php-009",
+      "source_digest_basis": {
+        "id": "INV-php-009",
+        "lang": "php",
+        "title": "CWE-862 Missing Authorization",
+        "family": "AUTHN",
+        "cwe": [
+          "CWE-862"
+        ],
+        "pattern": "敏感操作缺授权检查",
+        "sink_hint": "敏感操作处理函数入口",
+        "pitfall": "缺授权≠设计意图——核实敏感操作清单"
+      },
+      "source_digest": "sha256:dd7fe96bd7bd7051bcfa3c74997df4e5f73a09810da7f6ea21f297b4d1947ce0",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-php-06-65e0c2b40eae": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-php-012",
+      "source_digest_basis": {
+        "id": "INV-php-012",
+        "lang": "php",
+        "title": "CWE-770 Allocation of Resources Without Limits or Throttling",
+        "family": "RESOURCE-DOS",
+        "cwe": [
+          "CWE-770"
+        ],
+        "pattern": "资源分配无上限或无节流",
+        "sink_hint": "分配/队列/累积点",
+        "pitfall": "上限/节流在累积点之前"
+      },
+      "source_digest": "sha256:65e0c2b40eaec00f461a6e28a51a64b40f2831ebc3bc26d3fa010277f30c8f11",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-php-07-13d49ee44d11": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-php-001",
+      "source_digest_basis": {
+        "id": "INV-php-001",
+        "lang": "php",
+        "title": "加密库参数校验: 算法/密钥参数未白名单化",
+        "family": "CRYPTO",
+        "cwe": [
+          "CWE-327"
+        ],
+        "pattern": "加密库参数校验: 算法/密钥参数未白名单化",
+        "sink_hint": "签名验证入口",
+        "pitfall": "弱算法回退链 (协商降级) 是主判轴——逐降级分支核实 | 『标准用法』声称必须对照库契约 (低阶点校验形态)"
+      },
+      "source_digest": "sha256:13d49ee44d11622d4ae63b319ce185dc5e0ee9b973124dffa1e484dbfe6431b8",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-php-08-3f89f4560008": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-php-003",
+      "source_digest_basis": {
+        "id": "INV-php-003",
+        "lang": "php",
+        "title": "CWE-79 Cross-site Scripting",
+        "family": "WEB",
+        "cwe": [
+          "CWE-79"
+        ],
+        "pattern": "输出未净化的外部数据: 网页生成路径缺转义",
+        "sink_hint": "HTML 输出/模板渲染点",
+        "pitfall": "输出转义必须在渲染边界且覆盖上下文(HTML/属性/JS)"
+      },
+      "source_digest": "sha256:3f89f45600082a10a55eec838595788b7a2a8e27da34cc434cc8532d20932cf8",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-php-09-7c7133f82128": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-php-005",
+      "source_digest_basis": {
+        "id": "INV-php-005",
+        "lang": "php",
+        "title": "CWE-22 Path Traversal",
+        "family": "WEB",
+        "cwe": [
+          "CWE-22"
+        ],
+        "pattern": "路径名未限制到受限目录: 穿越/跳目录",
+        "sink_hint": "文件路径构造与打开点",
+        "pitfall": "规范化/白名单/根约束三选一必须存在"
+      },
+      "source_digest": "sha256:7c7133f821289509d8b1f61a585420837c8ff8915f6c5ebff5670b933932914a",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-php-10-3538720db86a": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-php-008",
+      "source_digest_basis": {
+        "id": "INV-php-008",
+        "lang": "php",
+        "title": "CWE-352 Cross-Site Request Forgery",
+        "family": "WEB",
+        "cwe": [
+          "CWE-352"
+        ],
+        "pattern": "状态变更请求缺跨站请求伪造防护",
+        "sink_hint": "状态变更端点(写操作路由)",
+        "pitfall": "状态变更需同源/令牌校验"
+      },
+      "source_digest": "sha256:3538720db86a3e12c43da65b2634312d33aa3dc2f5f225f9cf1d180e6830e2e3",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-ruby-01-66f5d1f4661c": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-ruby-002",
+      "source_digest_basis": {
+        "id": "INV-ruby-002",
+        "lang": "ruby",
+        "title": "动态代码执行: 不可信数据进入 eval/系统调用",
+        "family": "INJECTION",
+        "cwe": [
+          "CWE-94"
+        ],
+        "pattern": "动态代码执行: 不可信数据进入 eval/系统调用",
+        "sink_hint": "eval",
+        "pitfall": "send/constantize 动态分发与 eval 同族——漏判高发 | 『调用者受信』声称必须给信源链证据"
+      },
+      "source_digest": "sha256:66f5d1f4661cc336d078870f43c0ea0657c1b39214470008f12507b4f971312a",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-ruby-02-2f1792759551": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-ruby-007",
+      "source_digest_basis": {
+        "id": "INV-ruby-007",
+        "lang": "ruby",
+        "title": "CWE-78 OS Command Injection",
+        "family": "INJECTION",
+        "cwe": [
+          "CWE-78"
+        ],
+        "pattern": "外部输入进入 OS 命令执行路径",
+        "sink_hint": "system/popen/exec 族调用点",
+        "pitfall": "命令构造与执行分离; 参数数组优先"
+      },
+      "source_digest": "sha256:2f17927595514c7afc022ab84d612e8f845b08e0ae8e1f047f7565131ad824ba",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-ruby-03-40850f325dc2": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-ruby-011",
+      "source_digest_basis": {
+        "id": "INV-ruby-011",
+        "lang": "ruby",
+        "title": "CWE-502 Deserialization of Untrusted Data",
+        "family": "INJECTION",
+        "cwe": [
+          "CWE-502"
+        ],
+        "pattern": "不可信数据反序列化",
+        "sink_hint": "反序列化读取入口",
+        "pitfall": "反序列化输入按不可信处理"
+      },
+      "source_digest": "sha256:40850f325dc2102ff3cde912a037c55c44606e50733843fc4032a3f4900268ce",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-ruby-04-261d17d04efc": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-ruby-005",
+      "source_digest_basis": {
+        "id": "INV-ruby-005",
+        "lang": "ruby",
+        "title": "CWE-89 SQL Injection",
+        "family": "INJECTION",
+        "cwe": [
+          "CWE-89"
+        ],
+        "pattern": "外部输入拼接进 SQL 命令字符串",
+        "sink_hint": "SQL 语句构造/执行点",
+        "pitfall": "参数化查询优先; 拼接时必须枚举注入原语"
+      },
+      "source_digest": "sha256:261d17d04efcec3cbaf389d1da4ac3d26a437b4a478d1255c72bd324d7d9f128",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-ruby-05-aa694d1e12d0": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-ruby-001",
+      "source_digest_basis": {
+        "id": "INV-ruby-001",
+        "lang": "ruby",
+        "title": "调试/控制端点零鉴权: 暴露组件缺鉴权门禁",
+        "family": "AUTHN",
+        "cwe": [
+          "CWE-862"
+        ],
+        "pattern": "调试/控制端点零鉴权: 暴露组件缺鉴权门禁",
+        "sink_hint": "控制端点/状态页路由",
+        "pitfall": "『默认受保护』声称必须核实路由挂载与守卫链 | 无 token 形态的端点常被框架默认放行——按实际路由判定"
+      },
+      "source_digest": "sha256:aa694d1e12d064e76cee11fcb895635b4487ac3cee6328a57a50a37196424c1f",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-ruby-06-4d3bf920d13c": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-ruby-003",
+      "source_digest_basis": {
+        "id": "INV-ruby-003",
+        "lang": "ruby",
+        "title": "跨租户状态共享: 状态机序对缺陷 (停服/恢复/会话序)",
+        "family": "STATE",
+        "cwe": [
+          "CWE-696"
+        ],
+        "pattern": "跨租户状态共享: 状态机序对缺陷 (停服/恢复/会话序)",
+        "sink_hint": "跨用户共享状态点",
+        "pitfall": "跨用户停服类序对缺陷的 owner 归属必须逐请求核实 | 状态机序对 (启动→停止→启动) 的非法转移按逐转移行判定"
+      },
+      "source_digest": "sha256:4d3bf920d13c7ac34eca73545167cc0e8b56edbc86178dfccb22a0ac4fcc8803",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-ruby-07-a2ea0147b932": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-ruby-012",
+      "source_digest_basis": {
+        "id": "INV-ruby-012",
+        "lang": "ruby",
+        "title": "CWE-770 Allocation of Resources Without Limits or Throttling",
+        "family": "RESOURCE-DOS",
+        "cwe": [
+          "CWE-770"
+        ],
+        "pattern": "资源分配无上限或无节流",
+        "sink_hint": "分配/队列/累积点",
+        "pitfall": "上限/节流在累积点之前"
+      },
+      "source_digest": "sha256:a2ea0147b9324f288541b93e633fabf000ebac622d37d1fa0806953ce254eae6",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-ruby-08-03859f21e65a": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-ruby-013",
+      "source_digest_basis": {
+        "id": "INV-ruby-013",
+        "lang": "ruby",
+        "title": "CWE-639 Authorization Bypass Through User-Controlled Key",
+        "family": "AUTHN",
+        "cwe": [
+          "CWE-639"
+        ],
+        "pattern": "用户可控键绕过授权(越权)",
+        "sink_hint": "按用户键取资源的查询点",
+        "pitfall": "资源归属键与访问者身份比对"
+      },
+      "source_digest": "sha256:03859f21e65af0368174a92e88a4246ced64bea319f7bd6473379d4e564c0093",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-ruby-09-5e76cd7e2375": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-ruby-004",
+      "source_digest_basis": {
+        "id": "INV-ruby-004",
+        "lang": "ruby",
+        "title": "CWE-79 Cross-site Scripting",
+        "family": "WEB",
+        "cwe": [
+          "CWE-79"
+        ],
+        "pattern": "输出未净化的外部数据: 网页生成路径缺转义",
+        "sink_hint": "HTML 输出/模板渲染点",
+        "pitfall": "输出转义必须在渲染边界且覆盖上下文(HTML/属性/JS)"
+      },
+      "source_digest": "sha256:5e76cd7e23757af170226f59cb152fad01d4df21724a795a1f75c116b18c0913",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-ruby-10-4b6cf7c18d5d": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-ruby-006",
+      "source_digest_basis": {
+        "id": "INV-ruby-006",
+        "lang": "ruby",
+        "title": "CWE-22 Path Traversal",
+        "family": "WEB",
+        "cwe": [
+          "CWE-22"
+        ],
+        "pattern": "路径名未限制到受限目录: 穿越/跳目录",
+        "sink_hint": "文件路径构造与打开点",
+        "pitfall": "规范化/白名单/根约束三选一必须存在"
+      },
+      "source_digest": "sha256:4b6cf7c18d5d36868f94b454b9b7158f52ef8bb2de71ea49f27ede76a43b9161",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-swift-01-87eae84ae5b0": {
+      "source_type": "language_specific_seeded_refinement",
+      "source_record_id": "INV-swift-001",
+      "refinement_id": "swift-cwe-78-runtime-v1",
+      "source_digest_basis": {
+        "id": "INV-swift-001",
+        "lang": "swift",
+        "title": "Shell-mediated Process launch from untrusted Swift values",
+        "family": "INJECTION",
+        "cwe": [
+          "CWE-78"
+        ],
+        "pattern": "进程执行注入: 不可信数据进入进程执行路径",
+        "sink_hint": "Foundation.Process executableURL/arguments | Process launches /bin/sh or another interpreter with -c and attacker-influenced text",
+        "pitfall": "Foundation.Process arguments are argv elements and do not invoke a shell by themselves. | Injection risk arises when the selected executable is a shell/interpreter or arguments are reinterpreted by a child command."
+      },
+      "source_digest": "sha256:87eae84ae5b0591a5f01802237670017c4ac255e4df33d8ad3e84fb9314daffe",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-swift-02-b8f080ef096b": {
+      "source_type": "language_specific_seeded_refinement",
+      "source_record_id": "INV-swift-002",
+      "refinement_id": "swift-cwe-787-runtime-v1",
+      "source_digest_basis": {
+        "id": "INV-swift-002",
+        "lang": "swift",
+        "title": "Out-of-bounds write through Swift unsafe buffers or C interop",
+        "family": "MEMORY-SAFETY",
+        "cwe": [
+          "CWE-787"
+        ],
+        "pattern": "长度/索引计算错误导致缓冲边界外写入",
+        "sink_hint": "UnsafeMutablePointer/UnsafeMutableBufferPointer subscripts, pointer arithmetic, and raw-memory writes | C functions receiving Swift buffer baseAddress/count pairs",
+        "pitfall": "Ordinary Array subscripting performs bounds checks; focus on unsafe buffers, raw pointers, and imported C contracts. | withUnsafeBytes pointer lifetime ends at closure exit; do not retain the pointer."
+      },
+      "source_digest": "sha256:b8f080ef096b4476878dd1fbbf79ef8f05c874ece2ccc5f68ca05746e76d85a0",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-swift-03-5f108ae8d80c": {
+      "source_type": "language_specific_seeded_refinement",
+      "source_record_id": "INV-swift-003",
+      "refinement_id": "swift-cwe-416-runtime-v1",
+      "source_digest_basis": {
+        "id": "INV-swift-003",
+        "lang": "swift",
+        "title": "Dangling Swift/C object reference across ARC or Unmanaged lifetime boundary",
+        "family": "MEMORY-SAFETY",
+        "cwe": [
+          "CWE-416"
+        ],
+        "pattern": "释放后使用: 悬垂指针被解引用",
+        "sink_hint": "Unmanaged.takeRetainedValue/takeUnretainedValue | C/Objective-C callback or stored opaque pointer dereferences after owner release",
+        "pitfall": "ARC-managed strong references normally prevent UAF; examine Unmanaged, unsafe pointers, bridging, and foreign callbacks. | Retain-count imbalance may cause leaks or premature release; distinguish the actual failure mode."
+      },
+      "source_digest": "sha256:5f108ae8d80c55c9ba64c19d3e5a5a7c57c0ce1366784950249b976b87259715",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-swift-04-2b8f20e758ac": {
+      "source_type": "language_specific_seeded_refinement",
+      "source_record_id": "INV-swift-004",
+      "refinement_id": "swift-cwe-125-runtime-v1",
+      "source_digest_basis": {
+        "id": "INV-swift-004",
+        "lang": "swift",
+        "title": "Out-of-bounds read through Swift unsafe buffer or imported C pointer",
+        "family": "MEMORY-SAFETY",
+        "cwe": [
+          "CWE-125"
+        ],
+        "pattern": "边界外读取: 索引/长度越界访问",
+        "sink_hint": "unsafe buffer subscript and pointer advanced(by:) | C functions reading beyond the supplied pointer/count contract",
+        "pitfall": "Ordinary Collection subscripts are bounds checked; focus on unsafe APIs and FFI contracts. | Validate integer narrowing and element-count multiplication before constructing buffer views."
+      },
+      "source_digest": "sha256:2b8f20e758acdd898298cb7e10e31165c5b6e15f1bddd1ad81efc36e6275f62d",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-swift-05-6d8d80e318f0": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-swift-005",
+      "source_digest_basis": {
+        "id": "INV-swift-005",
+        "lang": "swift",
+        "title": "CWE-770 Allocation of Resources Without Limits or Throttling",
+        "family": "RESOURCE-DOS",
+        "cwe": [
+          "CWE-770"
+        ],
+        "pattern": "资源分配无上限或无节流",
+        "sink_hint": "分配/队列/累积点",
+        "pitfall": "上限/节流在累积点之前"
+      },
+      "source_digest": "sha256:6d8d80e318f04cb873a004b4bd6aa2aca1da38f4b741802da0084dcd503d0ea4",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-swift-06-b58f86ac1cd1": {
+      "source_type": "language_specific_seeded_refinement",
+      "source_record_id": "INV-swift-008",
+      "refinement_id": "swift-cwe-284-runtime-v1",
+      "source_digest_basis": {
+        "id": "INV-swift-008",
+        "lang": "swift",
+        "title": "Missing authorization on a Swift server route or privileged operation",
+        "family": "AUTHN",
+        "cwe": [
+          "CWE-284"
+        ],
+        "pattern": "访问控制缺失",
+        "sink_hint": "Vapor route handlers and middleware | database, filesystem, or administrative operations reachable from a request",
+        "pitfall": "Swift access control and type visibility are not request authorization. | A route group or middleware declaration is not effective unless it dominates every alias and registration path."
+      },
+      "source_digest": "sha256:b58f86ac1cd1cf10c4036d8083038efd76943243ed8d6a468b5253d270f6f58e",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-swift-07-9ba0ad06c6b7": {
+      "source_type": "language_specific_seeded_refinement",
+      "source_record_id": "INV-swift-009",
+      "refinement_id": "swift-cwe-863-runtime-v1",
+      "source_digest_basis": {
+        "id": "INV-swift-009",
+        "lang": "swift",
+        "title": "Incorrect principal/resource authorization in a Swift server handler",
+        "family": "AUTHN",
+        "cwe": [
+          "CWE-863"
+        ],
+        "pattern": "授权判定错误(对象/角色归属错配)",
+        "sink_hint": "Vapor/NIO route handlers and service methods | resource read/write after a role, owner, or tenant comparison",
+        "pitfall": "Authentication proves identity, not permission for the selected object or action. | Check middleware and service-layer policy consistency across aliases."
+      },
+      "source_digest": "sha256:9ba0ad06c6b7538ed82c88b6b1cb8ae45a2d491daf34538067250df09b02b407",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-swift-08-191aa6ccbd9c": {
+      "source_type": "language_specific_seeded_refinement",
+      "source_record_id": "INV-swift-010",
+      "refinement_id": "swift-cwe-639-runtime-v1",
+      "source_digest_basis": {
+        "id": "INV-swift-010",
+        "lang": "swift",
+        "title": "Swift server object lookup uses a request-controlled key without ownership scoping",
+        "family": "AUTHN",
+        "cwe": [
+          "CWE-639"
+        ],
+        "pattern": "用户可控键绕过授权(越权)",
+        "sink_hint": "Vapor route parameters and ORM/repository lookups | resource mutation/read after lookup by a request-controlled key",
+        "pitfall": "UUIDs and opaque identifiers do not establish ownership. | Authorization must cover nested, batch, and alternate route lookups."
+      },
+      "source_digest": "sha256:191aa6ccbd9c0f2dc644e08ca4d4470b0bb3826ca77d2cd811cdf0a6eed1c3ed",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-swift-09-c61768c9e9a2": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-swift-006",
+      "source_digest_basis": {
+        "id": "INV-swift-006",
+        "lang": "swift",
+        "title": "CWE-20 Improper Input Validation",
+        "family": "DATA-INTEGRITY",
+        "cwe": [
+          "CWE-20"
+        ],
+        "pattern": "输入校验缺失或不足",
+        "sink_hint": "外部输入消费点",
+        "pitfall": "输入校验与消费点同层"
+      },
+      "source_digest": "sha256:c61768c9e9a27dd651a26a31b8fa403a2e3e23d487382ede0a96dd8cc941a38e",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-swift-10-e4d2db19f159": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-swift-007",
+      "source_digest_basis": {
+        "id": "INV-swift-007",
+        "lang": "swift",
+        "title": "CWE-22 Path Traversal",
+        "family": "WEB",
+        "cwe": [
+          "CWE-22"
+        ],
+        "pattern": "路径名未限制到受限目录: 穿越/跳目录",
+        "sink_hint": "文件路径构造与打开点",
+        "pitfall": "规范化/白名单/根约束三选一必须存在"
+      },
+      "source_digest": "sha256:e4d2db19f159a0a3e288acece37530d330fb00211f8d75bdb30d08fdc640d5f7",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-shell-01-3cf30df6eb5d": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-shell-001",
+      "source_digest_basis": {
+        "id": "INV-shell-001",
+        "lang": "shell",
+        "title": "命令拼接执行: 变量进入命令字符串",
+        "family": "INJECTION",
+        "cwe": [
+          "CWE-78"
+        ],
+        "pattern": "命令拼接执行: 变量进入命令字符串",
+        "sink_hint": "eval",
+        "pitfall": "引号嵌套层级与参数展开次序是判定核心——逐层展开核实 | env 覆盖形态: 攻击者已能写框架文件时的能力支配裁决 (默认文件覆盖 env)"
+      },
+      "source_digest": "sha256:3cf30df6eb5d9893dda88fb6fd90fb6805fed5ddc54260ef2c69ce061f9da444",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-shell-02-7e611249728e": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-shell-004",
+      "source_digest_basis": {
+        "id": "INV-shell-004",
+        "lang": "shell",
+        "title": "CWE-94 Code Injection",
+        "family": "INJECTION",
+        "cwe": [
+          "CWE-94"
+        ],
+        "pattern": "外部输入被当作代码生成/执行",
+        "sink_hint": "eval/动态代码加载点",
+        "pitfall": "动态代码入口即信任边界"
+      },
+      "source_digest": "sha256:7e611249728e087f774decb3cebe11b5a8d885e95de6df1832f65f3c6ebeb1ea",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-shell-03-726866d188ab": {
+      "source_type": "language_specific_seeded_refinement",
+      "source_record_id": "CURATED-shell-word-splitting-001",
+      "refinement_id": "CURATED-shell-word-splitting-001-language-semantics-v1",
+      "source_digest_basis": {
+        "id": "CURATED-shell-word-splitting-001",
+        "lang": "shell",
+        "title": "Unquoted shell expansion changes argv through word splitting and globbing",
+        "family": "INJECTION",
+        "cwe": [
+          "CWE-88"
+        ],
+        "pattern": "An unquoted expansion is split into multiple arguments or pathname matches",
+        "sink_hint": "command arguments populated by unquoted parameter expansion",
+        "pitfall": "Inspect quote context, IFS, pathname expansion, arrays, and nested command substitutions; this differs from shell command-string injection."
+      },
+      "source_digest": "sha256:726866d188abeb1a54b44a26df2d8d48ceba91892c1eb08b93a4a15b496c5914",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-shell-04-7ff4ae5f6a8f": {
+      "source_type": "language_specific_seeded_refinement",
+      "source_record_id": "CURATED-shell-path-lookup-001",
+      "refinement_id": "CURATED-shell-path-lookup-001-language-semantics-v1",
+      "source_digest_basis": {
+        "id": "CURATED-shell-path-lookup-001",
+        "lang": "shell",
+        "title": "Attacker-influenced PATH selects an unintended executable",
+        "family": "TRUST-BOUNDARY",
+        "cwe": [
+          "CWE-426"
+        ],
+        "pattern": "A privileged script invokes a command through an inherited or attacker-influenced search path",
+        "sink_hint": "bare command invocation, PATH modification, env-based lookup, or sourced executable",
+        "pitfall": "Trace effective UID, environment sanitization, PATH order, writable directories, and absolute executable paths."
+      },
+      "source_digest": "sha256:7ff4ae5f6a8f6a9d8018fe1383476f95ba523391cd0ff7687604f68201e38ed8",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-shell-05-ad6893b4b651": {
+      "source_type": "language_specific_seeded_refinement",
+      "source_record_id": "CURATED-shell-temp-path-001",
+      "refinement_id": "CURATED-shell-temp-path-001-language-semantics-v1",
+      "source_digest_basis": {
+        "id": "CURATED-shell-temp-path-001",
+        "lang": "shell",
+        "title": "Predictable temporary path in a privileged shell workflow",
+        "family": "RACE",
+        "cwe": [
+          "CWE-377"
+        ],
+        "pattern": "A script creates or reuses a predictable path in a shared temporary directory",
+        "sink_hint": "temporary path creation followed by redirection, chmod, copy, or privileged write",
+        "pitfall": "Verify atomic creation, restrictive umask, ownership, symlink behavior, and whether the parent directory is attacker-writable."
+      },
+      "source_digest": "sha256:ad6893b4b651b0524b4fc0950dd735719fce97ea02ede4cb2bb1604812d92f84",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-shell-06-9ce4379b3a02": {
+      "source_type": "language_specific_seeded_refinement",
+      "source_record_id": "CURATED-shell-toctou-001",
+      "refinement_id": "CURATED-shell-toctou-001-language-semantics-v1",
+      "source_digest_basis": {
+        "id": "CURATED-shell-toctou-001",
+        "lang": "shell",
+        "title": "Filesystem check-then-use race in a privileged shell workflow",
+        "family": "RACE",
+        "cwe": [
+          "CWE-367"
+        ],
+        "pattern": "A path is tested/stat'ed and later opened, renamed, removed, or executed",
+        "sink_hint": "test/[[ -e ]]/stat followed by redirection, cp, mv, rm, chmod, or execution",
+        "pitfall": "Check whether an attacker can replace a path component or symlink between check and use; quoting alone does not prevent races."
+      },
+      "source_digest": "sha256:9ce4379b3a02cc2ce3bed586fc48b4f2ed14e529e70d9b064580f99651df63fe",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-shell-07-31e738dacffa": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-shell-007",
+      "source_digest_basis": {
+        "id": "INV-shell-007",
+        "lang": "shell",
+        "title": "CWE-770 Allocation of Resources Without Limits or Throttling",
+        "family": "RESOURCE-DOS",
+        "cwe": [
+          "CWE-770"
+        ],
+        "pattern": "资源分配无上限或无节流",
+        "sink_hint": "分配/队列/累积点",
+        "pitfall": "上限/节流在累积点之前"
+      },
+      "source_digest": "sha256:31e738dacffa2dd17f9e7c92110f60a120c80a35a668235682f1905313de06e1",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-shell-08-7782cc0373ea": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-shell-005",
+      "source_digest_basis": {
+        "id": "INV-shell-005",
+        "lang": "shell",
+        "title": "CWE-22 Path Traversal",
+        "family": "WEB",
+        "cwe": [
+          "CWE-22"
+        ],
+        "pattern": "路径名未限制到受限目录: 穿越/跳目录",
+        "sink_hint": "文件路径构造与打开点",
+        "pitfall": "规范化/白名单/根约束三选一必须存在"
+      },
+      "source_digest": "sha256:7782cc0373ea9850a075133bd9862b70e60ae5d1ff41457896b4df6e2f5a9640",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-shell-09-fb403493376b": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-shell-006",
+      "source_digest_basis": {
+        "id": "INV-shell-006",
+        "lang": "shell",
+        "title": "CWE-20 Improper Input Validation",
+        "family": "DATA-INTEGRITY",
+        "cwe": [
+          "CWE-20"
+        ],
+        "pattern": "输入校验缺失或不足",
+        "sink_hint": "外部输入消费点",
+        "pitfall": "输入校验与消费点同层"
+      },
+      "source_digest": "sha256:fb403493376bed697d375180f1d6049ce04395957dce0aaf64fdac5be050c4f3",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-shell-10-62906c905055": {
+      "source_type": "v3_language_issue_inventory",
+      "source_record_id": "INV-shell-008",
+      "source_digest_basis": {
+        "id": "INV-shell-008",
+        "lang": "shell",
+        "title": "CWE-200 Exposure of Sensitive Information",
+        "family": "DATA-INTEGRITY",
+        "cwe": [
+          "CWE-200"
+        ],
+        "pattern": "敏感信息暴露给未授权主体",
+        "sink_hint": "日志/错误输出/响应生成点",
+        "pitfall": "敏感字段过滤在序列化层"
+      },
+      "source_digest": "sha256:62906c90505583f64a647c36130148557f38f95a8e737509de20c79ff2da8dea",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-typescript-01-75034d880527": {
+      "source_type": "reviewed_javascript_mechanism_generalized_to_typescript",
+      "source_record_id": "INV-javascript-007",
+      "source_digest_basis": {
+        "id": "INV-javascript-007",
+        "lang": "javascript",
+        "title": "CWE-78 OS Command Injection",
+        "family": "INJECTION",
+        "cwe": [
+          "CWE-78"
+        ],
+        "pattern": "外部输入进入 OS 命令执行路径",
+        "sink_hint": "system/popen/exec 族调用点",
+        "pitfall": "命令构造与执行分离; 参数数组优先"
+      },
+      "source_digest": "sha256:75034d88052703044abc6705c9102d0f170acb7d7cc4c1ae150a1378f1a24539",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-typescript-02-35ad011af30b": {
+      "source_type": "reviewed_javascript_mechanism_generalized_to_typescript",
+      "source_record_id": "INV-javascript-008",
+      "source_digest_basis": {
+        "id": "INV-javascript-008",
+        "lang": "javascript",
+        "title": "CWE-94 Code Injection",
+        "family": "INJECTION",
+        "cwe": [
+          "CWE-94"
+        ],
+        "pattern": "外部输入被当作代码生成/执行",
+        "sink_hint": "eval/动态代码加载点",
+        "pitfall": "动态代码入口即信任边界"
+      },
+      "source_digest": "sha256:35ad011af30b580dcd5b58be6dbb7e6d483cefa7268f07259a0699e7a6471f10",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-typescript-03-c676db28071e": {
+      "source_type": "reviewed_javascript_mechanism_generalized_to_typescript",
+      "source_record_id": "INV-javascript-002",
+      "source_digest_basis": {
+        "id": "INV-javascript-002",
+        "lang": "javascript",
+        "title": "流式累积无上限: 数据事件逐块累积到内存",
+        "family": "RESOURCE-DOS",
+        "cwe": [
+          "CWE-400"
+        ],
+        "pattern": "流式累积无上限: 数据事件逐块累积到内存",
+        "sink_hint": "socket/stream 'data' 事件累积",
+        "pitfall": "分片到达序不可控——按到达累积的量级必须以上限为界 | 背压缺失 (消费者不停读) 使累积无平台期"
+      },
+      "source_digest": "sha256:c676db28071e8875add03cbbc84ab7e74295ef2248ad65aa4b3b57d5e53e67f6",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-typescript-04-0e1034170db7": {
+      "source_type": "reviewed_javascript_mechanism_generalized_to_typescript",
+      "source_record_id": "INV-javascript-005",
+      "source_digest_basis": {
+        "id": "INV-javascript-005",
+        "lang": "javascript",
+        "title": "CWE-862 Missing Authorization",
+        "family": "AUTHN",
+        "cwe": [
+          "CWE-862"
+        ],
+        "pattern": "敏感操作缺授权检查",
+        "sink_hint": "敏感操作处理函数入口",
+        "pitfall": "缺授权≠设计意图——核实敏感操作清单"
+      },
+      "source_digest": "sha256:0e1034170db7472cda5447cbce337689e14a73ede768c80a6576c8538920966a",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-typescript-05-2dd583a7c9f1": {
+      "source_type": "reviewed_javascript_mechanism_generalized_to_typescript",
+      "source_record_id": "INV-javascript-010",
+      "source_digest_basis": {
+        "id": "INV-javascript-010",
+        "lang": "javascript",
+        "title": "CWE-770 Allocation of Resources Without Limits or Throttling",
+        "family": "RESOURCE-DOS",
+        "cwe": [
+          "CWE-770"
+        ],
+        "pattern": "资源分配无上限或无节流",
+        "sink_hint": "分配/队列/累积点",
+        "pitfall": "上限/节流在累积点之前"
+      },
+      "source_digest": "sha256:2dd583a7c9f13a4379859412dfebf2510a94e6ee18076af635a74dbdb4c6dacb",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-typescript-06-01ab80f5d762": {
+      "source_type": "reviewed_javascript_mechanism_generalized_to_typescript",
+      "source_record_id": "INV-javascript-011",
+      "source_digest_basis": {
+        "id": "INV-javascript-011",
+        "lang": "javascript",
+        "title": "CWE-639 Authorization Bypass Through User-Controlled Key",
+        "family": "AUTHN",
+        "cwe": [
+          "CWE-639"
+        ],
+        "pattern": "用户可控键绕过授权(越权)",
+        "sink_hint": "按用户键取资源的查询点",
+        "pitfall": "资源归属键与访问者身份比对"
+      },
+      "source_digest": "sha256:01ab80f5d762ff8bb387fa0ad172b4876997c05842f33f097b5b7137b1983a26",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-typescript-07-3b70ea627f79": {
+      "source_type": "reviewed_javascript_mechanism_generalized_to_typescript",
+      "source_record_id": "INV-javascript-001",
+      "source_digest_basis": {
+        "id": "INV-javascript-001",
+        "lang": "javascript",
+        "title": "加密库参数校验: 算法/密钥参数未白名单化",
+        "family": "CRYPTO",
+        "cwe": [
+          "CWE-327"
+        ],
+        "pattern": "加密库参数校验: 算法/密钥参数未白名单化",
+        "sink_hint": "签名验证入口",
+        "pitfall": "弱算法回退链 (协商降级) 是主判轴——逐降级分支核实 | 『标准用法』声称必须对照库契约 (低阶点校验形态)"
+      },
+      "source_digest": "sha256:3b70ea627f7982119ed3a0853772ef41aa2d046260128735a8d09cf00252738e",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-typescript-08-29f99ec87426": {
+      "source_type": "reviewed_javascript_mechanism_generalized_to_typescript",
+      "source_record_id": "INV-javascript-003",
+      "source_digest_basis": {
+        "id": "INV-javascript-003",
+        "lang": "javascript",
+        "title": "CWE-79 Cross-site Scripting",
+        "family": "WEB",
+        "cwe": [
+          "CWE-79"
+        ],
+        "pattern": "输出未净化的外部数据: 网页生成路径缺转义",
+        "sink_hint": "HTML 输出/模板渲染点",
+        "pitfall": "输出转义必须在渲染边界且覆盖上下文(HTML/属性/JS)"
+      },
+      "source_digest": "sha256:29f99ec874264d384d0ed965781b29991c50e9b7a7417764e12b0bbbcae61d0b",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-typescript-09-581bbdb61c2a": {
+      "source_type": "reviewed_javascript_mechanism_generalized_to_typescript",
+      "source_record_id": "INV-javascript-004",
+      "source_digest_basis": {
+        "id": "INV-javascript-004",
+        "lang": "javascript",
+        "title": "CWE-352 Cross-Site Request Forgery",
+        "family": "WEB",
+        "cwe": [
+          "CWE-352"
+        ],
+        "pattern": "状态变更请求缺跨站请求伪造防护",
+        "sink_hint": "状态变更端点(写操作路由)",
+        "pitfall": "状态变更需同源/令牌校验"
+      },
+      "source_digest": "sha256:581bbdb61c2ae3ea33f0f570965b5dc608bb48b101a6af6331d44f7817505296",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    },
+    "PROV-typescript-10-f1a0f1cd915a": {
+      "source_type": "reviewed_javascript_mechanism_generalized_to_typescript",
+      "source_record_id": "INV-javascript-006",
+      "source_digest_basis": {
+        "id": "INV-javascript-006",
+        "lang": "javascript",
+        "title": "CWE-22 Path Traversal",
+        "family": "WEB",
+        "cwe": [
+          "CWE-22"
+        ],
+        "pattern": "路径名未限制到受限目录: 穿越/跳目录",
+        "sink_hint": "文件路径构造与打开点",
+        "pitfall": "规范化/白名单/根约束三选一必须存在"
+      },
+      "source_digest": "sha256:f1a0f1cd915af708969ff6f96afeee8d96a7f78dfd87ca5470e7cb12f85581fd",
+      "evidence_state": "seeded",
+      "review_status": "approved"
+    }
+  }
+}

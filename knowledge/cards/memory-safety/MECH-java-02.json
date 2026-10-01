@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-java-02",
+  "family": "MEMORY-SAFETY",
+  "title": "Java 形态内存安全: 越界索引与截断 cast",
+  "preconditions": [
+    "枚举 ordinal 下标无界/数值窄化截断/文本构造器绕过校验门禁"
+  ],
+  "dangerous_transitions": [
+    "枚举 ordinal 下标无界/数值窄化截断/文本构造器绕过校验门禁"
+  ],
+  "sink_semantics": [
+    "enumConstants[ordinal]/intValue() 窄化/parse 后下标"
+  ],
+  "counterevidence": [
+    "A guard dominates the sensitive operation for every relevant path.",
+    "The effective principal cannot control the source or the impact is not security relevant.",
+    "JVM 边界检查把后果限制为 AIOOBE/异常, 但截断 cast 的静默错值无告警——判级按实际后果而非 CWE 族; 结构校验门禁与文本构造器路径不一致即假设"
+  ],
+  "language_applicability": [
+    "java"
+  ],
+  "verification_recipe": [
+    "Trace the relevant source cue to the enumConstants[ordinal]/intValue() 窄化/parse 后下标 operation.",
+    "Establish attacker control, effective principal, guards, and security impact.",
+    "Test the listed counterevidence and record source anchors for every edge."
+  ],
+  "provenance": [
+    "PROV-java-02-75a0fcea49c5"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "seeded"
+}

@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-python-06",
+  "family": "STATE",
+  "title": "多帧/多块格式状态机: 逐帧门禁与一次性门禁语义混淆",
+  "preconditions": [
+    "多帧/多块格式状态机: 逐帧门禁与一次性门禁语义混淆"
+  ],
+  "dangerous_transitions": [
+    "多帧/多块格式状态机: 逐帧门禁与一次性门禁语义混淆"
+  ],
+  "sink_semantics": [
+    "逐帧解析循环"
+  ],
+  "counterevidence": [
+    "A guard dominates the sensitive operation for every relevant path.",
+    "The effective principal cannot control the source or the impact is not security relevant.",
+    "一次性门禁检查 ≠ 状态机重入门禁——逐状态转移行核实 (逐帧/逐块形态) | 跳步/重放/乱序序对依赖必须逐项验证"
+  ],
+  "language_applicability": [
+    "python"
+  ],
+  "verification_recipe": [
+    "Trace the relevant source cue to the 逐帧解析循环 operation.",
+    "Establish attacker control, effective principal, guards, and security impact.",
+    "Test the listed counterevidence and record source anchors for every edge."
+  ],
+  "provenance": [
+    "PROV-python-06-62afad60cf46"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "seeded"
+}

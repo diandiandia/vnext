@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-java-06",
+  "family": "AUTHN",
+  "title": "信任代理判定 fail-open: 未配置可信地址时恒真 + 客户端自置信任头被采信",
+  "preconditions": [
+    "isProxyTrusted 类判定未配置白名单时恒 true; 客户端可自置的信任头 (X-Forwarded-Trusted-Proxy 类) 直接设 true"
+  ],
+  "dangerous_transitions": [
+    "isProxyTrusted 类判定未配置白名单时恒 true; 客户端可自置的信任头 (X-Forwarded-Trusted-Proxy 类) 直接设 true"
+  ],
+  "sink_semantics": [
+    "代理信任判定点; 头驱动的证书/身份查找门禁点"
+  ],
+  "counterevidence": [
+    "A guard dominates the sensitive operation for every relevant path.",
+    "The effective principal cannot control the source or the impact is not security relevant.",
+    "门禁不消费平台可信判定的形态 (平台契约短路); 证书头门禁的关闭条件与平台层加固无法代偿"
+  ],
+  "language_applicability": [
+    "java"
+  ],
+  "verification_recipe": [
+    "Trace the relevant source cue to the 代理信任判定点; 头驱动的证书/身份查找门禁点 operation.",
+    "Establish attacker control, effective principal, guards, and security impact.",
+    "Test the listed counterevidence and record source anchors for every edge."
+  ],
+  "provenance": [
+    "PROV-java-06-cc7ffd42b033"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "battle_observed"
+}

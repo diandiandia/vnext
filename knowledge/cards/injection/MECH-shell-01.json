@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-shell-01",
+  "family": "INJECTION",
+  "title": "命令拼接执行: 变量进入命令字符串",
+  "preconditions": [
+    "命令拼接执行: 变量进入命令字符串"
+  ],
+  "dangerous_transitions": [
+    "命令拼接执行: 变量进入命令字符串"
+  ],
+  "sink_semantics": [
+    "eval"
+  ],
+  "counterevidence": [
+    "A guard dominates the sensitive operation for every relevant path.",
+    "The effective principal cannot control the source or the impact is not security relevant.",
+    "引号嵌套层级与参数展开次序是判定核心——逐层展开核实 | env 覆盖形态: 攻击者已能写框架文件时的能力支配裁决 (默认文件覆盖 env)"
+  ],
+  "language_applicability": [
+    "shell"
+  ],
+  "verification_recipe": [
+    "Trace the relevant source cue to the eval operation.",
+    "Establish attacker control, effective principal, guards, and security impact.",
+    "Test the listed counterevidence and record source anchors for every edge."
+  ],
+  "provenance": [
+    "PROV-shell-01-3cf30df6eb5d"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "seeded"
+}

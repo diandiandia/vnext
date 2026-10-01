@@ -1,0 +1,33 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-shell-03",
+  "family": "INJECTION",
+  "title": "Unquoted shell expansion changes argv through word splitting and globbing",
+  "preconditions": [
+    "An unquoted expansion is split into multiple arguments or pathname matches"
+  ],
+  "dangerous_transitions": [
+    "An unquoted expansion is split into multiple arguments or pathname matches"
+  ],
+  "sink_semantics": [
+    "command arguments populated by unquoted parameter expansion"
+  ],
+  "counterevidence": [
+    "Inspect quote context, IFS, pathname expansion, arrays, and nested command substitutions; this differs from shell command-string injection."
+  ],
+  "language_applicability": [
+    "shell"
+  ],
+  "verification_recipe": [
+    "Trace the language-specific source cue to command arguments populated by unquoted parameter expansion.",
+    "Establish attacker control, effective principal, guarding order, and security impact.",
+    "Test the stated language-specific counterevidence against source and runtime behavior."
+  ],
+  "provenance": [
+    "PROV-shell-03-726866d188ab"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "seeded"
+}

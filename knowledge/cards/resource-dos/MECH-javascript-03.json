@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-javascript-03",
+  "family": "RESOURCE-DOS",
+  "title": "流式累积无上限: 数据事件逐块累积到内存",
+  "preconditions": [
+    "流式累积无上限: 数据事件逐块累积到内存"
+  ],
+  "dangerous_transitions": [
+    "流式累积无上限: 数据事件逐块累积到内存"
+  ],
+  "sink_semantics": [
+    "socket/stream 'data' 事件累积"
+  ],
+  "counterevidence": [
+    "A guard dominates the sensitive operation for every relevant path.",
+    "The effective principal cannot control the source or the impact is not security relevant.",
+    "分片到达序不可控——按到达累积的量级必须以上限为界 | 背压缺失 (消费者不停读) 使累积无平台期"
+  ],
+  "language_applicability": [
+    "javascript"
+  ],
+  "verification_recipe": [
+    "Trace the relevant source cue to the socket/stream 'data' 事件累积 operation.",
+    "Establish attacker control, effective principal, guards, and security impact.",
+    "Test the listed counterevidence and record source anchors for every edge."
+  ],
+  "provenance": [
+    "PROV-javascript-03-c676db28071e"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "seeded"
+}

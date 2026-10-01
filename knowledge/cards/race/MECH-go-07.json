@@ -1,0 +1,33 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-go-07",
+  "family": "RACE",
+  "title": "Unsynchronized shared mutable state across Go goroutines",
+  "preconditions": [
+    "Concurrent goroutines access shared mutable state without a lock, atomic operation, or ownership handoff"
+  ],
+  "dangerous_transitions": [
+    "Concurrent goroutines access shared mutable state without a lock, atomic operation, or ownership handoff"
+  ],
+  "sink_semantics": [
+    "shared maps, slices, caches, and lifecycle fields crossing goroutine boundaries"
+  ],
+  "counterevidence": [
+    "The race detector only covers executed schedules; review all reads/writes and cancellation/close ordering."
+  ],
+  "language_applicability": [
+    "go"
+  ],
+  "verification_recipe": [
+    "Trace the language-specific source cue to shared maps, slices, caches, and lifecycle fields crossing goroutine boundaries.",
+    "Establish attacker control, effective principal, guarding order, and security impact.",
+    "Test the stated language-specific counterevidence against source and runtime behavior."
+  ],
+  "provenance": [
+    "PROV-go-07-62e6a4db4c97"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "seeded"
+}

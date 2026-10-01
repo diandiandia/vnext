@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-java-07",
+  "family": "RACE",
+  "title": "时序窗口: TOCTOU 检查与消费跨事务分离 / 并发窗口 (竞态窗口+会话过期+重放)",
+  "preconditions": [
+    "检查与撤销写入跨事务分离 (contains 检查→流结束才 put); 持久化旁路在 CAS 判定之外无条件执行; 单次使用语义的占位与消费时序窗口"
+  ],
+  "dangerous_transitions": [
+    "检查与撤销写入跨事务分离 (contains 检查→流结束才 put); 持久化旁路在 CAS 判定之外无条件执行; 单次使用语义的占位与消费时序窗口"
+  ],
+  "sink_semantics": [
+    "单次消费检查点; 撤销/持久化写入点; 锁获取与释放回调点"
+  ],
+  "counterevidence": [
+    "A guard dominates the sensitive operation for every relevant path.",
+    "The effective principal cannot control the source or the impact is not security relevant.",
+    "contains 只读检查与 put 原子写的窗口是默认形态——占位写前移是修复方向; 存量对象不受新保护机制覆盖 (开关翻转场景)"
+  ],
+  "language_applicability": [
+    "java"
+  ],
+  "verification_recipe": [
+    "Trace the relevant source cue to the 单次消费检查点; 撤销/持久化写入点; 锁获取与释放回调点 operation.",
+    "Establish attacker control, effective principal, guards, and security impact.",
+    "Test the listed counterevidence and record source anchors for every edge."
+  ],
+  "provenance": [
+    "PROV-java-07-b1449e8c6275"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "battle_observed"
+}

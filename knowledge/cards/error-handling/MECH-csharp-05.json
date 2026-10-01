@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-csharp-05",
+  "family": "ERROR-HANDLING",
+  "title": "模块存在 ≠ 被导入: 依赖注入/动态加载路径的静默失效",
+  "preconditions": [
+    "模块存在 ≠ 被导入: 依赖注入/动态加载路径的静默失效"
+  ],
+  "dangerous_transitions": [
+    "模块存在 ≠ 被导入: 依赖注入/动态加载路径的静默失效"
+  ],
+  "sink_semantics": [
+    "DI 容器注册点"
+  ],
+  "counterevidence": [
+    "A guard dominates the sensitive operation for every relevant path.",
+    "The effective principal cannot control the source or the impact is not security relevant.",
+    "broken_edge 类阻断必须核实导入注册链, 不得以模块存在推定 | 启动链正则与扫描器吞错路径双查"
+  ],
+  "language_applicability": [
+    "csharp"
+  ],
+  "verification_recipe": [
+    "Trace the relevant source cue to the DI 容器注册点 operation.",
+    "Establish attacker control, effective principal, guards, and security impact.",
+    "Test the listed counterevidence and record source anchors for every edge."
+  ],
+  "provenance": [
+    "PROV-csharp-05-0724bbab828c"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "seeded"
+}

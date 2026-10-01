@@ -1,0 +1,33 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-go-05",
+  "family": "NUMERIC",
+  "title": "Go query parse failure fails open in a routing or authorization decision",
+  "preconditions": [
+    "A query parsing error is converted into a non-match or permissive result used by a routing or authorization gate"
+  ],
+  "dangerous_transitions": [
+    "A query parsing error is converted into a non-match or permissive result used by a routing or authorization gate"
+  ],
+  "sink_semantics": [
+    "query parser error handling that feeds a route matcher or access decision"
+  ],
+  "counterevidence": [
+    "Check malformed separators and escapes, partial parse results, and whether parse failure denies or accidentally permits the operation."
+  ],
+  "language_applicability": [
+    "go"
+  ],
+  "verification_recipe": [
+    "Trace the language-specific source cue to query parser error handling that feeds a route matcher or access decision.",
+    "Establish attacker control, effective principal, guarding order, and security impact.",
+    "Test the stated language-specific counterevidence against source and runtime behavior."
+  ],
+  "provenance": [
+    "PROV-go-05-8eac230c35b1"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "battle_observed"
+}

@@ -1,0 +1,356 @@
+{
+  "schema_version": "1.0",
+  "profile_id": "PROFILE-swift-portfolio-2026-09-v1",
+  "language_id": "swift",
+  "portfolio_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "entries": [
+    {
+      "issue_id": "swift-issue-01",
+      "rank": 1,
+      "title": "Shell-mediated Process launch from untrusted Swift values",
+      "family": "INJECTION",
+      "weakness_refs": [
+        "CWE-78"
+      ],
+      "mechanism_card_ids": [
+        "MECH-swift-01"
+      ],
+      "source_cues": [
+        "untrusted input reaches a Process launch configuration",
+        "a shell command string is assembled before launching a process"
+      ],
+      "sink_cues": [
+        "Foundation.Process executableURL/arguments",
+        "Process launches /bin/sh or another interpreter with -c and attacker-influenced text"
+      ],
+      "language_pitfalls": [
+        "Foundation.Process arguments are argv elements and do not invoke a shell by themselves.",
+        "Injection risk arises when the selected executable is a shell/interpreter or arguments are reinterpreted by a child command."
+      ],
+      "counterevidence": [
+        "Safe high-level Swift collection access retains runtime bounds checks.",
+        "The foreign pointer contract and owner lifetime are validated at the boundary."
+      ],
+      "verification_steps": [
+        "Trace values into executableURL and every arguments element.",
+        "Determine whether a shell/interpreter is launched; compare argv-based and shell-string behavior."
+      ],
+      "provenance_refs": [
+        "PROV-swift-01-87eae84ae5b0"
+      ]
+    },
+    {
+      "issue_id": "swift-issue-02",
+      "rank": 2,
+      "title": "Out-of-bounds write through Swift unsafe buffers or C interop",
+      "family": "MEMORY-SAFETY",
+      "weakness_refs": [
+        "CWE-787"
+      ],
+      "mechanism_card_ids": [
+        "MECH-swift-02"
+      ],
+      "source_cues": [
+        "attacker-controlled lengths or indexes reach UnsafeMutablePointer/UnsafeMutableBufferPointer",
+        "Swift code passes a pointer and length across a C ABI boundary"
+      ],
+      "sink_cues": [
+        "UnsafeMutablePointer/UnsafeMutableBufferPointer subscripts, pointer arithmetic, and raw-memory writes",
+        "C functions receiving Swift buffer baseAddress/count pairs"
+      ],
+      "language_pitfalls": [
+        "Ordinary Array subscripting performs bounds checks; focus on unsafe buffers, raw pointers, and imported C contracts.",
+        "withUnsafeBytes pointer lifetime ends at closure exit; do not retain the pointer."
+      ],
+      "counterevidence": [
+        "Safe high-level Swift collection access retains runtime bounds checks.",
+        "The foreign pointer contract and owner lifetime are validated at the boundary."
+      ],
+      "verification_steps": [
+        "Trace count/capacity conversions and pointer arithmetic to the write.",
+        "Check lifetime scope and imported C function length contract; use sanitizers where available."
+      ],
+      "provenance_refs": [
+        "PROV-swift-02-b8f080ef096b"
+      ]
+    },
+    {
+      "issue_id": "swift-issue-03",
+      "rank": 3,
+      "title": "Dangling Swift/C object reference across ARC or Unmanaged lifetime boundary",
+      "family": "MEMORY-SAFETY",
+      "weakness_refs": [
+        "CWE-416"
+      ],
+      "mechanism_card_ids": [
+        "MECH-swift-03"
+      ],
+      "source_cues": [
+        "Unmanaged/passRetained/passUnretained or a C callback retains a reference",
+        "object lifetime ends while an unsafe pointer/callback remains reachable"
+      ],
+      "sink_cues": [
+        "Unmanaged.takeRetainedValue/takeUnretainedValue",
+        "C/Objective-C callback or stored opaque pointer dereferences after owner release"
+      ],
+      "language_pitfalls": [
+        "ARC-managed strong references normally prevent UAF; examine Unmanaged, unsafe pointers, bridging, and foreign callbacks.",
+        "Retain-count imbalance may cause leaks or premature release; distinguish the actual failure mode."
+      ],
+      "counterevidence": [
+        "Safe high-level Swift collection access retains runtime bounds checks.",
+        "The foreign pointer contract and owner lifetime are validated at the boundary."
+      ],
+      "verification_steps": [
+        "Map retain/release ownership across the Swift/Objective-C/C boundary.",
+        "Verify callback cancellation and owner lifetime with a controlled reproducer."
+      ],
+      "provenance_refs": [
+        "PROV-swift-03-5f108ae8d80c"
+      ]
+    },
+    {
+      "issue_id": "swift-issue-04",
+      "rank": 4,
+      "title": "Out-of-bounds read through Swift unsafe buffer or imported C pointer",
+      "family": "MEMORY-SAFETY",
+      "weakness_refs": [
+        "CWE-125"
+      ],
+      "mechanism_card_ids": [
+        "MECH-swift-04"
+      ],
+      "source_cues": [
+        "untrusted count/index reaches UnsafeBufferPointer or raw pointer access",
+        "a Swift buffer and count are passed to a C reader"
+      ],
+      "sink_cues": [
+        "unsafe buffer subscript and pointer advanced(by:)",
+        "C functions reading beyond the supplied pointer/count contract"
+      ],
+      "language_pitfalls": [
+        "Ordinary Collection subscripts are bounds checked; focus on unsafe APIs and FFI contracts.",
+        "Validate integer narrowing and element-count multiplication before constructing buffer views."
+      ],
+      "counterevidence": [
+        "Safe high-level Swift collection access retains runtime bounds checks.",
+        "The foreign pointer contract and owner lifetime are validated at the boundary."
+      ],
+      "verification_steps": [
+        "Trace length units, integer casts, and pointer offsets to the read.",
+        "Check initialized count and foreign function contract; use sanitizers where available."
+      ],
+      "provenance_refs": [
+        "PROV-swift-04-2b8f20e758ac"
+      ]
+    },
+    {
+      "issue_id": "swift-issue-05",
+      "rank": 5,
+      "title": "CWE-770 Allocation of Resources Without Limits or Throttling",
+      "family": "RESOURCE-DOS",
+      "weakness_refs": [
+        "CWE-770"
+      ],
+      "mechanism_card_ids": [
+        "MECH-swift-05"
+      ],
+      "source_cues": [
+        "资源分配无上限或无节流"
+      ],
+      "sink_cues": [
+        "分配/队列/累积点"
+      ],
+      "language_pitfalls": [
+        "上限/节流在累积点之前"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "上限/节流在累积点之前"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the 分配/队列/累积点 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-swift-05-6d8d80e318f0"
+      ]
+    },
+    {
+      "issue_id": "swift-issue-06",
+      "rank": 6,
+      "title": "Missing authorization on a Swift server route or privileged operation",
+      "family": "AUTHN",
+      "weakness_refs": [
+        "CWE-284"
+      ],
+      "mechanism_card_ids": [
+        "MECH-swift-06"
+      ],
+      "source_cues": [
+        "a Vapor/NIO request reaches a sensitive operation",
+        "route registration or middleware determines whether a principal is required"
+      ],
+      "sink_cues": [
+        "Vapor route handlers and middleware",
+        "database, filesystem, or administrative operations reachable from a request"
+      ],
+      "language_pitfalls": [
+        "Swift access control and type visibility are not request authorization.",
+        "A route group or middleware declaration is not effective unless it dominates every alias and registration path."
+      ],
+      "counterevidence": [
+        "Safe high-level Swift collection access retains runtime bounds checks.",
+        "The foreign pointer contract and owner lifetime are validated at the boundary."
+      ],
+      "verification_steps": [
+        "Enumerate route registrations, groups, middleware order, and aliases.",
+        "Test anonymous and least-privileged requests against the sensitive operation."
+      ],
+      "provenance_refs": [
+        "PROV-swift-06-b58f86ac1cd1"
+      ]
+    },
+    {
+      "issue_id": "swift-issue-07",
+      "rank": 7,
+      "title": "Incorrect principal/resource authorization in a Swift server handler",
+      "family": "AUTHN",
+      "weakness_refs": [
+        "CWE-863"
+      ],
+      "mechanism_card_ids": [
+        "MECH-swift-07"
+      ],
+      "source_cues": [
+        "request principal and resource/role identifiers are checked in separate code paths",
+        "authorization result is derived from a route parameter or decoded request value"
+      ],
+      "sink_cues": [
+        "Vapor/NIO route handlers and service methods",
+        "resource read/write after a role, owner, or tenant comparison"
+      ],
+      "language_pitfalls": [
+        "Authentication proves identity, not permission for the selected object or action.",
+        "Check middleware and service-layer policy consistency across aliases."
+      ],
+      "counterevidence": [
+        "Safe high-level Swift collection access retains runtime bounds checks.",
+        "The foreign pointer contract and owner lifetime are validated at the boundary."
+      ],
+      "verification_steps": [
+        "Trace the authenticated principal and selected resource through the exact policy branch.",
+        "Compare owner, cross-tenant, and wrong-role controls."
+      ],
+      "provenance_refs": [
+        "PROV-swift-07-9ba0ad06c6b7"
+      ]
+    },
+    {
+      "issue_id": "swift-issue-08",
+      "rank": 8,
+      "title": "Swift server object lookup uses a request-controlled key without ownership scoping",
+      "family": "AUTHN",
+      "weakness_refs": [
+        "CWE-639"
+      ],
+      "mechanism_card_ids": [
+        "MECH-swift-08"
+      ],
+      "source_cues": [
+        "route/query/body identifier selects a server-side object",
+        "authenticated principal or tenant is available separately"
+      ],
+      "sink_cues": [
+        "Vapor route parameters and ORM/repository lookups",
+        "resource mutation/read after lookup by a request-controlled key"
+      ],
+      "language_pitfalls": [
+        "UUIDs and opaque identifiers do not establish ownership.",
+        "Authorization must cover nested, batch, and alternate route lookups."
+      ],
+      "counterevidence": [
+        "Safe high-level Swift collection access retains runtime bounds checks.",
+        "The foreign pointer contract and owner lifetime are validated at the boundary."
+      ],
+      "verification_steps": [
+        "Trace request identifiers into reads and writes and inspect query tenant/owner constraints.",
+        "Test same-tenant and cross-tenant principals against the same object key."
+      ],
+      "provenance_refs": [
+        "PROV-swift-08-191aa6ccbd9c"
+      ]
+    },
+    {
+      "issue_id": "swift-issue-09",
+      "rank": 9,
+      "title": "CWE-20 Improper Input Validation",
+      "family": "DATA-INTEGRITY",
+      "weakness_refs": [
+        "CWE-20"
+      ],
+      "mechanism_card_ids": [
+        "MECH-swift-09"
+      ],
+      "source_cues": [
+        "输入校验缺失或不足"
+      ],
+      "sink_cues": [
+        "外部输入消费点"
+      ],
+      "language_pitfalls": [
+        "输入校验与消费点同层"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "输入校验与消费点同层"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the 外部输入消费点 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-swift-09-c61768c9e9a2"
+      ]
+    },
+    {
+      "issue_id": "swift-issue-10",
+      "rank": 10,
+      "title": "CWE-22 Path Traversal",
+      "family": "WEB",
+      "weakness_refs": [
+        "CWE-22"
+      ],
+      "mechanism_card_ids": [
+        "MECH-swift-10"
+      ],
+      "source_cues": [
+        "路径名未限制到受限目录: 穿越/跳目录"
+      ],
+      "sink_cues": [
+        "文件路径构造与打开点"
+      ],
+      "language_pitfalls": [
+        "规范化/白名单/根约束三选一必须存在"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "规范化/白名单/根约束三选一必须存在"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the 文件路径构造与打开点 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-swift-10-e4d2db19f159"
+      ]
+    }
+  ]
+}

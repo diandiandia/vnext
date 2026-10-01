@@ -1,0 +1,33 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-cpp-09",
+  "family": "STATE",
+  "title": "Asynchronous task object destroyed before worker completion",
+  "preconditions": [
+    "An asynchronous worker retains access to an object that another thread can destroy or reset"
+  ],
+  "dangerous_transitions": [
+    "An asynchronous worker retains access to an object that another thread can destroy or reset"
+  ],
+  "sink_semantics": [
+    "task lifetime termination, release, or reset while worker execution may still be active"
+  ],
+  "counterevidence": [
+    "A documented lifetime contract is counterevidence only if its preconditions are guaranteed and all callers obey them; inspect every API path and caller."
+  ],
+  "language_applicability": [
+    "cpp"
+  ],
+  "verification_recipe": [
+    "Trace the language-specific source cue to task lifetime termination, release, or reset while worker execution may still be active.",
+    "Establish attacker control, effective principal, guarding order, and security impact.",
+    "Test the stated language-specific counterevidence against source and runtime behavior."
+  ],
+  "provenance": [
+    "PROV-cpp-09-0c2639db4462"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "seeded"
+}

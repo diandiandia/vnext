@@ -1,0 +1,1 @@
+"""Source-anchored discovery helpers that produce leads, not verdicts."""

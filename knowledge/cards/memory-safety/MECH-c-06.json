@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-c-06",
+  "family": "MEMORY-SAFETY",
+  "title": "CWE-121 Stack-based Buffer Overflow",
+  "preconditions": [
+    "栈缓冲溢出: 无界拷贝"
+  ],
+  "dangerous_transitions": [
+    "栈缓冲溢出: 无界拷贝"
+  ],
+  "sink_semantics": [
+    "栈缓冲拷贝点"
+  ],
+  "counterevidence": [
+    "A guard dominates the sensitive operation for every relevant path.",
+    "The effective principal cannot control the source or the impact is not security relevant.",
+    "栈缓冲拷贝长度检查"
+  ],
+  "language_applicability": [
+    "c"
+  ],
+  "verification_recipe": [
+    "Trace the relevant source cue to the 栈缓冲拷贝点 operation.",
+    "Establish attacker control, effective principal, guards, and security impact.",
+    "Test the listed counterevidence and record source anchors for every edge."
+  ],
+  "provenance": [
+    "PROV-c-06-a83b4ffa7942"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "seeded"
+}

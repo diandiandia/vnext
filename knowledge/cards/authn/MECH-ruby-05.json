@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-ruby-05",
+  "family": "AUTHN",
+  "title": "调试/控制端点零鉴权: 暴露组件缺鉴权门禁",
+  "preconditions": [
+    "调试/控制端点零鉴权: 暴露组件缺鉴权门禁"
+  ],
+  "dangerous_transitions": [
+    "调试/控制端点零鉴权: 暴露组件缺鉴权门禁"
+  ],
+  "sink_semantics": [
+    "控制端点/状态页路由"
+  ],
+  "counterevidence": [
+    "A guard dominates the sensitive operation for every relevant path.",
+    "The effective principal cannot control the source or the impact is not security relevant.",
+    "『默认受保护』声称必须核实路由挂载与守卫链 | 无 token 形态的端点常被框架默认放行——按实际路由判定"
+  ],
+  "language_applicability": [
+    "ruby"
+  ],
+  "verification_recipe": [
+    "Trace the relevant source cue to the 控制端点/状态页路由 operation.",
+    "Establish attacker control, effective principal, guards, and security impact.",
+    "Test the listed counterevidence and record source anchors for every edge."
+  ],
+  "provenance": [
+    "PROV-ruby-05-aa694d1e12d0"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "seeded"
+}

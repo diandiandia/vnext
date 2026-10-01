@@ -1,0 +1,341 @@
+{
+  "schema_version": "1.0",
+  "profile_id": "PROFILE-shell-portfolio-2026-09-v1",
+  "language_id": "shell",
+  "portfolio_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "entries": [
+    {
+      "issue_id": "shell-issue-01",
+      "rank": 1,
+      "title": "命令拼接执行: 变量进入命令字符串",
+      "family": "INJECTION",
+      "weakness_refs": [
+        "CWE-78"
+      ],
+      "mechanism_card_ids": [
+        "MECH-shell-01"
+      ],
+      "source_cues": [
+        "命令拼接执行: 变量进入命令字符串"
+      ],
+      "sink_cues": [
+        "eval"
+      ],
+      "language_pitfalls": [
+        "引号嵌套层级与参数展开次序是判定核心——逐层展开核实 | env 覆盖形态: 攻击者已能写框架文件时的能力支配裁决 (默认文件覆盖 env)"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "引号嵌套层级与参数展开次序是判定核心——逐层展开核实 | env 覆盖形态: 攻击者已能写框架文件时的能力支配裁决 (默认文件覆盖 env)"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the eval operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-shell-01-3cf30df6eb5d"
+      ]
+    },
+    {
+      "issue_id": "shell-issue-02",
+      "rank": 2,
+      "title": "CWE-94 Code Injection",
+      "family": "INJECTION",
+      "weakness_refs": [
+        "CWE-94"
+      ],
+      "mechanism_card_ids": [
+        "MECH-shell-02"
+      ],
+      "source_cues": [
+        "外部输入被当作代码生成/执行"
+      ],
+      "sink_cues": [
+        "eval/动态代码加载点"
+      ],
+      "language_pitfalls": [
+        "动态代码入口即信任边界"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "动态代码入口即信任边界"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the eval/动态代码加载点 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-shell-02-7e611249728e"
+      ]
+    },
+    {
+      "issue_id": "shell-issue-03",
+      "rank": 3,
+      "title": "Unquoted shell expansion changes argv through word splitting and globbing",
+      "family": "INJECTION",
+      "weakness_refs": [
+        "CWE-88"
+      ],
+      "mechanism_card_ids": [
+        "MECH-shell-03"
+      ],
+      "source_cues": [
+        "An unquoted expansion is split into multiple arguments or pathname matches"
+      ],
+      "sink_cues": [
+        "command arguments populated by unquoted parameter expansion"
+      ],
+      "language_pitfalls": [
+        "Inspect quote context, IFS, pathname expansion, arrays, and nested command substitutions; this differs from shell command-string injection."
+      ],
+      "counterevidence": [
+        "Inspect quote context, IFS, pathname expansion, arrays, and nested command substitutions; this differs from shell command-string injection."
+      ],
+      "verification_steps": [
+        "Trace the language-specific source cue to command arguments populated by unquoted parameter expansion.",
+        "Establish attacker control, effective principal, guarding order, and security impact.",
+        "Test the stated language-specific counterevidence against source and runtime behavior."
+      ],
+      "provenance_refs": [
+        "PROV-shell-03-726866d188ab"
+      ]
+    },
+    {
+      "issue_id": "shell-issue-04",
+      "rank": 4,
+      "title": "Attacker-influenced PATH selects an unintended executable",
+      "family": "TRUST-BOUNDARY",
+      "weakness_refs": [
+        "CWE-426"
+      ],
+      "mechanism_card_ids": [
+        "MECH-shell-04"
+      ],
+      "source_cues": [
+        "A privileged script invokes a command through an inherited or attacker-influenced search path"
+      ],
+      "sink_cues": [
+        "bare command invocation, PATH modification, env-based lookup, or sourced executable"
+      ],
+      "language_pitfalls": [
+        "Trace effective UID, environment sanitization, PATH order, writable directories, and absolute executable paths."
+      ],
+      "counterevidence": [
+        "Trace effective UID, environment sanitization, PATH order, writable directories, and absolute executable paths."
+      ],
+      "verification_steps": [
+        "Trace the language-specific source cue to bare command invocation, PATH modification, env-based lookup, or sourced executable.",
+        "Establish attacker control, effective principal, guarding order, and security impact.",
+        "Test the stated language-specific counterevidence against source and runtime behavior."
+      ],
+      "provenance_refs": [
+        "PROV-shell-04-7ff4ae5f6a8f"
+      ]
+    },
+    {
+      "issue_id": "shell-issue-05",
+      "rank": 5,
+      "title": "Predictable temporary path in a privileged shell workflow",
+      "family": "RACE",
+      "weakness_refs": [
+        "CWE-377"
+      ],
+      "mechanism_card_ids": [
+        "MECH-shell-05"
+      ],
+      "source_cues": [
+        "A script creates or reuses a predictable path in a shared temporary directory"
+      ],
+      "sink_cues": [
+        "temporary path creation followed by redirection, chmod, copy, or privileged write"
+      ],
+      "language_pitfalls": [
+        "Verify atomic creation, restrictive umask, ownership, symlink behavior, and whether the parent directory is attacker-writable."
+      ],
+      "counterevidence": [
+        "Verify atomic creation, restrictive umask, ownership, symlink behavior, and whether the parent directory is attacker-writable."
+      ],
+      "verification_steps": [
+        "Trace the language-specific source cue to temporary path creation followed by redirection, chmod, copy, or privileged write.",
+        "Establish attacker control, effective principal, guarding order, and security impact.",
+        "Test the stated language-specific counterevidence against source and runtime behavior."
+      ],
+      "provenance_refs": [
+        "PROV-shell-05-ad6893b4b651"
+      ]
+    },
+    {
+      "issue_id": "shell-issue-06",
+      "rank": 6,
+      "title": "Filesystem check-then-use race in a privileged shell workflow",
+      "family": "RACE",
+      "weakness_refs": [
+        "CWE-367"
+      ],
+      "mechanism_card_ids": [
+        "MECH-shell-06"
+      ],
+      "source_cues": [
+        "A path is tested/stat'ed and later opened, renamed, removed, or executed"
+      ],
+      "sink_cues": [
+        "test/[[ -e ]]/stat followed by redirection, cp, mv, rm, chmod, or execution"
+      ],
+      "language_pitfalls": [
+        "Check whether an attacker can replace a path component or symlink between check and use; quoting alone does not prevent races."
+      ],
+      "counterevidence": [
+        "Check whether an attacker can replace a path component or symlink between check and use; quoting alone does not prevent races."
+      ],
+      "verification_steps": [
+        "Trace the language-specific source cue to test/[[ -e ]]/stat followed by redirection, cp, mv, rm, chmod, or execution.",
+        "Establish attacker control, effective principal, guarding order, and security impact.",
+        "Test the stated language-specific counterevidence against source and runtime behavior."
+      ],
+      "provenance_refs": [
+        "PROV-shell-06-9ce4379b3a02"
+      ]
+    },
+    {
+      "issue_id": "shell-issue-07",
+      "rank": 7,
+      "title": "CWE-770 Allocation of Resources Without Limits or Throttling",
+      "family": "RESOURCE-DOS",
+      "weakness_refs": [
+        "CWE-770"
+      ],
+      "mechanism_card_ids": [
+        "MECH-shell-07"
+      ],
+      "source_cues": [
+        "资源分配无上限或无节流"
+      ],
+      "sink_cues": [
+        "分配/队列/累积点"
+      ],
+      "language_pitfalls": [
+        "上限/节流在累积点之前"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "上限/节流在累积点之前"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the 分配/队列/累积点 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-shell-07-31e738dacffa"
+      ]
+    },
+    {
+      "issue_id": "shell-issue-08",
+      "rank": 8,
+      "title": "CWE-22 Path Traversal",
+      "family": "WEB",
+      "weakness_refs": [
+        "CWE-22"
+      ],
+      "mechanism_card_ids": [
+        "MECH-shell-08"
+      ],
+      "source_cues": [
+        "路径名未限制到受限目录: 穿越/跳目录"
+      ],
+      "sink_cues": [
+        "文件路径构造与打开点"
+      ],
+      "language_pitfalls": [
+        "规范化/白名单/根约束三选一必须存在"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "规范化/白名单/根约束三选一必须存在"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the 文件路径构造与打开点 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-shell-08-7782cc0373ea"
+      ]
+    },
+    {
+      "issue_id": "shell-issue-09",
+      "rank": 9,
+      "title": "CWE-20 Improper Input Validation",
+      "family": "DATA-INTEGRITY",
+      "weakness_refs": [
+        "CWE-20"
+      ],
+      "mechanism_card_ids": [
+        "MECH-shell-09"
+      ],
+      "source_cues": [
+        "输入校验缺失或不足"
+      ],
+      "sink_cues": [
+        "外部输入消费点"
+      ],
+      "language_pitfalls": [
+        "输入校验与消费点同层"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "输入校验与消费点同层"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the 外部输入消费点 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-shell-09-fb403493376b"
+      ]
+    },
+    {
+      "issue_id": "shell-issue-10",
+      "rank": 10,
+      "title": "CWE-200 Exposure of Sensitive Information",
+      "family": "DATA-INTEGRITY",
+      "weakness_refs": [
+        "CWE-200"
+      ],
+      "mechanism_card_ids": [
+        "MECH-shell-10"
+      ],
+      "source_cues": [
+        "敏感信息暴露给未授权主体"
+      ],
+      "sink_cues": [
+        "日志/错误输出/响应生成点"
+      ],
+      "language_pitfalls": [
+        "敏感字段过滤在序列化层"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "敏感字段过滤在序列化层"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the 日志/错误输出/响应生成点 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-shell-10-62906c905055"
+      ]
+    }
+  ]
+}

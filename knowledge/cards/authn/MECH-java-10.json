@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-java-10",
+  "family": "AUTHN",
+  "title": "撤销策略未生效: 多层 notBefore/撤销校验维度缺失",
+  "preconditions": [
+    "realm/client/user 三级 notBefore 校验不完整的调用点; 撤销策略验证修复后未覆盖的兄弟路径"
+  ],
+  "dangerous_transitions": [
+    "realm/client/user 三级 notBefore 校验不完整的调用点; 撤销策略验证修复后未覆盖的兄弟路径"
+  ],
+  "sink_semantics": [
+    "TokenVerifier.withChecks(NotBeforeCheck) 调用点"
+  ],
+  "counterevidence": [
+    "A guard dominates the sensitive operation for every relevant path.",
+    "The effective principal cannot control the source or the impact is not security relevant.",
+    "同族调用点对比矩阵: 修复后带全维度 vs 未修复缺维度; 无生产调用者的缺陷形态按不可达处理"
+  ],
+  "language_applicability": [
+    "java"
+  ],
+  "verification_recipe": [
+    "Trace the relevant source cue to the TokenVerifier.withChecks(NotBeforeCheck) 调用点 operation.",
+    "Establish attacker control, effective principal, guards, and security impact.",
+    "Test the listed counterevidence and record source anchors for every edge."
+  ],
+  "provenance": [
+    "PROV-java-10-e28919f16e43"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "battle_observed"
+}

@@ -1,0 +1,363 @@
+{
+  "schema_version": "1.0",
+  "profile_id": "PROFILE-typescript-portfolio-2026-09-v1",
+  "language_id": "typescript",
+  "portfolio_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "entries": [
+    {
+      "issue_id": "typescript-issue-01",
+      "rank": 1,
+      "title": "Node.js child_process command construction from untrusted input",
+      "family": "INJECTION",
+      "weakness_refs": [
+        "CWE-78"
+      ],
+      "mechanism_card_ids": [
+        "MECH-typescript-01"
+      ],
+      "source_cues": [
+        "HTTP/RPC/message values flow into command arguments",
+        "TypeScript values cross erased type annotations or JavaScript interop"
+      ],
+      "sink_cues": [
+        "node:child_process exec/execSync command string",
+        "execFile/spawn options including shell, argv, and executable path"
+      ],
+      "language_pitfalls": [
+        "exec and execSync invoke a shell; string concatenation and interpolation can enable command injection.",
+        "execFile/spawn are safer only when shell execution is disabled and untrusted data remains a separate argument.",
+        "Type annotations do not validate runtime input; validate deserialized and any-typed values.",
+        "Type annotations are erased at runtime; external values require runtime validation."
+      ],
+      "counterevidence": [
+        "Only a fixed executable is invoked with a fixed argv structure, shell:false, and validated values."
+      ],
+      "verification_steps": [
+        "Trace untrusted values to child_process APIs and identify the exact API/overload/options.",
+        "Verify shell behavior, argument boundaries, executable selection, and platform-specific quoting.",
+        "Use a harmless sentinel command in an isolated harness and compare an argv-based negative control."
+      ],
+      "provenance_refs": [
+        "PROV-typescript-01-75034d880527"
+      ]
+    },
+    {
+      "issue_id": "typescript-issue-02",
+      "rank": 2,
+      "title": "Dynamic code evaluation from untrusted TypeScript runtime values",
+      "family": "INJECTION",
+      "weakness_refs": [
+        "CWE-94"
+      ],
+      "mechanism_card_ids": [
+        "MECH-typescript-02"
+      ],
+      "source_cues": [
+        "untrusted data reaches an evaluation or module-loading input",
+        "generated JavaScript runtime values bypass static TypeScript types"
+      ],
+      "sink_cues": [
+        "eval and Function constructors",
+        "node:vm runIn* APIs and dynamic code-generation APIs"
+      ],
+      "language_pitfalls": [
+        "Dynamic import of a fixed module is not equivalent to evaluating attacker-controlled source.",
+        "Template construction and transpilation can create an execution sink even when the input is typed as string.",
+        "Type annotations are erased at runtime; external values require runtime validation."
+      ],
+      "counterevidence": [
+        "Only fixed reviewed source is evaluated and untrusted input remains data."
+      ],
+      "verification_steps": [
+        "Trace attacker-controlled bytes through decoding, templating, and code generation to the evaluator.",
+        "Distinguish data arguments from source text and inspect sandbox/realm boundaries.",
+        "Use a harmless expression sentinel and a non-evaluating control."
+      ],
+      "provenance_refs": [
+        "PROV-typescript-02-35ad011af30b"
+      ]
+    },
+    {
+      "issue_id": "typescript-issue-03",
+      "rank": 3,
+      "title": "Unbounded Node.js stream or request-body accumulation",
+      "family": "RESOURCE-DOS",
+      "weakness_refs": [
+        "CWE-400"
+      ],
+      "mechanism_card_ids": [
+        "MECH-typescript-03"
+      ],
+      "source_cues": [
+        "remote request or stream chunks are appended to persistent buffers/arrays",
+        "multiple consumers or retries retain chunks beyond request lifetime"
+      ],
+      "sink_cues": [
+        "Readable/data event accumulation and Buffer.concat",
+        "body parsers, message queues, and per-request chunk arrays"
+      ],
+      "language_pitfalls": [
+        "A stream API does not imply backpressure is enabled.",
+        "Count and byte limits must be applied before retaining each chunk; per-request limits may still permit aggregate exhaustion.",
+        "Type annotations are erased at runtime; external values require runtime validation."
+      ],
+      "counterevidence": [
+        "A byte/count cap is enforced before append and overflow terminates or backpressures the producer."
+      ],
+      "verification_steps": [
+        "Trace chunk production, buffering, consumption, cancellation, and cleanup.",
+        "Measure retained bytes under bounded and over-limit streams with a negative control.",
+        "Check per-connection and aggregate concurrency limits."
+      ],
+      "provenance_refs": [
+        "PROV-typescript-03-c676db28071e"
+      ]
+    },
+    {
+      "issue_id": "typescript-issue-04",
+      "rank": 4,
+      "title": "Missing authorization on a TypeScript service operation",
+      "family": "AUTHN",
+      "weakness_refs": [
+        "CWE-862"
+      ],
+      "mechanism_card_ids": [
+        "MECH-typescript-04"
+      ],
+      "source_cues": [
+        "authenticated or anonymous request reaches a state-changing handler",
+        "route parameter selects a protected object"
+      ],
+      "sink_cues": [
+        "Express/Koa/Fastify route handlers and service methods",
+        "database writes, secret reads, and administrative operations"
+      ],
+      "language_pitfalls": [
+        "Authentication middleware does not prove object- or action-level authorization.",
+        "Decorator/type declarations do not enforce runtime authorization unless middleware is wired on every route.",
+        "Type annotations are erased at runtime; external values require runtime validation."
+      ],
+      "counterevidence": [
+        "A verified authorization policy dominates the operation for every registered route and alias."
+      ],
+      "verification_steps": [
+        "Enumerate route registration, middleware ordering, aliases, and service entry points.",
+        "Test anonymous, low-privilege, owner, and cross-tenant principals."
+      ],
+      "provenance_refs": [
+        "PROV-typescript-04-0e1034170db7"
+      ]
+    },
+    {
+      "issue_id": "typescript-issue-05",
+      "rank": 5,
+      "title": "Unbounded queues, timers, retries, or object retention in a TypeScript runtime",
+      "family": "RESOURCE-DOS",
+      "weakness_refs": [
+        "CWE-770"
+      ],
+      "mechanism_card_ids": [
+        "MECH-typescript-05"
+      ],
+      "source_cues": [
+        "attacker-controlled requests schedule retained work or objects",
+        "queue growth outpaces bounded consumers"
+      ],
+      "sink_cues": [
+        "arrays/maps/queues, timers, promises, worker queues, and buffered streams",
+        "retained closures/listeners and retry scheduling"
+      ],
+      "language_pitfalls": [
+        "Garbage collection does not reclaim objects reachable from queues, listeners, timers, or caches.",
+        "Per-item limits do not bound aggregate concurrency or retry amplification.",
+        "Type annotations are erased at runtime; external values require runtime validation."
+      ],
+      "counterevidence": [
+        "Queue, concurrency, retention, and retry budgets are enforced before admitting work and on failure paths."
+      ],
+      "verification_steps": [
+        "Identify the retaining owner and every enqueue, retry, cancellation, and drain transition.",
+        "Measure queue depth and retained memory with bounded and adversarial-rate controls."
+      ],
+      "provenance_refs": [
+        "PROV-typescript-05-2dd583a7c9f1"
+      ]
+    },
+    {
+      "issue_id": "typescript-issue-06",
+      "rank": 6,
+      "title": "Broken object-level authorization through a user-controlled TypeScript key",
+      "family": "AUTHN",
+      "weakness_refs": [
+        "CWE-639"
+      ],
+      "mechanism_card_ids": [
+        "MECH-typescript-06"
+      ],
+      "source_cues": [
+        "route/body/query identifier selects a database object",
+        "tenant or owner identity is available separately from the selected key"
+      ],
+      "sink_cues": [
+        "ORM findById/findUnique and repository lookups",
+        "filesystem/object-store keys and cache entries selected by request parameters"
+      ],
+      "language_pitfalls": [
+        "UUIDs and unguessable identifiers do not replace authorization.",
+        "TypeScript DTO types do not establish ownership or tenant membership at runtime.",
+        "Type annotations are erased at runtime; external values require runtime validation."
+      ],
+      "counterevidence": [
+        "The query is scoped by the authenticated principal/tenant or an equivalent policy is checked before use."
+      ],
+      "verification_steps": [
+        "Trace request-controlled identifiers to reads and writes, including batch and nested routes.",
+        "Compare owner, same-tenant, and cross-tenant access outcomes."
+      ],
+      "provenance_refs": [
+        "PROV-typescript-06-01ab80f5d762"
+      ]
+    },
+    {
+      "issue_id": "typescript-issue-07",
+      "rank": 7,
+      "title": "Unsafe cryptographic algorithm or parameter selection in a TypeScript runtime",
+      "family": "CRYPTO",
+      "weakness_refs": [
+        "CWE-327"
+      ],
+      "mechanism_card_ids": [
+        "MECH-typescript-07"
+      ],
+      "source_cues": [
+        "request/config values select algorithm, digest, key, IV, or mode",
+        "serialized keys/parameters cross a runtime trust boundary"
+      ],
+      "sink_cues": [
+        "node:crypto createCipheriv/createDecipheriv/createSign/createVerify",
+        "WebCrypto subtle.importKey/sign/verify algorithm dictionaries"
+      ],
+      "language_pitfalls": [
+        "Runtime algorithm strings require an explicit allowlist and compatible parameter checks.",
+        "A successful API call does not establish safe key size, mode, nonce handling, or protocol binding.",
+        "Type annotations are erased at runtime; external values require runtime validation."
+      ],
+      "counterevidence": [
+        "Algorithm and parameter choices are fixed or allowlisted with validated key/nonce constraints."
+      ],
+      "verification_steps": [
+        "Trace algorithm and parameter sources to the exact Node/WebCrypto primitive.",
+        "Check key length, mode, nonce uniqueness, tag verification, and error behavior."
+      ],
+      "provenance_refs": [
+        "PROV-typescript-07-3b70ea627f79"
+      ]
+    },
+    {
+      "issue_id": "typescript-issue-08",
+      "rank": 8,
+      "title": "Untrusted data reaches an HTML or DOM execution sink",
+      "family": "WEB",
+      "weakness_refs": [
+        "CWE-79"
+      ],
+      "mechanism_card_ids": [
+        "MECH-typescript-08"
+      ],
+      "source_cues": [
+        "request/API/storage data reaches browser-rendered markup",
+        "server template output is embedded into an HTML/JS context"
+      ],
+      "sink_cues": [
+        "DOM innerHTML/outerHTML/insertAdjacentHTML/document.write",
+        "React dangerouslySetInnerHTML and unescaped server template output"
+      ],
+      "language_pitfalls": [
+        "Framework escaping is context-dependent; raw HTML escape hatches bypass it.",
+        "URL, script, attribute, and HTML-body contexts require different encoding rules.",
+        "Type annotations are erased at runtime; external values require runtime validation."
+      ],
+      "counterevidence": [
+        "The framework uses context-correct escaping and no raw HTML sink receives attacker-controlled data."
+      ],
+      "verification_steps": [
+        "Trace the value into the final browser/template context and inspect sanitization order.",
+        "Use a harmless markup sentinel and a context-matched encoded control."
+      ],
+      "provenance_refs": [
+        "PROV-typescript-08-29f99ec87426"
+      ]
+    },
+    {
+      "issue_id": "typescript-issue-09",
+      "rank": 9,
+      "title": "Cross-site request forgery against cookie-authenticated TypeScript endpoints",
+      "family": "WEB",
+      "weakness_refs": [
+        "CWE-352"
+      ],
+      "mechanism_card_ids": [
+        "MECH-typescript-09"
+      ],
+      "source_cues": [
+        "browser-originated state change uses ambient cookies",
+        "cross-origin form/fetch reaches a mutation route"
+      ],
+      "sink_cues": [
+        "state-changing Express/Koa/Fastify routes",
+        "cookie-authenticated JSON/form endpoints and credentialed fetch handlers"
+      ],
+      "language_pitfalls": [
+        "CORS is not a general CSRF defense for form submissions or simple requests.",
+        "SameSite behavior depends on cookie attributes, browser context, and cross-site navigation.",
+        "Type annotations are erased at runtime; external values require runtime validation."
+      ],
+      "counterevidence": [
+        "A verified anti-CSRF token/origin policy protects every state-changing cookie-authenticated route."
+      ],
+      "verification_steps": [
+        "Map cookie attributes and route methods, then test cross-site form and credentialed fetch controls.",
+        "Check origin/referrer validation and token binding on aliases."
+      ],
+      "provenance_refs": [
+        "PROV-typescript-09-581bbdb61c2a"
+      ]
+    },
+    {
+      "issue_id": "typescript-issue-10",
+      "rank": 10,
+      "title": "Path traversal through TypeScript/Node filesystem operations",
+      "family": "WEB",
+      "weakness_refs": [
+        "CWE-22"
+      ],
+      "mechanism_card_ids": [
+        "MECH-typescript-10"
+      ],
+      "source_cues": [
+        "request/archive/object key controls a filesystem path",
+        "base directory and user-controlled relative path are combined"
+      ],
+      "sink_cues": [
+        "node:fs open/readFile/writeFile/createReadStream/unlink",
+        "path.join/path.resolve results used for filesystem access"
+      ],
+      "language_pitfalls": [
+        "path.join is normalization, not a containment proof.",
+        "Check the resolved target against the intended root after normalization and account for symlinks.",
+        "Type annotations are erased at runtime; external values require runtime validation."
+      ],
+      "counterevidence": [
+        "The canonical resolved path remains under the trusted root and symlink policy is enforced."
+      ],
+      "verification_steps": [
+        "Trace path inputs through decoding, path.resolve, symlinks, and the final fs operation.",
+        "Test traversal encodings and symlink controls against an in-root negative case."
+      ],
+      "provenance_refs": [
+        "PROV-typescript-10-f1a0f1cd915a"
+      ]
+    }
+  ]
+}

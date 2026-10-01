@@ -1,0 +1,33 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-shell-05",
+  "family": "RACE",
+  "title": "Predictable temporary path in a privileged shell workflow",
+  "preconditions": [
+    "A script creates or reuses a predictable path in a shared temporary directory"
+  ],
+  "dangerous_transitions": [
+    "A script creates or reuses a predictable path in a shared temporary directory"
+  ],
+  "sink_semantics": [
+    "temporary path creation followed by redirection, chmod, copy, or privileged write"
+  ],
+  "counterevidence": [
+    "Verify atomic creation, restrictive umask, ownership, symlink behavior, and whether the parent directory is attacker-writable."
+  ],
+  "language_applicability": [
+    "shell"
+  ],
+  "verification_recipe": [
+    "Trace the language-specific source cue to temporary path creation followed by redirection, chmod, copy, or privileged write.",
+    "Establish attacker control, effective principal, guarding order, and security impact.",
+    "Test the stated language-specific counterevidence against source and runtime behavior."
+  ],
+  "provenance": [
+    "PROV-shell-05-ad6893b4b651"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "seeded"
+}

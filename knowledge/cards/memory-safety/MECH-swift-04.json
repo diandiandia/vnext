@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-swift-04",
+  "family": "MEMORY-SAFETY",
+  "title": "Out-of-bounds read through Swift unsafe buffer or imported C pointer",
+  "preconditions": [
+    "untrusted count/index reaches UnsafeBufferPointer or raw pointer access",
+    "a Swift buffer and count are passed to a C reader"
+  ],
+  "dangerous_transitions": [
+    "read index exceeds initialized count",
+    "pointer/count contract is widened or narrowed inconsistently across FFI"
+  ],
+  "sink_semantics": [
+    "unsafe buffer subscript and pointer advanced(by:)",
+    "C functions reading beyond the supplied pointer/count contract"
+  ],
+  "counterevidence": [
+    "Safe high-level Swift collection access retains runtime bounds checks.",
+    "The foreign pointer contract and owner lifetime are validated at the boundary."
+  ],
+  "language_applicability": [
+    "swift"
+  ],
+  "verification_recipe": [
+    "Trace length units, integer casts, and pointer offsets to the read.",
+    "Check initialized count and foreign function contract; use sanitizers where available."
+  ],
+  "provenance": [
+    "PROV-swift-04-2b8f20e758ac"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "seeded"
+}

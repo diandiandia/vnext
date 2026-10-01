@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-java-05",
+  "family": "ERROR-HANDLING",
+  "title": "空引用/越界解引用: 解析结果零长度元素未防御 (Java 形态 AIOOBE/NPE)",
+  "preconditions": [
+    "split 后索引未检查长度 (尾随分隔符形态); DOM getFirstChild 空引用; 列表 get(0) 空列表; LDAP 属性值 substring/charAt/parseLong 未校验"
+  ],
+  "dangerous_transitions": [
+    "split 后索引未检查长度 (尾随分隔符形态); DOM getFirstChild 空引用; 列表 get(0) 空列表; LDAP 属性值 substring/charAt/parseLong 未校验"
+  ],
+  "sink_semantics": [
+    "split/index 点; DOM 节点取值点; 外部数据属性解析点"
+  ],
+  "counterevidence": [
+    "A guard dominates the sensitive operation for every relevant path.",
+    "The effective principal cannot control the source or the impact is not security relevant.",
+    "Java String.split 移除尾随空串的语义是 AIOOBE 高发形态; 异常逃逸 vs 捕获的分支方向核实"
+  ],
+  "language_applicability": [
+    "java"
+  ],
+  "verification_recipe": [
+    "Trace the relevant source cue to the split/index 点; DOM 节点取值点; 外部数据属性解析点 operation.",
+    "Establish attacker control, effective principal, guards, and security impact.",
+    "Test the listed counterevidence and record source anchors for every edge."
+  ],
+  "provenance": [
+    "PROV-java-05-898617ca8089"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "battle_observed"
+}

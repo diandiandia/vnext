@@ -1,0 +1,34 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-typescript-09",
+  "family": "WEB",
+  "title": "Cross-site request forgery against cookie-authenticated TypeScript endpoints",
+  "preconditions": [
+    "browser-originated state change uses ambient cookies",
+    "cross-origin form/fetch reaches a mutation route"
+  ],
+  "dangerous_transitions": [
+    "ambient cookie authorization accepts a cross-site state-changing request without a valid CSRF defense"
+  ],
+  "sink_semantics": [
+    "state-changing Express/Koa/Fastify routes",
+    "cookie-authenticated JSON/form endpoints and credentialed fetch handlers"
+  ],
+  "counterevidence": [
+    "A verified anti-CSRF token/origin policy protects every state-changing cookie-authenticated route."
+  ],
+  "language_applicability": [
+    "typescript"
+  ],
+  "verification_recipe": [
+    "Map cookie attributes and route methods, then test cross-site form and credentialed fetch controls.",
+    "Check origin/referrer validation and token binding on aliases."
+  ],
+  "provenance": [
+    "PROV-typescript-09-581bbdb61c2a"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "seeded"
+}

@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-cpp-07",
+  "family": "MEMORY-SAFETY",
+  "title": "CWE-122 Heap-based Buffer Overflow",
+  "preconditions": [
+    "堆缓冲溢出: 无界拷贝"
+  ],
+  "dangerous_transitions": [
+    "堆缓冲溢出: 无界拷贝"
+  ],
+  "sink_semantics": [
+    "堆缓冲拷贝点: 长度未检拷贝"
+  ],
+  "counterevidence": [
+    "A guard dominates the sensitive operation for every relevant path.",
+    "The effective principal cannot control the source or the impact is not security relevant.",
+    "堆缓冲拷贝长度检查"
+  ],
+  "language_applicability": [
+    "cpp"
+  ],
+  "verification_recipe": [
+    "Trace the relevant source cue to the 堆缓冲拷贝点: 长度未检拷贝 operation.",
+    "Establish attacker control, effective principal, guards, and security impact.",
+    "Test the listed counterevidence and record source anchors for every edge."
+  ],
+  "provenance": [
+    "PROV-cpp-07-cd92cb693d5a"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "seeded"
+}

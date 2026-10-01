@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-typescript-03",
+  "family": "RESOURCE-DOS",
+  "title": "Unbounded Node.js stream or request-body accumulation",
+  "preconditions": [
+    "remote request or stream chunks are appended to persistent buffers/arrays",
+    "multiple consumers or retries retain chunks beyond request lifetime"
+  ],
+  "dangerous_transitions": [
+    "each attacker-controlled chunk increases retained memory without a cumulative cap",
+    "slow consumers prevent release while producers continue"
+  ],
+  "sink_semantics": [
+    "Readable/data event accumulation and Buffer.concat",
+    "body parsers, message queues, and per-request chunk arrays"
+  ],
+  "counterevidence": [
+    "A byte/count cap is enforced before append and overflow terminates or backpressures the producer."
+  ],
+  "language_applicability": [
+    "typescript"
+  ],
+  "verification_recipe": [
+    "Trace chunk production, buffering, consumption, cancellation, and cleanup.",
+    "Measure retained bytes under bounded and over-limit streams with a negative control.",
+    "Check per-connection and aggregate concurrency limits."
+  ],
+  "provenance": [
+    "PROV-typescript-03-c676db28071e"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "seeded"
+}

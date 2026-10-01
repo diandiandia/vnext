@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-php-09",
+  "family": "WEB",
+  "title": "CWE-22 Path Traversal",
+  "preconditions": [
+    "路径名未限制到受限目录: 穿越/跳目录"
+  ],
+  "dangerous_transitions": [
+    "路径名未限制到受限目录: 穿越/跳目录"
+  ],
+  "sink_semantics": [
+    "文件路径构造与打开点"
+  ],
+  "counterevidence": [
+    "A guard dominates the sensitive operation for every relevant path.",
+    "The effective principal cannot control the source or the impact is not security relevant.",
+    "规范化/白名单/根约束三选一必须存在"
+  ],
+  "language_applicability": [
+    "php"
+  ],
+  "verification_recipe": [
+    "Trace the relevant source cue to the 文件路径构造与打开点 operation.",
+    "Establish attacker control, effective principal, guards, and security impact.",
+    "Test the listed counterevidence and record source anchors for every edge."
+  ],
+  "provenance": [
+    "PROV-php-09-7c7133f82128"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "seeded"
+}

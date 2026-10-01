@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-scala-03",
+  "family": "INJECTION",
+  "title": "CWE-89 SQL Injection",
+  "preconditions": [
+    "外部输入拼接进 SQL 命令字符串"
+  ],
+  "dangerous_transitions": [
+    "外部输入拼接进 SQL 命令字符串"
+  ],
+  "sink_semantics": [
+    "SQL 语句构造/执行点"
+  ],
+  "counterevidence": [
+    "A guard dominates the sensitive operation for every relevant path.",
+    "The effective principal cannot control the source or the impact is not security relevant.",
+    "参数化查询优先; 拼接时必须枚举注入原语"
+  ],
+  "language_applicability": [
+    "scala"
+  ],
+  "verification_recipe": [
+    "Trace the relevant source cue to the SQL 语句构造/执行点 operation.",
+    "Establish attacker control, effective principal, guards, and security impact.",
+    "Test the listed counterevidence and record source anchors for every edge."
+  ],
+  "provenance": [
+    "PROV-scala-03-63c7f2ce8c2b"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "seeded"
+}

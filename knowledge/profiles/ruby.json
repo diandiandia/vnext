@@ -1,0 +1,349 @@
+{
+  "schema_version": "1.0",
+  "profile_id": "PROFILE-ruby-portfolio-2026-09-v1",
+  "language_id": "ruby",
+  "portfolio_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "entries": [
+    {
+      "issue_id": "ruby-issue-01",
+      "rank": 1,
+      "title": "动态代码执行: 不可信数据进入 eval/系统调用",
+      "family": "INJECTION",
+      "weakness_refs": [
+        "CWE-94"
+      ],
+      "mechanism_card_ids": [
+        "MECH-ruby-01"
+      ],
+      "source_cues": [
+        "动态代码执行: 不可信数据进入 eval/系统调用"
+      ],
+      "sink_cues": [
+        "eval"
+      ],
+      "language_pitfalls": [
+        "send/constantize 动态分发与 eval 同族——漏判高发 | 『调用者受信』声称必须给信源链证据"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "send/constantize 动态分发与 eval 同族——漏判高发 | 『调用者受信』声称必须给信源链证据"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the eval operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-ruby-01-66f5d1f4661c"
+      ]
+    },
+    {
+      "issue_id": "ruby-issue-02",
+      "rank": 2,
+      "title": "CWE-78 OS Command Injection",
+      "family": "INJECTION",
+      "weakness_refs": [
+        "CWE-78"
+      ],
+      "mechanism_card_ids": [
+        "MECH-ruby-02"
+      ],
+      "source_cues": [
+        "外部输入进入 OS 命令执行路径"
+      ],
+      "sink_cues": [
+        "system/popen/exec 族调用点"
+      ],
+      "language_pitfalls": [
+        "命令构造与执行分离; 参数数组优先"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "命令构造与执行分离; 参数数组优先"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the system/popen/exec 族调用点 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-ruby-02-2f1792759551"
+      ]
+    },
+    {
+      "issue_id": "ruby-issue-03",
+      "rank": 3,
+      "title": "CWE-502 Deserialization of Untrusted Data",
+      "family": "INJECTION",
+      "weakness_refs": [
+        "CWE-502"
+      ],
+      "mechanism_card_ids": [
+        "MECH-ruby-03"
+      ],
+      "source_cues": [
+        "不可信数据反序列化"
+      ],
+      "sink_cues": [
+        "反序列化读取入口"
+      ],
+      "language_pitfalls": [
+        "反序列化输入按不可信处理"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "反序列化输入按不可信处理"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the 反序列化读取入口 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-ruby-03-40850f325dc2"
+      ]
+    },
+    {
+      "issue_id": "ruby-issue-04",
+      "rank": 4,
+      "title": "CWE-89 SQL Injection",
+      "family": "INJECTION",
+      "weakness_refs": [
+        "CWE-89"
+      ],
+      "mechanism_card_ids": [
+        "MECH-ruby-04"
+      ],
+      "source_cues": [
+        "外部输入拼接进 SQL 命令字符串"
+      ],
+      "sink_cues": [
+        "SQL 语句构造/执行点"
+      ],
+      "language_pitfalls": [
+        "参数化查询优先; 拼接时必须枚举注入原语"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "参数化查询优先; 拼接时必须枚举注入原语"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the SQL 语句构造/执行点 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-ruby-04-261d17d04efc"
+      ]
+    },
+    {
+      "issue_id": "ruby-issue-05",
+      "rank": 5,
+      "title": "调试/控制端点零鉴权: 暴露组件缺鉴权门禁",
+      "family": "AUTHN",
+      "weakness_refs": [
+        "CWE-862"
+      ],
+      "mechanism_card_ids": [
+        "MECH-ruby-05"
+      ],
+      "source_cues": [
+        "调试/控制端点零鉴权: 暴露组件缺鉴权门禁"
+      ],
+      "sink_cues": [
+        "控制端点/状态页路由"
+      ],
+      "language_pitfalls": [
+        "『默认受保护』声称必须核实路由挂载与守卫链 | 无 token 形态的端点常被框架默认放行——按实际路由判定"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "『默认受保护』声称必须核实路由挂载与守卫链 | 无 token 形态的端点常被框架默认放行——按实际路由判定"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the 控制端点/状态页路由 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-ruby-05-aa694d1e12d0"
+      ]
+    },
+    {
+      "issue_id": "ruby-issue-06",
+      "rank": 6,
+      "title": "跨租户状态共享: 状态机序对缺陷 (停服/恢复/会话序)",
+      "family": "STATE",
+      "weakness_refs": [
+        "CWE-696"
+      ],
+      "mechanism_card_ids": [
+        "MECH-ruby-06"
+      ],
+      "source_cues": [
+        "跨租户状态共享: 状态机序对缺陷 (停服/恢复/会话序)"
+      ],
+      "sink_cues": [
+        "跨用户共享状态点"
+      ],
+      "language_pitfalls": [
+        "跨用户停服类序对缺陷的 owner 归属必须逐请求核实 | 状态机序对 (启动→停止→启动) 的非法转移按逐转移行判定"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "跨用户停服类序对缺陷的 owner 归属必须逐请求核实 | 状态机序对 (启动→停止→启动) 的非法转移按逐转移行判定"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the 跨用户共享状态点 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-ruby-06-4d3bf920d13c"
+      ]
+    },
+    {
+      "issue_id": "ruby-issue-07",
+      "rank": 7,
+      "title": "CWE-770 Allocation of Resources Without Limits or Throttling",
+      "family": "RESOURCE-DOS",
+      "weakness_refs": [
+        "CWE-770"
+      ],
+      "mechanism_card_ids": [
+        "MECH-ruby-07"
+      ],
+      "source_cues": [
+        "资源分配无上限或无节流"
+      ],
+      "sink_cues": [
+        "分配/队列/累积点"
+      ],
+      "language_pitfalls": [
+        "上限/节流在累积点之前"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "上限/节流在累积点之前"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the 分配/队列/累积点 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-ruby-07-a2ea0147b932"
+      ]
+    },
+    {
+      "issue_id": "ruby-issue-08",
+      "rank": 8,
+      "title": "CWE-639 Authorization Bypass Through User-Controlled Key",
+      "family": "AUTHN",
+      "weakness_refs": [
+        "CWE-639"
+      ],
+      "mechanism_card_ids": [
+        "MECH-ruby-08"
+      ],
+      "source_cues": [
+        "用户可控键绕过授权(越权)"
+      ],
+      "sink_cues": [
+        "按用户键取资源的查询点"
+      ],
+      "language_pitfalls": [
+        "资源归属键与访问者身份比对"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "资源归属键与访问者身份比对"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the 按用户键取资源的查询点 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-ruby-08-03859f21e65a"
+      ]
+    },
+    {
+      "issue_id": "ruby-issue-09",
+      "rank": 9,
+      "title": "CWE-79 Cross-site Scripting",
+      "family": "WEB",
+      "weakness_refs": [
+        "CWE-79"
+      ],
+      "mechanism_card_ids": [
+        "MECH-ruby-09"
+      ],
+      "source_cues": [
+        "输出未净化的外部数据: 网页生成路径缺转义"
+      ],
+      "sink_cues": [
+        "HTML 输出/模板渲染点"
+      ],
+      "language_pitfalls": [
+        "输出转义必须在渲染边界且覆盖上下文(HTML/属性/JS)"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "输出转义必须在渲染边界且覆盖上下文(HTML/属性/JS)"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the HTML 输出/模板渲染点 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-ruby-09-5e76cd7e2375"
+      ]
+    },
+    {
+      "issue_id": "ruby-issue-10",
+      "rank": 10,
+      "title": "CWE-22 Path Traversal",
+      "family": "WEB",
+      "weakness_refs": [
+        "CWE-22"
+      ],
+      "mechanism_card_ids": [
+        "MECH-ruby-10"
+      ],
+      "source_cues": [
+        "路径名未限制到受限目录: 穿越/跳目录"
+      ],
+      "sink_cues": [
+        "文件路径构造与打开点"
+      ],
+      "language_pitfalls": [
+        "规范化/白名单/根约束三选一必须存在"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "规范化/白名单/根约束三选一必须存在"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the 文件路径构造与打开点 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-ruby-10-4b6cf7c18d5d"
+      ]
+    }
+  ]
+}

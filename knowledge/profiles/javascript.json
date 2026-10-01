@@ -1,0 +1,349 @@
+{
+  "schema_version": "1.0",
+  "profile_id": "PROFILE-javascript-portfolio-2026-09-v1",
+  "language_id": "javascript",
+  "portfolio_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "entries": [
+    {
+      "issue_id": "javascript-issue-01",
+      "rank": 1,
+      "title": "CWE-78 OS Command Injection",
+      "family": "INJECTION",
+      "weakness_refs": [
+        "CWE-78"
+      ],
+      "mechanism_card_ids": [
+        "MECH-javascript-01"
+      ],
+      "source_cues": [
+        "外部输入进入 OS 命令执行路径"
+      ],
+      "sink_cues": [
+        "system/popen/exec 族调用点"
+      ],
+      "language_pitfalls": [
+        "命令构造与执行分离; 参数数组优先"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "命令构造与执行分离; 参数数组优先"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the system/popen/exec 族调用点 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-javascript-01-75034d880527"
+      ]
+    },
+    {
+      "issue_id": "javascript-issue-02",
+      "rank": 2,
+      "title": "CWE-94 Code Injection",
+      "family": "INJECTION",
+      "weakness_refs": [
+        "CWE-94"
+      ],
+      "mechanism_card_ids": [
+        "MECH-javascript-02"
+      ],
+      "source_cues": [
+        "外部输入被当作代码生成/执行"
+      ],
+      "sink_cues": [
+        "eval/动态代码加载点"
+      ],
+      "language_pitfalls": [
+        "动态代码入口即信任边界"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "动态代码入口即信任边界"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the eval/动态代码加载点 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-javascript-02-35ad011af30b"
+      ]
+    },
+    {
+      "issue_id": "javascript-issue-03",
+      "rank": 3,
+      "title": "流式累积无上限: 数据事件逐块累积到内存",
+      "family": "RESOURCE-DOS",
+      "weakness_refs": [
+        "CWE-400"
+      ],
+      "mechanism_card_ids": [
+        "MECH-javascript-03"
+      ],
+      "source_cues": [
+        "流式累积无上限: 数据事件逐块累积到内存"
+      ],
+      "sink_cues": [
+        "socket/stream 'data' 事件累积"
+      ],
+      "language_pitfalls": [
+        "分片到达序不可控——按到达累积的量级必须以上限为界 | 背压缺失 (消费者不停读) 使累积无平台期"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "分片到达序不可控——按到达累积的量级必须以上限为界 | 背压缺失 (消费者不停读) 使累积无平台期"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the socket/stream 'data' 事件累积 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-javascript-03-c676db28071e"
+      ]
+    },
+    {
+      "issue_id": "javascript-issue-04",
+      "rank": 4,
+      "title": "CWE-862 Missing Authorization",
+      "family": "AUTHN",
+      "weakness_refs": [
+        "CWE-862"
+      ],
+      "mechanism_card_ids": [
+        "MECH-javascript-04"
+      ],
+      "source_cues": [
+        "敏感操作缺授权检查"
+      ],
+      "sink_cues": [
+        "敏感操作处理函数入口"
+      ],
+      "language_pitfalls": [
+        "缺授权≠设计意图——核实敏感操作清单"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "缺授权≠设计意图——核实敏感操作清单"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the 敏感操作处理函数入口 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-javascript-04-0e1034170db7"
+      ]
+    },
+    {
+      "issue_id": "javascript-issue-05",
+      "rank": 5,
+      "title": "CWE-770 Allocation of Resources Without Limits or Throttling",
+      "family": "RESOURCE-DOS",
+      "weakness_refs": [
+        "CWE-770"
+      ],
+      "mechanism_card_ids": [
+        "MECH-javascript-05"
+      ],
+      "source_cues": [
+        "资源分配无上限或无节流"
+      ],
+      "sink_cues": [
+        "分配/队列/累积点"
+      ],
+      "language_pitfalls": [
+        "上限/节流在累积点之前"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "上限/节流在累积点之前"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the 分配/队列/累积点 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-javascript-05-2dd583a7c9f1"
+      ]
+    },
+    {
+      "issue_id": "javascript-issue-06",
+      "rank": 6,
+      "title": "CWE-639 Authorization Bypass Through User-Controlled Key",
+      "family": "AUTHN",
+      "weakness_refs": [
+        "CWE-639"
+      ],
+      "mechanism_card_ids": [
+        "MECH-javascript-06"
+      ],
+      "source_cues": [
+        "用户可控键绕过授权(越权)"
+      ],
+      "sink_cues": [
+        "按用户键取资源的查询点"
+      ],
+      "language_pitfalls": [
+        "资源归属键与访问者身份比对"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "资源归属键与访问者身份比对"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the 按用户键取资源的查询点 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-javascript-06-01ab80f5d762"
+      ]
+    },
+    {
+      "issue_id": "javascript-issue-07",
+      "rank": 7,
+      "title": "加密库参数校验: 算法/密钥参数未白名单化",
+      "family": "CRYPTO",
+      "weakness_refs": [
+        "CWE-327"
+      ],
+      "mechanism_card_ids": [
+        "MECH-javascript-07"
+      ],
+      "source_cues": [
+        "加密库参数校验: 算法/密钥参数未白名单化"
+      ],
+      "sink_cues": [
+        "签名验证入口"
+      ],
+      "language_pitfalls": [
+        "弱算法回退链 (协商降级) 是主判轴——逐降级分支核实 | 『标准用法』声称必须对照库契约 (低阶点校验形态)"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "弱算法回退链 (协商降级) 是主判轴——逐降级分支核实 | 『标准用法』声称必须对照库契约 (低阶点校验形态)"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the 签名验证入口 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-javascript-07-3b70ea627f79"
+      ]
+    },
+    {
+      "issue_id": "javascript-issue-08",
+      "rank": 8,
+      "title": "CWE-79 Cross-site Scripting",
+      "family": "WEB",
+      "weakness_refs": [
+        "CWE-79"
+      ],
+      "mechanism_card_ids": [
+        "MECH-javascript-08"
+      ],
+      "source_cues": [
+        "输出未净化的外部数据: 网页生成路径缺转义"
+      ],
+      "sink_cues": [
+        "HTML 输出/模板渲染点"
+      ],
+      "language_pitfalls": [
+        "输出转义必须在渲染边界且覆盖上下文(HTML/属性/JS)"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "输出转义必须在渲染边界且覆盖上下文(HTML/属性/JS)"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the HTML 输出/模板渲染点 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-javascript-08-29f99ec87426"
+      ]
+    },
+    {
+      "issue_id": "javascript-issue-09",
+      "rank": 9,
+      "title": "CWE-352 Cross-Site Request Forgery",
+      "family": "WEB",
+      "weakness_refs": [
+        "CWE-352"
+      ],
+      "mechanism_card_ids": [
+        "MECH-javascript-09"
+      ],
+      "source_cues": [
+        "状态变更请求缺跨站请求伪造防护"
+      ],
+      "sink_cues": [
+        "状态变更端点(写操作路由)"
+      ],
+      "language_pitfalls": [
+        "状态变更需同源/令牌校验"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "状态变更需同源/令牌校验"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the 状态变更端点(写操作路由) operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-javascript-09-581bbdb61c2a"
+      ]
+    },
+    {
+      "issue_id": "javascript-issue-10",
+      "rank": 10,
+      "title": "CWE-22 Path Traversal",
+      "family": "WEB",
+      "weakness_refs": [
+        "CWE-22"
+      ],
+      "mechanism_card_ids": [
+        "MECH-javascript-10"
+      ],
+      "source_cues": [
+        "路径名未限制到受限目录: 穿越/跳目录"
+      ],
+      "sink_cues": [
+        "文件路径构造与打开点"
+      ],
+      "language_pitfalls": [
+        "规范化/白名单/根约束三选一必须存在"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "规范化/白名单/根约束三选一必须存在"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the 文件路径构造与打开点 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-javascript-10-f1a0f1cd915a"
+      ]
+    }
+  ]
+}

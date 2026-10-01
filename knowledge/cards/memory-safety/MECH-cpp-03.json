@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-cpp-03",
+  "family": "MEMORY-SAFETY",
+  "title": "CWE-125 Out-of-bounds Read",
+  "preconditions": [
+    "边界外读取: 索引/长度越界访问"
+  ],
+  "dangerous_transitions": [
+    "边界外读取: 索引/长度越界访问"
+  ],
+  "sink_semantics": [
+    "缓冲读点: 索引/长度驱动读取"
+  ],
+  "counterevidence": [
+    "A guard dominates the sensitive operation for every relevant path.",
+    "The effective principal cannot control the source or the impact is not security relevant.",
+    "索引上界与缓冲长度同源核对"
+  ],
+  "language_applicability": [
+    "cpp"
+  ],
+  "verification_recipe": [
+    "Trace the relevant source cue to the 缓冲读点: 索引/长度驱动读取 operation.",
+    "Establish attacker control, effective principal, guards, and security impact.",
+    "Test the listed counterevidence and record source anchors for every edge."
+  ],
+  "provenance": [
+    "PROV-cpp-03-af070a574c1f"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "seeded"
+}

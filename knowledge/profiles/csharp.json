@@ -1,0 +1,349 @@
+{
+  "schema_version": "1.0",
+  "profile_id": "PROFILE-csharp-portfolio-2026-09-v1",
+  "language_id": "csharp",
+  "portfolio_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "entries": [
+    {
+      "issue_id": "csharp-issue-01",
+      "rank": 1,
+      "title": "反序列化输入面: 类型解析受攻击者控制 (多态类型开关)",
+      "family": "INJECTION",
+      "weakness_refs": [
+        "CWE-502"
+      ],
+      "mechanism_card_ids": [
+        "MECH-csharp-01"
+      ],
+      "source_cues": [
+        "反序列化输入面: 类型解析受攻击者控制 (多态类型开关)"
+      ],
+      "sink_cues": [
+        "TypeNameHandling 类类型开关"
+      ],
+      "language_pitfalls": [
+        "默认拒绝/配置接受双侧对照: 默认关闭的开关必须按实际部署配置判定, 不得以代码零值推定 | 『仅受信通道』声称必须给出信源链证据"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "默认拒绝/配置接受双侧对照: 默认关闭的开关必须按实际部署配置判定, 不得以代码零值推定 | 『仅受信通道』声称必须给出信源链证据"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the TypeNameHandling 类类型开关 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-csharp-01-49c950c80d73"
+      ]
+    },
+    {
+      "issue_id": "csharp-issue-02",
+      "rank": 2,
+      "title": "CWE-78 OS Command Injection",
+      "family": "INJECTION",
+      "weakness_refs": [
+        "CWE-78"
+      ],
+      "mechanism_card_ids": [
+        "MECH-csharp-02"
+      ],
+      "source_cues": [
+        "外部输入进入 OS 命令执行路径"
+      ],
+      "sink_cues": [
+        "system/popen/exec 族调用点"
+      ],
+      "language_pitfalls": [
+        "命令构造与执行分离; 参数数组优先"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "命令构造与执行分离; 参数数组优先"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the system/popen/exec 族调用点 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-csharp-02-c52290678b88"
+      ]
+    },
+    {
+      "issue_id": "csharp-issue-03",
+      "rank": 3,
+      "title": "CWE-89 SQL Injection",
+      "family": "INJECTION",
+      "weakness_refs": [
+        "CWE-89"
+      ],
+      "mechanism_card_ids": [
+        "MECH-csharp-03"
+      ],
+      "source_cues": [
+        "外部输入拼接进 SQL 命令字符串"
+      ],
+      "sink_cues": [
+        "SQL 语句构造/执行点"
+      ],
+      "language_pitfalls": [
+        "参数化查询优先; 拼接时必须枚举注入原语"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "参数化查询优先; 拼接时必须枚举注入原语"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the SQL 语句构造/执行点 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-csharp-03-bd7f17c00a35"
+      ]
+    },
+    {
+      "issue_id": "csharp-issue-04",
+      "rank": 4,
+      "title": "安全配置默认可达性: 鉴权/防护开关键代码零值与实际提交值不一致",
+      "family": "AUTHN",
+      "weakness_refs": [
+        "CWE-306"
+      ],
+      "mechanism_card_ids": [
+        "MECH-csharp-04"
+      ],
+      "source_cues": [
+        "安全配置默认可达性: 鉴权/防护开关键代码零值与实际提交值不一致"
+      ],
+      "sink_cues": [
+        "鉴权开关键"
+      ],
+      "language_pitfalls": [
+        "『默认可达』声称必须引用 shipped-config 盘点 (提交值 vs 代码零值) | 显式关闭也是提交值——不得把显式关闭误读为默认开启"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "『默认可达』声称必须引用 shipped-config 盘点 (提交值 vs 代码零值) | 显式关闭也是提交值——不得把显式关闭误读为默认开启"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the 鉴权开关键 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-csharp-04-a9f5ad3a9d03"
+      ]
+    },
+    {
+      "issue_id": "csharp-issue-05",
+      "rank": 5,
+      "title": "模块存在 ≠ 被导入: 依赖注入/动态加载路径的静默失效",
+      "family": "ERROR-HANDLING",
+      "weakness_refs": [
+        "CWE-457"
+      ],
+      "mechanism_card_ids": [
+        "MECH-csharp-05"
+      ],
+      "source_cues": [
+        "模块存在 ≠ 被导入: 依赖注入/动态加载路径的静默失效"
+      ],
+      "sink_cues": [
+        "DI 容器注册点"
+      ],
+      "language_pitfalls": [
+        "broken_edge 类阻断必须核实导入注册链, 不得以模块存在推定 | 启动链正则与扫描器吞错路径双查"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "broken_edge 类阻断必须核实导入注册链, 不得以模块存在推定 | 启动链正则与扫描器吞错路径双查"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the DI 容器注册点 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-csharp-05-0724bbab828c"
+      ]
+    },
+    {
+      "issue_id": "csharp-issue-06",
+      "rank": 6,
+      "title": "CWE-862 Missing Authorization",
+      "family": "AUTHN",
+      "weakness_refs": [
+        "CWE-862"
+      ],
+      "mechanism_card_ids": [
+        "MECH-csharp-06"
+      ],
+      "source_cues": [
+        "敏感操作缺授权检查"
+      ],
+      "sink_cues": [
+        "敏感操作处理函数入口"
+      ],
+      "language_pitfalls": [
+        "缺授权≠设计意图——核实敏感操作清单"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "缺授权≠设计意图——核实敏感操作清单"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the 敏感操作处理函数入口 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-csharp-06-a970cdc89567"
+      ]
+    },
+    {
+      "issue_id": "csharp-issue-07",
+      "rank": 7,
+      "title": "CWE-770 Allocation of Resources Without Limits or Throttling",
+      "family": "RESOURCE-DOS",
+      "weakness_refs": [
+        "CWE-770"
+      ],
+      "mechanism_card_ids": [
+        "MECH-csharp-07"
+      ],
+      "source_cues": [
+        "资源分配无上限或无节流"
+      ],
+      "sink_cues": [
+        "分配/队列/累积点"
+      ],
+      "language_pitfalls": [
+        "上限/节流在累积点之前"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "上限/节流在累积点之前"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the 分配/队列/累积点 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-csharp-07-94ac69bb9f2f"
+      ]
+    },
+    {
+      "issue_id": "csharp-issue-08",
+      "rank": 8,
+      "title": "CWE-639 Authorization Bypass Through User-Controlled Key",
+      "family": "AUTHN",
+      "weakness_refs": [
+        "CWE-639"
+      ],
+      "mechanism_card_ids": [
+        "MECH-csharp-08"
+      ],
+      "source_cues": [
+        "用户可控键绕过授权(越权)"
+      ],
+      "sink_cues": [
+        "按用户键取资源的查询点"
+      ],
+      "language_pitfalls": [
+        "资源归属键与访问者身份比对"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "资源归属键与访问者身份比对"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the 按用户键取资源的查询点 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-csharp-08-adf07676b386"
+      ]
+    },
+    {
+      "issue_id": "csharp-issue-09",
+      "rank": 9,
+      "title": "CWE-79 Cross-site Scripting",
+      "family": "WEB",
+      "weakness_refs": [
+        "CWE-79"
+      ],
+      "mechanism_card_ids": [
+        "MECH-csharp-09"
+      ],
+      "source_cues": [
+        "输出未净化的外部数据: 网页生成路径缺转义"
+      ],
+      "sink_cues": [
+        "HTML 输出/模板渲染点"
+      ],
+      "language_pitfalls": [
+        "输出转义必须在渲染边界且覆盖上下文(HTML/属性/JS)"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "输出转义必须在渲染边界且覆盖上下文(HTML/属性/JS)"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the HTML 输出/模板渲染点 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-csharp-09-ec538adaeb9b"
+      ]
+    },
+    {
+      "issue_id": "csharp-issue-10",
+      "rank": 10,
+      "title": "CWE-22 Path Traversal",
+      "family": "WEB",
+      "weakness_refs": [
+        "CWE-22"
+      ],
+      "mechanism_card_ids": [
+        "MECH-csharp-10"
+      ],
+      "source_cues": [
+        "路径名未限制到受限目录: 穿越/跳目录"
+      ],
+      "sink_cues": [
+        "文件路径构造与打开点"
+      ],
+      "language_pitfalls": [
+        "规范化/白名单/根约束三选一必须存在"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "规范化/白名单/根约束三选一必须存在"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the 文件路径构造与打开点 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-csharp-10-cee9d6843700"
+      ]
+    }
+  ]
+}

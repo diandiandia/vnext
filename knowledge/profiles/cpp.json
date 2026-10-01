@@ -1,0 +1,347 @@
+{
+  "schema_version": "1.0",
+  "profile_id": "PROFILE-cpp-portfolio-2026-09-v1",
+  "language_id": "cpp",
+  "portfolio_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "entries": [
+    {
+      "issue_id": "cpp-issue-01",
+      "rank": 1,
+      "title": "反序列化器尺寸字段无门: wire 字节解码的长度直接进入分配/写操作",
+      "family": "MEMORY-SAFETY",
+      "weakness_refs": [
+        "CWE-787"
+      ],
+      "mechanism_card_ids": [
+        "MECH-cpp-01"
+      ],
+      "source_cues": [
+        "反序列化器尺寸字段无门: wire 字节解码的长度直接进入分配/写操作"
+      ],
+      "sink_cues": [
+        "GetUint30/varint 解码点"
+      ],
+      "language_pitfalls": [
+        "『快照/缓存为受信输入』是信任模型声明不是代码防御——防御纵深建议仍需尺寸门 (code-cache 侧 size<kHeaderSize 守卫先例) | 乘法回绕必须在分配前检查 (SignedMulOverflow), 回绕后小尺寸分配成立即越界写 | 后置 CHECK 不阻断首块写——检查点在写窗口之后属后置检查形态, 按 CK-POSTOP-INVARIANT 判缺陷"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "『快照/缓存为受信输入』是信任模型声明不是代码防御——防御纵深建议仍需尺寸门 (code-cache 侧 size<kHeaderSize 守卫先例) | 乘法回绕必须在分配前检查 (SignedMulOverflow), 回绕后小尺寸分配成立即越界写 | 后置 CHECK 不阻断首块写——检查点在写窗口之后属后置检查形态, 按 CK-POSTOP-INVARIANT 判缺陷"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the GetUint30/varint 解码点 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-cpp-01-c227252f8b8b"
+      ]
+    },
+    {
+      "issue_id": "cpp-issue-02",
+      "rank": 2,
+      "title": "CWE-416 Use After Free",
+      "family": "MEMORY-SAFETY",
+      "weakness_refs": [
+        "CWE-416"
+      ],
+      "mechanism_card_ids": [
+        "MECH-cpp-02"
+      ],
+      "source_cues": [
+        "释放后使用: 悬垂指针被解引用"
+      ],
+      "sink_cues": [
+        "释放点与后续解引用点"
+      ],
+      "language_pitfalls": [
+        "释放后引用计数/所有权转移逐点核对"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "释放后引用计数/所有权转移逐点核对"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the 释放点与后续解引用点 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-cpp-02-b0422205eecc"
+      ]
+    },
+    {
+      "issue_id": "cpp-issue-03",
+      "rank": 3,
+      "title": "CWE-125 Out-of-bounds Read",
+      "family": "MEMORY-SAFETY",
+      "weakness_refs": [
+        "CWE-125"
+      ],
+      "mechanism_card_ids": [
+        "MECH-cpp-03"
+      ],
+      "source_cues": [
+        "边界外读取: 索引/长度越界访问"
+      ],
+      "sink_cues": [
+        "缓冲读点: 索引/长度驱动读取"
+      ],
+      "language_pitfalls": [
+        "索引上界与缓冲长度同源核对"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "索引上界与缓冲长度同源核对"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the 缓冲读点: 索引/长度驱动读取 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-cpp-03-af070a574c1f"
+      ]
+    },
+    {
+      "issue_id": "cpp-issue-04",
+      "rank": 4,
+      "title": "CWE-476 NULL Pointer Dereference",
+      "family": "MEMORY-SAFETY",
+      "weakness_refs": [
+        "CWE-476"
+      ],
+      "mechanism_card_ids": [
+        "MECH-cpp-04"
+      ],
+      "source_cues": [
+        "空指针解引用"
+      ],
+      "sink_cues": [
+        "指针解引用点(缺空检查)"
+      ],
+      "language_pitfalls": [
+        "解引用前空检查或前置不变量"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "解引用前空检查或前置不变量"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the 指针解引用点(缺空检查) operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-cpp-04-976512724439"
+      ]
+    },
+    {
+      "issue_id": "cpp-issue-05",
+      "rank": 5,
+      "title": "CWE-120 Classic Buffer Overflow",
+      "family": "MEMORY-SAFETY",
+      "weakness_refs": [
+        "CWE-120"
+      ],
+      "mechanism_card_ids": [
+        "MECH-cpp-05"
+      ],
+      "source_cues": [
+        "缓冲拷贝未检查输入大小"
+      ],
+      "sink_cues": [
+        "定长缓冲拷贝点: strcpy/gets 族"
+      ],
+      "language_pitfalls": [
+        "拷贝长度≤目标容量必须机械可证"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "拷贝长度≤目标容量必须机械可证"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the 定长缓冲拷贝点: strcpy/gets 族 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-cpp-05-7ab575d69154"
+      ]
+    },
+    {
+      "issue_id": "cpp-issue-06",
+      "rank": 6,
+      "title": "CWE-121 Stack-based Buffer Overflow",
+      "family": "MEMORY-SAFETY",
+      "weakness_refs": [
+        "CWE-121"
+      ],
+      "mechanism_card_ids": [
+        "MECH-cpp-06"
+      ],
+      "source_cues": [
+        "栈缓冲溢出: 无界拷贝"
+      ],
+      "sink_cues": [
+        "栈缓冲拷贝点"
+      ],
+      "language_pitfalls": [
+        "栈缓冲拷贝长度检查"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "栈缓冲拷贝长度检查"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the 栈缓冲拷贝点 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-cpp-06-a5a2f0f5b7dd"
+      ]
+    },
+    {
+      "issue_id": "cpp-issue-07",
+      "rank": 7,
+      "title": "CWE-122 Heap-based Buffer Overflow",
+      "family": "MEMORY-SAFETY",
+      "weakness_refs": [
+        "CWE-122"
+      ],
+      "mechanism_card_ids": [
+        "MECH-cpp-07"
+      ],
+      "source_cues": [
+        "堆缓冲溢出: 无界拷贝"
+      ],
+      "sink_cues": [
+        "堆缓冲拷贝点: 长度未检拷贝"
+      ],
+      "language_pitfalls": [
+        "堆缓冲拷贝长度检查"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "堆缓冲拷贝长度检查"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the 堆缓冲拷贝点: 长度未检拷贝 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-cpp-07-cd92cb693d5a"
+      ]
+    },
+    {
+      "issue_id": "cpp-issue-08",
+      "rank": 8,
+      "title": "远端控制分配: new[]/容器预留受攻击者控制",
+      "family": "RESOURCE-DOS",
+      "weakness_refs": [
+        "CWE-789"
+      ],
+      "mechanism_card_ids": [
+        "MECH-cpp-08"
+      ],
+      "source_cues": [
+        "远端控制分配: new[]/容器预留受攻击者控制"
+      ],
+      "sink_cues": [
+        "new[] 攻击者控制长度"
+      ],
+      "language_pitfalls": [
+        "容器自动增长的累积量级以对象图内部急切分配为准 (成员缓冲/嵌套对象) | 顶层对象尺寸低估 3-4 个数量级的形态必须按构造器链枚举"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "容器自动增长的累积量级以对象图内部急切分配为准 (成员缓冲/嵌套对象) | 顶层对象尺寸低估 3-4 个数量级的形态必须按构造器链枚举"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the new[] 攻击者控制长度 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-cpp-08-8ec4cab236fa"
+      ]
+    },
+    {
+      "issue_id": "cpp-issue-09",
+      "rank": 9,
+      "title": "Asynchronous task object destroyed before worker completion",
+      "family": "STATE",
+      "weakness_refs": [
+        "CWE-696"
+      ],
+      "mechanism_card_ids": [
+        "MECH-cpp-09"
+      ],
+      "source_cues": [
+        "An asynchronous worker retains access to an object that another thread can destroy or reset"
+      ],
+      "sink_cues": [
+        "task lifetime termination, release, or reset while worker execution may still be active"
+      ],
+      "language_pitfalls": [
+        "A documented lifetime contract is counterevidence only if its preconditions are guaranteed and all callers obey them; inspect every API path and caller."
+      ],
+      "counterevidence": [
+        "A documented lifetime contract is counterevidence only if its preconditions are guaranteed and all callers obey them; inspect every API path and caller."
+      ],
+      "verification_steps": [
+        "Trace the language-specific source cue to task lifetime termination, release, or reset while worker execution may still be active.",
+        "Establish attacker control, effective principal, guarding order, and security impact.",
+        "Test the stated language-specific counterevidence against source and runtime behavior."
+      ],
+      "provenance_refs": [
+        "PROV-cpp-09-0c2639db4462"
+      ]
+    },
+    {
+      "issue_id": "cpp-issue-10",
+      "rank": 10,
+      "title": "CWE-770 Allocation of Resources Without Limits or Throttling",
+      "family": "RESOURCE-DOS",
+      "weakness_refs": [
+        "CWE-770"
+      ],
+      "mechanism_card_ids": [
+        "MECH-cpp-10"
+      ],
+      "source_cues": [
+        "资源分配无上限或无节流"
+      ],
+      "sink_cues": [
+        "分配/队列/累积点"
+      ],
+      "language_pitfalls": [
+        "上限/节流在累积点之前"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "上限/节流在累积点之前"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the 分配/队列/累积点 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-cpp-10-3efc74e5b54e"
+      ]
+    }
+  ]
+}

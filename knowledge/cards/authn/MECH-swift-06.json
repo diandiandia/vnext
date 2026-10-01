@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-swift-06",
+  "family": "AUTHN",
+  "title": "Missing authorization on a Swift server route or privileged operation",
+  "preconditions": [
+    "a Vapor/NIO request reaches a sensitive operation",
+    "route registration or middleware determines whether a principal is required"
+  ],
+  "dangerous_transitions": [
+    "request reaches a sensitive operation without an effective authentication/authorization policy"
+  ],
+  "sink_semantics": [
+    "Vapor route handlers and middleware",
+    "database, filesystem, or administrative operations reachable from a request"
+  ],
+  "counterevidence": [
+    "Safe high-level Swift collection access retains runtime bounds checks.",
+    "The foreign pointer contract and owner lifetime are validated at the boundary."
+  ],
+  "language_applicability": [
+    "swift"
+  ],
+  "verification_recipe": [
+    "Enumerate route registrations, groups, middleware order, and aliases.",
+    "Test anonymous and least-privileged requests against the sensitive operation."
+  ],
+  "provenance": [
+    "PROV-swift-06-b58f86ac1cd1"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "seeded"
+}

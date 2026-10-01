@@ -1,0 +1,349 @@
+{
+  "schema_version": "1.0",
+  "profile_id": "PROFILE-java-portfolio-2026-09-v1",
+  "language_id": "java",
+  "portfolio_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "entries": [
+    {
+      "issue_id": "java-issue-01",
+      "rank": 1,
+      "title": "反序列化输入面: 对象流反序列化受攻击者控制",
+      "family": "INJECTION",
+      "weakness_refs": [
+        "CWE-502"
+      ],
+      "mechanism_card_ids": [
+        "MECH-java-01"
+      ],
+      "source_cues": [
+        "反序列化输入面: 对象流反序列化受攻击者控制"
+      ],
+      "sink_cues": [
+        "readObject/ObjectInputStream"
+      ],
+      "language_pitfalls": [
+        "反序列化过滤 (ObjectInputFilter 类) 缺省不启用——『默认防护』声称必须核实启用点 | gadget 链判定按可达类路径枚举, 不得以单类推定"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "反序列化过滤 (ObjectInputFilter 类) 缺省不启用——『默认防护』声称必须核实启用点 | gadget 链判定按可达类路径枚举, 不得以单类推定"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the readObject/ObjectInputStream operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-java-01-b1203e4bf5d1"
+      ]
+    },
+    {
+      "issue_id": "java-issue-02",
+      "rank": 2,
+      "title": "Java 形态内存安全: 越界索引与截断 cast",
+      "family": "MEMORY-SAFETY",
+      "weakness_refs": [
+        "CWE-129"
+      ],
+      "mechanism_card_ids": [
+        "MECH-java-02"
+      ],
+      "source_cues": [
+        "枚举 ordinal 下标无界/数值窄化截断/文本构造器绕过校验门禁"
+      ],
+      "sink_cues": [
+        "enumConstants[ordinal]/intValue() 窄化/parse 后下标"
+      ],
+      "language_pitfalls": [
+        "JVM 边界检查把后果限制为 AIOOBE/异常, 但截断 cast 的静默错值无告警——判级按实际后果而非 CWE 族; 结构校验门禁与文本构造器路径不一致即假设"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "JVM 边界检查把后果限制为 AIOOBE/异常, 但截断 cast 的静默错值无告警——判级按实际后果而非 CWE 族; 结构校验门禁与文本构造器路径不一致即假设"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the enumConstants[ordinal]/intValue() 窄化/parse 后下标 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-java-02-75a0fcea49c5"
+      ]
+    },
+    {
+      "issue_id": "java-issue-03",
+      "rank": 3,
+      "title": "日志注入: 用户可控值进日志记录 (控制字符/伪造记录行/敏感头)",
+      "family": "INJECTION",
+      "weakness_refs": [
+        "CWE-117"
+      ],
+      "mechanism_card_ids": [
+        "MECH-java-03"
+      ],
+      "source_cues": [
+        "用户可控值 (client_id/用户名/URL 参数) 写入日志无消毒; 访问日志记录敏感头 (Authorization/Cookie)"
+      ],
+      "sink_cues": [
+        "logger 调用点 + 用户可控参数; access log 头记录点"
+      ],
+      "language_pitfalls": [
+        "消毒修复常单点——同族其他日志调用点未消毒是 fix-variant 形态; access log 掩码默认空列表 = 无掩码"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "消毒修复常单点——同族其他日志调用点未消毒是 fix-variant 形态; access log 掩码默认空列表 = 无掩码"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the logger 调用点 + 用户可控参数; access log 头记录点 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-java-03-10ac0766e0e0"
+      ]
+    },
+    {
+      "issue_id": "java-issue-04",
+      "rank": 4,
+      "title": "CWE-89 SQL Injection",
+      "family": "INJECTION",
+      "weakness_refs": [
+        "CWE-89"
+      ],
+      "mechanism_card_ids": [
+        "MECH-java-04"
+      ],
+      "source_cues": [
+        "外部输入拼接进 SQL 命令字符串"
+      ],
+      "sink_cues": [
+        "SQL 语句构造/执行点"
+      ],
+      "language_pitfalls": [
+        "参数化查询优先; 拼接时必须枚举注入原语"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "参数化查询优先; 拼接时必须枚举注入原语"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the SQL 语句构造/执行点 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-java-04-6bd8a77ce8e6"
+      ]
+    },
+    {
+      "issue_id": "java-issue-05",
+      "rank": 5,
+      "title": "空引用/越界解引用: 解析结果零长度元素未防御 (Java 形态 AIOOBE/NPE)",
+      "family": "ERROR-HANDLING",
+      "weakness_refs": [
+        "CWE-476"
+      ],
+      "mechanism_card_ids": [
+        "MECH-java-05"
+      ],
+      "source_cues": [
+        "split 后索引未检查长度 (尾随分隔符形态); DOM getFirstChild 空引用; 列表 get(0) 空列表; LDAP 属性值 substring/charAt/parseLong 未校验"
+      ],
+      "sink_cues": [
+        "split/index 点; DOM 节点取值点; 外部数据属性解析点"
+      ],
+      "language_pitfalls": [
+        "Java String.split 移除尾随空串的语义是 AIOOBE 高发形态; 异常逃逸 vs 捕获的分支方向核实"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "Java String.split 移除尾随空串的语义是 AIOOBE 高发形态; 异常逃逸 vs 捕获的分支方向核实"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the split/index 点; DOM 节点取值点; 外部数据属性解析点 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-java-05-898617ca8089"
+      ]
+    },
+    {
+      "issue_id": "java-issue-06",
+      "rank": 6,
+      "title": "信任代理判定 fail-open: 未配置可信地址时恒真 + 客户端自置信任头被采信",
+      "family": "AUTHN",
+      "weakness_refs": [
+        "CWE-290"
+      ],
+      "mechanism_card_ids": [
+        "MECH-java-06"
+      ],
+      "source_cues": [
+        "isProxyTrusted 类判定未配置白名单时恒 true; 客户端可自置的信任头 (X-Forwarded-Trusted-Proxy 类) 直接设 true"
+      ],
+      "sink_cues": [
+        "代理信任判定点; 头驱动的证书/身份查找门禁点"
+      ],
+      "language_pitfalls": [
+        "门禁不消费平台可信判定的形态 (平台契约短路); 证书头门禁的关闭条件与平台层加固无法代偿"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "门禁不消费平台可信判定的形态 (平台契约短路); 证书头门禁的关闭条件与平台层加固无法代偿"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the 代理信任判定点; 头驱动的证书/身份查找门禁点 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-java-06-cc7ffd42b033"
+      ]
+    },
+    {
+      "issue_id": "java-issue-07",
+      "rank": 7,
+      "title": "时序窗口: TOCTOU 检查与消费跨事务分离 / 并发窗口 (竞态窗口+会话过期+重放)",
+      "family": "RACE",
+      "weakness_refs": [
+        "CWE-367"
+      ],
+      "mechanism_card_ids": [
+        "MECH-java-07"
+      ],
+      "source_cues": [
+        "检查与撤销写入跨事务分离 (contains 检查→流结束才 put); 持久化旁路在 CAS 判定之外无条件执行; 单次使用语义的占位与消费时序窗口"
+      ],
+      "sink_cues": [
+        "单次消费检查点; 撤销/持久化写入点; 锁获取与释放回调点"
+      ],
+      "language_pitfalls": [
+        "contains 只读检查与 put 原子写的窗口是默认形态——占位写前移是修复方向; 存量对象不受新保护机制覆盖 (开关翻转场景)"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "contains 只读检查与 put 原子写的窗口是默认形态——占位写前移是修复方向; 存量对象不受新保护机制覆盖 (开关翻转场景)"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the 单次消费检查点; 撤销/持久化写入点; 锁获取与释放回调点 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-java-07-b1449e8c6275"
+      ]
+    },
+    {
+      "issue_id": "java-issue-08",
+      "rank": 8,
+      "title": "类型混淆: 不可信 claim 强转 (JSON 类型攻击者可控)",
+      "family": "NUMERIC",
+      "weakness_refs": [
+        "CWE-704"
+      ],
+      "mechanism_card_ids": [
+        "MECH-java-08"
+      ],
+      "source_cues": [
+        "getOtherClaims 取值直接强转 String 无 instanceof; 验签前使用未验签 claim 字段"
+      ],
+      "sink_cues": [
+        "claim 强转点"
+      ],
+      "language_pitfalls": [
+        "外层 catch 兜底只收敛为 400 不影响鉴权判定——按错误路径缺陷定位"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "外层 catch 兜底只收敛为 400 不影响鉴权判定——按错误路径缺陷定位"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the claim 强转点 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-java-08-d4d06dd540c1"
+      ]
+    },
+    {
+      "issue_id": "java-issue-09",
+      "rank": 9,
+      "title": "无界集合累积: 分页参数直通 skip/limit 无钳制 (java 形态)",
+      "family": "RESOURCE-DOS",
+      "weakness_refs": [
+        "CWE-789"
+      ],
+      "mechanism_card_ids": [
+        "MECH-java-09"
+      ],
+      "source_cues": [
+        "HTTP 分页参数 (first/max) 直通 skip/limit 无上界钳制; skip-before-limit 顺序的放大杠杆; provider 侧全量物化在 limit 之前"
+      ],
+      "sink_cues": [
+        "skip/limit 流操作点; provider 全量遍历点"
+      ],
+      "language_pitfalls": [
+        "first 是独立放大杠杆 (skip 施加于 limit 之前); 只钳 max 不钳 first 的常规缓解不完整; 默认请求 (max=10) 也强制全量遍历的形态"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "first 是独立放大杠杆 (skip 施加于 limit 之前); 只钳 max 不钳 first 的常规缓解不完整; 默认请求 (max=10) 也强制全量遍历的形态"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the skip/limit 流操作点; provider 全量遍历点 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-java-09-e1b20d9776d4"
+      ]
+    },
+    {
+      "issue_id": "java-issue-10",
+      "rank": 10,
+      "title": "撤销策略未生效: 多层 notBefore/撤销校验维度缺失",
+      "family": "AUTHN",
+      "weakness_refs": [
+        "CWE-303"
+      ],
+      "mechanism_card_ids": [
+        "MECH-java-10"
+      ],
+      "source_cues": [
+        "realm/client/user 三级 notBefore 校验不完整的调用点; 撤销策略验证修复后未覆盖的兄弟路径"
+      ],
+      "sink_cues": [
+        "TokenVerifier.withChecks(NotBeforeCheck) 调用点"
+      ],
+      "language_pitfalls": [
+        "同族调用点对比矩阵: 修复后带全维度 vs 未修复缺维度; 无生产调用者的缺陷形态按不可达处理"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "同族调用点对比矩阵: 修复后带全维度 vs 未修复缺维度; 无生产调用者的缺陷形态按不可达处理"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the TokenVerifier.withChecks(NotBeforeCheck) 调用点 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-java-10-e28919f16e43"
+      ]
+    }
+  ]
+}

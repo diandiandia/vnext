@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-swift-02",
+  "family": "MEMORY-SAFETY",
+  "title": "Out-of-bounds write through Swift unsafe buffers or C interop",
+  "preconditions": [
+    "attacker-controlled lengths or indexes reach UnsafeMutablePointer/UnsafeMutableBufferPointer",
+    "Swift code passes a pointer and length across a C ABI boundary"
+  ],
+  "dangerous_transitions": [
+    "length/index is not bounded by the actual initialized buffer before unsafe write",
+    "C callee writes beyond the count/capacity contract"
+  ],
+  "sink_semantics": [
+    "UnsafeMutablePointer/UnsafeMutableBufferPointer subscripts, pointer arithmetic, and raw-memory writes",
+    "C functions receiving Swift buffer baseAddress/count pairs"
+  ],
+  "counterevidence": [
+    "Safe high-level Swift collection access retains runtime bounds checks.",
+    "The foreign pointer contract and owner lifetime are validated at the boundary."
+  ],
+  "language_applicability": [
+    "swift"
+  ],
+  "verification_recipe": [
+    "Trace count/capacity conversions and pointer arithmetic to the write.",
+    "Check lifetime scope and imported C function length contract; use sanitizers where available."
+  ],
+  "provenance": [
+    "PROV-swift-02-b8f080ef096b"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "seeded"
+}

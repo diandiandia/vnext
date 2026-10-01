@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-kotlin-09",
+  "family": "WEB",
+  "title": "CWE-352 Cross-Site Request Forgery",
+  "preconditions": [
+    "状态变更请求缺跨站请求伪造防护"
+  ],
+  "dangerous_transitions": [
+    "状态变更请求缺跨站请求伪造防护"
+  ],
+  "sink_semantics": [
+    "状态变更端点(写操作路由)"
+  ],
+  "counterevidence": [
+    "A guard dominates the sensitive operation for every relevant path.",
+    "The effective principal cannot control the source or the impact is not security relevant.",
+    "状态变更需同源/令牌校验"
+  ],
+  "language_applicability": [
+    "kotlin"
+  ],
+  "verification_recipe": [
+    "Trace the relevant source cue to the 状态变更端点(写操作路由) operation.",
+    "Establish attacker control, effective principal, guards, and security impact.",
+    "Test the listed counterevidence and record source anchors for every edge."
+  ],
+  "provenance": [
+    "PROV-kotlin-09-d69a6cce56d4"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "seeded"
+}

@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-c-09",
+  "family": "AUTHN",
+  "title": "集群同步协议默认无认证 (无 secret 机制载体)",
+  "preconditions": [
+    "集群同步协议默认无认证 (无 secret 机制载体)"
+  ],
+  "dangerous_transitions": [
+    "集群同步协议默认无认证 (无 secret 机制载体)"
+  ],
+  "sink_semantics": [
+    "入站同步监听的三段纯文本握手 (版本/主机名/对端名)"
+  ],
+  "counterevidence": [
+    "A guard dominates the sensitive operation for every relevant path.",
+    "The effective principal cannot control the source or the impact is not security relevant.",
+    "判据: 配置启用即攻击面; '无认证是可选关闭的默认' 与 '无认证机制载体' 是两种强度——grep 全文件无 secret/sign/hmac 标识符才可下后者结论"
+  ],
+  "language_applicability": [
+    "c"
+  ],
+  "verification_recipe": [
+    "Trace the relevant source cue to the 入站同步监听的三段纯文本握手 (版本/主机名/对端名) operation.",
+    "Establish attacker control, effective principal, guards, and security impact.",
+    "Test the listed counterevidence and record source anchors for every edge."
+  ],
+  "provenance": [
+    "PROV-c-09-2ebdb946a155"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "battle_observed"
+}

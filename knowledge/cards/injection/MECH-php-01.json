@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-php-01",
+  "family": "INJECTION",
+  "title": "动态代码执行: 不可信数据进入 eval/回调形态",
+  "preconditions": [
+    "动态代码执行: 不可信数据进入 eval/回调形态"
+  ],
+  "dangerous_transitions": [
+    "动态代码执行: 不可信数据进入 eval/回调形态"
+  ],
+  "sink_semantics": [
+    "eval"
+  ],
+  "counterevidence": [
+    "A guard dominates the sensitive operation for every relevant path.",
+    "The effective principal cannot control the source or the impact is not security relevant.",
+    "回调形态 (动态函数名/类名) 与 eval 同族——不得漏判 | include 动态路径兼文件包含面, 双面登记"
+  ],
+  "language_applicability": [
+    "php"
+  ],
+  "verification_recipe": [
+    "Trace the relevant source cue to the eval operation.",
+    "Establish attacker control, effective principal, guards, and security impact.",
+    "Test the listed counterevidence and record source anchors for every edge."
+  ],
+  "provenance": [
+    "PROV-php-01-f05bbe93d917"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "seeded"
+}

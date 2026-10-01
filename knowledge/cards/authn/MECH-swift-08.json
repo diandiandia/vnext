@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-swift-08",
+  "family": "AUTHN",
+  "title": "Swift server object lookup uses a request-controlled key without ownership scoping",
+  "preconditions": [
+    "route/query/body identifier selects a server-side object",
+    "authenticated principal or tenant is available separately"
+  ],
+  "dangerous_transitions": [
+    "request-controlled object key reaches a lookup or mutation without principal/resource scoping"
+  ],
+  "sink_semantics": [
+    "Vapor route parameters and ORM/repository lookups",
+    "resource mutation/read after lookup by a request-controlled key"
+  ],
+  "counterevidence": [
+    "Safe high-level Swift collection access retains runtime bounds checks.",
+    "The foreign pointer contract and owner lifetime are validated at the boundary."
+  ],
+  "language_applicability": [
+    "swift"
+  ],
+  "verification_recipe": [
+    "Trace request identifiers into reads and writes and inspect query tenant/owner constraints.",
+    "Test same-tenant and cross-tenant principals against the same object key."
+  ],
+  "provenance": [
+    "PROV-swift-08-191aa6ccbd9c"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "seeded"
+}

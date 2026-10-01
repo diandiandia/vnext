@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-java-01",
+  "family": "INJECTION",
+  "title": "反序列化输入面: 对象流反序列化受攻击者控制",
+  "preconditions": [
+    "反序列化输入面: 对象流反序列化受攻击者控制"
+  ],
+  "dangerous_transitions": [
+    "反序列化输入面: 对象流反序列化受攻击者控制"
+  ],
+  "sink_semantics": [
+    "readObject/ObjectInputStream"
+  ],
+  "counterevidence": [
+    "A guard dominates the sensitive operation for every relevant path.",
+    "The effective principal cannot control the source or the impact is not security relevant.",
+    "反序列化过滤 (ObjectInputFilter 类) 缺省不启用——『默认防护』声称必须核实启用点 | gadget 链判定按可达类路径枚举, 不得以单类推定"
+  ],
+  "language_applicability": [
+    "java"
+  ],
+  "verification_recipe": [
+    "Trace the relevant source cue to the readObject/ObjectInputStream operation.",
+    "Establish attacker control, effective principal, guards, and security impact.",
+    "Test the listed counterevidence and record source anchors for every edge."
+  ],
+  "provenance": [
+    "PROV-java-01-b1203e4bf5d1"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "seeded"
+}

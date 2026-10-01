@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-java-08",
+  "family": "NUMERIC",
+  "title": "类型混淆: 不可信 claim 强转 (JSON 类型攻击者可控)",
+  "preconditions": [
+    "getOtherClaims 取值直接强转 String 无 instanceof; 验签前使用未验签 claim 字段"
+  ],
+  "dangerous_transitions": [
+    "getOtherClaims 取值直接强转 String 无 instanceof; 验签前使用未验签 claim 字段"
+  ],
+  "sink_semantics": [
+    "claim 强转点"
+  ],
+  "counterevidence": [
+    "A guard dominates the sensitive operation for every relevant path.",
+    "The effective principal cannot control the source or the impact is not security relevant.",
+    "外层 catch 兜底只收敛为 400 不影响鉴权判定——按错误路径缺陷定位"
+  ],
+  "language_applicability": [
+    "java"
+  ],
+  "verification_recipe": [
+    "Trace the relevant source cue to the claim 强转点 operation.",
+    "Establish attacker control, effective principal, guards, and security impact.",
+    "Test the listed counterevidence and record source anchors for every edge."
+  ],
+  "provenance": [
+    "PROV-java-08-d4d06dd540c1"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "battle_observed"
+}

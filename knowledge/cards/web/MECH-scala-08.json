@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-scala-08",
+  "family": "WEB",
+  "title": "CWE-79 Cross-site Scripting",
+  "preconditions": [
+    "输出未净化的外部数据: 网页生成路径缺转义"
+  ],
+  "dangerous_transitions": [
+    "输出未净化的外部数据: 网页生成路径缺转义"
+  ],
+  "sink_semantics": [
+    "HTML 输出/模板渲染点"
+  ],
+  "counterevidence": [
+    "A guard dominates the sensitive operation for every relevant path.",
+    "The effective principal cannot control the source or the impact is not security relevant.",
+    "输出转义必须在渲染边界且覆盖上下文(HTML/属性/JS)"
+  ],
+  "language_applicability": [
+    "scala"
+  ],
+  "verification_recipe": [
+    "Trace the relevant source cue to the HTML 输出/模板渲染点 operation.",
+    "Establish attacker control, effective principal, guards, and security impact.",
+    "Test the listed counterevidence and record source anchors for every edge."
+  ],
+  "provenance": [
+    "PROV-scala-08-ddc2bf7e2a1b"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "seeded"
+}

@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-csharp-01",
+  "family": "INJECTION",
+  "title": "反序列化输入面: 类型解析受攻击者控制 (多态类型开关)",
+  "preconditions": [
+    "反序列化输入面: 类型解析受攻击者控制 (多态类型开关)"
+  ],
+  "dangerous_transitions": [
+    "反序列化输入面: 类型解析受攻击者控制 (多态类型开关)"
+  ],
+  "sink_semantics": [
+    "TypeNameHandling 类类型开关"
+  ],
+  "counterevidence": [
+    "A guard dominates the sensitive operation for every relevant path.",
+    "The effective principal cannot control the source or the impact is not security relevant.",
+    "默认拒绝/配置接受双侧对照: 默认关闭的开关必须按实际部署配置判定, 不得以代码零值推定 | 『仅受信通道』声称必须给出信源链证据"
+  ],
+  "language_applicability": [
+    "csharp"
+  ],
+  "verification_recipe": [
+    "Trace the relevant source cue to the TypeNameHandling 类类型开关 operation.",
+    "Establish attacker control, effective principal, guards, and security impact.",
+    "Test the listed counterevidence and record source anchors for every edge."
+  ],
+  "provenance": [
+    "PROV-csharp-01-49c950c80d73"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "seeded"
+}

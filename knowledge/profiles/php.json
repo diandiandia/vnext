@@ -1,0 +1,349 @@
+{
+  "schema_version": "1.0",
+  "profile_id": "PROFILE-php-portfolio-2026-09-v1",
+  "language_id": "php",
+  "portfolio_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "entries": [
+    {
+      "issue_id": "php-issue-01",
+      "rank": 1,
+      "title": "动态代码执行: 不可信数据进入 eval/回调形态",
+      "family": "INJECTION",
+      "weakness_refs": [
+        "CWE-94"
+      ],
+      "mechanism_card_ids": [
+        "MECH-php-01"
+      ],
+      "source_cues": [
+        "动态代码执行: 不可信数据进入 eval/回调形态"
+      ],
+      "sink_cues": [
+        "eval"
+      ],
+      "language_pitfalls": [
+        "回调形态 (动态函数名/类名) 与 eval 同族——不得漏判 | include 动态路径兼文件包含面, 双面登记"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "回调形态 (动态函数名/类名) 与 eval 同族——不得漏判 | include 动态路径兼文件包含面, 双面登记"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the eval operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-php-01-f05bbe93d917"
+      ]
+    },
+    {
+      "issue_id": "php-issue-02",
+      "rank": 2,
+      "title": "CWE-78 OS Command Injection",
+      "family": "INJECTION",
+      "weakness_refs": [
+        "CWE-78"
+      ],
+      "mechanism_card_ids": [
+        "MECH-php-02"
+      ],
+      "source_cues": [
+        "外部输入进入 OS 命令执行路径"
+      ],
+      "sink_cues": [
+        "system/popen/exec 族调用点"
+      ],
+      "language_pitfalls": [
+        "命令构造与执行分离; 参数数组优先"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "命令构造与执行分离; 参数数组优先"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the system/popen/exec 族调用点 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-php-02-0db3c29accc5"
+      ]
+    },
+    {
+      "issue_id": "php-issue-03",
+      "rank": 3,
+      "title": "CWE-502 Deserialization of Untrusted Data",
+      "family": "INJECTION",
+      "weakness_refs": [
+        "CWE-502"
+      ],
+      "mechanism_card_ids": [
+        "MECH-php-03"
+      ],
+      "source_cues": [
+        "不可信数据反序列化"
+      ],
+      "sink_cues": [
+        "反序列化读取入口"
+      ],
+      "language_pitfalls": [
+        "反序列化输入按不可信处理"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "反序列化输入按不可信处理"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the 反序列化读取入口 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-php-03-31c473c3377c"
+      ]
+    },
+    {
+      "issue_id": "php-issue-04",
+      "rank": 4,
+      "title": "CWE-89 SQL Injection",
+      "family": "INJECTION",
+      "weakness_refs": [
+        "CWE-89"
+      ],
+      "mechanism_card_ids": [
+        "MECH-php-04"
+      ],
+      "source_cues": [
+        "外部输入拼接进 SQL 命令字符串"
+      ],
+      "sink_cues": [
+        "SQL 语句构造/执行点"
+      ],
+      "language_pitfalls": [
+        "参数化查询优先; 拼接时必须枚举注入原语"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "参数化查询优先; 拼接时必须枚举注入原语"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the SQL 语句构造/执行点 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-php-04-fc483c2f9c04"
+      ]
+    },
+    {
+      "issue_id": "php-issue-05",
+      "rank": 5,
+      "title": "CWE-862 Missing Authorization",
+      "family": "AUTHN",
+      "weakness_refs": [
+        "CWE-862"
+      ],
+      "mechanism_card_ids": [
+        "MECH-php-05"
+      ],
+      "source_cues": [
+        "敏感操作缺授权检查"
+      ],
+      "sink_cues": [
+        "敏感操作处理函数入口"
+      ],
+      "language_pitfalls": [
+        "缺授权≠设计意图——核实敏感操作清单"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "缺授权≠设计意图——核实敏感操作清单"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the 敏感操作处理函数入口 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-php-05-dd7fe96bd7bd"
+      ]
+    },
+    {
+      "issue_id": "php-issue-06",
+      "rank": 6,
+      "title": "CWE-770 Allocation of Resources Without Limits or Throttling",
+      "family": "RESOURCE-DOS",
+      "weakness_refs": [
+        "CWE-770"
+      ],
+      "mechanism_card_ids": [
+        "MECH-php-06"
+      ],
+      "source_cues": [
+        "资源分配无上限或无节流"
+      ],
+      "sink_cues": [
+        "分配/队列/累积点"
+      ],
+      "language_pitfalls": [
+        "上限/节流在累积点之前"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "上限/节流在累积点之前"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the 分配/队列/累积点 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-php-06-65e0c2b40eae"
+      ]
+    },
+    {
+      "issue_id": "php-issue-07",
+      "rank": 7,
+      "title": "加密库参数校验: 算法/密钥参数未白名单化",
+      "family": "CRYPTO",
+      "weakness_refs": [
+        "CWE-327"
+      ],
+      "mechanism_card_ids": [
+        "MECH-php-07"
+      ],
+      "source_cues": [
+        "加密库参数校验: 算法/密钥参数未白名单化"
+      ],
+      "sink_cues": [
+        "签名验证入口"
+      ],
+      "language_pitfalls": [
+        "弱算法回退链 (协商降级) 是主判轴——逐降级分支核实 | 『标准用法』声称必须对照库契约 (低阶点校验形态)"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "弱算法回退链 (协商降级) 是主判轴——逐降级分支核实 | 『标准用法』声称必须对照库契约 (低阶点校验形态)"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the 签名验证入口 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-php-07-13d49ee44d11"
+      ]
+    },
+    {
+      "issue_id": "php-issue-08",
+      "rank": 8,
+      "title": "CWE-79 Cross-site Scripting",
+      "family": "WEB",
+      "weakness_refs": [
+        "CWE-79"
+      ],
+      "mechanism_card_ids": [
+        "MECH-php-08"
+      ],
+      "source_cues": [
+        "输出未净化的外部数据: 网页生成路径缺转义"
+      ],
+      "sink_cues": [
+        "HTML 输出/模板渲染点"
+      ],
+      "language_pitfalls": [
+        "输出转义必须在渲染边界且覆盖上下文(HTML/属性/JS)"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "输出转义必须在渲染边界且覆盖上下文(HTML/属性/JS)"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the HTML 输出/模板渲染点 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-php-08-3f89f4560008"
+      ]
+    },
+    {
+      "issue_id": "php-issue-09",
+      "rank": 9,
+      "title": "CWE-22 Path Traversal",
+      "family": "WEB",
+      "weakness_refs": [
+        "CWE-22"
+      ],
+      "mechanism_card_ids": [
+        "MECH-php-09"
+      ],
+      "source_cues": [
+        "路径名未限制到受限目录: 穿越/跳目录"
+      ],
+      "sink_cues": [
+        "文件路径构造与打开点"
+      ],
+      "language_pitfalls": [
+        "规范化/白名单/根约束三选一必须存在"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "规范化/白名单/根约束三选一必须存在"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the 文件路径构造与打开点 operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-php-09-7c7133f82128"
+      ]
+    },
+    {
+      "issue_id": "php-issue-10",
+      "rank": 10,
+      "title": "CWE-352 Cross-Site Request Forgery",
+      "family": "WEB",
+      "weakness_refs": [
+        "CWE-352"
+      ],
+      "mechanism_card_ids": [
+        "MECH-php-10"
+      ],
+      "source_cues": [
+        "状态变更请求缺跨站请求伪造防护"
+      ],
+      "sink_cues": [
+        "状态变更端点(写操作路由)"
+      ],
+      "language_pitfalls": [
+        "状态变更需同源/令牌校验"
+      ],
+      "counterevidence": [
+        "A guard dominates the sensitive operation for every relevant path.",
+        "The effective principal cannot control the source or the impact is not security relevant.",
+        "状态变更需同源/令牌校验"
+      ],
+      "verification_steps": [
+        "Trace the relevant source cue to the 状态变更端点(写操作路由) operation.",
+        "Establish attacker control, effective principal, guards, and security impact.",
+        "Test the listed counterevidence and record source anchors for every edge."
+      ],
+      "provenance_refs": [
+        "PROV-php-10-3538720db86a"
+      ]
+    }
+  ]
+}

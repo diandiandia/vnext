@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-csharp-08",
+  "family": "AUTHN",
+  "title": "CWE-639 Authorization Bypass Through User-Controlled Key",
+  "preconditions": [
+    "用户可控键绕过授权(越权)"
+  ],
+  "dangerous_transitions": [
+    "用户可控键绕过授权(越权)"
+  ],
+  "sink_semantics": [
+    "按用户键取资源的查询点"
+  ],
+  "counterevidence": [
+    "A guard dominates the sensitive operation for every relevant path.",
+    "The effective principal cannot control the source or the impact is not security relevant.",
+    "资源归属键与访问者身份比对"
+  ],
+  "language_applicability": [
+    "csharp"
+  ],
+  "verification_recipe": [
+    "Trace the relevant source cue to the 按用户键取资源的查询点 operation.",
+    "Establish attacker control, effective principal, guards, and security impact.",
+    "Test the listed counterevidence and record source anchors for every edge."
+  ],
+  "provenance": [
+    "PROV-csharp-08-adf07676b386"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "seeded"
+}

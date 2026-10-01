@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-php-07",
+  "family": "CRYPTO",
+  "title": "加密库参数校验: 算法/密钥参数未白名单化",
+  "preconditions": [
+    "加密库参数校验: 算法/密钥参数未白名单化"
+  ],
+  "dangerous_transitions": [
+    "加密库参数校验: 算法/密钥参数未白名单化"
+  ],
+  "sink_semantics": [
+    "签名验证入口"
+  ],
+  "counterevidence": [
+    "A guard dominates the sensitive operation for every relevant path.",
+    "The effective principal cannot control the source or the impact is not security relevant.",
+    "弱算法回退链 (协商降级) 是主判轴——逐降级分支核实 | 『标准用法』声称必须对照库契约 (低阶点校验形态)"
+  ],
+  "language_applicability": [
+    "php"
+  ],
+  "verification_recipe": [
+    "Trace the relevant source cue to the 签名验证入口 operation.",
+    "Establish attacker control, effective principal, guards, and security impact.",
+    "Test the listed counterevidence and record source anchors for every edge."
+  ],
+  "provenance": [
+    "PROV-php-07-13d49ee44d11"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "seeded"
+}

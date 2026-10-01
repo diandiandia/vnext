@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-scala-01",
+  "family": "INJECTION",
+  "title": "进程执行注入: 不可信数据进入进程执行路径",
+  "preconditions": [
+    "进程执行注入: 不可信数据进入进程执行路径"
+  ],
+  "dangerous_transitions": [
+    "进程执行注入: 不可信数据进入进程执行路径"
+  ],
+  "sink_semantics": [
+    "Runtime.getRuntime.exec"
+  ],
+  "counterevidence": [
+    "A guard dominates the sensitive operation for every relevant path.",
+    "The effective principal cannot control the source or the impact is not security relevant.",
+    "字符串形态与参数数组形态的注入面不同——按实际调用形态判定 | 『参数化已防注入』声称必须核实底层 shell 是否介入"
+  ],
+  "language_applicability": [
+    "scala"
+  ],
+  "verification_recipe": [
+    "Trace the relevant source cue to the Runtime.getRuntime.exec operation.",
+    "Establish attacker control, effective principal, guards, and security impact.",
+    "Test the listed counterevidence and record source anchors for every edge."
+  ],
+  "provenance": [
+    "PROV-scala-01-ee1d425ef866"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "seeded"
+}

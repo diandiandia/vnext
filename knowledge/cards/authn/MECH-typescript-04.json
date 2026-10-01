@@ -1,0 +1,34 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-typescript-04",
+  "family": "AUTHN",
+  "title": "Missing authorization on a TypeScript service operation",
+  "preconditions": [
+    "authenticated or anonymous request reaches a state-changing handler",
+    "route parameter selects a protected object"
+  ],
+  "dangerous_transitions": [
+    "request reaches sensitive service operation without principal/resource/action policy check"
+  ],
+  "sink_semantics": [
+    "Express/Koa/Fastify route handlers and service methods",
+    "database writes, secret reads, and administrative operations"
+  ],
+  "counterevidence": [
+    "A verified authorization policy dominates the operation for every registered route and alias."
+  ],
+  "language_applicability": [
+    "typescript"
+  ],
+  "verification_recipe": [
+    "Enumerate route registration, middleware ordering, aliases, and service entry points.",
+    "Test anonymous, low-privilege, owner, and cross-tenant principals."
+  ],
+  "provenance": [
+    "PROV-typescript-04-0e1034170db7"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "seeded"
+}

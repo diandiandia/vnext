@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-swift-07",
+  "family": "AUTHN",
+  "title": "Incorrect principal/resource authorization in a Swift server handler",
+  "preconditions": [
+    "request principal and resource/role identifiers are checked in separate code paths",
+    "authorization result is derived from a route parameter or decoded request value"
+  ],
+  "dangerous_transitions": [
+    "incorrect subject/action/resource comparison authorizes a protected operation"
+  ],
+  "sink_semantics": [
+    "Vapor/NIO route handlers and service methods",
+    "resource read/write after a role, owner, or tenant comparison"
+  ],
+  "counterevidence": [
+    "Safe high-level Swift collection access retains runtime bounds checks.",
+    "The foreign pointer contract and owner lifetime are validated at the boundary."
+  ],
+  "language_applicability": [
+    "swift"
+  ],
+  "verification_recipe": [
+    "Trace the authenticated principal and selected resource through the exact policy branch.",
+    "Compare owner, cross-tenant, and wrong-role controls."
+  ],
+  "provenance": [
+    "PROV-swift-07-9ba0ad06c6b7"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "seeded"
+}

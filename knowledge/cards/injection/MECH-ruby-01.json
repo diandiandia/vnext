@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-ruby-01",
+  "family": "INJECTION",
+  "title": "动态代码执行: 不可信数据进入 eval/系统调用",
+  "preconditions": [
+    "动态代码执行: 不可信数据进入 eval/系统调用"
+  ],
+  "dangerous_transitions": [
+    "动态代码执行: 不可信数据进入 eval/系统调用"
+  ],
+  "sink_semantics": [
+    "eval"
+  ],
+  "counterevidence": [
+    "A guard dominates the sensitive operation for every relevant path.",
+    "The effective principal cannot control the source or the impact is not security relevant.",
+    "send/constantize 动态分发与 eval 同族——漏判高发 | 『调用者受信』声称必须给信源链证据"
+  ],
+  "language_applicability": [
+    "ruby"
+  ],
+  "verification_recipe": [
+    "Trace the relevant source cue to the eval operation.",
+    "Establish attacker control, effective principal, guards, and security impact.",
+    "Test the listed counterevidence and record source anchors for every edge."
+  ],
+  "provenance": [
+    "PROV-ruby-01-66f5d1f4661c"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "seeded"
+}

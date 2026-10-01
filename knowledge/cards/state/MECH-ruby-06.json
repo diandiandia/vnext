@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-ruby-06",
+  "family": "STATE",
+  "title": "跨租户状态共享: 状态机序对缺陷 (停服/恢复/会话序)",
+  "preconditions": [
+    "跨租户状态共享: 状态机序对缺陷 (停服/恢复/会话序)"
+  ],
+  "dangerous_transitions": [
+    "跨租户状态共享: 状态机序对缺陷 (停服/恢复/会话序)"
+  ],
+  "sink_semantics": [
+    "跨用户共享状态点"
+  ],
+  "counterevidence": [
+    "A guard dominates the sensitive operation for every relevant path.",
+    "The effective principal cannot control the source or the impact is not security relevant.",
+    "跨用户停服类序对缺陷的 owner 归属必须逐请求核实 | 状态机序对 (启动→停止→启动) 的非法转移按逐转移行判定"
+  ],
+  "language_applicability": [
+    "ruby"
+  ],
+  "verification_recipe": [
+    "Trace the relevant source cue to the 跨用户共享状态点 operation.",
+    "Establish attacker control, effective principal, guards, and security impact.",
+    "Test the listed counterevidence and record source anchors for every edge."
+  ],
+  "provenance": [
+    "PROV-ruby-06-4d3bf920d13c"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "seeded"
+}

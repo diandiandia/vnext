@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-swift-01",
+  "family": "INJECTION",
+  "title": "Shell-mediated Process launch from untrusted Swift values",
+  "preconditions": [
+    "untrusted input reaches a Process launch configuration",
+    "a shell command string is assembled before launching a process"
+  ],
+  "dangerous_transitions": [
+    "untrusted text reaches an interpreter command string",
+    "a shell is explicitly launched with -c and interpolated data"
+  ],
+  "sink_semantics": [
+    "Foundation.Process executableURL/arguments",
+    "Process launches /bin/sh or another interpreter with -c and attacker-influenced text"
+  ],
+  "counterevidence": [
+    "Safe high-level Swift collection access retains runtime bounds checks.",
+    "The foreign pointer contract and owner lifetime are validated at the boundary."
+  ],
+  "language_applicability": [
+    "swift"
+  ],
+  "verification_recipe": [
+    "Trace values into executableURL and every arguments element.",
+    "Determine whether a shell/interpreter is launched; compare argv-based and shell-string behavior."
+  ],
+  "provenance": [
+    "PROV-swift-01-87eae84ae5b0"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "seeded"
+}

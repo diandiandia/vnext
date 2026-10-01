@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-kotlin-03",
+  "family": "RESOURCE-DOS",
+  "title": "流式接收累积无上限: 协程通道/流逐块累积",
+  "preconditions": [
+    "流式接收累积无上限: 协程通道/流逐块累积"
+  ],
+  "dangerous_transitions": [
+    "流式接收累积无上限: 协程通道/流逐块累积"
+  ],
+  "sink_semantics": [
+    "Channel.receive 循环"
+  ],
+  "counterevidence": [
+    "A guard dominates the sensitive operation for every relevant path.",
+    "The effective principal cannot control the source or the impact is not security relevant.",
+    "协程取消与累积交互: 取消点缺失使累积持续 | 帧上限必须对每个分片帧 (含 continuation) 强制"
+  ],
+  "language_applicability": [
+    "kotlin"
+  ],
+  "verification_recipe": [
+    "Trace the relevant source cue to the Channel.receive 循环 operation.",
+    "Establish attacker control, effective principal, guards, and security impact.",
+    "Test the listed counterevidence and record source anchors for every edge."
+  ],
+  "provenance": [
+    "PROV-kotlin-03-78c19640d6a0"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "seeded"
+}

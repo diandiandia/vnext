@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-go-08",
+  "family": "DATA-INTEGRITY",
+  "title": "配置目录 env 缺失回退 CWD 相对路径 + 写点无 O_NOFOLLOW",
+  "preconditions": [
+    "退化 env 几何 + 世界可写 CWD = 本地低权主体预置目录/symlink 链"
+  ],
+  "dangerous_transitions": [
+    "退化 env 几何 + 世界可写 CWD = 本地低权主体预置目录/symlink 链"
+  ],
+  "sink_semantics": [
+    "AppConfigDir/AppDataDir 回退 './app'; MkdirAll+WriteFile 无原子替换无跟链防护"
+  ],
+  "counterevidence": [
+    "A guard dominates the sensitive operation for every relevant path.",
+    "The effective principal cannot control the source or the impact is not security relevant.",
+    "权限位 (0700/0600) 防不住既有 inode 跟链写与异主目录放行; --resume 读回构成完整写→读链"
+  ],
+  "language_applicability": [
+    "go"
+  ],
+  "verification_recipe": [
+    "Trace the relevant source cue to the AppConfigDir/AppDataDir 回退 './app'; MkdirAll+WriteFile 无原子替换无跟链防护 operation.",
+    "Establish attacker control, effective principal, guards, and security impact.",
+    "Test the listed counterevidence and record source anchors for every edge."
+  ],
+  "provenance": [
+    "PROV-go-08-c0dbaf049643"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "battle_observed"
+}

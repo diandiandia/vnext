@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-swift-03",
+  "family": "MEMORY-SAFETY",
+  "title": "Dangling Swift/C object reference across ARC or Unmanaged lifetime boundary",
+  "preconditions": [
+    "Unmanaged/passRetained/passUnretained or a C callback retains a reference",
+    "object lifetime ends while an unsafe pointer/callback remains reachable"
+  ],
+  "dangerous_transitions": [
+    "foreign callback/pointer outlives the owning Swift object",
+    "unretained opaque pointer is dereferenced after release"
+  ],
+  "sink_semantics": [
+    "Unmanaged.takeRetainedValue/takeUnretainedValue",
+    "C/Objective-C callback or stored opaque pointer dereferences after owner release"
+  ],
+  "counterevidence": [
+    "Safe high-level Swift collection access retains runtime bounds checks.",
+    "The foreign pointer contract and owner lifetime are validated at the boundary."
+  ],
+  "language_applicability": [
+    "swift"
+  ],
+  "verification_recipe": [
+    "Map retain/release ownership across the Swift/Objective-C/C boundary.",
+    "Verify callback cancellation and owner lifetime with a controlled reproducer."
+  ],
+  "provenance": [
+    "PROV-swift-03-5f108ae8d80c"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "seeded"
+}

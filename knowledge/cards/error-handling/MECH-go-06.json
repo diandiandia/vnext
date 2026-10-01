@@ -1,0 +1,33 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-go-06",
+  "family": "ERROR-HANDLING",
+  "title": "Failed Go service reload leaves a provisional listener running",
+  "preconditions": [
+    "A failed configuration reload leaves a newly started listener or goroutine active"
+  ],
+  "dangerous_transitions": [
+    "A failed configuration reload leaves a newly started listener or goroutine active"
+  ],
+  "sink_semantics": [
+    "listener/server/goroutine lifecycle cleanup on failed reload paths"
+  ],
+  "counterevidence": [
+    "This is resource lifecycle cleanup, not use-after-free; trace every provisional start to rollback/shutdown."
+  ],
+  "language_applicability": [
+    "go"
+  ],
+  "verification_recipe": [
+    "Trace the language-specific source cue to listener/server/goroutine lifecycle cleanup on failed reload paths.",
+    "Establish attacker control, effective principal, guarding order, and security impact.",
+    "Test the stated language-specific counterevidence against source and runtime behavior."
+  ],
+  "provenance": [
+    "PROV-go-06-e843c8c64673"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "battle_observed"
+}

@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-csharp-04",
+  "family": "AUTHN",
+  "title": "安全配置默认可达性: 鉴权/防护开关键代码零值与实际提交值不一致",
+  "preconditions": [
+    "安全配置默认可达性: 鉴权/防护开关键代码零值与实际提交值不一致"
+  ],
+  "dangerous_transitions": [
+    "安全配置默认可达性: 鉴权/防护开关键代码零值与实际提交值不一致"
+  ],
+  "sink_semantics": [
+    "鉴权开关键"
+  ],
+  "counterevidence": [
+    "A guard dominates the sensitive operation for every relevant path.",
+    "The effective principal cannot control the source or the impact is not security relevant.",
+    "『默认可达』声称必须引用 shipped-config 盘点 (提交值 vs 代码零值) | 显式关闭也是提交值——不得把显式关闭误读为默认开启"
+  ],
+  "language_applicability": [
+    "csharp"
+  ],
+  "verification_recipe": [
+    "Trace the relevant source cue to the 鉴权开关键 operation.",
+    "Establish attacker control, effective principal, guards, and security impact.",
+    "Test the listed counterevidence and record source anchors for every edge."
+  ],
+  "provenance": [
+    "PROV-csharp-04-a9f5ad3a9d03"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "seeded"
+}

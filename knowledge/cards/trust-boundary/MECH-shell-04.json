@@ -1,0 +1,33 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-shell-04",
+  "family": "TRUST-BOUNDARY",
+  "title": "Attacker-influenced PATH selects an unintended executable",
+  "preconditions": [
+    "A privileged script invokes a command through an inherited or attacker-influenced search path"
+  ],
+  "dangerous_transitions": [
+    "A privileged script invokes a command through an inherited or attacker-influenced search path"
+  ],
+  "sink_semantics": [
+    "bare command invocation, PATH modification, env-based lookup, or sourced executable"
+  ],
+  "counterevidence": [
+    "Trace effective UID, environment sanitization, PATH order, writable directories, and absolute executable paths."
+  ],
+  "language_applicability": [
+    "shell"
+  ],
+  "verification_recipe": [
+    "Trace the language-specific source cue to bare command invocation, PATH modification, env-based lookup, or sourced executable.",
+    "Establish attacker control, effective principal, guarding order, and security impact.",
+    "Test the stated language-specific counterevidence against source and runtime behavior."
+  ],
+  "provenance": [
+    "PROV-shell-04-7ff4ae5f6a8f"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "seeded"
+}

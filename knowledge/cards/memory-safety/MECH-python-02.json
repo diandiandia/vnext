@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-python-02",
+  "family": "MEMORY-SAFETY",
+  "title": "C 扩展边界: 共享 helper/allocator 的边界检查归属",
+  "preconditions": [
+    "C 扩展边界: 共享 helper/allocator 的边界检查归属"
+  ],
+  "dangerous_transitions": [
+    "C 扩展边界: 共享 helper/allocator 的边界检查归属"
+  ],
+  "sink_semantics": [
+    "C 扩展模块内存操作"
+  ],
+  "counterevidence": [
+    "A guard dominates the sensitive operation for every relevant path.",
+    "The effective principal cannot control the source or the impact is not security relevant.",
+    "边界检查必须沿调用链双向核实——被调函数内有检查 ≠ 调用者未挡, 反之亦然 | 判『缺检查/缺上界』前必须 Read 两侧源码并各引证据行"
+  ],
+  "language_applicability": [
+    "python"
+  ],
+  "verification_recipe": [
+    "Trace the relevant source cue to the C 扩展模块内存操作 operation.",
+    "Establish attacker control, effective principal, guards, and security impact.",
+    "Test the listed counterevidence and record source anchors for every edge."
+  ],
+  "provenance": [
+    "PROV-python-02-23d153817fed"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "seeded"
+}

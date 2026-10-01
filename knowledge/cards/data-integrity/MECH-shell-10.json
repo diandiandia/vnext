@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-shell-10",
+  "family": "DATA-INTEGRITY",
+  "title": "CWE-200 Exposure of Sensitive Information",
+  "preconditions": [
+    "敏感信息暴露给未授权主体"
+  ],
+  "dangerous_transitions": [
+    "敏感信息暴露给未授权主体"
+  ],
+  "sink_semantics": [
+    "日志/错误输出/响应生成点"
+  ],
+  "counterevidence": [
+    "A guard dominates the sensitive operation for every relevant path.",
+    "The effective principal cannot control the source or the impact is not security relevant.",
+    "敏感字段过滤在序列化层"
+  ],
+  "language_applicability": [
+    "shell"
+  ],
+  "verification_recipe": [
+    "Trace the relevant source cue to the 日志/错误输出/响应生成点 operation.",
+    "Establish attacker control, effective principal, guards, and security impact.",
+    "Test the listed counterevidence and record source anchors for every edge."
+  ],
+  "provenance": [
+    "PROV-shell-10-62906c905055"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "seeded"
+}

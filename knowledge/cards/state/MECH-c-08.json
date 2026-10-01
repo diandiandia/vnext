@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-c-08",
+  "family": "STATE",
+  "title": "vendored 状态机: 续接分支/暂停恢复语义",
+  "preconditions": [
+    "vendored 状态机: 续接分支/暂停恢复语义"
+  ],
+  "dangerous_transitions": [
+    "vendored 状态机: 续接分支/暂停恢复语义"
+  ],
+  "sink_semantics": [
+    "状态机转移点"
+  ],
+  "counterevidence": [
+    "A guard dominates the sensitive operation for every relevant path.",
+    "The effective principal cannot control the source or the impact is not security relevant.",
+    "『死代码/不可达』类阻断对 vendored 状态机必须做状态机级复核 (逐状态转移行核实) | 续接分支被 verifier 判死代码为假的高发形态"
+  ],
+  "language_applicability": [
+    "c"
+  ],
+  "verification_recipe": [
+    "Trace the relevant source cue to the 状态机转移点 operation.",
+    "Establish attacker control, effective principal, guards, and security impact.",
+    "Test the listed counterevidence and record source anchors for every edge."
+  ],
+  "provenance": [
+    "PROV-c-08-45e1fa089a3c"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "battle_observed"
+}

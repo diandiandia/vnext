@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-rust-02",
+  "family": "MEMORY-SAFETY",
+  "title": "FFI 边界契约双侧核实: unsafe extern 的指针/长度契约承重在调用侧 (C++ CheckedInt/UTF-8 门) — unsafe 块自证义务的载体是跨语言调用契约而非 rust 侧单边",
+  "preconditions": [
+    "FFI 边界契约双侧核实: unsafe extern 的指针/长度契约承重在调用侧 (C++ CheckedInt/UTF-8 门) — unsafe 块自证义务的载体是跨语言调用契约而非 rust 侧单边"
+  ],
+  "dangerous_transitions": [
+    "FFI 边界契约双侧核实: unsafe extern 的指针/长度契约承重在调用侧 (C++ CheckedInt/UTF-8 门) — unsafe 块自证义务的载体是跨语言调用契约而非 rust 侧单边"
+  ],
+  "sink_semantics": [
+    "unsafe 块"
+  ],
+  "counterevidence": [
+    "A guard dominates the sensitive operation for every relevant path.",
+    "The effective principal cannot control the source or the impact is not security relevant.",
+    "内层安全不变量必须在 unsafe 块内自证——『外层已保证』声称必须给出作用域证据 | safe 包 unsafe 的边界检查归属双向核实 | safe Rust 解析器的递归/深度防护以解析器内建上限为机制 (嵌套块深度门), 非 unsafe 问题但仍属该格防护形态"
+  ],
+  "language_applicability": [
+    "rust"
+  ],
+  "verification_recipe": [
+    "Trace the relevant source cue to the unsafe 块 operation.",
+    "Establish attacker control, effective principal, guards, and security impact.",
+    "Test the listed counterevidence and record source anchors for every edge."
+  ],
+  "provenance": [
+    "PROV-rust-02-e541f9accacb"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "seeded"
+}

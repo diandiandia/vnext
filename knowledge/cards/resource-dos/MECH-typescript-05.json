@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "knowledge_version": "portfolio-2026-09-v1",
+  "review_status": "approved",
+  "mechanism_id": "MECH-typescript-05",
+  "family": "RESOURCE-DOS",
+  "title": "Unbounded queues, timers, retries, or object retention in a TypeScript runtime",
+  "preconditions": [
+    "attacker-controlled requests schedule retained work or objects",
+    "queue growth outpaces bounded consumers"
+  ],
+  "dangerous_transitions": [
+    "untrusted work is enqueued without a count/byte/time budget",
+    "failure triggers unbounded retry or retained callbacks"
+  ],
+  "sink_semantics": [
+    "arrays/maps/queues, timers, promises, worker queues, and buffered streams",
+    "retained closures/listeners and retry scheduling"
+  ],
+  "counterevidence": [
+    "Queue, concurrency, retention, and retry budgets are enforced before admitting work and on failure paths."
+  ],
+  "language_applicability": [
+    "typescript"
+  ],
+  "verification_recipe": [
+    "Identify the retaining owner and every enqueue, retry, cancellation, and drain transition.",
+    "Measure queue depth and retained memory with bounded and adversarial-rate controls."
+  ],
+  "provenance": [
+    "PROV-typescript-05-2dd583a7c9f1"
+  ],
+  "evaluation_partition": "training",
+  "evidence_state": "seeded"
+}
