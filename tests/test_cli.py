@@ -3,7 +3,10 @@ from pathlib import Path
 import sys
 
 from reachable_audit.cli import main
+from reachable_audit.campaign import CampaignManager
 from reachable_audit.compatibility import scan_runtime_deproject
+from reachable_audit.execution import ManualExecutionBackend, TaskResult, TaskSpec, TaskStatus
+from dataclasses import replace
 from test_evaluation import _manifest
 from test_batch_workflow import _workflow
 
@@ -62,6 +65,9 @@ def test_cli_managed_harness_run_records_output_artifacts(
     input_path.write_text(json.dumps({
         "command": [sys.executable, "-c", "print('managed')"],
         "timeout_seconds": 5,
+        "cpu_limit_seconds": 2,
+        "memory_limit_bytes": 256 * 1024 * 1024,
+        "hypothesis_id": "HYP-harness-cli",
     }), encoding="utf-8")
 
     assert main([
@@ -69,8 +75,92 @@ def test_cli_managed_harness_run_records_output_artifacts(
     ]) == 0
     result = json.loads(capsys.readouterr().out)  # type: ignore[attr-defined]
     assert result["exit_code"] == 0
+    assert result["empirical_upgrade_eligible"] is True
+    assert result["resource_limits"]["cpu_seconds"] == 2
+    assert result["resource_limits"]["address_space_bytes"] == 256 * 1024 * 1024
     assert result["stdout_artifact_id"].startswith("sha256:")
     assert result["execution_artifact_id"].startswith("sha256:")
+
+
+def test_cli_task_list_filters_batch_and_hints_exhausted_retry(
+    tmp_path: Path, capsys: object
+) -> None:
+    target = tmp_path / "task-target"
+    target.mkdir()
+    with CampaignManager(target) as manager:
+        campaign = manager.create_campaign(
+            campaign_id="CMP-task-list", snapshot_id="fixture:task-list"
+        )
+        manager.add_batch(
+            campaign_id=campaign.campaign_id,
+            batch_id="B-failed",
+            manifest={"work_unit_ids": ["WU-failed"]},
+        )
+        manager.add_batch(
+            campaign_id=campaign.campaign_id,
+            batch_id="B-pending",
+            manifest={"work_unit_ids": ["WU-pending"]},
+        )
+        input_ref = manager.artifacts.put_text("{}").artifact_id
+        failed_task = TaskSpec(
+            "TASK-failed", campaign.campaign_id, "B-failed", "WU-failed",
+            "discover_surfaces", (input_ref,), "surface-set/v1", {}, max_attempts=1,
+        )
+        pending_task = replace(
+            failed_task,
+            task_id="TASK-pending",
+            batch_id="B-pending",
+            work_unit_id="WU-pending",
+        )
+        backend = ManualExecutionBackend(manager, campaign.campaign_id)
+        backend.submit(failed_task)
+        backend.submit(pending_task)
+        lease = backend.claim(
+            "worker", batch_id="B-failed", task_id_filter=failed_task.task_id
+        )
+        assert lease is not None
+        assert backend.collect(lease, TaskResult(
+            False, None, "worker failed", {"agent_runs": 1, "wall_seconds": 1},
+        )).status is TaskStatus.FAILED
+
+    assert main([
+        "task-list", str(target), "CMP-task-list", "--batch-id", "B-failed",
+    ]) == 0
+    result = json.loads(capsys.readouterr().out)  # type: ignore[attr-defined]
+    assert [item["task"]["task_id"] for item in result["tasks"]] == ["TASK-failed"]
+    assert "task-retry" in result["tasks"][0]["operator_hint"]
+
+    assert main([
+        "task-list", str(target), "CMP-task-list", "--batch-id", "B-pending",
+    ]) == 0
+    result = json.loads(capsys.readouterr().out)  # type: ignore[attr-defined]
+    assert [item["task"]["task_id"] for item in result["tasks"]] == ["TASK-pending"]
+
+
+def test_task_list_help_exposes_filters() -> None:
+    from reachable_audit.cli import _parser
+
+    help_text = _parser().format_help()
+    subparser_action = next(
+        action for action in _parser()._actions if action.dest == "command"
+    )
+    task_list_parser = subparser_action.choices["task-list"]
+    task_list_help = task_list_parser.format_help()
+    assert "--batch-id" in task_list_help
+    assert "--operation" in task_list_help
+
+
+def test_harness_help_documents_hypothesis_and_cwd_constraints() -> None:
+    from reachable_audit.cli import _parser
+
+    parser = _parser()
+    subparser_action = next(
+        action for action in parser._actions if action.dest == "command"
+    )
+    harness_help = subparser_action.choices["harness-run"].format_help()
+    assert "input.hypothesis_id" in harness_help
+    assert "input.cwd" in harness_help
+    assert "not an OS sandbox" in harness_help
 
 
 def test_cli_runs_inventory_graph_plan_in_order(tmp_path: Path, capsys: object) -> None:
@@ -143,9 +233,24 @@ def test_cli_drives_a_durable_surface_task(tmp_path: Path, capsys: object) -> No
     capsys.readouterr()  # type: ignore[attr-defined]
     assert main(["task-schedule-r1", str(target), "CMP-tasks", batch_id]) == 0
     capsys.readouterr()  # type: ignore[attr-defined]
-    assert main(["task-claim", str(target), "CMP-tasks", "worker-a"]) == 0
-    claim = json.loads(capsys.readouterr().out)  # type: ignore[attr-defined]
-    task_id = claim["lease"]["task"]["task_id"]
+    assert main([
+        "task-claim", str(target), "CMP-tasks", "worker-a",
+        "--operation", "discover_surfaces",
+    ]) == 0
+    first_claim = json.loads(capsys.readouterr().out)  # type: ignore[attr-defined]
+    task_id = first_claim["lease"]["task"]["task_id"]
+    assert main([
+        "task-release", str(target), "CMP-tasks", task_id, "worker-a",
+        "--reason", "worker pool routing correction",
+    ]) == 0
+    capsys.readouterr()  # type: ignore[attr-defined]
+    assert main([
+        "task-claim", str(target), "CMP-tasks", "worker-b",
+        "--operation", "discover_surfaces",
+    ]) == 0
+    second_claim = json.loads(capsys.readouterr().out)  # type: ignore[attr-defined]
+    assert second_claim["lease"]["task"]["task_id"] == task_id
+    assert second_claim["lease"]["attempt"] == 2
     result_path = tmp_path / "result.json"
     result_path.write_text(json.dumps({
         "succeeded": True,
@@ -160,10 +265,11 @@ def test_cli_drives_a_durable_surface_task(tmp_path: Path, capsys: object) -> No
             "schema_version": "1.0",
             "reviewed_paths": ["main.py"],
             "surfaces": [],
+                "boundary_reviews": [],
         },
     }), encoding="utf-8")
     assert main([
-        "task-collect", str(target), "CMP-tasks", task_id, "worker-a",
+        "task-collect", str(target), "CMP-tasks", task_id, "worker-b",
         "--input", str(result_path),
     ]) == 0
     capsys.readouterr()  # type: ignore[attr-defined]
@@ -218,9 +324,13 @@ def test_cli_cleans_campaign_resources_and_reads_skill_backlog(
     assert cleanup["failures"] == []
     assert not resource_path.exists()
 
-    assert main(["skill-backlog", str(target)]) == 0
+    assert main(["skill-backlog", str(target), "CMP-lifecycle"]) == 0
     backlog = json.loads(capsys.readouterr().out)  # type: ignore[attr-defined]
-    assert backlog == {"pending_issues": []}
+    assert backlog == {
+        "purpose": "tool_regression_only",
+        "campaign_id": "CMP-lifecycle",
+        "pending_issues": [],
+    }
 
     review_path = tmp_path / "skill-review.json"
     review_path.write_text(json.dumps({
@@ -239,9 +349,33 @@ def test_cli_cleans_campaign_resources_and_reads_skill_backlog(
         "--input", str(review_path),
     ]) == 0
     capsys.readouterr()  # type: ignore[attr-defined]
-    assert main(["skill-backlog", str(target)]) == 0
+    assert main(["skill-backlog", str(target), "CMP-lifecycle"]) == 0
+    backlog = json.loads(capsys.readouterr().out)  # type: ignore[attr-defined]
+    assert backlog["pending_issues"] == []
+
+    assert main([
+        "init", str(target), "--snapshot-id", "fixture:follow-up",
+        "--campaign-id", "CMP-follow-up", "--audit-mode", "follow-up",
+        "--history-source", "CMP-lifecycle",
+    ]) == 0
+    capsys.readouterr()  # type: ignore[attr-defined]
+    assert main(["skill-backlog", str(target), "CMP-follow-up"]) == 0
     backlog = json.loads(capsys.readouterr().out)  # type: ignore[attr-defined]
     assert backlog["pending_issues"][0]["issue_id"] == "SKILL-cli-1"
+
+    revised_review = json.loads(review_path.read_text(encoding="utf-8"))
+    revised_review["skill_issues"][0]["summary"] = "runtime probe lacked a registered observation artifact"
+    review_path.write_text(json.dumps(revised_review), encoding="utf-8")
+    assert main([
+        "skill-review", str(target), "CMP-lifecycle",
+        "--input", str(review_path),
+    ]) == 0
+    capsys.readouterr()  # type: ignore[attr-defined]
+    assert main(["skill-backlog", str(target), "CMP-follow-up"]) == 0
+    backlog = json.loads(capsys.readouterr().out)  # type: ignore[attr-defined]
+    assert backlog["pending_issues"][0]["summary"] == (
+        "runtime probe lacked a registered observation artifact"
+    )
 
 
 def test_cli_aborts_campaign_writes_lesson_and_cleans_resources(

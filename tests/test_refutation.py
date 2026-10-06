@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -18,13 +19,16 @@ from reachable_audit.analysis_models import (
 )
 from reachable_audit.batch_workflow import BatchWorkflow
 from reachable_audit.campaign import CampaignManager
+from reachable_audit.execution import DiscoveryCoordinator, ManualExecutionBackend
 from reachable_audit.inventory import build_inventory
 from reachable_audit.models import ModelError
 from conftest import axis_runs_from_evidence
 from reachable_audit.planning import create_audit_plan
 
 
-def _reachable_workflow(tmp_path: Path):  # type: ignore[no-untyped-def]
+def _reachable_workflow(
+    tmp_path: Path, *, verdict_kind: VerdictKind = VerdictKind.REACHABLE,
+):  # type: ignore[no-untyped-def]
     (tmp_path / "app.py").write_text("def run(value): return value\n", encoding="utf-8")
     inventory = build_inventory(tmp_path, "fixture:refute")
     plan = create_audit_plan(
@@ -59,9 +63,12 @@ def _reachable_workflow(tmp_path: Path):  # type: ignore[no-untyped-def]
         axis_runs=axis_runs_from_evidence(axis_evidence))
     edge_ref = manager.artifacts.put_text("state edge evidence").artifact_id
     workflow.record_r3([VerdictSubmission(
-        "HYP-state", VerdictKind.REACHABLE, EvidenceGrade.EDGE_PROVEN,
-        "remote", (), ("LOC-app.py:1",), (edge_ref,), (), (),
-        "state edge is reachable",
+        "HYP-state", verdict_kind,
+        EvidenceGrade.EDGE_PROVEN if verdict_kind is VerdictKind.REACHABLE else EvidenceGrade.STATIC_ONLY,
+        "remote", (), ("LOC-app.py:1",) if verdict_kind is VerdictKind.REACHABLE else (),
+        (edge_ref,) if verdict_kind is VerdictKind.REACHABLE else (),
+        (edge_ref,) if verdict_kind is VerdictKind.UNREACHABLE else (), (),
+        "state edge is reachable" if verdict_kind is VerdictKind.REACHABLE else "blocking guard applies",
     )])
     return manager, workflow
 
@@ -121,5 +128,29 @@ def test_split_refutations_require_human_adjudication(tmp_path: Path) -> None:
                 "ADJ-split", "HYP-state", ("REF-a", "REF-b"),
                 VerdictKind.NEEDS_REVIEW, AdjudicationActor.AUTO, (), "split vote",
             ))
+    finally:
+        manager.close()
+
+
+def test_revival_scheduler_reuses_existing_selection(tmp_path: Path) -> None:
+    manager, workflow = _reachable_workflow(
+        tmp_path, verdict_kind=VerdictKind.UNREACHABLE,
+    )
+    try:
+        workflow.record_revival_selection(
+            ["HYP-state"], rationale="review selected rejection",
+            evidence_refs=("EVID-selection",),
+        )
+        backend = ManualExecutionBackend(manager, workflow.campaign_id)
+        tasks = DiscoveryCoordinator(workflow, backend).schedule_r35_revivals()
+
+        assert len(tasks) == 1
+        task_input = json.loads(manager.artifacts.get_bytes(tasks[0].task.input_refs[0]))
+        assert task_input["hypothesis"]["hypothesis_id"] == "HYP-state"
+        selection_events = [
+            event for event in manager.store.list_events(workflow.campaign_id)
+            if event.event_type == "REVIVAL_SAMPLE_SELECTED"
+        ]
+        assert len(selection_events) == 1
     finally:
         manager.close()

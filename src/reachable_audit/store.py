@@ -14,11 +14,15 @@ from .models import (
     AppendResult,
     BatchRecord,
     BatchStatus,
+    CampaignAuditMode,
     CampaignRecord,
     CampaignStatus,
     EventRecord,
     require_transition,
 )
+
+
+_MAX_TASK_RETRY_AUTHORIZATIONS = 3
 
 
 class StoreError(RuntimeError):
@@ -64,6 +68,8 @@ class AuditStore(AbstractContextManager["AuditStore"]):
                 campaign_id TEXT PRIMARY KEY,
                 target_root TEXT NOT NULL,
                 snapshot_id TEXT NOT NULL,
+                audit_mode TEXT NOT NULL DEFAULT 'legacy',
+                history_sources_json TEXT NOT NULL DEFAULT '[]',
                 status TEXT NOT NULL,
                 budget_json TEXT NOT NULL,
                 constraints_json TEXT NOT NULL,
@@ -100,8 +106,32 @@ class AuditStore(AbstractContextManager["AuditStore"]):
                 ON events(campaign_id, sequence);
             CREATE INDEX IF NOT EXISTS idx_events_entity
                 ON events(entity_type, entity_id, sequence);
+            CREATE INDEX IF NOT EXISTS idx_events_campaign_entity
+                ON events(campaign_id, entity_type, entity_id, sequence);
+            CREATE INDEX IF NOT EXISTS idx_events_campaign_entity_event
+                ON events(campaign_id, entity_type, event_type, batch_id, entity_id);
+            CREATE INDEX IF NOT EXISTS idx_events_campaign_event_type
+                ON events(campaign_id, event_type, sequence);
+            CREATE INDEX IF NOT EXISTS idx_events_campaign_batch_type
+                ON events(campaign_id, batch_id, event_type, sequence);
+            CREATE INDEX IF NOT EXISTS idx_events_campaign_batch_type_entity
+                ON events(campaign_id, batch_id, event_type, entity_id, sequence);
+            CREATE INDEX IF NOT EXISTS idx_events_payload_ref
+                ON events(payload_ref);
             """
         )
+        campaign_columns = {
+            row["name"]
+            for row in self._connection.execute("PRAGMA table_info(campaigns)")
+        }
+        if "audit_mode" not in campaign_columns:
+            self._connection.execute(
+                "ALTER TABLE campaigns ADD COLUMN audit_mode TEXT NOT NULL DEFAULT 'legacy'"
+            )
+        if "history_sources_json" not in campaign_columns:
+            self._connection.execute(
+                "ALTER TABLE campaigns ADD COLUMN history_sources_json TEXT NOT NULL DEFAULT '[]'"
+            )
         self._connection.commit()
 
     def create_campaign(
@@ -110,9 +140,19 @@ class AuditStore(AbstractContextManager["AuditStore"]):
         campaign_id: str,
         target_root: str,
         snapshot_id: str,
+        audit_mode: CampaignAuditMode = CampaignAuditMode.FRESH,
+        history_source_campaign_ids: tuple[str, ...] = (),
         budget: Mapping[str, Any] | None = None,
         constraints: list[str] | tuple[str, ...] | None = None,
     ) -> CampaignRecord:
+        if audit_mode is CampaignAuditMode.LEGACY:
+            raise ValueError("legacy is reserved for migrated Campaign records")
+        if len(history_source_campaign_ids) != len(set(history_source_campaign_ids)):
+            raise ValueError("history source Campaign IDs must be unique")
+        if audit_mode is CampaignAuditMode.FRESH and history_source_campaign_ids:
+            raise ValueError("fresh Campaigns cannot declare historical Campaign sources")
+        if audit_mode is CampaignAuditMode.FOLLOW_UP and not history_source_campaign_ids:
+            raise ValueError("follow-up Campaigns require explicit history sources")
         now = _utc_now()
         budget_json = _json(dict(budget or {}))
         constraints_json = _json(list(constraints or ()))
@@ -125,6 +165,8 @@ class AuditStore(AbstractContextManager["AuditStore"]):
                 if (
                     record.target_root != target_root
                     or record.snapshot_id != snapshot_id
+                    or record.audit_mode != audit_mode
+                    or record.history_source_campaign_ids != history_source_campaign_ids
                     or _json(record.budget) != budget_json
                     or _json(record.constraints) != constraints_json
                 ):
@@ -133,14 +175,17 @@ class AuditStore(AbstractContextManager["AuditStore"]):
             self._connection.execute(
                 """
                 INSERT INTO campaigns (
-                    campaign_id, target_root, snapshot_id, status, budget_json,
-                    constraints_json, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    campaign_id, target_root, snapshot_id, audit_mode,
+                    history_sources_json, status, budget_json, constraints_json,
+                    created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     campaign_id,
                     target_root,
                     snapshot_id,
+                    audit_mode.value,
+                    _json(list(history_source_campaign_ids)),
                     CampaignStatus.PLANNING.value,
                     budget_json,
                     constraints_json,
@@ -156,7 +201,11 @@ class AuditStore(AbstractContextManager["AuditStore"]):
                 event_type="CAMPAIGN_CREATED",
                 idempotency_key=f"campaign:create:{campaign_id}",
                 actor="tool",
-                payload={"snapshot_id": snapshot_id},
+                payload={
+                    "snapshot_id": snapshot_id,
+                    "audit_mode": audit_mode.value,
+                    "history_source_campaign_ids": list(history_source_campaign_ids),
+                },
                 payload_ref=None,
                 created_at=now,
             )
@@ -336,12 +385,106 @@ class AuditStore(AbstractContextManager["AuditStore"]):
                 created_at=_utc_now(),
             )
 
-    def list_events(self, campaign_id: str) -> list[EventRecord]:
+    def list_events(
+        self,
+        campaign_id: str,
+        *,
+        entity_type: str | None = None,
+        entity_id: str | None = None,
+        event_type: str | None = None,
+        event_types: set[str] | frozenset[str] | None = None,
+    ) -> list[EventRecord]:
+        clauses = ["campaign_id = ?"]
+        parameters: list[Any] = [campaign_id]
+        for column, value in (
+            ("entity_type", entity_type),
+            ("entity_id", entity_id),
+            ("event_type", event_type),
+        ):
+            if value is not None:
+                clauses.append(f"{column} = ?")
+                parameters.append(value)
+        if event_types is not None:
+            values = sorted(event_types)
+            if not values:
+                return []
+            clauses.append(f"event_type IN ({','.join('?' for _ in values)})")
+            parameters.extend(values)
         rows = self._connection.execute(
-            "SELECT * FROM events WHERE campaign_id = ? ORDER BY sequence",
-            (campaign_id,),
+            f"SELECT * FROM events WHERE {' AND '.join(clauses)} ORDER BY sequence",
+            parameters,
         ).fetchall()
         return [self._event_from_row(row) for row in rows]
+
+    def list_batch_events(
+        self,
+        campaign_id: str,
+        batch_id: str,
+        *,
+        entity_type: str | None = None,
+        entity_id: str | None = None,
+        event_type: str | None = None,
+        event_types: set[str] | frozenset[str] | None = None,
+    ) -> list[EventRecord]:
+        clauses = ["campaign_id = ?", "batch_id = ?"]
+        parameters: list[Any] = [campaign_id, batch_id]
+        for column, value in (
+            ("entity_type", entity_type),
+            ("entity_id", entity_id),
+            ("event_type", event_type),
+        ):
+            if value is not None:
+                clauses.append(f"{column} = ?")
+                parameters.append(value)
+        if event_types is not None:
+            values = sorted(event_types)
+            if not values:
+                return []
+            clauses.append(f"event_type IN ({','.join('?' for _ in values)})")
+            parameters.extend(values)
+        rows = self._connection.execute(
+            f"SELECT * FROM events WHERE {' AND '.join(clauses)} ORDER BY sequence",
+            parameters,
+        ).fetchall()
+        return [self._event_from_row(row) for row in rows]
+
+    def list_entity_ids(
+        self,
+        campaign_id: str,
+        *,
+        entity_type: str,
+        event_type: str,
+        batch_id: str | None = None,
+    ) -> tuple[str, ...]:
+        clauses = ["campaign_id = ?", "entity_type = ?", "event_type = ?"]
+        parameters: list[Any] = [campaign_id, entity_type, event_type]
+        if batch_id is not None:
+            clauses.append("batch_id = ?")
+            parameters.append(batch_id)
+        rows = self._connection.execute(
+            "SELECT entity_id FROM events WHERE "
+            f"{' AND '.join(clauses)} "
+            "GROUP BY entity_id ORDER BY MIN(sequence)",
+            parameters,
+        ).fetchall()
+        return tuple(str(row["entity_id"]) for row in rows)
+
+    def artifact_campaign_owners(
+        self, artifact_ids: set[str] | tuple[str, ...]
+    ) -> dict[str, set[str]]:
+        references = sorted(set(artifact_ids))
+        owners: dict[str, set[str]] = {}
+        for offset in range(0, len(references), 400):
+            chunk = references[offset:offset + 400]
+            placeholders = ",".join("?" for _ in chunk)
+            rows = self._connection.execute(
+                f"SELECT payload_ref, campaign_id FROM events "
+                f"WHERE payload_ref IN ({placeholders})",
+                chunk,
+            ).fetchall()
+            for row in rows:
+                owners.setdefault(row["payload_ref"], set()).add(row["campaign_id"])
+        return owners
 
     def claim_task(
         self,
@@ -367,17 +510,32 @@ class AuditStore(AbstractContextManager["AuditStore"]):
             if not rows:
                 raise NotFoundError(f"execution task not found: {task_id}")
             events = [self._event_from_row(row) for row in rows]
-            if any(
-                event.event_type in {"TASK_COMPLETED", "TASK_FAILED", "TASK_CANCELLED"}
-                for event in events
-            ):
-                self._connection.rollback()
-                return None
             claims = [event for event in events if event.event_type == "TASK_CLAIMED"]
-            if claims and str(claims[-1].payload["lease_expires_at"]) > now:
+            state_events = [event for event in events if event.event_type in {
+                "TASK_CLAIMED", "TASK_LEASE_RELEASED", "TASK_COMPLETED",
+                "TASK_FAILED", "TASK_RETRY_AUTHORIZED", "TASK_CANCELLED",
+            }]
+            latest_state = state_events[-1] if state_events else None
+            if latest_state is not None and latest_state.event_type in {
+                "TASK_COMPLETED", "TASK_CANCELLED",
+            }:
                 self._connection.rollback()
                 return None
             attempt = len(claims) + 1
+            max_attempts = int(events[0].payload.get("max_attempts", 3))
+            retry_authorizations = sum(
+                event.event_type == "TASK_RETRY_AUTHORIZED" for event in events
+            )
+            if attempt > max_attempts + retry_authorizations:
+                self._connection.rollback()
+                return None
+            if (
+                latest_state is not None
+                and latest_state.event_type == "TASK_CLAIMED"
+                and str(latest_state.payload["lease_expires_at"]) > now
+            ):
+                self._connection.rollback()
+                return None
             result = self._append_event_tx(
                 campaign_id=campaign_id,
                 batch_id=events[0].batch_id,
@@ -412,6 +570,7 @@ class AuditStore(AbstractContextManager["AuditStore"]):
         campaign_id: str,
         task_id: str,
         worker_id: str,
+        attempt: int,
         succeeded: bool,
         payload: Mapping[str, Any],
         payload_ref: str | None,
@@ -436,18 +595,29 @@ class AuditStore(AbstractContextManager["AuditStore"]):
             if not claims:
                 raise ConflictError(f"execution task has no active lease: {task_id}")
             claim = claims[-1]
+            if int(claim.payload["attempt"]) != attempt:
+                raise ConflictError(f"execution task lease attempt is stale: {task_id}")
             event_type = "TASK_COMPLETED" if succeeded else "TASK_FAILED"
             idempotency_key = f"task:finalize:{campaign_id}:{task_id}:{claim.event_id}"
-            terminal = next((
-                event
-                for event in events
-                if event.event_type in {"TASK_COMPLETED", "TASK_FAILED", "TASK_CANCELLED"}
-            ), None)
-            if terminal is not None and terminal.idempotency_key != idempotency_key:
-                raise ConflictError(f"execution task is already terminal: {task_id}")
+            state_events = [event for event in events if event.event_type in {
+                "TASK_CLAIMED", "TASK_LEASE_RELEASED", "TASK_COMPLETED",
+                "TASK_FAILED", "TASK_RETRY_AUTHORIZED", "TASK_CANCELLED",
+            }]
+            latest_state = state_events[-1] if state_events else None
+            if latest_state is not None and latest_state.event_type in {
+                "TASK_COMPLETED", "TASK_FAILED", "TASK_CANCELLED",
+            }:
+                if latest_state.idempotency_key != idempotency_key:
+                    raise ConflictError(f"execution task attempt is already terminal: {task_id}")
+            elif latest_state is None or latest_state.event_id != claim.event_id:
+                raise ConflictError(f"execution task lease is no longer active: {task_id}")
             if claim.actor != worker_id:
                 raise ConflictError(f"execution task lease belongs to another worker: {task_id}")
-            if str(claim.payload["lease_expires_at"]) <= now and terminal is None:
+            if (
+                str(claim.payload["lease_expires_at"]) <= now
+                and latest_state is not None
+                and latest_state.event_type == "TASK_CLAIMED"
+            ):
                 raise ConflictError(f"execution task lease expired: {task_id}")
             result = self._append_event_tx(
                 campaign_id=campaign_id,
@@ -459,6 +629,127 @@ class AuditStore(AbstractContextManager["AuditStore"]):
                 actor=worker_id,
                 payload=payload,
                 payload_ref=payload_ref,
+                created_at=now,
+            )
+            self._connection.commit()
+            return result
+        except Exception:
+            if self._connection.in_transaction:
+                self._connection.rollback()
+            raise
+
+    def authorize_task_retry(
+        self,
+        *,
+        campaign_id: str,
+        task_id: str,
+        actor: str,
+        reason: str,
+        now: str,
+    ) -> AppendResult:
+        self.get_campaign(campaign_id)
+        if not actor.strip() or not reason.strip():
+            raise ValueError("task retry authorization requires actor and reason")
+        try:
+            self._connection.execute("BEGIN IMMEDIATE")
+            rows = self._connection.execute(
+                """
+                SELECT * FROM events
+                WHERE campaign_id = ? AND entity_type = 'execution_task'
+                    AND entity_id = ?
+                ORDER BY sequence
+                """,
+                (campaign_id, task_id),
+            ).fetchall()
+            if not rows:
+                raise NotFoundError(f"execution task not found: {task_id}")
+            events = [self._event_from_row(row) for row in rows]
+            claims = [event for event in events if event.event_type == "TASK_CLAIMED"]
+            retries = [event for event in events if event.event_type == "TASK_RETRY_AUTHORIZED"]
+            state_events = [event for event in events if event.event_type in {
+                "TASK_CLAIMED", "TASK_LEASE_RELEASED", "TASK_COMPLETED",
+                "TASK_FAILED", "TASK_RETRY_AUTHORIZED", "TASK_CANCELLED",
+            }]
+            latest_state = state_events[-1] if state_events else None
+            if latest_state is None or latest_state.event_type != "TASK_FAILED":
+                raise ConflictError("only an exhausted failed task can be retried")
+            max_attempts = int(events[0].payload.get("max_attempts", 3))
+            if len(claims) < max_attempts + len(retries):
+                raise ConflictError("task still has configured attempts remaining")
+            if len(retries) >= _MAX_TASK_RETRY_AUTHORIZATIONS:
+                raise ConflictError("task retry authorization limit exceeded")
+            result = self._append_event_tx(
+                campaign_id=campaign_id,
+                batch_id=events[0].batch_id,
+                entity_type="execution_task",
+                entity_id=task_id,
+                event_type="TASK_RETRY_AUTHORIZED",
+                idempotency_key=(
+                    f"task:retry:{campaign_id}:{task_id}:{latest_state.event_id}:"
+                    f"{len(retries) + 1}"
+                ),
+                actor=actor,
+                payload={"reason": reason, "additional_attempts": 1},
+                payload_ref=None,
+                created_at=now,
+            )
+            self._connection.commit()
+            return result
+        except Exception:
+            if self._connection.in_transaction:
+                self._connection.rollback()
+            raise
+
+    def release_task(
+        self,
+        *,
+        campaign_id: str,
+        task_id: str,
+        worker_id: str,
+        attempt: int,
+        reason: str,
+        now: str,
+    ) -> AppendResult:
+        self.get_campaign(campaign_id)
+        if not reason.strip():
+            raise ValueError("task lease release requires a reason")
+        try:
+            self._connection.execute("BEGIN IMMEDIATE")
+            rows = self._connection.execute(
+                """
+                SELECT * FROM events
+                WHERE campaign_id = ? AND entity_type = 'execution_task'
+                    AND entity_id = ?
+                ORDER BY sequence
+                """,
+                (campaign_id, task_id),
+            ).fetchall()
+            if not rows:
+                raise NotFoundError(f"execution task not found: {task_id}")
+            events = [self._event_from_row(row) for row in rows]
+            state_events = [event for event in events if event.event_type in {
+                "TASK_CLAIMED", "TASK_LEASE_RELEASED", "TASK_COMPLETED",
+                "TASK_FAILED", "TASK_CANCELLED",
+            }]
+            latest_state = state_events[-1] if state_events else None
+            if latest_state is None or latest_state.event_type != "TASK_CLAIMED":
+                raise ConflictError(f"execution task has no active lease: {task_id}")
+            if latest_state.actor != worker_id:
+                raise ConflictError(f"execution task lease belongs to another worker: {task_id}")
+            if int(latest_state.payload["attempt"]) != attempt:
+                raise ConflictError(f"execution task lease attempt is stale: {task_id}")
+            if str(latest_state.payload["lease_expires_at"]) <= now:
+                raise ConflictError(f"execution task lease expired: {task_id}")
+            result = self._append_event_tx(
+                campaign_id=campaign_id,
+                batch_id=events[0].batch_id,
+                entity_type="execution_task",
+                entity_id=task_id,
+                event_type="TASK_LEASE_RELEASED",
+                idempotency_key=f"task:release:{campaign_id}:{task_id}:{latest_state.event_id}",
+                actor=worker_id,
+                payload={"reason": reason},
+                payload_ref=None,
                 created_at=now,
             )
             self._connection.commit()
@@ -492,13 +783,15 @@ class AuditStore(AbstractContextManager["AuditStore"]):
             if not rows:
                 raise NotFoundError(f"execution task not found: {task_id}")
             events = [self._event_from_row(row) for row in rows]
-            terminal = next((
-                event
-                for event in events
-                if event.event_type in {"TASK_COMPLETED", "TASK_FAILED", "TASK_CANCELLED"}
-            ), None)
+            state_events = [event for event in events if event.event_type in {
+                "TASK_CLAIMED", "TASK_LEASE_RELEASED", "TASK_COMPLETED",
+                "TASK_FAILED", "TASK_CANCELLED",
+            }]
+            terminal = state_events[-1] if state_events and state_events[-1].event_type in {
+                "TASK_COMPLETED", "TASK_FAILED", "TASK_CANCELLED",
+            } else None
             idempotency_key = f"task:cancel:{campaign_id}:{task_id}"
-            if terminal is not None and terminal.idempotency_key != idempotency_key:
+            if terminal is not None and terminal.event_type in {"TASK_COMPLETED", "TASK_CANCELLED"} and terminal.idempotency_key != idempotency_key:
                 raise ConflictError(f"execution task is already terminal: {task_id}")
             result = self._append_event_tx(
                 campaign_id=campaign_id,
@@ -593,6 +886,8 @@ class AuditStore(AbstractContextManager["AuditStore"]):
             campaign_id=row["campaign_id"],
             target_root=row["target_root"],
             snapshot_id=row["snapshot_id"],
+            audit_mode=CampaignAuditMode(row["audit_mode"]),
+            history_source_campaign_ids=tuple(json.loads(row["history_sources_json"])),
             status=CampaignStatus(row["status"]),
             budget=json.loads(row["budget_json"]),
             constraints=tuple(json.loads(row["constraints_json"])),

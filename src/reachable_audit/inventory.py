@@ -13,7 +13,7 @@ from .plan_models import Component, ProjectInventory, SourceFile
 
 
 BUILD_MANIFESTS = frozenset({
-    "BUILD", "BUILD.bazel", "CMakeLists.txt", "Cargo.toml", "Package.swift",
+    "BUILD", "BUILD.bazel", "BUILD.gn", ".gn", "CMakeLists.txt", "Cargo.toml", "Package.swift",
     "Gemfile", "Makefile", "GNUmakefile", "Makefile.PL", "WORKSPACE",
     "build.gradle", "build.gradle.kts", "build.sbt", "composer.json", "go.mod",
     "package.json", "pom.xml", "pyproject.toml", "setup.cfg", "cpanfile",

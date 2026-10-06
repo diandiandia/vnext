@@ -31,6 +31,8 @@ def test_runner_captures_bounded_output_as_artifacts_and_cleans_group(tmp_path: 
         assert result["exit_code"] != 0
         assert result["timed_out"] is False
         assert result["output_limit_exceeded"] is True
+        assert result["empirical_upgrade_eligible"] is False
+        assert "hypothesis_id" in result["empirical_upgrade_note"]
         assert len(stdout) == 12
         assert "runtime" in result["runtime_directory_ref"]
         assert cleanup_campaign_resources(manager, "CMP-harness")["failures"] == []

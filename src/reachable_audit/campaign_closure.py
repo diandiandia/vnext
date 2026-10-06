@@ -4,9 +4,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+from pathlib import Path
 from typing import Any
 
-from .analysis_models import CampaignClosure, R5Disposition
+from .analysis_models import (
+    CampaignClosure,
+    R5Disposition,
+    ScopeDispositionKind,
+)
 from .campaign import CampaignManager
 from .models import BatchStatus, CampaignStatus, ModelError
 from .plan_models import AuditPlan
@@ -32,6 +37,98 @@ class CampaignCloser:
         self.campaign_id = campaign_id
         self.plan = plan
         self.campaign = manager.store.get_campaign(campaign_id)
+
+    def _scope_disposition_errors(
+        self,
+        closure: CampaignClosure,
+        *,
+        inventory_source_files: set[str],
+    ) -> list[str]:
+        errors: list[str] = []
+        dispositions = closure.scope_dispositions
+        refs = [item.scope_ref for item in dispositions]
+        if len(refs) != len(set(refs)):
+            errors.append("scope dispositions contain duplicate scope_ref values")
+        if len(closure.unreviewed_scope) != len(set(closure.unreviewed_scope)):
+            errors.append("unreviewed_scope contains duplicate entries")
+        if set(refs) != set(closure.unreviewed_scope):
+            errors.append("scope dispositions must match unreviewed_scope exactly")
+
+        artifact_refs = {
+            evidence_ref
+            for item in dispositions
+            for evidence_ref in item.evidence_refs
+            if evidence_ref.startswith("sha256:")
+        }
+        artifact_owners = self.manager.store.artifact_campaign_owners(artifact_refs)
+
+        for item in dispositions:
+            scope_label = f"scope {item.scope_ref!r}"
+            if item.disposition not in {
+                ScopeDispositionKind.EXCLUDED,
+                ScopeDispositionKind.DEFERRED,
+            }:
+                errors.append(f"{scope_label} has an invalid disposition")
+            if item.snapshot_id != self.campaign.snapshot_id:
+                errors.append(f"{scope_label} is not bound to the current snapshot")
+            if not item.rationale.strip() or not item.approved_by.strip():
+                errors.append(f"{scope_label} requires rationale and approver")
+            if not item.evidence_refs:
+                errors.append(f"{scope_label} requires evidence")
+            if item.history_source_campaign_id:
+                if self.campaign.audit_mode.value == "fresh":
+                    errors.append(f"{scope_label} cites historical data in fresh mode")
+                elif item.history_source_campaign_id not in (
+                    self.campaign.history_source_campaign_ids
+                ):
+                    errors.append(f"{scope_label} cites an undeclared history source")
+            for evidence_ref in item.evidence_refs:
+                if evidence_ref.startswith("LOC-"):
+                    if not self._valid_source_anchor(
+                        evidence_ref, inventory_source_files
+                    ):
+                        errors.append(f"{scope_label} has an invalid source anchor")
+                elif evidence_ref.startswith("sha256:"):
+                    owners = artifact_owners.get(evidence_ref, set())
+                    allowed_owners = {self.campaign_id}
+                    if item.history_source_campaign_id:
+                        allowed_owners.add(item.history_source_campaign_id)
+                    try:
+                        self.manager.artifacts.get_bytes(evidence_ref)
+                    except (OSError, ValueError):
+                        owners = set()
+                    if not owners or not owners.issubset(allowed_owners):
+                        errors.append(
+                            f"{scope_label} references an artifact not owned by this review"
+                        )
+                else:
+                    errors.append(
+                        f"{scope_label} evidence must be a LOC anchor or Campaign artifact"
+                    )
+        return errors
+
+    def _valid_source_anchor(
+        self, evidence_ref: str, inventory_source_files: set[str]
+    ) -> bool:
+        path_text, separator, line_text = evidence_ref[4:].rpartition(":")
+        if not separator or not line_text.isdigit() or int(line_text) < 1:
+            return False
+        relative_path = Path(path_text)
+        if relative_path.is_absolute() or ".." in relative_path.parts:
+            return False
+        if relative_path.as_posix() not in inventory_source_files:
+            return False
+        source_path = (self.manager.target_root / relative_path).resolve()
+        if not source_path.is_relative_to(self.manager.target_root) or not source_path.is_file():
+            return False
+        try:
+            with source_path.open("rb") as source:
+                for _ in range(int(line_text)):
+                    if not source.readline():
+                        return False
+        except OSError:
+            return False
+        return True
 
     def close(self, closure: CampaignClosure) -> dict[str, Any]:
         events = self.manager.store.list_events(self.campaign_id)
@@ -111,7 +208,7 @@ class CampaignCloser:
         verdicts = []
         category_runs = []
         r5_assessments = []
-        batch_reports = []
+        batch_reports_by_id: dict[str, Mapping[str, Any]] = {}
         metrics = []
         artifact_event_types = {
             "R1_COMPLETED", "R2_COMPLETED", "R3_COMPLETED", "R4_COMPLETED", "R5_COMPLETED",
@@ -137,25 +234,50 @@ class CampaignCloser:
                 elif event.event_type == "R5_COMPLETED":
                     r5_assessments.extend(artifact["assessments"])
                 elif event.event_type == "R6_COMPLETED":
-                    batch_reports.append(artifact)
+                    batch_reports_by_id[batch_id] = artifact
                 elif event.event_type == "TRANSMISSION_METRICS_RECORDED":
                     metrics.append(artifact)
+        batch_reports = list(batch_reports_by_id.values())
         surface_ids = [item["surface_id"] for item in surfaces]
         analyzed_surface_ids = {
             surface_id
             for hypothesis in hypotheses
             for surface_id in hypothesis["surface_ids"]
         }
+        surface_work_units = {str(item["work_unit_id"]) for item in surfaces}
+        reviewed_surface_work_units = {
+            str(item["work_unit_id"])
+            for item in discovery_axis_runs
+            if item["axis"] == "surface"
+        }
+        work_unit_ids = {unit.work_unit_id for unit in self.plan.work_units}
+        expected_axis_coverage = {
+            (work_unit_id, axis)
+            for work_unit_id in work_unit_ids
+            for axis in self.plan.discovery_axes
+        }
+        actual_axis_coverage = {
+            (str(item.get("work_unit_id", "")), str(item["axis"]))
+            for item in discovery_axis_runs
+        }
+        unknown_surface_refs = sorted(analyzed_surface_ids - set(surface_ids))
+        surfaces_without_review = sorted(surface_work_units - reviewed_surface_work_units)
         hypothesis_ids = {item["hypothesis_id"] for item in hypotheses}
         verdict_hypothesis_ids = {item["hypothesis_id"] for item in verdicts}
         gates["CG3"] = {
             "pass": len(surface_ids) == len(set(surface_ids))
-            and set(surface_ids) == analyzed_surface_ids
+            and surface_work_units.issubset(work_unit_ids)
+            and not surfaces_without_review
+            and actual_axis_coverage == expected_axis_coverage
+            and not unknown_surface_refs
             and hypothesis_ids == verdict_hypothesis_ids,
             "detail": {
                 "surface_count": len(surface_ids),
-                "unanalyzed_surfaces": sorted(set(surface_ids) - analyzed_surface_ids),
-                "unknown_surface_refs": sorted(analyzed_surface_ids - set(surface_ids)),
+                "surfaces_without_hypothesis": sorted(set(surface_ids) - analyzed_surface_ids),
+                "surfaces_without_work_unit_review": surfaces_without_review,
+                "missing_axis_reviews": sorted(expected_axis_coverage - actual_axis_coverage),
+                "unexpected_axis_reviews": sorted(actual_axis_coverage - expected_axis_coverage),
+                "unknown_surface_refs": unknown_surface_refs,
                 "hypotheses_without_verdict": sorted(
                     hypothesis_ids - verdict_hypothesis_ids
                 ),
@@ -327,11 +449,28 @@ class CampaignCloser:
             for name, items in closure_statements.items()
             if any(not item.strip() for item in items)
         }
+        scope_errors = self._scope_disposition_errors(
+            closure,
+            inventory_source_files={source.path for source in inventory.source_files},
+        )
         gates["CG10"] = {
-            "pass": not blank_closure_items,
+            "pass": not blank_closure_items and not scope_errors,
             "detail": {
                 "blank_items": blank_closure_items,
+                "scope_disposition_errors": scope_errors,
                 **{name: list(items) for name, items in closure_statements.items()},
+                "scope_dispositions": [
+                    {
+                        "scope_ref": item.scope_ref,
+                        "disposition": item.disposition.value,
+                        "snapshot_id": item.snapshot_id,
+                        "rationale": item.rationale,
+                        "approved_by": item.approved_by,
+                        "evidence_refs": list(item.evidence_refs),
+                        "history_source_campaign_id": item.history_source_campaign_id,
+                    }
+                    for item in closure.scope_dispositions
+                ],
             },
         }
 
@@ -352,6 +491,10 @@ class CampaignCloser:
             "scope_digest": self.plan.inventory_digest,
             "repository_size_bytes": inventory.repository_size_bytes,
             "status": "PASS",
+            "audit_mode": self.campaign.audit_mode.value,
+            "history_source_campaign_ids": list(
+                self.campaign.history_source_campaign_ids
+            ),
             "architecture_overview": closure.architecture_overview,
             "coverage": {
                 "components": len(inventory.components),
@@ -387,6 +530,12 @@ class CampaignCloser:
                 for batch_id in sorted(planned_batch_ids)
             ],
             "unreviewed_scope": list(closure.unreviewed_scope),
+            "scope_completeness": (
+                "WITH_DECLARED_UNREVIEWED_SCOPE"
+                if closure.unreviewed_scope
+                else "NO_DECLARED_UNREVIEWED_SCOPE"
+            ),
+            "scope_dispositions": gates["CG10"]["detail"]["scope_dispositions"],
             "residual_risks": list(closure.residual_risks),
             "limitations": list(closure.limitations),
             "lessons": list(closure.lessons),
@@ -451,6 +600,14 @@ class CampaignCloser:
         self.manager.write_campaign_report_exports(
             self.campaign_id, report, self._markdown(report)
         )
+        self.manager.write_campaign_closure_lessons(
+            self.campaign_id,
+            unreviewed_scope=closure.unreviewed_scope,
+            residual_risks=closure.residual_risks,
+            limitations=closure.limitations,
+            lessons=closure.lessons,
+            knowledge_nominations=closure.knowledge_nominations,
+        )
         campaign = self.manager.store.get_campaign(self.campaign_id)
         if campaign.status is CampaignStatus.RUNNING:
             self.manager.store.transition_campaign(
@@ -491,26 +648,180 @@ class CampaignCloser:
 
     @staticmethod
     def _markdown(report: dict[str, Any]) -> str:
+        findings = list(report.get("findings", []))
+        severity_order = ("CRITICAL", "HIGH", "MEDIUM", "LOW", "UNKNOWN")
+
+        def severity_of(finding: dict[str, Any]) -> str:
+            severity = str(finding.get("severity", "UNKNOWN")).upper()
+            return severity if severity in severity_order else "UNKNOWN"
+
+        def cell(value: Any) -> str:
+            return str(value).replace("|", "\\|").replace("\n", " ").strip()
+
+        severity_counts = _counts(severity_of(finding) for finding in findings)
+        status_counts = _counts(
+            str(finding.get("status", "UNKNOWN")).upper() for finding in findings
+        )
+        evidence_counts = _counts(
+            str(finding.get("evidence_grade", "UNKNOWN")) for finding in findings
+        )
+        sorted_findings = sorted(
+            findings,
+            key=lambda finding: (
+                severity_order.index(severity_of(finding)),
+                str(finding.get("title", "" )).casefold(),
+                str(finding.get("finding_id", "")),
+            ),
+        )
+        execution = report.get("execution_measurements", {})
+        coverage = report.get("coverage", {})
+        unreviewed_scope = report.get("unreviewed_scope", [])
+        scope_completeness = report.get(
+            "scope_completeness",
+            "LEGACY_REPORT_WITH_UNSTRUCTURED_UNREVIEWED_SCOPE"
+            if unreviewed_scope
+            else "NO_DECLARED_UNREVIEWED_SCOPE",
+        )
+        audit_mode = report.get("audit_mode", "NOT_RECORDED (legacy report schema)")
         lines = [
-            "# Campaign Report", "",
+            "# Campaign Audit Report", "",
             f"- Campaign: `{report['campaign_id']}`",
             f"- Snapshot: `{report['snapshot_id']}`",
             f"- Status: **{report['status']}**",
-            f"- Findings: {len(report['findings'])}", "",
-            "## Architecture", "", report["architecture_overview"], "",
-            "## Coverage", "",
+            f"- Audit mode: `{audit_mode}`",
+            f"- Scope completeness: `{scope_completeness}`",
+            "",
+            "## 1. Audit Summary", "",
+            f"- Findings: {len(findings)}",
+            "- Severity: " + ", ".join(
+                f"{severity} {severity_counts.get(severity, 0)}"
+                for severity in severity_order[:-1]
+            ),
+            "- Status: " + ", ".join(
+                f"{status} {count}" for status, count in status_counts.items()
+            ) if status_counts else "- Status: None",
+            "- Evidence grade: " + ", ".join(
+                f"{grade} {count}" for grade, count in evidence_counts.items()
+            ) if evidence_counts else "- Evidence grade: None",
+            "",
+            "### Coverage", "",
         ]
         lines.extend(
-            f"- {name}: {count}" for name, count in report["coverage"].items()
+            f"- {name}: {count}" for name, count in coverage.items()
         )
-        lines.extend(["", "## Residual Risk", ""])
+        if execution:
+            totals = execution.get("totals", {})
+            lines.extend([
+                f"- Tasks completed: {execution.get('completed_task_count', 0)} / "
+                f"{execution.get('task_count', 0)}",
+                f"- Agent runs: {totals.get('agent_runs', 'not recorded')}",
+                f"- Delegated agent runs: {totals.get('delegated_agent_runs', 'not recorded')}",
+                f"- Wall seconds: {totals.get('wall_seconds', 'not recorded')}",
+                f"- Host configuration complete: "
+                f"{execution.get('configuration_complete', 'not recorded')}",
+            ])
+        lines.extend([
+            "",
+            "### Architecture", "", report.get("architecture_overview", "Not recorded."),
+            "",
+        ])
+        if report.get("history_source_campaign_ids"):
+            lines.extend([
+                "", "## Declared History Sources", "",
+                *(
+                    f"- `{campaign_id}`"
+                    for campaign_id in report["history_source_campaign_ids"]
+                ),
+            ])
+        lines.extend(["", "### Unreviewed Scope", ""])
+        if report.get("scope_dispositions"):
+            lines.extend(
+                f"- **{item['disposition']}** `{item['scope_ref']}`; approved by "
+                f"`{item['approved_by']}` for snapshot `{item['snapshot_id']}`. "
+                f"{item['rationale']} Evidence: {', '.join(item['evidence_refs'])}"
+                for item in report["scope_dispositions"]
+            )
+        elif unreviewed_scope:
+            lines.extend(f"- {item}" for item in unreviewed_scope)
+            lines.append(
+                "- Structured scope dispositions were not recorded in this report version."
+            )
+        else:
+            lines.append("- None recorded.")
+        lines.extend(["", "### Limitations", ""])
+        lines.extend(f"- {item}" for item in report.get("limitations", []) or ["None recorded."])
+        lines.extend(["", "### Residual Risk", ""])
         lines.extend(
-            f"- {risk}" for risk in (report["residual_risks"] or ["None recorded."])
+            f"- {risk}" for risk in (report.get("residual_risks", []) or ["None recorded."])
         )
-        lines.extend(["", "## Campaign Gates", ""])
+        lines.extend(["", "## 2. Findings Overview", ""])
+        lines.extend([
+            "| Severity | Finding ID | Status | Issue | Root cause |",
+            "|---|---|---|---|---|",
+        ])
+        if sorted_findings:
+            lines.extend(
+                "| " + " | ".join((
+                    severity_of(finding),
+                    cell(finding.get("finding_id", "unknown")),
+                    cell(finding.get("status", "UNKNOWN")),
+                    cell(finding.get("title", "Untitled finding")),
+                    cell(finding.get("root_cause_key", "not recorded")),
+                )) + " |"
+                for finding in sorted_findings
+            )
+        else:
+            lines.append("| - | - | - | No findings recorded. | - |")
+
+        lines.extend(["", "## 3. Detailed Findings by Severity", ""])
+        for severity in severity_order[:-1]:
+            severity_findings = [
+                finding for finding in sorted_findings
+                if severity_of(finding) == severity
+            ]
+            lines.extend([f"### {severity.title()}", ""])
+            if not severity_findings:
+                lines.extend(["No findings at this severity.", ""])
+                continue
+            for finding in severity_findings:
+                mechanism = finding.get("mechanism") or {}
+                if not isinstance(mechanism, dict):
+                    mechanism = {"description": str(mechanism)}
+                lines.extend([
+                    f"#### {cell(finding.get('finding_id', 'Unknown finding'))}: "
+                    f"{cell(finding.get('title', 'Untitled finding'))}",
+                    "",
+                    f"- Status: **{cell(finding.get('status', 'UNKNOWN'))}**",
+                    f"- Evidence grade: `{cell(finding.get('evidence_grade', 'unknown'))}`",
+                    f"- Root cause: `{cell(finding.get('root_cause_key', 'not recorded'))}`",
+                    f"- Mechanism: {cell(mechanism.get('family', 'not recorded'))} / "
+                    f"{cell(mechanism.get('variant', 'not recorded'))}",
+                ])
+                detail = mechanism.get("freeform") or mechanism.get("description")
+                if detail:
+                    lines.append(f"- Detail: {cell(detail)}")
+                for label, values in (
+                    ("Affected components", finding.get("affected_component_ids", [])),
+                    ("Hypotheses", finding.get("hypothesis_ids", [])),
+                    ("Source findings", finding.get("source_finding_ids", [])),
+                ):
+                    lines.append(
+                        f"- {label}: " + (", ".join(f"`{cell(value)}`" for value in values)
+                                           if values else "Not recorded")
+                    )
+                evidence_refs = finding.get("evidence_refs", [])
+                lines.append("- Evidence:")
+                lines.extend(
+                    f"  - `{cell(evidence_ref)}`" for evidence_ref in evidence_refs
+                )
+                if not evidence_refs:
+                    lines.append("  - Not recorded")
+                lines.append("")
+
+        lines.extend(["## Campaign Gates", ""])
         lines.extend(
             f"- {gate_id}: {'PASS' if gate['pass'] else 'FAIL'}"
-            for gate_id, gate in report["gates"].items()
+            for gate_id, gate in report.get("gates", {}).items()
         )
         return "\n".join(lines) + "\n"
 

@@ -69,12 +69,10 @@ class LanguageAdapter:
             add(f"{module}/__init__.py")
             add((source.parent / f"{module}.py").as_posix())
             add((source.parent / module / "__init__.py").as_posix())
-            leaf = module.rsplit("/", 1)[-1]
             candidates.update(
                 path for path in known_paths
                 if path.endswith(f"/{module}.py")
                 or path.endswith(f"/{module}/__init__.py")
-                or path.endswith(f"/{leaf}.py")
             )
         elif self.language_id in {"javascript", "typescript"} and reference.startswith("."):
             base = posixpath.normpath((source.parent / reference).as_posix())

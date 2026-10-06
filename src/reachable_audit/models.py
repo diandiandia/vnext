@@ -23,6 +23,12 @@ class CampaignStatus(StrEnum):
     BLOCKED = "BLOCKED"
 
 
+class CampaignAuditMode(StrEnum):
+    FRESH = "fresh"
+    FOLLOW_UP = "follow-up"
+    LEGACY = "legacy"
+
+
 class BatchStatus(StrEnum):
     PLANNED = "PLANNED"
     READY = "READY"
@@ -79,6 +85,8 @@ class CampaignRecord:
     campaign_id: str
     target_root: str
     snapshot_id: str
+    audit_mode: CampaignAuditMode
+    history_source_campaign_ids: tuple[str, ...]
     status: CampaignStatus
     budget: Mapping[str, Any]
     constraints: tuple[str, ...]

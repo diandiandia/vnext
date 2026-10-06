@@ -36,6 +36,13 @@ policy, not engine-specific policy. Repository bytes use the inventory-defined
 worktree-footprint policy; scope identity uses the frozen inventory/plan digest. Paired
 v3/vNext runs must use equal scope and host execution-configuration digests.
 
+Every clean-room capability run must record `audit_mode: fresh` and an empty
+`history_source_campaign_ids` list. The trusted signer must verify that prior target
+Campaign reports, findings, scope decisions, lessons, and skill-regression backlog were
+not supplied to R1/R2 discovery. Follow-up runs may measure regression behavior but do
+not qualify as held-out clean-room capability evidence. The evaluator does not yet
+validate this provenance contract; RG13 below remains a promotion blocker.
+
 The complete manifest is signed with HMAC-SHA256. The evaluator obtains its verification
 key from `VNA_EVALUATION_HMAC_KEY`; that secret belongs only to the evaluation authority
 and must never be put in the target repository, Agent task context, logs, or committed
@@ -88,6 +95,7 @@ returns `ACCEPTED` and a reviewer verifies the manifest against source Campaign 
 | RG10 | Every referenced evidence artifact resolves and its digest verifies under the signed manifest. |
 | RG11 | All 150 language/issue cells meet the frozen sample floor and at least one real held-out mixed-language Campaign has fully reconciled boundary cases. |
 | RG12 | Every enabled hotspot provider passes positive, negative, alias, and malformed-source conformance fixtures; held-out evaluation reports candidate coverage/precision separately from Agent finding recall. Missing providers and unsupported paths are explicit, never counted as clean coverage. |
+| RG13 | Clean-room capability runs use fresh Campaigns with no declared history sources; signed provenance confirms prior target audit artifacts and regression backlogs are absent from R1/R2 inputs. Follow-up runs cannot satisfy held-out recall gates. |
 
 Synthetic fixtures may test evaluator mechanics only. They cannot satisfy any real
 held-out, language certification, mixed-language, representative-project, or 20GB+
@@ -95,9 +103,10 @@ release gate.
 
 ## 4. Decision
 
-Promotion is authorized only when `shadow-evaluate` reports `ACCEPTED`, all RG1-RG12
+Promotion is authorized only when `shadow-evaluate` reports `ACCEPTED`, all RG1-RG13
 pass, and a reviewer confirms the signed evidence bundle against the actual Campaign
 artifacts. RG12 is a planned gate and is not implemented in the current evaluator;
-promotion therefore remains blocked until hotspot-provider conformance and coverage
-evidence are implemented. Until then, vNext remains an experimental shadow candidate
-and v3 remains the production audit skill.
+RG13 is also not implemented in the current evaluator. Promotion therefore remains
+blocked until hotspot-provider conformance, clean-room provenance verification, and
+coverage evidence are implemented. Until then, vNext remains an experimental shadow
+candidate and v3 remains the production audit skill.

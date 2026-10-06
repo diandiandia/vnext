@@ -69,11 +69,32 @@ Source anchors, tool outputs, experiments, human decisions, and Agent submission
 immutable artifacts/events. Campaign status, coverage, verdicts, and reports are derived
 from validated records. Agent prose alone is not evidence.
 
+Corrections to accepted verdicts, task outputs, stage reports, or skill reviews use
+append-only amendment events referencing the prior artifact digest, replacement artifact,
+reason, actor, and supporting evidence. The prior artifact is retained; derived views
+select the latest valid revision. An idempotency key cannot make a substantive decision
+immutable when the workflow provides no supported correction path.
+
 ### 3.5 Runtime knowledge and evaluation answers are isolated
 
 Runtime prompts may consume approved training knowledge only. Held-out cases, expected
 findings, and private scoring details are unavailable to the discovery runtime. Any
 knowledge promotion requires provenance review and regression evaluation.
+
+### 3.6 Campaign history is explicit and isolated
+
+Campaigns default to `fresh`; their managed discovery context contains the current
+snapshot and approved generic runtime knowledge, not prior Campaign findings, lessons,
+scope decisions, or skill-regression issues. A `follow-up` Campaign names same-target
+source Campaigns at creation. Their artifacts may be consulted only as declared context;
+they do not automatically become R1/R2 seeds. Skill-regression backlog is a separate
+tool-QA channel and is not vulnerability-discovery knowledge. Migrated Campaigns without
+this metadata are `legacy`, never silently treated as fresh.
+
+Every unreviewed scope item is paired with an `EXCLUDED` or `DEFERRED` disposition,
+current snapshot, evidence, rationale, and approver. A historical scope decision may
+inform a follow-up, but cannot substitute for current evidence and approval. Closure
+reports distinguish passed gates from declared unreviewed scope.
 
 ## 4. System Context
 
@@ -117,6 +138,8 @@ ownership; language sets are summaries, not replacements for file-level ownershi
 The plan covers:
 
 - every supported source file, or an explicit excluded/deferred scope entry;
+- each path's role and scope disposition: included, excluded with a reason, or deferred
+   with an owner/follow-up; exclusions remain in inventory and are visible in reports;
 - every recognized build unit and its parser status;
 - each component-to-component edge and its evidence;
 - cross-language boundaries such as FFI, RPC, IPC, serialization, shared storage, and
@@ -126,8 +149,13 @@ The plan covers:
 Build dependencies are useful boundary evidence but are not a complete call graph.
 Language/build adapters may propose edges; Agents or reviewers must confirm security
 relevant edges with source evidence. A missing edge is never inferred from an unsupported
-build manifest. Unresolved boundaries remain open and block any finding whose proof
-depends on them, while unrelated work may continue.
+build manifest. Handoffs support an evidence-backed `NOT_SECURITY_BOUNDARY` disposition
+separate from `NEEDS_REVIEW`; unresolved boundaries remain open and block any finding
+whose proof depends on them, while unrelated work may continue.
+
+Scope exclusions do not delete source inventory. The Plan records excluded path(s), file
+role, reason, approving actor, and snapshot; closure reports excluded/deferred counts and
+requires explicit acknowledgement for security-relevant or fuzzing code.
 
 One Campaign can complete mixed-language analysis when all required component and
 boundary work is closed. This is distinct from certifying the system for all 15 languages,
@@ -140,18 +168,25 @@ The existing R0-R6 semantics remain the workflow vocabulary, with one canonical 
 | Stage | Responsibility | Required output |
 |---|---|---|
 | R0 | Freeze snapshot, scope, tools, and constraints | Signed Campaign/Batch baseline and explicit blockers |
-| R1 | Map external surfaces, principals, components, and boundaries | Source-anchored inventory and boundary records |
+| R1 | Map external surfaces, principals, components, and boundaries | Source-anchored inventory, scope roles/exclusions, and boundary records |
 | R2 | Generate and screen hypotheses using multiple discovery axes and approved knowledge | Falsifiable hypotheses with axis, language, mechanism, and seed provenance |
 | R3 | Verify reachability and vulnerability mechanism | Call/dataflow evidence, counterevidence, and provisional verdict |
 | R3.5 | Independent refutation and adjudication | Reviewer evidence and explicit disposition |
 | R4 | Execute applicable security-category reviews | CategoryRun records; zero findings is valid if review is evidenced |
-| R5 | Run a justified experiment where behavior requires it | Reproducible experiment artifact and fidelity level, or NEEDS_REVIEW |
+| R5 | Run a justified experiment where behavior requires it | Reproducible experiment artifact and fidelity level, or evidenced NEEDS_REVIEW/NOT_FEASIBLE disposition |
 | R6 | Close the Batch and reconcile scope, evidence, and handoffs | Derived report and unresolved-risk statement |
 
 Campaign closure is separate from Batch closure. No Batch completion may be reported as
 whole-project completion. A finding cannot be promoted to reachable without an evidenced
 path from a declared principal to the affected operation. An unsupported strong impact
 claim must be downgraded or marked NEEDS_REVIEW.
+
+Every R1 Surface receives a review disposition independent of whether it produces a
+Hypothesis. A reviewed Surface may yield a hypothesis, an evidenced clean result, or a
+deferred/unreviewed disposition. Campaign coverage counts dispositions, not only Surface
+IDs copied into Hypothesis records. An accepted R3 verdict may be revised only through an
+append-only, evidence-backed amendment; prior verdict artifacts remain immutable and
+derived views select the latest valid revision.
 
 Discovery axes are complementary prompts, not six mandatory full-repository passes.
 The Planner selects axes by scope and risk; every omitted axis requires an applicability
@@ -163,6 +198,10 @@ R1/R2 task context. A hotspot is a review lead, never a vulnerability verdict. E
 provider reports scanned paths, unsupported paths, rule IDs, and known blind spots;
 no match or no registered provider must never be presented as evidence of safety.
 Provider coverage and candidate quality are evaluated separately from Agent verdicts.
+An experiment-required R5 claim that cannot be run is recorded as `NOT_FEASIBLE` with
+reason/evidence instead of silently lowering `experiment_required`. Authorized out-of-
+band observations require provenance and reviewer attestation; a reference string alone
+cannot upgrade a claim to real-target empirical confirmation.
 
 ## 7. Security Knowledge Model
 

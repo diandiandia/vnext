@@ -110,3 +110,16 @@ def test_resolved_handoff_merges_a_cross_batch_call_chain(tmp_path: Path) -> Non
         ]
         assert event_types.count("HANDOFF_RESOLVED") == 1
         assert event_types.count("HANDOFF_INTEGRATED") == 1
+
+
+def test_handoff_can_record_evidenced_non_security_boundary() -> None:
+    resolution = HandoffResolution.from_dict({
+        "handoff_id": "HO-build-import",
+        "owner_batch_id": "B-owner",
+        "outcome": HandoffOutcome.NOT_SECURITY_BOUNDARY.value,
+        "evidence_refs": ["LOC-tools/helper.py:1"],
+        "rationale": "The import resolves to a development-time standard-library helper, not a runtime trust edge.",
+    })
+
+    assert resolution.outcome is HandoffOutcome.NOT_SECURITY_BOUNDARY
+    assert resolution.chain_suffix == ()

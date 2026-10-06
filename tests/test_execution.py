@@ -11,6 +11,7 @@ from reachable_audit.analysis_models import (
     Hypothesis,
     HypothesisStatus,
     Mechanism,
+    RevivalOutcome,
     Surface,
     VerdictKind,
     VerdictSubmission,
@@ -24,6 +25,7 @@ from reachable_audit.execution import (
     TaskStatus,
 )
 from reachable_audit.models import ModelError
+from reachable_audit.store import ConflictError
 from reachable_audit.runtime_policy import execution_policy_digest
 from conftest import axis_runs_from_evidence
 from conftest import execution_configuration_fixture
@@ -62,7 +64,12 @@ def test_manual_backend_leases_once_and_collects_idempotently(tmp_path: Path) ->
         lease = backend.claim("worker-a", lease_seconds=60)
         assert lease is not None
         assert backend.claim("worker-b", lease_seconds=60) is None
-        output_ref = manager.artifacts.put_text('{"surfaces":[]}').artifact_id
+        output_ref = manager.artifacts.put_text(json.dumps({
+            "schema_version": "1.0",
+            "reviewed_paths": [],
+            "surfaces": [],
+            "boundary_reviews": [],
+        })).artifact_id
         result = TaskResult(
             True,
             output_ref,
@@ -77,6 +84,75 @@ def test_manual_backend_leases_once_and_collects_idempotently(tmp_path: Path) ->
             if event.event_type == "TASK_COMPLETED"
         )
         assert completed.payload["configuration"]["model_id"] == "fixture-model"
+    finally:
+        manager.close()
+
+
+def test_manual_backend_claim_filters_by_operation(tmp_path: Path) -> None:
+    manager, task = _setup(tmp_path)
+    try:
+        backend = ManualExecutionBackend(manager, "CMP-exec")
+        unrelated = replace(task, task_id="TASK-refute", operation="refute_reachability")
+        backend.submit(unrelated)
+        backend.submit(task)
+
+        lease = backend.claim("surface-worker", operation="discover_surfaces")
+
+        assert lease is not None
+        assert lease.task.task_id == task.task_id
+        assert backend.poll(unrelated.task_id).status is TaskStatus.PENDING
+    finally:
+        manager.close()
+
+
+def test_manual_backend_claim_targets_specific_task_and_batch(tmp_path: Path) -> None:
+    manager, task = _setup(tmp_path)
+    try:
+        backend = ManualExecutionBackend(manager, "CMP-exec")
+        earlier = replace(task, task_id="TASK-earlier", operation="refute_reachability")
+        backend.submit(earlier)
+        backend.submit(task)
+
+        lease = backend.claim(
+            "surface-worker",
+            operation="discover_surfaces",
+            batch_id=task.batch_id,
+            task_id_filter=task.task_id,
+        )
+
+        assert lease is not None
+        assert lease.task.task_id == task.task_id
+        assert backend.poll(earlier.task_id).status is TaskStatus.PENDING
+    finally:
+        manager.close()
+
+
+def test_collect_rejects_bad_output_before_terminalizing_task(tmp_path: Path) -> None:
+    manager, task = _setup(tmp_path)
+    try:
+        backend = ManualExecutionBackend(manager, "CMP-exec")
+        backend.submit(task)
+        lease = backend.claim("worker-a")
+        assert lease is not None
+        malformed_ref = manager.artifacts.put_text('{"surfaces":[]}').artifact_id
+        malformed = TaskResult(
+            True, malformed_ref, "malformed output", {"agent_runs": 1, "wall_seconds": 1},
+        )
+
+        with pytest.raises(ModelError, match="schema_version mismatch"):
+            backend.collect(lease, malformed)
+        assert backend.poll(task.task_id).status is TaskStatus.LEASED
+
+        valid_ref = manager.artifacts.put_text(json.dumps({
+            "schema_version": "1.0",
+            "reviewed_paths": [],
+            "surfaces": [],
+            "boundary_reviews": [],
+        })).artifact_id
+        corrected = TaskResult(
+            True, valid_ref, "corrected output", {"agent_runs": 1, "wall_seconds": 1},
+        )
+        assert backend.collect(lease, corrected).status is TaskStatus.SUCCEEDED
     finally:
         manager.close()
 
@@ -97,7 +173,12 @@ def test_runtime_policy_digest_is_available_without_host_attestation(tmp_path: P
         backend.submit(task)
         lease = backend.claim("worker")
         assert lease is not None
-        output_ref = manager.artifacts.put_text("{}").artifact_id
+        output_ref = manager.artifacts.put_text(json.dumps({
+            "schema_version": "1.0",
+            "reviewed_paths": [],
+            "surfaces": [],
+            "boundary_reviews": [],
+        })).artifact_id
         backend.collect(lease, TaskResult(
             True, output_ref, "collected without host policy API",
             {"agent_runs": 1, "wall_seconds": 1},
@@ -131,6 +212,81 @@ def test_expired_lease_is_reclaimed_and_survives_reopen(tmp_path: Path) -> None:
         assert recovered.poll(task.task_id).worker_id == "worker-b"
 
 
+def test_failed_task_can_be_retried_within_attempt_limit(tmp_path: Path) -> None:
+    manager, original = _setup(tmp_path)
+    task = replace(original, max_attempts=2)
+    try:
+        backend = ManualExecutionBackend(manager, "CMP-exec")
+        backend.submit(task)
+        first = backend.claim("worker-a")
+        assert first is not None
+        failed = TaskResult(False, None, "worker setup failed", {"agent_runs": 1, "wall_seconds": 1})
+        assert backend.collect(first, failed).status is TaskStatus.FAILED
+
+        second = backend.claim("worker-b")
+        assert second is not None
+        assert second.attempt == 2
+        valid_ref = manager.artifacts.put_text(json.dumps({
+            "schema_version": "1.0", "reviewed_paths": [],
+            "surfaces": [], "boundary_reviews": [],
+        })).artifact_id
+        result = TaskResult(True, valid_ref, "retry succeeded", {"agent_runs": 1, "wall_seconds": 1})
+        assert backend.collect(second, result).status is TaskStatus.SUCCEEDED
+        assert backend.claim("worker-c") is None
+    finally:
+        manager.close()
+
+
+def test_exhausted_task_requires_operator_retry_authorization(tmp_path: Path) -> None:
+    manager, original = _setup(tmp_path)
+    task = replace(original, max_attempts=1)
+    try:
+        backend = ManualExecutionBackend(manager, "CMP-exec")
+        backend.submit(task)
+        first = backend.claim("worker-a")
+        assert first is not None
+        assert backend.collect(first, TaskResult(
+            False, None, "transient worker error", {"agent_runs": 1, "wall_seconds": 1},
+        )).status is TaskStatus.FAILED
+        assert backend.claim("worker-b") is None
+
+        assert backend.retry(
+            task.task_id, reason="operator verified transient environment failure",
+        ).status is TaskStatus.PENDING
+        second = backend.claim("worker-b")
+        assert second is not None
+        assert second.attempt == 2
+        valid_ref = manager.artifacts.put_text(json.dumps({
+            "schema_version": "1.0", "reviewed_paths": [],
+            "surfaces": [], "boundary_reviews": [],
+        })).artifact_id
+        assert backend.collect(second, TaskResult(
+            True, valid_ref, "retry succeeded", {"agent_runs": 1, "wall_seconds": 1},
+        )).status is TaskStatus.SUCCEEDED
+    finally:
+        manager.close()
+
+
+def test_worker_can_release_lease_for_another_compatible_worker(tmp_path: Path) -> None:
+    manager, task = _setup(tmp_path)
+    try:
+        backend = ManualExecutionBackend(manager, "CMP-exec")
+        backend.submit(task)
+        first = backend.claim("surface-worker")
+        assert first is not None
+        assert backend.release(first, reason="worker voluntarily released the task").status is TaskStatus.PENDING
+
+        second = backend.claim("surface-worker", operation="discover_surfaces")
+        assert second is not None
+        assert second.attempt == 2
+        with pytest.raises(ConflictError, match="attempt is stale"):
+            backend.collect(first, TaskResult(
+                False, None, "stale lease", {"agent_runs": 1, "wall_seconds": 1},
+            ))
+    finally:
+        manager.close()
+
+
 def test_cancelled_task_cannot_be_claimed(tmp_path: Path) -> None:
     manager, task = _setup(tmp_path)
     try:
@@ -149,7 +305,12 @@ def test_collection_rejects_measurements_over_budget(tmp_path: Path) -> None:
         backend.submit(task)
         lease = backend.claim("worker-a")
         assert lease is not None
-        output_ref = manager.artifacts.put_text("{}").artifact_id
+        output_ref = manager.artifacts.put_text(json.dumps({
+            "schema_version": "1.0",
+            "reviewed_paths": [],
+            "surfaces": [],
+            "boundary_reviews": [],
+        })).artifact_id
         with pytest.raises(ModelError, match="exceeded budget"):
             backend.collect(
                 lease,
@@ -196,6 +357,7 @@ def test_discovery_coordinator_commits_r1_and_six_axis_r2(tmp_path: Path) -> Non
                 "principal": "remote_unauthenticated",
                 "evidence_refs": ["LOC-app.py:1"],
             }],
+            "boundary_reviews": [],
         })).artifact_id
         backend.collect(lease, TaskResult(
               True, surface_output, "surface mapped", {"agent_runs": 1, "wall_seconds": 1}, execution_configuration_fixture()
@@ -266,6 +428,68 @@ def test_discovery_coordinator_commits_r1_and_six_axis_r2(tmp_path: Path) -> Non
         assert set(reference for refs in r2_artifact["axis_evidence"].values() for reference in refs) == {
             f"EVID-{axis.value}" for axis in DiscoveryAxis
         }
+    finally:
+        manager.close()
+
+
+def test_revival_task_accepts_worker_not_prebound_to_reviewer_id(tmp_path: Path) -> None:
+    manager, workflow, plan = _workflow(tmp_path, "CMP-revival-worker")
+    work_unit = plan.work_units[0]
+    try:
+        workflow.run_r0()
+        workflow.record_r1([Surface(
+            "SURF-revival", work_unit.work_unit_id, work_unit.component_id,
+            "function_entry", "app.py", "handle", "remote", ("LOC-app.py:1",),
+        )])
+        evidence = {
+            "surface": ("LOC-app.py:1",), "mechanism": ("LOC-app.py:1",),
+            "state": ("EVID-state",), "fix_variant": ("EVID-fix",),
+            "boundary": ("EVID-boundary",), "differential": ("EVID-diff",),
+        }
+        workflow.record_r2([Hypothesis(
+            "HYP-revival", work_unit.work_unit_id, "surface", ("SURF-revival",),
+            ("SURF-revival",), Mechanism("INJECTION", "candidate"),
+            "candidate is probably blocked", HypothesisStatus.NEW,
+        )], axis_evidence=evidence, axis_runs=axis_runs_from_evidence(evidence))
+        workflow.record_r3([VerdictSubmission(
+            "HYP-revival", VerdictKind.UNREACHABLE, EvidenceGrade.STATIC_ONLY,
+            "remote", (), (), (), ("LOC-app.py:1",), (),
+            "the input is blocked at the entry guard",
+        )])
+        workflow.record_revival_selection(
+            ["HYP-revival"], rationale="recheck one rejected hypothesis",
+            evidence_refs=("LOC-app.py:1",),
+        )
+
+        backend = ManualExecutionBackend(manager, workflow.campaign_id)
+        coordinator = DiscoveryCoordinator(workflow, backend)
+        tasks = coordinator.schedule_r35_revivals()
+        assert len(tasks) == 1
+        task_input = json.loads(manager.artifacts.get_bytes(tasks[0].task.input_refs[0]))
+        lease = backend.claim("available-reviewer")
+        assert lease is not None
+        assert lease.task.task_id == tasks[0].task.task_id
+        output = manager.artifacts.put_text(json.dumps({
+            "schema_version": "1.0",
+            "revival_review": {
+                "revival_id": "REV-HYP-revival",
+                "hypothesis_id": "HYP-revival",
+                "reviewer_id": task_input["reviewer_id"],
+                "outcome": RevivalOutcome.UPHOLD.value,
+                "evidence_refs": ["LOC-app.py:1"],
+                "rationale": "the guard dominates the candidate path",
+            },
+        })).artifact_id
+        backend.collect(lease, TaskResult(
+            True, output, "review completed", {"agent_runs": 1, "wall_seconds": 1},
+            execution_configuration_fixture(),
+        ))
+
+        coordinator.commit_r35_revivals()
+        assert any(
+            event.event_type == "R3_5_COMPLETED"
+            for event in manager.store.list_events(workflow.campaign_id)
+        )
     finally:
         manager.close()
 
@@ -343,6 +567,7 @@ def test_discovery_commit_rejects_incomplete_reviewed_paths(tmp_path: Path) -> N
         assert lease is not None
         output_ref = manager.artifacts.put_text(json.dumps({
             "schema_version": "1.0", "reviewed_paths": [], "surfaces": [],
+            "boundary_reviews": [],
         })).artifact_id
         backend.collect(lease, TaskResult(
               True, output_ref, "partial", {"agent_runs": 1, "wall_seconds": 1}, execution_configuration_fixture()
@@ -354,6 +579,7 @@ def test_discovery_commit_rejects_incomplete_reviewed_paths(tmp_path: Path) -> N
 
 
 def test_discovery_coordinator_schedules_and_commits_r3(tmp_path: Path) -> None:
+    (tmp_path / "schema.yaml").write_text("entry: generated\n", encoding="utf-8")
     manager, workflow, plan = _workflow(tmp_path, "CMP-r3-tasks")
     try:
         work_unit = plan.work_units[0]
@@ -382,7 +608,28 @@ def test_discovery_coordinator_schedules_and_commits_r3(tmp_path: Path) -> None:
         assert len(coordinator.schedule_r3()) == 1
         lease = backend.claim("verifier")
         assert lease is not None
-        edge_evidence_ref = manager.artifacts.put_text("R3 edge evidence").artifact_id
+        schema_evidence_ref = "LOC-schema.yaml:1"
+        bad_output_ref = manager.artifacts.put_text(json.dumps({
+            "schema_version": "1.0",
+            "verdict": {
+                "hypothesis_id": "HYP-r3",
+                "verdict": "REACHABLE",
+                "evidence_grade": "edge_proven",
+                "principal": "remote",
+                "preconditions": [],
+                "call_chain": ["LOC-src/missing.py:3554"],
+                "edge_evidence_ids": [schema_evidence_ref],
+                "blocking_evidence_ids": [],
+                "experiment_ids": [],
+                "rationale": "transcription error in a source anchor",
+            },
+        })).artifact_id
+        with pytest.raises(ModelError, match="not in the Campaign inventory"):
+            backend.collect(lease, TaskResult(
+                True, bad_output_ref, "bad anchor", {"agent_runs": 1, "wall_seconds": 1},
+                execution_configuration_fixture(),
+            ))
+        assert backend.poll(lease.task.task_id).status is TaskStatus.LEASED
         output_ref = manager.artifacts.put_text(json.dumps({
             "schema_version": "1.0",
             "verdict": {
@@ -392,7 +639,7 @@ def test_discovery_coordinator_schedules_and_commits_r3(tmp_path: Path) -> None:
                 "principal": "remote",
                 "preconditions": [],
                 "call_chain": ["LOC-app.py:1", "LOC-app.py:2"],
-                "edge_evidence_ids": [edge_evidence_ref],
+                "edge_evidence_ids": [schema_evidence_ref],
                 "blocking_evidence_ids": [],
                 "experiment_ids": [],
                 "rationale": "direct call and data-flow edge",

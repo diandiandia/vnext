@@ -7,13 +7,13 @@ description: "Experimental campaign-scale reachable vulnerability audit skill. U
 
 ## Current Capability
 
-This is an experimental, clean-room replacement for v3. The current build provides
+This is an experimental replacement candidate for v3. The current build provides
 Campaign and Batch state management, idempotent events, artifacts, recovery, component
 inventory, deterministic Work Unit planning, cross-Batch Handoffs, R0-R6 execution,
 CG1-CG10 Campaign closure, durable Agent task leases, source-slice drift invalidation,
 15 source-language adapters, 14 build ecosystem adapters, the approved 15-language /
 150-issue knowledge catalog, R5 recipes and bounded toolchain probes, and derived final reports. The implementation remains an
-experimental shadow candidate until RG1-RG11 acceptance is completed on representative
+experimental shadow candidate until RG1-RG13 acceptance is completed on representative
 projects, including all 15 language certifications, a mixed-language Campaign, and a
 20GB+ Campaign. See `docs/design/ACCEPTANCE_PLAN_VNEXT.md`.
 
@@ -33,15 +33,24 @@ projects, including all 15 language certifications, a mixed-language Campaign, a
   lesson file and releases registered resources. Retryable gate failures remain open;
   do not abort them accidentally. `resource-cleanup` is the manual recovery fallback.
 10. Every Campaign closure must submit `skill_issues`, even when it is an empty array.
-  Pending issues are mandatory regression inputs for the next Campaign.
+  Skill issues are tool-regression data, never vulnerability hypotheses or R1/R2 seeds.
+11. A new independent audit uses `fresh` mode. Historical Campaign reports, findings,
+  exclusions, lessons, and regression issues must not enter its discovery context.
+12. A follow-up audit must explicitly name same-target history sources. Historical scope
+  decisions are context only and require current-snapshot evidence and approval.
+13. Every non-empty `unreviewed_scope` item needs one structured `scope_dispositions`
+  record; `PASS` means closure gates passed, not that all scope was reviewed.
 
 ## Host Agent Loop
 
-Before planning, run `skill-backlog` and include every pending issue in the regression
-checks for the new Campaign. `init` records the same backlog as an immutable Campaign
-baseline. During probes and runtime experiments, start servers in their own process
-group (for example with `setsid`) and immediately register the group. Use only temporary
-directories returned by `resource-create-temp` for disposable runtime state.
+Start independent audits with `init` (default `--audit-mode fresh`). Do not inspect or
+load prior Campaign artifacts while planning or generating hypotheses. A follow-up must
+use `--audit-mode follow-up --history-source <campaign-id>` for each source. Only in a
+follow-up, run `skill-backlog <target> <campaign-id>` and use its output in tool
+regression checks; never copy it into R1/R2 prompts. During probes and runtime
+experiments, start servers in their own process group (for example with `setsid`) and
+immediately register the group. Use only temporary directories returned by
+`resource-create-temp` for disposable runtime state.
 
 After R0, schedule R1 and repeatedly claim tasks until the command returns `null`.
 Each claim contains the canonical Work Unit, project-relative source paths, output
@@ -140,12 +149,35 @@ core-dump limits and records stdout/stderr as artifacts. These limits are resour
 controls, not a security sandbox for hostile code; use an external container/VM when the
 target may execute adversarial native code.
 
+`harness-run` input may include `hypothesis_id` to bind the execution to an R5 claim;
+without it, the run is recorded as ineligible for empirical upgrade. `cwd` is relative
+to the target and must resolve inside its root. The managed resource limits are not an
+OS sandbox.
+
+Example input:
+
+```json
+{
+  "command": ["python3", "-c", "print('probe')"],
+  "cwd": ".",
+  "timeout_seconds": 10,
+  "hypothesis_id": "HYP-from-the-current-campaign"
+}
+```
+
+The `hypothesis_id` must identify the R5 hypothesis being tested; do not reuse another
+Campaign's ID. `cwd` must be an existing directory under the target root.
+
 ## Commands
 
 ```bash
-PYTHONPATH=<vnext>/src python3 -m reachable_audit init <target> --snapshot-id <id>
+PYTHONPATH=<vnext>/src python3 -m reachable_audit init <target> --snapshot-id <id> \
+  --audit-mode fresh
+PYTHONPATH=<vnext>/src python3 -m reachable_audit init <target> \
+  --snapshot-id <id> --campaign-id <new-id> --audit-mode follow-up \
+  --history-source <prior-campaign-id>
 PYTHONPATH=<vnext>/src python3 -m reachable_audit status <target>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit skill-backlog <target>
+PYTHONPATH=<vnext>/src python3 -m reachable_audit skill-backlog <target> <campaign-id>
 PYTHONPATH=<vnext>/src python3 -m reachable_audit skill-review \
   <target> <campaign-id> --input <skill-review.json>
 PYTHONPATH=<vnext>/src python3 -m reachable_audit resource-register-process \
@@ -179,11 +211,22 @@ PYTHONPATH=<vnext>/src python3 -m reachable_audit task-schedule-r1 \
   <target> <campaign-id> <batch-id>
 PYTHONPATH=<vnext>/src python3 -m reachable_audit task-claim \
   <target> <campaign-id> <worker-id>
+PYTHONPATH=<vnext>/src python3 -m reachable_audit task-list \
+  <target> <campaign-id> --batch-id <batch-id> --operation <operation>
+PYTHONPATH=<vnext>/src python3 -m reachable_audit task-retry \
+  <target> <campaign-id> <task-id> --reason <operator-reason>
 PYTHONPATH=<vnext>/src python3 -m reachable_audit task-collect \
   <target> <campaign-id> <task-id> <worker-id> --input <result.json>
 PYTHONPATH=<vnext>/src python3 -m reachable_audit task-commit-r1 \
   <target> <campaign-id> <batch-id>
 PYTHONPATH=<vnext>/src python3 -m reachable_audit task-schedule-r2 \
+
+After a `task-collect` validation error, the task remains leased and non-terminal;
+correct the result JSON and resubmit it with the same task/worker before the lease
+expires, or use `task-release` with a reason. Use `task-list --batch-id` to inspect a
+partial batch. If an output was already accepted and needs correction, do not edit its
+artifact in place; general task-output amendment is not yet implemented, so record the
+blocker and preserve the existing event history.
   <target> <campaign-id> <batch-id>
 PYTHONPATH=<vnext>/src python3 -m reachable_audit task-commit-r2 \
   <target> <campaign-id> <batch-id>
@@ -287,6 +330,14 @@ contain a `skill_issues` array. Each item requires `issue_id`, `kind` (`ERROR` o
 `DEFECT`), `stage`, `summary`, non-empty `evidence_refs`, `regression_expectation`, and
 `status` (`REGRESSION_PENDING` or `RESOLVED`). The consolidated backlog is written to
 `.audit_vnext/skill-regression.json` and `.audit_vnext/lessons.md`.
+
+Campaign closure JSON must contain `scope_dispositions`, including an empty array when
+there is no unreviewed scope. Each `unreviewed_scope` item must match exactly one record
+with `scope_ref`, `disposition` (`EXCLUDED` or `DEFERRED`), current `snapshot_id`,
+`rationale`, `approved_by`, and evidence references. Evidence must resolve to a current
+source `LOC-<path>:<line>` or an artifact recorded by the current Campaign. A follow-up
+may cite an artifact from a declared history source, but the decision still requires
+current-snapshot approval. Fresh Campaigns reject historical artifact references.
 
 The complete intended workflow is specified in
 `docs/design/SYSTEM_DESIGN_VNEXT.md` in the development repository.

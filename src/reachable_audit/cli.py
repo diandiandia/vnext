@@ -50,6 +50,7 @@ from .resource_cleanup import (
     create_campaign_temp_directory,
     register_process_group,
 )
+from .models import CampaignAuditMode
 
 
 def _print(value: Any) -> None:
@@ -68,6 +69,14 @@ def _parser() -> argparse.ArgumentParser:
     init.add_argument("--snapshot-id")
     init.add_argument("--state-dir", default=".audit_vnext")
     init.add_argument("--campaign-id")
+    init.add_argument(
+        "--audit-mode", choices=("fresh", "follow-up"), default="fresh",
+        help="fresh isolates prior Campaign context; follow-up requires explicit history sources",
+    )
+    init.add_argument(
+        "--history-source", action="append", default=[], metavar="CAMPAIGN_ID",
+        help="prior Campaign used only for follow-up QA/regression context",
+    )
 
     status = subparsers.add_parser("status", help="show Campaign and Batch state")
     status.add_argument("target")
@@ -107,7 +116,21 @@ def _parser() -> argparse.ArgumentParser:
     )
 
     harness_run = subparsers.add_parser(
-        "harness-run", help="run an explicit argv harness under Campaign resource ownership"
+        "harness-run",
+        description=(
+            "Run an argv harness bound to the current Campaign and source snapshot. "
+            "Set input.hypothesis_id to make the captured execution eligible for "
+            "R5 empirical-upgrade review."
+        ),
+        epilog=(
+            "input.cwd must be an existing directory under the target root. CPU, "
+            "address-space, output-file, descriptor, timeout, and process-group "
+            "limits are resource controls, not an OS sandbox for hostile native code."
+        ),
+        help=(
+            "run a bounded argv harness; input.hypothesis_id binds output to an R5 "
+            "claim, and input.cwd must stay inside the target"
+        ),
     )
     harness_run.add_argument("target")
     harness_run.add_argument("campaign_id")
@@ -272,6 +295,7 @@ def _parser() -> argparse.ArgumentParser:
         "skill-backlog", help="show skill defects pending regression"
     )
     skill_backlog.add_argument("target")
+    skill_backlog.add_argument("campaign_id")
     skill_backlog.add_argument("--state-dir", default=".audit_vnext")
 
     skill_review = subparsers.add_parser(
@@ -345,12 +369,17 @@ def _parser() -> argparse.ArgumentParser:
     task_list = subparsers.add_parser("task-list", help="list durable execution tasks")
     task_list.add_argument("target")
     task_list.add_argument("campaign_id")
+    task_list.add_argument("--batch-id")
+    task_list.add_argument("--operation")
     task_list.add_argument("--state-dir", default=".audit_vnext")
 
     task_claim = subparsers.add_parser("task-claim", help="lease the next execution task")
     task_claim.add_argument("target")
     task_claim.add_argument("campaign_id")
     task_claim.add_argument("worker_id")
+    task_claim.add_argument("--operation")
+    task_claim.add_argument("--batch-id")
+    task_claim.add_argument("--task-id")
     task_claim.add_argument("--lease-seconds", type=int, default=900)
     task_claim.add_argument("--state-dir", default=".audit_vnext")
 
@@ -368,6 +397,26 @@ def _parser() -> argparse.ArgumentParser:
     task_cancel.add_argument("task_id")
     task_cancel.add_argument("--reason", required=True)
     task_cancel.add_argument("--state-dir", default=".audit_vnext")
+
+    task_release = subparsers.add_parser(
+        "task-release", help="release a task lease back to the compatible-worker queue"
+    )
+    task_release.add_argument("target")
+    task_release.add_argument("campaign_id")
+    task_release.add_argument("task_id")
+    task_release.add_argument("worker_id")
+    task_release.add_argument("--reason", required=True)
+    task_release.add_argument("--state-dir", default=".audit_vnext")
+
+    task_retry = subparsers.add_parser(
+        "task-retry", help="authorize one bounded retry for an exhausted failed task"
+    )
+    task_retry.add_argument("target")
+    task_retry.add_argument("campaign_id")
+    task_retry.add_argument("task_id")
+    task_retry.add_argument("--reason", required=True)
+    task_retry.add_argument("--actor", default="operator")
+    task_retry.add_argument("--state-dir", default=".audit_vnext")
 
     drift_resolve = subparsers.add_parser(
         "drift-resolve", help="verify source restoration and resolve snapshot drift"
@@ -388,7 +437,10 @@ def main(argv: list[str] | None = None) -> int:
             snapshot_id = arguments.snapshot_id or detect_clean_git_snapshot(arguments.target)
             with CampaignManager(arguments.target, arguments.state_dir) as manager:
                 campaign = manager.create_campaign(
-                    snapshot_id=snapshot_id, campaign_id=arguments.campaign_id
+                    snapshot_id=snapshot_id,
+                    campaign_id=arguments.campaign_id,
+                    audit_mode=CampaignAuditMode(arguments.audit_mode),
+                    history_source_campaign_ids=tuple(arguments.history_source),
                 )
                 _print(asdict(campaign))
             return 0
@@ -411,7 +463,17 @@ def main(argv: list[str] | None = None) -> int:
 
         if arguments.command == "skill-backlog":
             with CampaignManager(arguments.target, arguments.state_dir) as manager:
-                _print({"pending_issues": manager.load_skill_regression_backlog()})
+                campaign = manager.store.get_campaign(arguments.campaign_id)
+                source_ids = (
+                    campaign.history_source_campaign_ids
+                    if campaign.audit_mode is CampaignAuditMode.FOLLOW_UP
+                    else ()
+                )
+                _print({
+                    "purpose": "tool_regression_only",
+                    "campaign_id": campaign.campaign_id,
+                    "pending_issues": manager.load_skill_regression_backlog(source_ids),
+                })
             return 0
 
         if arguments.command == "skill-review":
@@ -510,6 +572,14 @@ def main(argv: list[str] | None = None) -> int:
                     timeout_seconds=int(value.get("timeout_seconds", 30)),
                     environment=value.get("environment"),
                     output_limit_bytes=int(value.get("output_limit_bytes", 1_048_576)),
+                    cpu_limit_seconds=(
+                        int(value["cpu_limit_seconds"])
+                        if value.get("cpu_limit_seconds") is not None else None
+                    ),
+                    memory_limit_bytes=(
+                        int(value["memory_limit_bytes"])
+                        if value.get("memory_limit_bytes") is not None else None
+                    ),
                     hypothesis_id=(
                         str(value["hypothesis_id"])
                         if value.get("hypothesis_id") is not None else None
@@ -795,10 +865,33 @@ def main(argv: list[str] | None = None) -> int:
             with CampaignManager(arguments.target, arguments.state_dir) as manager:
                 backend = ManualExecutionBackend(manager, arguments.campaign_id)
                 if arguments.command == "task-list":
-                    _print({"tasks": [asdict(view) for view in backend.list_tasks()]})
+                    tasks = []
+                    for view in backend.list_tasks(
+                        operation=arguments.operation,
+                        batch_id=arguments.batch_id,
+                    ):
+                        task = asdict(view)
+                        if view.status.value == "FAILED":
+                            if view.attempt >= view.task.max_attempts:
+                                task["operator_hint"] = (
+                                    "attempts exhausted; authorize one bounded retry with: "
+                                    f"task-retry {arguments.target} {arguments.campaign_id} "
+                                    f"{view.task.task_id} --reason <reason>"
+                                )
+                            else:
+                                task["operator_hint"] = (
+                                    "retry remains within the automatic attempt budget; "
+                                    "claim this task again"
+                                )
+                        tasks.append(task)
+                    _print({"tasks": tasks})
                 elif arguments.command == "task-claim":
                     lease = backend.claim(
-                        arguments.worker_id, lease_seconds=arguments.lease_seconds
+                        arguments.worker_id,
+                        lease_seconds=arguments.lease_seconds,
+                        operation=arguments.operation,
+                        batch_id=arguments.batch_id,
+                        task_id_filter=arguments.task_id,
                     )
                     _print(None if lease is None else backend.describe_lease(lease))
                 elif arguments.command == "task-collect":
@@ -832,6 +925,17 @@ def main(argv: list[str] | None = None) -> int:
                             for key, item in value.get("configuration", {}).items()
                         },
                     ))))
+                elif arguments.command == "task-release":
+                    lease = backend.current_lease(
+                        arguments.task_id, arguments.worker_id
+                    )
+                    _print(asdict(backend.release(lease, reason=arguments.reason)))
+                elif arguments.command == "task-retry":
+                    _print(asdict(backend.retry(
+                        arguments.task_id,
+                        reason=arguments.reason,
+                        actor=arguments.actor,
+                    )))
                 elif arguments.command == "task-cancel":
                     _print(asdict(backend.cancel(
                         arguments.task_id, reason=arguments.reason

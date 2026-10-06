@@ -35,8 +35,16 @@ from reachable_audit.knowledge import create_category_audit_plans
 from conftest import execution_configuration_fixture
 
 
-def _ready_for_r5(tmp_path: Path):  # type: ignore[no-untyped-def]
-    manager, workflow, plan = _ready_for_r4(tmp_path)
+def _ready_for_r5(
+    tmp_path: Path,
+    *,
+    static_hypothesis: bool = False,
+    surface_without_hypothesis: bool = False,
+):  # type: ignore[no-untyped-def]
+    manager, workflow, plan = _ready_for_r4(
+        tmp_path, static_hypothesis=static_hypothesis,
+        surface_without_hypothesis=surface_without_hypothesis,
+    )
     category_plan = create_category_audit_plans(plan.work_units, [_card()], budget={})[0]
     workflow.record_category_audit_plan([category_plan])
     workflow.record_r4([CategoryRun(

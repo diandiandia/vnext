@@ -1,6 +1,6 @@
 # vNext Repair Roadmap
 
-Status: ordered implementation plan, reviewed 2026-10-01. This roadmap separates local engineering fixes from claims requiring external evaluation evidence. A completed code milestone does not imply improved vulnerability recall until its acceptance criteria are measured.
+Status: ordered implementation plan, reviewed 2026-10-05. This roadmap separates local engineering fixes from claims requiring external evaluation evidence. A completed code milestone does not imply improved vulnerability recall until its acceptance criteria are measured.
 
 ## Baseline
 
@@ -18,6 +18,33 @@ The current implementation has a durable Campaign/Batch workflow, source/build i
 | 5 | Add reusable cross-language mechanism variants and durable source archives. | Not started | Shared cards are used only when semantics match; language differences are explicit; provenance basis is digest-verifiable and linked to an access-controlled source archive/reviewer decision. |
 | 6 | Close remaining evidence-contract and trust gaps. | Not started | Typed evidence references resolve to source/artifact records across stages; worker independence is attested by the execution host or explicitly remains uncertified. |
 | 7 | Run real paired capability and scale evaluation. | Blocked on external evidence | Frozen held-out samples for all 150 cells, at least one mixed-language Campaign, comparable v3/vNext budgets, independent adjudication, and a real 20GB+ recovery run. Promotion only on signed acceptance. |
+
+## Campaign-Scale Defect Register
+
+Large-repository pilots exposed workflow failure modes that must be regression-tested
+without retaining target names, paths, IDs, or source excerpts in this generic design
+document. Preserve the original evidence only in the access-controlled Campaign record.
+
+| Priority | Generic issue class | Current state and next action |
+|---|---|---|
+| P0 | Static-only reachability, Surface coverage, and scope accounting can block closure. | **Partially fixed:** BG2 accepts explicit R5 dispositions; CG3 counts Work Unit axis review independently of Hypothesis links; closure records evidence-backed exclusions/deferments. General R3 amendment and path-level plan scope dispositions remain open; affected Campaigns require replay. |
+| P0 | Prior Campaign decisions can silently narrow a nominally fresh audit. | **Partially fixed:** fresh is the default, prior skill issues are omitted from its baseline and backlog query, follow-up sources are explicit, and unreviewed scope requires current-snapshot evidence/approval. Host-authored prompt isolation, path-level plan dispositions, and evaluator enforcement of clean-room provenance remain open. |
+| P1 | Findings can be recorded after an R6 projection, leaving reports stale. | **Code fixed, campaign replay pending:** R6 supports append-only revisions and Campaign closure uses the latest projection per Batch. Re-run R6 for affected completed Batches, then rerun Campaign gates. |
+| P1 | Shared queues can lease incompatible tasks; failed/released tasks and collected outputs need correction paths. | **Partially fixed:** operation/task/batch-filtered claims, batch-scoped task listing, explicit release, bounded retries with exhausted-task hints, attempt-bound finalize, and collection-time output validation are implemented. A rejected collect can be corrected before terminalization; amendments to already-accepted outputs, delegated-work budgets, and host-attested worker identity remain open. |
+| P1 | Repeated source-anchor validation and whole-Campaign event materialization dominate large runs; NOT_APPLICABLE screening creates avoidable R4 tasks. | **Code fixed for reported paths, scale proof pending:** line counts are cached per R1/R3 operation; task and batch event reads are SQL-filtered and indexed; fully NOT_APPLICABLE R4 plans become persisted coverage without worker tasks. Add measured 1k-file/10k-event acceptance before claiming scale improvement. |
+| P1 | A real R5 confirmation can be blocked by the earlier static-only R3.5 disposition. | **Code fixed and regression-tested:** a CONFIRMED finding accepts either REACHABLE R3.5 adjudication or a snapshot-bound empirical R5 confirmation for every hypothesis. Other static-only findings remain unconfirmed. |
+| P1 | Valid schema/generator evidence outside the source inventory can abort R3 collection. | **Code fixed and regression-tested:** evidence-only in-repository LOC anchors are accepted as supporting evidence; call-chain LOC anchors remain restricted to inventoried source/build files. |
+| P1 | Large Campaign validation and event queries can dominate the audit, while NOT_APPLICABLE screening plans create zero-information R4 work. | **Code fixed for the reported paths; scale proof pending:** R1/R3 line counts are cached per stage call, event/task polling uses indexed entity/batch filters, and fully NOT_APPLICABLE R4 plans become durable coverage records without worker tasks. Re-benchmark at 10k+ events and 1k-file Work Units. |
+| P1 | A real R5 confirmation can be blocked by the earlier static-only R3.5 disposition. | **Code fixed and regression-tested:** CONFIRMED findings accept either REACHABLE R3.5 adjudication or a snapshot-bound empirical R5 confirmation for every hypothesis. Other static-only findings remain unconfirmed. |
+| P1 | Valid schema/generator evidence outside the source inventory can abort R3 collection. | **Code fixed and regression-tested:** evidence-only in-repository LOC anchors are accepted for supporting evidence; call-chain LOC anchors must still belong to inventoried source/build files. |
+| P1 | R5 must support target-specific virtual-address limits and required-but-infeasible experiments. | **Partially fixed:** CLI forwards CPU/address-space limits. `NOT_FEASIBLE` and provenance-checked out-of-band evidence remain unimplemented; such evidence must not imply empirical confirmation. |
+| P2 | Import heuristics and Handoffs need precise runtime-boundary semantics; review altitude must be explicit. | **Partially fixed:** Python stdlib leaf-name false edges are removed and evidence-backed `NOT_SECURITY_BOUNDARY` exists. Review altitude is specified in design but not yet enforced by task schema. |
+| P2 | Campaign lessons and skill issues must not overwrite or drift from one another. | **Code fixed and tested:** issues and closure lessons are separate; reviews append revisions; digest-marked closure lessons preserve host-authored content. |
+
+The system/software design documents define contracts for these groups. Implementation
+order is P0 closure/scope semantics and history isolation, P1 durable correction and
+queue reliability, P2 reporting/boundary semantics, then the broader knowledge and
+workflow improvements.
 
 ## First Implementation Slice: Python Hotspots
 

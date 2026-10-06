@@ -12,6 +12,13 @@ from reachable_audit.analysis_models import (
     DiscoveryAxis,
     EvaluationPartition,
     MechanismCard,
+    EvidenceGrade,
+    Hypothesis,
+    HypothesisStatus,
+    Mechanism,
+    Surface,
+    VerdictKind,
+    VerdictSubmission,
 )
 from reachable_audit.batch_workflow import BatchWorkflow
 from reachable_audit.campaign import CampaignManager
@@ -29,7 +36,13 @@ from conftest import axis_runs_from_evidence
 from conftest import execution_configuration_fixture
 
 
-def _ready_for_r4(tmp_path: Path):  # type: ignore[no-untyped-def]
+def _ready_for_r4(
+    tmp_path: Path,
+    *,
+    static_hypothesis: bool = False,
+    surface_without_hypothesis: bool = False,
+    screening_work_unit: bool = False,
+):  # type: ignore[no-untyped-def]
     (tmp_path / "state.py").write_text("STATE = {}\n", encoding="utf-8")
     inventory = build_inventory(tmp_path, "fixture:r4")
     plan = create_audit_plan(
@@ -41,17 +54,36 @@ def _ready_for_r4(tmp_path: Path):  # type: ignore[no-untyped-def]
     manager.record_plan(campaign_id="CMP-r4", plan=plan, inventory=inventory)
     workflow = BatchWorkflow(manager, "CMP-r4", plan.batches[0].batch_id)
     workflow.run_r0()
-    workflow.record_r1([])
+    work_unit = plan.work_units[0]
+    surfaces = [Surface(
+        "SURF-static", work_unit.work_unit_id, work_unit.component_id,
+        "function_entry", "state.py", "run", "local", ("LOC-state.py:1",),
+    )] if static_hypothesis or surface_without_hypothesis else []
+    workflow.record_r1(surfaces)
     axis_evidence = {
         "surface": ("EVID-surface",), "mechanism": ("EVID-mechanism",),
         "state": ("EVID-state",), "fix_variant": ("EVID-fix",),
         "boundary": ("EVID-boundary",), "differential": ("EVID-differential",),
     }
+    hypotheses = [Hypothesis(
+        "HYP-static", work_unit.work_unit_id, "surface", ("SURF-static",),
+        ("SURF-static",), Mechanism("STATE", "static-state-transition"),
+        "static-only reachability needs further proof", HypothesisStatus.NEW,
+    )] if static_hypothesis else []
     workflow.record_r2(
-        [], axis_evidence=axis_evidence,
-        axis_runs=axis_runs_from_evidence(axis_evidence),
+        hypotheses, axis_evidence=axis_evidence,
+        axis_runs=axis_runs_from_evidence(
+            axis_evidence,
+            not_applicable=tuple(axis_evidence) if screening_work_unit else (),
+        ),
     )
-    workflow.record_r3([])
+    workflow.record_r3([
+        VerdictSubmission(
+            "HYP-static", VerdictKind.REACHABLE, EvidenceGrade.STATIC_ONLY,
+            "remote", (), ("LOC-state.py:1",), ("LOC-state.py:1",), (), (),
+            "static chain is plausible but not edge-proven",
+        )
+    ] if static_hypothesis else [])
     workflow.record_revival_selection(
         [], rationale="no unreachable hypotheses", evidence_refs=("EVID-r3",)
     )
@@ -184,5 +216,46 @@ def test_r4_category_plan_runs_as_durable_task(tmp_path: Path) -> None:
         coordinator.commit_r4()
         events = manager.store.list_events("CMP-r4")
         assert sum(event.event_type == "R4_COMPLETED" for event in events) == 1
+    finally:
+        manager.close()
+
+
+def test_r4_screening_work_unit_needs_no_agent_category_tasks(
+    tmp_path: Path,
+) -> None:
+    manager, workflow, plan = _ready_for_r4(
+        tmp_path, screening_work_unit=True
+    )
+    try:
+        category_plan = create_category_audit_plans(
+            plan.work_units, [_card()], budget={}
+        )[0]
+        workflow.record_category_audit_plan([category_plan])
+        backend = ManualExecutionBackend(manager, workflow.campaign_id)
+        coordinator = DiscoveryCoordinator(workflow, backend)
+
+        assert coordinator.schedule_r4() == ()
+        screening_event = next(
+            event for event in manager.store.list_batch_events(
+                workflow.campaign_id, workflow.batch_id,
+                event_type="R4_SCREENING_COVERAGE_RECORDED",
+            )
+        )
+        assert screening_event.payload["category_plan_ids"] == [
+            category_plan.category_plan_id,
+        ]
+
+        coordinator.commit_r4()
+        r4_event = next(
+            event for event in manager.store.list_batch_events(
+                workflow.campaign_id, workflow.batch_id,
+                event_type="R4_COMPLETED",
+            )
+        )
+        runs = json.loads(manager.artifacts.get_bytes(r4_event.payload_ref))["category_runs"]
+        assert len(runs) == 1
+        assert runs[0]["applicability"] == Applicability.NOT_APPLICABLE.value
+        assert runs[0]["status"] == CategoryRunStatus.COMPLETE.value
+        assert runs[0]["hypothesis_ids"] == []
     finally:
         manager.close()

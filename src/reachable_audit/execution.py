@@ -20,6 +20,7 @@ from .analysis_models import (
     BatchClosure,
     BoundaryReview,
     CategoryRun,
+    CategoryRunStatus,
     DiscoveryAxis,
     Experiment,
     Hypothesis,
@@ -100,6 +101,18 @@ _TASK_OUTPUT_CONTRACTS = {
     "assess_experiment": "r5-assessment/v1",
     "collect_batch_closure_evidence": "batch-closure-evidence/v1",
 }
+_TASK_OUTPUT_REQUIRED_FIELDS = {
+    "surface-set/v1": {"reviewed_paths", "surfaces", "boundary_reviews"},
+    "hypothesis-set/v1": {"reviewed_paths", "axis_run", "hypotheses"},
+    "compact-hypothesis-set/v1": {"reviewed_paths", "axis_runs", "hypotheses"},
+    "verdict-submission/v1": {"verdict"},
+    "refutation/v1": {"refutation"},
+    "adjudication/v1": {"adjudication"},
+    "revival-review/v1": {"revival_review"},
+    "category-run/v1": {"category_run"},
+    "r5-assessment/v1": {"experiments", "assessment"},
+    "batch-closure-evidence/v1": {"closure"},
+}
 
 
 @dataclass(frozen=True)
@@ -112,6 +125,7 @@ class TaskSpec:
     input_refs: tuple[str, ...]
     required_output: str
     budget: Mapping[str, int]
+    max_attempts: int = 3
 
     @classmethod
     def from_dict(cls, value: Mapping[str, Any]) -> "TaskSpec":
@@ -124,6 +138,7 @@ class TaskSpec:
             input_refs=tuple(str(item) for item in value.get("input_refs", [])),
             required_output=str(value["required_output"]),
             budget={str(key): int(amount) for key, amount in value.get("budget", {}).items()},
+            max_attempts=int(value.get("max_attempts", 3)),
         )
         if not all((
             task.task_id,
@@ -138,6 +153,8 @@ class TaskSpec:
             raise ModelError("execution task requires artifact input references")
         if any(amount < 0 for amount in task.budget.values()):
             raise ModelError("execution task budget cannot be negative")
+        if task.max_attempts < 1:
+            raise ModelError("execution task max_attempts must be positive")
         return task
 
 
@@ -193,8 +210,14 @@ class ExecutionBackend(Protocol):
     def capabilities(self) -> frozenset[str]: ...
     def submit(self, task: TaskSpec) -> TaskView: ...
     def poll(self, task_id: str) -> TaskView: ...
-    def claim(self, worker_id: str, *, lease_seconds: int = 900) -> TaskLease | None: ...
+    def claim(
+        self, worker_id: str, *, lease_seconds: int = 900,
+        operation: str | None = None, batch_id: str | None = None,
+        task_id_filter: str | None = None,
+    ) -> TaskLease | None: ...
     def collect(self, lease: TaskLease, result: TaskResult) -> TaskView: ...
+    def release(self, lease: TaskLease, *, reason: str) -> TaskView: ...
+    def retry(self, task_id: str, *, reason: str, actor: str = "operator") -> TaskView: ...
     def cancel(self, task_id: str, *, reason: str) -> TaskView: ...
 
 
@@ -213,7 +236,10 @@ class ManualExecutionBackend:
         self._clock = clock or (lambda: dt.datetime.now(dt.UTC))
 
     def capabilities(self) -> frozenset[str]:
-        return frozenset({"durable_queue", "leases", "artifact_io", "manual_worker"})
+        return frozenset({
+            "durable_queue", "leases", "operation_filter", "lease_release",
+            "bounded_retry", "artifact_io", "manual_worker",
+        })
 
     def submit(self, task: TaskSpec) -> TaskView:
         if task.campaign_id != self.campaign_id:
@@ -223,13 +249,12 @@ class ManualExecutionBackend:
             asdict(task), ensure_ascii=False, sort_keys=True, separators=(",", ":")
         )
         artifact = self.manager.artifacts.put_text(encoded)
-        existing_submissions = [
-            event
-            for event in self.manager.store.list_events(self.campaign_id)
-            if event.entity_type == "execution_task"
-            and event.entity_id == task.task_id
-            and event.event_type == "TASK_SUBMITTED"
-        ]
+        existing_submissions = self.manager.store.list_events(
+            self.campaign_id,
+            entity_type="execution_task",
+            entity_id=task.task_id,
+            event_type="TASK_SUBMITTED",
+        )
         if existing_submissions and any(
             event.payload_ref != artifact.artifact_id for event in existing_submissions
         ):
@@ -247,6 +272,7 @@ class ManualExecutionBackend:
                 "work_unit_id": task.work_unit_id,
                 "operation": task.operation,
                 "required_output": task.required_output,
+                "max_attempts": task.max_attempts,
             },
             payload_ref=artifact.artifact_id,
         )
@@ -261,17 +287,20 @@ class ManualExecutionBackend:
             self.manager.artifacts.get_bytes(submitted.payload_ref)
         ))
         claims = [event for event in events if event.event_type == "TASK_CLAIMED"]
-        terminal = next((
-            event for event in reversed(events)
-            if event.event_type in {"TASK_COMPLETED", "TASK_FAILED", "TASK_CANCELLED"}
-        ), None)
-        if terminal is not None:
+        state_events = [event for event in events if event.event_type in {
+            "TASK_CLAIMED", "TASK_LEASE_RELEASED", "TASK_COMPLETED",
+            "TASK_FAILED", "TASK_RETRY_AUTHORIZED", "TASK_CANCELLED",
+        }]
+        latest_state = state_events[-1] if state_events else None
+        if latest_state is not None and latest_state.event_type in {
+            "TASK_COMPLETED", "TASK_FAILED", "TASK_CANCELLED",
+        }:
             status = {
                 "TASK_COMPLETED": TaskStatus.SUCCEEDED,
                 "TASK_FAILED": TaskStatus.FAILED,
                 "TASK_CANCELLED": TaskStatus.CANCELLED,
-            }[terminal.event_type]
-        elif claims:
+            }[latest_state.event_type]
+        elif latest_state is not None and latest_state.event_type == "TASK_CLAIMED":
             status = TaskStatus.LEASED
         else:
             status = TaskStatus.PENDING
@@ -282,17 +311,33 @@ class ManualExecutionBackend:
             worker_id=claim.actor if claim else None,
             attempt=int(claim.payload["attempt"]) if claim else 0,
             lease_expires_at=str(claim.payload["lease_expires_at"]) if claim else None,
-            output_ref=terminal.payload_ref if terminal else None,
+            output_ref=(
+                latest_state.payload_ref
+                if latest_state is not None and latest_state.event_type in {
+                    "TASK_COMPLETED", "TASK_FAILED", "TASK_CANCELLED",
+                } else None
+            ),
         )
 
-    def claim(self, worker_id: str, *, lease_seconds: int = 900) -> TaskLease | None:
+    def claim(
+        self, worker_id: str, *, lease_seconds: int = 900,
+        operation: str | None = None, batch_id: str | None = None,
+        task_id_filter: str | None = None,
+    ) -> TaskLease | None:
         if not worker_id.strip() or lease_seconds <= 0:
             raise ModelError("task claim requires a worker and positive lease duration")
         now = self._now()
-        for task_id in self._task_ids():
+        for candidate_task_id in self._task_ids():
+            if task_id_filter is not None and candidate_task_id != task_id_filter:
+                continue
+            view = self.poll(candidate_task_id)
+            if operation is not None and view.task.operation != operation:
+                continue
+            if batch_id is not None and view.task.batch_id != batch_id:
+                continue
             event = self.manager.store.claim_task(
                 campaign_id=self.campaign_id,
-                task_id=task_id,
+                task_id=candidate_task_id,
                 worker_id=worker_id,
                 lease_expires_at=(
                     dt.datetime.fromisoformat(now) + dt.timedelta(seconds=lease_seconds)
@@ -301,7 +346,7 @@ class ManualExecutionBackend:
             )
             if event is None:
                 continue
-            view = self.poll(task_id)
+            view = self.poll(candidate_task_id)
             return TaskLease(
                 task=view.task,
                 worker_id=worker_id,
@@ -313,6 +358,22 @@ class ManualExecutionBackend:
     def collect(self, lease: TaskLease, result: TaskResult) -> TaskView:
         if lease.task.campaign_id != self.campaign_id:
             raise ModelError("execution lease belongs to another Campaign")
+        if result.succeeded and lease.task.required_output in _TASK_OUTPUT_REQUIRED_FIELDS:
+            if result.output_ref is None:
+                raise ModelError("successful execution task requires an output artifact")
+            try:
+                output = json.loads(self.manager.artifacts.get_bytes(result.output_ref))
+            except (OSError, ValueError, json.JSONDecodeError) as error:
+                raise ModelError(f"task output is not valid JSON: {lease.task.task_id}") from error
+            if not isinstance(output, dict) or output.get("schema_version") != "1.0":
+                raise ModelError(f"task output schema_version mismatch: {lease.task.task_id}")
+            missing = _TASK_OUTPUT_REQUIRED_FIELDS[lease.task.required_output] - set(output)
+            if missing:
+                raise ModelError(
+                    f"task output contract missing {sorted(missing)}: {lease.task.task_id}"
+                )
+            if lease.task.required_output == "verdict-submission/v1":
+                self._validate_verdict_output(lease.task, output)
         exceeded = {
             name: (result.measurements[name], limit)
             for name, limit in lease.task.budget.items()
@@ -324,6 +385,7 @@ class ManualExecutionBackend:
             campaign_id=self.campaign_id,
             task_id=lease.task.task_id,
             worker_id=lease.worker_id,
+            attempt=lease.attempt,
             succeeded=result.succeeded,
             payload={
                 "summary": result.summary,
@@ -337,6 +399,56 @@ class ManualExecutionBackend:
             now=self._now(),
         )
         return self.poll(lease.task.task_id)
+
+    def _validate_verdict_output(
+        self, task: TaskSpec, output: Mapping[str, Any],
+    ) -> None:
+        verdict_value = output.get("verdict")
+        if not isinstance(verdict_value, dict):
+            raise ModelError(f"task output requires a verdict object: {task.task_id}")
+        submission = VerdictSubmission.from_dict(verdict_value)
+        inventory = self.manager.load_inventory(task.campaign_id)
+        evidence_paths = {source.path for source in inventory.source_files}
+        evidence_paths.update(
+            manifest
+            for component in inventory.components
+            for manifest in component.build_manifests
+        )
+        workflow = BatchWorkflow(self.manager, task.campaign_id, task.batch_id)
+        for reference in submission.call_chain:
+            workflow._validate_source_location(reference, evidence_paths)
+        for reference in (
+            *submission.edge_evidence_ids,
+            *submission.blocking_evidence_ids,
+        ):
+            workflow._validate_evidence_reference(reference, evidence_paths)
+
+    def release(
+        self, lease: TaskLease, *, reason: str = "worker released lease",
+    ) -> TaskView:
+        if lease.task.campaign_id != self.campaign_id:
+            raise ModelError("execution lease belongs to another Campaign")
+        self.manager.store.release_task(
+            campaign_id=self.campaign_id,
+            task_id=lease.task.task_id,
+            worker_id=lease.worker_id,
+            attempt=lease.attempt,
+            reason=reason,
+            now=self._now(),
+        )
+        return self.poll(lease.task.task_id)
+
+    def retry(
+        self, task_id: str, *, reason: str, actor: str = "operator",
+    ) -> TaskView:
+        self.manager.store.authorize_task_retry(
+            campaign_id=self.campaign_id,
+            task_id=task_id,
+            actor=actor,
+            reason=reason,
+            now=self._now(),
+        )
+        return self.poll(task_id)
 
     def current_lease(self, task_id: str, worker_id: str) -> TaskLease:
         view = self.poll(task_id)
@@ -374,28 +486,36 @@ class ManualExecutionBackend:
         )
         return self.poll(task_id)
 
-    def list_tasks(self, *, operation: str | None = None) -> tuple[TaskView, ...]:
-        views = tuple(self.poll(task_id) for task_id in self._task_ids())
+    def list_tasks(
+        self,
+        *,
+        operation: str | None = None,
+        batch_id: str | None = None,
+    ) -> tuple[TaskView, ...]:
+        views = tuple(
+            self.poll(task_id) for task_id in self._task_ids(batch_id=batch_id)
+        )
         if operation is None:
             return views
         return tuple(view for view in views if view.task.operation == operation)
 
     def _task_events(self, task_id: str) -> list[Any]:
-        events = [
-            event for event in self.manager.store.list_events(self.campaign_id)
-            if event.entity_type == "execution_task" and event.entity_id == task_id
-        ]
+        events = self.manager.store.list_events(
+            self.campaign_id,
+            entity_type="execution_task",
+            entity_id=task_id,
+        )
         if not events:
             raise NotFoundError(f"execution task not found: {task_id}")
         return events
 
-    def _task_ids(self) -> Sequence[str]:
-        return tuple(dict.fromkeys(
-            event.entity_id
-            for event in self.manager.store.list_events(self.campaign_id)
-            if event.entity_type == "execution_task"
-            and event.event_type == "TASK_SUBMITTED"
-        ))
+    def _task_ids(self, *, batch_id: str | None = None) -> Sequence[str]:
+        return self.manager.store.list_entity_ids(
+            self.campaign_id,
+            entity_type="execution_task",
+            event_type="TASK_SUBMITTED",
+            batch_id=batch_id,
+        )
 
     def _now(self) -> str:
         value = self._clock()
@@ -848,11 +968,12 @@ class DiscoveryCoordinator:
                 ] = (hypothesis_id, refuter_id, angles)
         views = self._successful_tasks("refute_reachability", expected)
         artifact_ids = []
+        workers_by_hypothesis: dict[str, set[str]] = {}
         for view in views:
             hypothesis_id, refuter_id, allowed_angles = expected[view.task.task_id]
-            if view.worker_id != refuter_id:
+            if view.worker_id is None:
                 raise ModelError(
-                    f"R3.5 refutation worker identity mismatch: {view.task.task_id}"
+                    f"R3.5 refutation task has no claimed worker: {view.task.task_id}"
                 )
             value = self._read_output(view)
             refutation_value = value.get("refutation")
@@ -869,6 +990,12 @@ class DiscoveryCoordinator:
                 raise ModelError(
                     f"R3.5 refutation task scope mismatch: {refutation.refutation_id}"
                 )
+            workers = workers_by_hypothesis.setdefault(hypothesis_id, set())
+            if view.worker_id in workers:
+                raise ModelError(
+                    f"R3.5 refutations for a hypothesis require distinct claimed workers: {hypothesis_id}"
+                )
+            workers.add(view.worker_id)
             artifact_ids.append(self.workflow.record_refutation(refutation))
         return tuple(artifact_ids)
 
@@ -953,12 +1080,18 @@ class DiscoveryCoordinator:
             for item in r3["verdicts"]
             if item["verdict"] == "UNREACHABLE"
         }
-        selected = sorted(verdicts)
-        self.workflow.record_revival_selection(
-            selected,
-            rationale="review every initial R3 UNREACHABLE verdict",
-            evidence_refs=(r3_event.payload_ref,),
-        )
+        selection_event = self.workflow._stage_event("REVIVAL_SAMPLE_SELECTED")
+        if selection_event is not None and selection_event.payload_ref is not None:
+            selected = sorted(
+                self.workflow._read_artifact(selection_event.payload_ref)["hypothesis_ids"]
+            )
+        else:
+            selected = sorted(verdicts)
+            self.workflow.record_revival_selection(
+                selected,
+                rationale="review every initial R3 UNREACHABLE verdict",
+                evidence_refs=(r3_event.payload_ref,),
+            )
         views = []
         for hypothesis_id in selected:
             hypothesis = hypotheses[hypothesis_id]
@@ -1021,7 +1154,7 @@ class DiscoveryCoordinator:
             if (
                 review.hypothesis_id != hypothesis_id
                 or review.reviewer_id != expected_reviewer
-                or view.worker_id != expected_reviewer
+                or view.worker_id is None
             ):
                 raise ModelError(
                     f"R3.5 revival task scope mismatch: {review.revival_id}"
@@ -1041,10 +1174,56 @@ class DiscoveryCoordinator:
         work_units = {
             str(item["work_unit_id"]): item for item in self._work_units()
         }
+        r2 = json.loads(
+            self.workflow.manager.artifacts.get_bytes(r2_event.payload_ref)
+        )
+        axis_runs = {
+            (str(item["work_unit_id"]), str(item["axis"])): item
+            for item in r2["axis_runs"]
+        }
+        hypotheses_by_work_unit: dict[str, list[Mapping[str, Any]]] = {}
+        for hypothesis in r2["hypotheses"]:
+            hypotheses_by_work_unit.setdefault(
+                str(hypothesis["work_unit_id"]), []
+            ).append(hypothesis)
         views = []
+        screening_runs = []
         for category_plan in value["category_plans"]:
             category_plan_id = str(category_plan["category_plan_id"])
             work_unit_id = str(category_plan["work_unit_id"])
+            planned_axes = tuple(str(axis) for axis in category_plan["discovery_axes"])
+            if (
+                planned_axes
+                and not hypotheses_by_work_unit.get(work_unit_id)
+                and all(
+                    axis_runs.get((work_unit_id, axis), {}).get("applicability")
+                    == Applicability.NOT_APPLICABLE.value
+                    for axis in planned_axes
+                )
+            ):
+                source_runs = [axis_runs[(work_unit_id, axis)] for axis in planned_axes]
+                screening_runs.append(CategoryRun(
+                    category_run_id=f"CR-screening-{category_plan_id}",
+                    category_plan_id=category_plan_id,
+                    work_unit_id=work_unit_id,
+                    family=str(category_plan["family"]),
+                    mechanism_variants_examined=(),
+                    axis_runs=tuple(AxisRun.from_dict(item) for item in source_runs),
+                    applicability=Applicability.NOT_APPLICABLE,
+                    status=CategoryRunStatus.COMPLETE,
+                    evidence_refs=tuple(dict.fromkeys(
+                        reference
+                        for item in source_runs
+                        for reference in item["evidence_refs"]
+                    )),
+                    rationale=(
+                        "All planned discovery axes were explicitly NOT_APPLICABLE "
+                        "in R2; no category-analysis task was required."
+                    ),
+                    hypothesis_ids=(),
+                    finding_ids=(),
+                ))
+                continue
             seed_card_ids = tuple(str(item) for item in category_plan["seed_card_ids"])
             mechanism_cards = [
                 self.knowledge_catalog.cards[card_id]
@@ -1091,6 +1270,8 @@ class DiscoveryCoordinator:
                     for name, amount in category_plan.get("budget", {}).items()
                 },
             )))
+        if screening_runs:
+            self.workflow.record_r4_screening_runs(screening_runs)
         return tuple(views)
 
     def commit_r4(self) -> str:
@@ -1103,12 +1284,33 @@ class DiscoveryCoordinator:
         plans = {
             str(item["category_plan_id"]): item for item in value["category_plans"]
         }
+        screening_event = next((
+            event for event in self.workflow.manager.store.list_batch_events(
+                self.workflow.campaign_id,
+                self.workflow.batch_id,
+                event_type="R4_SCREENING_COVERAGE_RECORDED",
+            )
+        ), None)
+        screening_runs = []
+        screening_plan_ids = set()
+        if screening_event is not None and screening_event.payload_ref:
+            screening_artifact = json.loads(
+                self.workflow.manager.artifacts.get_bytes(screening_event.payload_ref)
+            )
+            screening_runs = [
+                CategoryRun.from_dict(item)
+                for item in screening_artifact["category_runs"]
+            ]
+            screening_plan_ids = {
+                run.category_plan_id for run in screening_runs
+            }
         expected = {
             self._task_id("run_category_audit", category_plan_id): category_plan_id
             for category_plan_id in plans
+            if category_plan_id not in screening_plan_ids
         }
         views = self._successful_tasks("run_category_audit", expected)
-        runs = []
+        runs = list(screening_runs)
         for view in views:
             category_plan_id = expected[view.task.task_id]
             output = self._read_output(view)
@@ -1299,15 +1501,12 @@ class DiscoveryCoordinator:
         return self.workflow.close_r6(closure)
 
     def _measured_task_budget(self) -> dict[str, int]:
-        completed = [
-            event
-            for event in self.workflow.manager.store.list_events(
-                self.workflow.campaign_id
-            )
-            if event.batch_id == self.workflow.batch_id
-            and event.entity_type == "execution_task"
-            and event.event_type == "TASK_COMPLETED"
-        ]
+        completed = self.workflow.manager.store.list_batch_events(
+            self.workflow.campaign_id,
+            self.workflow.batch_id,
+            entity_type="execution_task",
+            event_type="TASK_COMPLETED",
+        )
         budget: dict[str, int] = {"task_count": len(completed)}
         for event in completed:
             measurements = event.payload.get("measurements", {})
@@ -1321,14 +1520,14 @@ class DiscoveryCoordinator:
     def _r35_refutations(self, hypothesis_id: str) -> list[Mapping[str, Any]]:
         return [
             json.loads(self.workflow.manager.artifacts.get_bytes(event.payload_ref))
-            for event in self.workflow.manager.store.list_events(
-                self.workflow.campaign_id
+            for event in self.workflow.manager.store.list_batch_events(
+                self.workflow.campaign_id,
+                self.workflow.batch_id,
+                entity_type="hypothesis",
+                entity_id=hypothesis_id,
+                event_type="REFUTATION_SUBMITTED",
             )
-            if event.batch_id == self.workflow.batch_id
-            and event.entity_type == "hypothesis"
-            and event.entity_id == hypothesis_id
-            and event.event_type == "REFUTATION_SUBMITTED"
-            and event.payload_ref is not None
+            if event.payload_ref is not None
         ]
 
     def _r35_eligible(self) -> dict[str, str]:
@@ -1356,16 +1555,14 @@ class DiscoveryCoordinator:
         return list(value)
 
     def _require_stage(self, event_type: str) -> Any:
-        event = next((
-            event for event in self.workflow.manager.store.list_events(
-                self.workflow.campaign_id
-            )
-            if event.batch_id == self.workflow.batch_id
-            and event.event_type == event_type
-        ), None)
-        if event is None:
+        events = self.workflow.manager.store.list_batch_events(
+            self.workflow.campaign_id,
+            self.workflow.batch_id,
+            event_type=event_type,
+        )
+        if not events:
             raise ModelError(f"required Batch stage is missing: {event_type}")
-        return event
+        return events[-1]
 
     def _successful_tasks(
         self,

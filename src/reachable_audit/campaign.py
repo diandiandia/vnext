@@ -13,7 +13,7 @@ from typing import Any, Mapping
 import uuid
 
 from .artifacts import ArtifactStore
-from .models import BatchRecord, BatchStatus, CampaignRecord
+from .models import BatchRecord, BatchStatus, CampaignAuditMode, CampaignRecord
 from .analysis_models import SkillIssue, SkillIssueStatus
 from .plan_models import AuditPlan, ComponentGraph, PlanAmendment, ProjectInventory
 from .planning import batch_manifest, validate_plan
@@ -79,17 +79,40 @@ class CampaignManager:
         budget: Mapping[str, Any] | None = None,
         constraints: list[str] | tuple[str, ...] | None = None,
         campaign_id: str | None = None,
+        audit_mode: CampaignAuditMode = CampaignAuditMode.FRESH,
+        history_source_campaign_ids: tuple[str, ...] = (),
     ) -> CampaignRecord:
         identifier = campaign_id or f"CMP-{uuid.uuid4().hex}"
+        if len(history_source_campaign_ids) != len(set(history_source_campaign_ids)):
+            raise ValueError("history source Campaign IDs must be unique")
+        if audit_mode is CampaignAuditMode.FRESH and history_source_campaign_ids:
+            raise ValueError("fresh Campaigns cannot declare historical Campaign sources")
+        if audit_mode is CampaignAuditMode.FOLLOW_UP and not history_source_campaign_ids:
+            raise ValueError("follow-up Campaigns require explicit history sources")
+        if audit_mode is CampaignAuditMode.LEGACY:
+            raise ValueError("legacy is reserved for migrated Campaign records")
+        for source_id in history_source_campaign_ids:
+            source = self.store.get_campaign(source_id)
+            if source.target_root != str(self.target_root):
+                raise ValueError("history sources must belong to the same target")
         record = self.store.create_campaign(
             campaign_id=identifier,
             target_root=str(self.target_root),
             snapshot_id=snapshot_id,
             budget=budget,
             constraints=constraints,
+            audit_mode=audit_mode,
+            history_source_campaign_ids=history_source_campaign_ids,
         )
         self._write_campaign_export(record)
-        self._record_skill_regression_baseline(record.campaign_id)
+        self._record_skill_regression_baseline(
+            record.campaign_id,
+            source_campaign_ids=(
+                record.history_source_campaign_ids
+                if record.audit_mode is CampaignAuditMode.FOLLOW_UP
+                else ()
+            ),
+        )
         return record
 
     def record_skill_review(
@@ -108,13 +131,6 @@ class CampaignManager:
             value, ensure_ascii=False, sort_keys=True, separators=(",", ":")
         )
         artifact = self.artifacts.put_text(encoded)
-        existing = [
-            event
-            for event in self.store.list_events(campaign_id)
-            if event.event_type == "SKILL_REVIEW_COMPLETED"
-        ]
-        if existing and any(event.payload_ref != artifact.artifact_id for event in existing):
-            raise ValueError("Campaign already has a different skill review")
         for issue in issues:
             issue_value = asdict(issue)
             issue_artifact = self.artifacts.put_text(json.dumps(
@@ -148,7 +164,7 @@ class CampaignManager:
             payload={"issue_ids": sorted(issue_ids)},
             payload_ref=artifact.artifact_id,
         )
-        self._write_campaign_lessons(campaign_id, issues)
+        self._write_campaign_skill_issues(campaign_id, issues)
         self._write_skill_regression_exports()
         return artifact.artifact_id
 
@@ -206,15 +222,55 @@ class CampaignManager:
         self._atomic_json(
             self.state_dir / "campaigns" / campaign_id / "abort-report.json", report
         )
+        self.write_campaign_closure_lessons(
+            campaign_id,
+            unreviewed_scope=(reason,),
+            residual_risks=(reason,),
+            lessons=("Campaign was explicitly aborted by an operator.",),
+        )
         if cleanup_error is not None:
             raise ValueError(f"Campaign aborted but resource cleanup failed: {cleanup_error}")
         return report
 
-    def _write_campaign_lessons(
+    def write_campaign_closure_lessons(
+        self,
+        campaign_id: str,
+        *,
+        unreviewed_scope: tuple[str, ...] = (),
+        residual_risks: tuple[str, ...] = (),
+        limitations: tuple[str, ...] = (),
+        lessons: tuple[str, ...] = (),
+        knowledge_nominations: tuple[str, ...] = (),
+    ) -> None:
+        sections = {
+            "Unreviewed scope": unreviewed_scope,
+            "Residual risks": residual_risks,
+            "Limitations": limitations,
+            "Lessons": lessons,
+            "Knowledge nominations": knowledge_nominations,
+        }
+        lines = [f"## Campaign closure: {campaign_id}"]
+        for title, values in sections.items():
+            lines.extend(("", f"### {title}"))
+            lines.extend(f"- {value}" for value in values)
+            if not values:
+                lines.append("- None recorded.")
+        section = "\n".join(lines).rstrip()
+        digest = hashlib.sha256(section.encode("utf-8")).hexdigest()
+        marker = f"<!-- vnext-closure-lessons:sha256:{digest} -->"
+        path = self.state_dir / "campaigns" / campaign_id / "lessons.md"
+        existing = path.read_text(encoding="utf-8") if path.is_file() else ""
+        if marker in existing:
+            return
+        prefix = existing.rstrip()
+        content = f"{prefix}\n\n" if prefix else ""
+        self._atomic_text(path, f"{content}{marker}\n{section}\n")
+
+    def _write_campaign_skill_issues(
         self, campaign_id: str, issues: tuple[SkillIssue, ...]
     ) -> None:
         lines = [
-            "# Campaign Skill Lessons",
+            "# Campaign Skill Issues",
             "",
             f"Campaign: `{campaign_id}`",
             "",
@@ -233,13 +289,17 @@ class CampaignManager:
                 "",
             ))
         self._atomic_text(
-            self.state_dir / "campaigns" / campaign_id / "lessons.md",
+            self.state_dir / "campaigns" / campaign_id / "skill-issues.md",
             "\n".join(lines),
         )
 
-    def load_skill_regression_backlog(self) -> tuple[dict[str, Any], ...]:
+    def load_skill_regression_backlog(
+        self, source_campaign_ids: tuple[str, ...] | None = None
+    ) -> tuple[dict[str, Any], ...]:
         latest: dict[str, tuple[int, dict[str, Any]]] = {}
         for campaign in self.store.list_campaigns():
+            if source_campaign_ids is not None and campaign.campaign_id not in source_campaign_ids:
+                continue
             for event in self.store.list_events(campaign.campaign_id):
                 if event.event_type != "SKILL_ISSUE_RECORDED" or not event.payload_ref:
                     continue
@@ -258,8 +318,10 @@ class CampaignManager:
             if value["status"] == SkillIssueStatus.REGRESSION_PENDING.value
         )
 
-    def _record_skill_regression_baseline(self, campaign_id: str) -> None:
-        backlog = self.load_skill_regression_backlog()
+    def _record_skill_regression_baseline(
+        self, campaign_id: str, *, source_campaign_ids: tuple[str, ...]
+    ) -> None:
+        backlog = self.load_skill_regression_backlog(source_campaign_ids)
         value = {"schema_version": "1.0", "issues": list(backlog)}
         artifact = self.artifacts.put_text(json.dumps(
             value, ensure_ascii=False, sort_keys=True, separators=(",", ":")
@@ -297,7 +359,7 @@ class CampaignManager:
                 f"- Status: `{issue['status']}`",
                 "",
             ))
-        self._atomic_text(self.state_dir / "lessons.md", "\n".join(lines))
+        self._atomic_text(self.state_dir / "skill-regression.md", "\n".join(lines))
 
     def add_batch(
         self,

@@ -54,6 +54,17 @@ def test_adapters_resolve_local_modules_where_path_semantics_are_available() -> 
             reference, source, paths
         )) == expected, language
 
+def test_python_stdlib_import_does_not_match_repository_leaf_name() -> None:
+    adapter = LANGUAGE_ADAPTERS["python"]
+
+    targets = adapter.resolve_import(
+        "http.server",
+        "examples/importer.py",
+        {"examples/importer.py", "lib/network/server.py"},
+    )
+
+    assert targets == ()
+
 
 @pytest.mark.parametrize("path", ("/absolute/source.py", "../escape.py", "src/../../escape.py"))
 def test_language_adapters_reject_non_project_relative_locations(path: str) -> None:

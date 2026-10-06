@@ -19,6 +19,7 @@ from .analysis_models import (
     CanonicalVerdict,
     CategoryAuditPlan,
     CategoryRun,
+    CategoryRunStatus,
     DiscoveryAxis,
     EvidenceGrade,
     Experiment,
@@ -158,6 +159,9 @@ class BatchWorkflow:
         if not plan_id:
             raise ModelError("Batch manifest lacks a plan ID for boundary evidence validation")
         plan = self.manager.load_audit_plan(self.campaign_id, plan_id)
+        inventory = self.manager.load_inventory(self.campaign_id)
+        inventoried_paths = {source.path for source in inventory.source_files}
+        line_count_cache: dict[str, int] = {}
         boundary_edges = {edge.edge_id: edge for edge in plan.boundary_edges}
         expected_boundary_reviews = {
             (str(edge_id), work_unit_id)
@@ -181,7 +185,9 @@ class BatchWorkflow:
                 edge.source_component_id, edge.target_component_id,
             }:
                 raise ModelError(f"boundary review Work Unit is not an edge endpoint: {review.edge_id}")
-            self._validate_boundary_evidence(review.evidence_refs, review.edge_id)
+            self._validate_boundary_evidence(
+                review.evidence_refs, review.edge_id, inventoried_paths, line_count_cache
+            )
             actual_boundary_reviews.add(key)
         if actual_boundary_reviews != expected_boundary_reviews:
             missing = sorted(expected_boundary_reviews - actual_boundary_reviews)
@@ -210,9 +216,7 @@ class BatchWorkflow:
                 raise ModelError(
                     f"surface requires a source anchor for its entry path: {surface.surface_id}"
                 )
-            line_count = len((
-                self.manager.target_root / surface.entry_path
-            ).read_text(encoding="utf-8", errors="replace").splitlines())
+            line_count = self._source_line_count(surface.entry_path, line_count_cache)
             for anchor in anchors:
                 line_value = anchor.removeprefix(expected_prefix)
                 if not line_value.isdigit() or not 1 <= int(line_value) <= line_count:
@@ -246,11 +250,27 @@ class BatchWorkflow:
             )
         return artifact_id
 
+    def _source_line_count(
+        self, source_path: str, cache: dict[str, int]
+    ) -> int:
+        if source_path not in cache:
+            try:
+                cache[source_path] = len((
+                    self.manager.target_root / source_path
+                ).read_text(encoding="utf-8", errors="replace").splitlines())
+            except OSError as error:
+                raise ModelError(
+                    f"source anchor file cannot be read: {source_path}"
+                ) from error
+        return cache[source_path]
+
     def _validate_boundary_evidence(
-        self, evidence_refs: Sequence[str], edge_id: str
+        self,
+        evidence_refs: Sequence[str],
+        edge_id: str,
+        inventoried_paths: set[str],
+        line_count_cache: dict[str, int],
     ) -> None:
-        inventory = self.manager.load_inventory(self.campaign_id)
-        inventoried_paths = {source.path for source in inventory.source_files}
         for reference in evidence_refs:
             if not reference.startswith("LOC-"):
                 raise ModelError(
@@ -260,12 +280,7 @@ class BatchWorkflow:
             source_path, separator, line_text = location.rpartition(":")
             if not separator or source_path not in inventoried_paths or not line_text.isdigit():
                 raise ModelError(f"invalid boundary source anchor: {reference}")
-            try:
-                line_count = len((self.manager.target_root / source_path).read_text(
-                    encoding="utf-8", errors="replace"
-                ).splitlines())
-            except OSError as error:
-                raise ModelError(f"boundary source file cannot be read: {source_path}") from error
+            line_count = self._source_line_count(source_path, line_count_cache)
             if not 1 <= int(line_text) <= line_count:
                 raise ModelError(f"boundary source anchor is outside the file: {reference}")
 
@@ -388,12 +403,10 @@ class BatchWorkflow:
 
     def record_refutation(self, refutation: Refutation) -> str:
         self._refutation_target(refutation.hypothesis_id)
-        existing = [
-            event
-            for event in self._events()
-            if event.event_type == "REFUTATION_SUBMITTED"
-            and event.entity_id == refutation.hypothesis_id
-        ]
+        existing = self._events(
+            event_type="REFUTATION_SUBMITTED",
+            entity_id=refutation.hypothesis_id,
+        )
         if any(event.payload.get("refuter_id") == refutation.refuter_id for event in existing):
             same = next(
                 event
@@ -428,12 +441,10 @@ class BatchWorkflow:
 
     def record_adjudication(self, adjudication: Adjudication) -> str:
         _, verifier_verdict = self._refutation_target(adjudication.hypothesis_id)
-        events = [
-            event
-            for event in self._events()
-            if event.event_type == "REFUTATION_SUBMITTED"
-            and event.entity_id == adjudication.hypothesis_id
-        ]
+        events = self._events(
+            event_type="REFUTATION_SUBMITTED",
+            entity_id=adjudication.hypothesis_id,
+        )
         refutations = [self._read_artifact(event.payload_ref) for event in events]
         if len({item["refuter_id"] for item in refutations}) < 2:
             raise ModelError("adjudication requires two independent refuters")
@@ -544,8 +555,7 @@ class BatchWorkflow:
         }
         adjudicated = {
             event.entity_id
-            for event in self._events()
-            if event.event_type == "ADJUDICATION_DECIDED"
+            for event in self._events(event_type="ADJUDICATION_DECIDED")
         }
         if eligible != adjudicated:
             raise ModelError(
@@ -556,8 +566,7 @@ class BatchWorkflow:
         selected = set(self._read_artifact(selection.payload_ref)["hypothesis_ids"])
         reviewed = {
             event.entity_id
-            for event in self._events()
-            if event.event_type == "REVIVAL_REVIEWED"
+            for event in self._events(event_type="REVIVAL_REVIEWED")
         }
         if selected != reviewed:
             raise ModelError(
@@ -627,6 +636,91 @@ class BatchWorkflow:
         )
         return artifact_id
 
+    def record_r4_screening_runs(self, runs: Sequence[CategoryRun]) -> str:
+        plan_event = self._require_stage("CATEGORY_AUDIT_PLAN_RECORDED")
+        r2_event = self._require_stage("R2_COMPLETED")
+        if plan_event.payload_ref is None or r2_event.payload_ref is None:
+            raise ModelError("R4 screening requires CategoryAuditPlan and R2 artifacts")
+        plans = {
+            str(item["category_plan_id"]): item
+            for item in self._read_artifact(plan_event.payload_ref)["category_plans"]
+        }
+        r2 = self._read_artifact(r2_event.payload_ref)
+        axis_runs = {
+            (str(item["work_unit_id"]), str(item["axis"])): item
+            for item in r2["axis_runs"]
+        }
+        hypotheses_by_work_unit: dict[str, list[str]] = {}
+        for hypothesis in r2["hypotheses"]:
+            hypotheses_by_work_unit.setdefault(
+                str(hypothesis["work_unit_id"]), []
+            ).append(str(hypothesis["hypothesis_id"]))
+
+        expected_screening = set()
+        for plan_id, plan in plans.items():
+            work_unit_id = str(plan["work_unit_id"])
+            planned_axes = tuple(str(axis) for axis in plan["discovery_axes"])
+            if (
+                planned_axes
+                and not hypotheses_by_work_unit.get(work_unit_id)
+                and all(
+                    axis_runs.get((work_unit_id, axis), {}).get("applicability")
+                    == Applicability.NOT_APPLICABLE.value
+                    for axis in planned_axes
+                )
+            ):
+                expected_screening.add(plan_id)
+        actual_screening = {run.category_plan_id for run in runs}
+        if actual_screening != expected_screening or len(runs) != len(actual_screening):
+            raise ModelError(
+                "R4 screening coverage must exactly match all fully NOT_APPLICABLE plans"
+            )
+        for run in runs:
+            plan = plans[run.category_plan_id]
+            work_unit_id = str(plan["work_unit_id"])
+            expected_axes = tuple(str(axis) for axis in plan["discovery_axes"])
+            expected_axis_runs = [
+                axis_runs[(work_unit_id, axis)] for axis in expected_axes
+            ]
+            if (
+                run.work_unit_id != work_unit_id
+                or run.family != str(plan["family"])
+                or run.applicability is not Applicability.NOT_APPLICABLE
+                or run.status is not CategoryRunStatus.COMPLETE
+                or tuple(item.axis.value for item in run.axis_runs) != expected_axes
+                or any(
+                    item.applicability is not Applicability.NOT_APPLICABLE
+                    for item in run.axis_runs
+                )
+                or any(
+                    tuple(item.evidence_refs) != tuple(source["evidence_refs"])
+                    for item, source in zip(run.axis_runs, expected_axis_runs)
+                )
+                or run.hypothesis_ids
+                or run.finding_ids
+            ):
+                raise ModelError(
+                    f"R4 screening result is not backed by R2 dispositions: {run.category_run_id}"
+                )
+        artifact_id = self._put_json({
+            "schema_version": "1.0",
+            "category_runs": [asdict(run) for run in runs],
+        })
+        self.manager.store.append_event(
+            campaign_id=self.campaign_id,
+            batch_id=self.batch_id,
+            entity_type="batch_stage",
+            entity_id=self.batch_id,
+            event_type="R4_SCREENING_COVERAGE_RECORDED",
+            idempotency_key=(
+                f"r4-screening:{self.campaign_id}:{self.batch_id}:{artifact_id}"
+            ),
+            actor="tool",
+            payload={"category_plan_ids": sorted(actual_screening)},
+            payload_ref=artifact_id,
+        )
+        return artifact_id
+
     def record_r4(self, runs: Sequence[CategoryRun]) -> str:
         plan_event = self._require_stage("CATEGORY_AUDIT_PLAN_RECORDED")
         plans = {
@@ -642,8 +736,7 @@ class BatchWorkflow:
         }
         recorded_findings = {
             event.entity_id
-            for event in self._events()
-            if event.event_type == "FINDING_RECORDED"
+            for event in self._events(event_type="FINDING_RECORDED")
         }
         for run in runs:
             plan = plans[run.category_plan_id]
@@ -714,6 +807,16 @@ class BatchWorkflow:
             raise ModelError("duplicate R5 hypothesis assessment")
         if set(assessment_by_hypothesis) != set(verdicts):
             raise ModelError("R5 assessment coverage must match R3 verdict coverage")
+        harness_events = (
+            self.manager.store.list_events(
+                self.campaign_id, event_type="HARNESS_EXECUTION_COMPLETED"
+            )
+            if any(
+                assessment.disposition is R5Disposition.EMPIRICALLY_CONFIRMED
+                for assessment in assessments
+            )
+            else ()
+        )
         for experiment in experiments:
             if experiment.hypothesis_id not in verdicts:
                 raise ModelError(
@@ -736,7 +839,7 @@ class BatchWorkflow:
                     raise ModelError(
                         "empirical upgrade requires a confirmed real-target or equivalent experiment"
                     )
-                self._validate_empirical_harness_evidence(experiment)
+                self._validate_empirical_harness_evidence(experiment, harness_events)
             if assessment.disposition is R5Disposition.REFUTED:
                 if experiment is None or experiment.result is not ExperimentResult.REFUTED:
                     raise ModelError("R5 REFUTED disposition requires a refuting experiment")
@@ -775,10 +878,18 @@ class BatchWorkflow:
         )
         return artifact_id
 
-    def _validate_empirical_harness_evidence(self, experiment: Experiment) -> None:
+    def _validate_empirical_harness_evidence(
+        self,
+        experiment: Experiment,
+        harness_events: Sequence[EventRecord] | None = None,
+    ) -> None:
         command_refs = set(experiment.command_refs)
         observation_refs = set(experiment.observation_refs)
-        for event in self.manager.store.list_events(self.campaign_id):
+        if harness_events is None:
+            harness_events = self.manager.store.list_events(
+                self.campaign_id, event_type="HARNESS_EXECUTION_COMPLETED"
+            )
+        for event in harness_events:
             if (
                 event.event_type != "HARNESS_EXECUTION_COMPLETED"
                 or event.actor != "tool"
@@ -848,16 +959,9 @@ class BatchWorkflow:
             raise ModelError(f"Finding mechanism family mismatch: {finding.finding_id}")
         adjudicated = {
             event.entity_id: event.payload["final_verdict"]
-            for event in self._events()
-            if event.event_type == "ADJUDICATION_DECIDED"
+            for event in self._events(event_type="ADJUDICATION_DECIDED")
         }
-        if finding.status is FindingStatus.CONFIRMED and any(
-            adjudicated.get(hypothesis_id) != VerdictKind.REACHABLE.value
-            for hypothesis_id in finding.hypothesis_ids
-        ):
-            raise ModelError(
-                f"confirmed Finding requires REACHABLE R3.5 adjudication: {finding.finding_id}"
-            )
+        empirically_confirmed: set[str] = set()
         if finding.evidence_grade is EvidenceGrade.EMPIRICALLY_CONFIRMED:
             r5 = self._read_artifact(self._require_stage("R5_COMPLETED").payload_ref)
             empirically_confirmed = {
@@ -868,6 +972,20 @@ class BatchWorkflow:
             if not set(finding.hypothesis_ids).issubset(empirically_confirmed):
                 raise ModelError(
                     "empirically confirmed Finding requires empirical R5 assessment for every hypothesis"
+                )
+        if finding.status is FindingStatus.CONFIRMED:
+            adjudication_confirms_all = all(
+                adjudicated.get(hypothesis_id) == VerdictKind.REACHABLE.value
+                for hypothesis_id in finding.hypothesis_ids
+            )
+            r5_confirms_all = (
+                finding.evidence_grade is EvidenceGrade.EMPIRICALLY_CONFIRMED
+                and set(finding.hypothesis_ids).issubset(empirically_confirmed)
+            )
+            if not adjudication_confirms_all and not r5_confirms_all:
+                raise ModelError(
+                    f"confirmed Finding requires a REACHABLE R3.5 adjudication or "
+                    f"empirical R5 confirmation for every hypothesis: {finding.finding_id}"
                 )
         artifact_id = self._put_json(asdict(finding))
         self.manager.store.append_event(
@@ -906,21 +1024,43 @@ class BatchWorkflow:
             "detail": "all Work Units reached the R5 closure boundary",
         }
         verdicts = self._r3_verdicts() if stage_events["R3_COMPLETED"] else []
-        weak_reachable = [
-            item["hypothesis_id"]
-            for item in verdicts
-            if item["verdict"] == VerdictKind.REACHABLE.value
-            and item["evidence_grade"] == EvidenceGrade.STATIC_ONLY.value
-        ]
-        gates["BG2"] = {
-            "pass": not weak_reachable,
-            "detail": {"weak_reachable": weak_reachable},
-        }
         r5 = (
             self._read_artifact(stage_events["R5_COMPLETED"].payload_ref)
             if stage_events["R5_COMPLETED"]
             else {"assessments": []}
         )
+        r5_by_hypothesis = {
+            str(item["hypothesis_id"]): item for item in r5["assessments"]
+        }
+        weak_reachable = {
+            str(item["hypothesis_id"])
+            for item in verdicts
+            if item["verdict"] == VerdictKind.REACHABLE.value
+            and item["evidence_grade"] == EvidenceGrade.STATIC_ONLY.value
+        }
+        unresolved_static = sorted(
+            hypothesis_id for hypothesis_id in weak_reachable
+            if hypothesis_id not in r5_by_hypothesis
+            or r5_by_hypothesis[hypothesis_id]["disposition"] not in {
+                R5Disposition.STATIC_VERDICT_RETAINED.value,
+                R5Disposition.NEEDS_REVIEW.value,
+                R5Disposition.EMPIRICALLY_CONFIRMED.value,
+                R5Disposition.REFUTED.value,
+            }
+        )
+        gates["BG2"] = {
+            "pass": not unresolved_static,
+            "detail": {
+                "static_only_reachable": sorted(weak_reachable),
+                "explicitly_dispositioned_by_r5": sorted(weak_reachable - set(unresolved_static)),
+                "missing_or_invalid_r5_disposition": unresolved_static,
+                "static_only_r5_dispositions": {
+                    hypothesis_id: r5_by_hypothesis[hypothesis_id]["disposition"]
+                    for hypothesis_id in sorted(weak_reachable)
+                    if hypothesis_id in r5_by_hypothesis
+                },
+            },
+        }
         invalid_r5 = [
             item["hypothesis_id"]
             for item in r5["assessments"]
@@ -978,13 +1118,10 @@ class BatchWorkflow:
             stage_events["R3_5_COMPLETED"], verdicts
         )
         gates["BG6"] = {"pass": r35_valid, "detail": r35_detail}
-        drift_events = [
-            event for event in self._events() if event.event_type == "SNAPSHOT_DRIFT"
-        ]
+        drift_events = self._events(event_type="SNAPSHOT_DRIFT")
         resolved_drift_ids = {
             str(event.payload["drift_event_id"])
-            for event in self._events()
-            if event.event_type == "SNAPSHOT_DRIFT_RESOLVED"
+            for event in self._events(event_type="SNAPSHOT_DRIFT_RESOLVED")
         }
         unresolved_drift = [
             event.event_id
@@ -1013,10 +1150,10 @@ class BatchWorkflow:
         if failed:
             raise ModelError(f"Batch gates failed: {', '.join(failed)}")
 
-        findings = []
-        for event in self._events():
-            if event.event_type == "FINDING_RECORDED":
-                findings.append(self._read_artifact(event.payload_ref))
+        findings = [
+            self._read_artifact(event.payload_ref)
+            for event in self._events(event_type="FINDING_RECORDED")
+        ]
         report = {
             "schema_version": "1.0",
             "campaign_id": self.campaign_id,
@@ -1030,8 +1167,25 @@ class BatchWorkflow:
             "needs_review_hypothesis_ids": [
                 item["hypothesis_id"]
                 for item in r5["assessments"]
-                if item["disposition"] == R5Disposition.NEEDS_REVIEW.value
+                if item["disposition"] in {
+                    R5Disposition.NEEDS_REVIEW.value,
+                    R5Disposition.STATIC_VERDICT_RETAINED.value,
+                }
             ],
+            "static_only_retained_as_review": sorted(
+                weak_reachable
+                & {
+                    str(item["hypothesis_id"])
+                    for item in r5["assessments"]
+                    if item["disposition"] == R5Disposition.STATIC_VERDICT_RETAINED.value
+                }
+            ),
+            "static_only_reachable_hypothesis_ids": sorted(weak_reachable),
+            "static_only_r5_dispositions": {
+                hypothesis_id: r5_by_hypothesis[hypothesis_id]["disposition"]
+                for hypothesis_id in sorted(weak_reachable)
+                if hypothesis_id in r5_by_hypothesis
+            },
             "handoff_ids": list(self.batch.manifest.get("handoff_ids", [])),
             "closure": asdict(closure),
             "gates": gates,
@@ -1044,7 +1198,7 @@ class BatchWorkflow:
             entity_type="batch_stage",
             entity_id=self.batch_id,
             event_type="R6_COMPLETED",
-            idempotency_key=f"r6:{self.campaign_id}:{self.batch_id}",
+            idempotency_key=f"r6:{self.campaign_id}:{self.batch_id}:{artifact_id}",
             actor="tool",
             payload={
                 "status": "PASS",
@@ -1135,17 +1289,29 @@ class BatchWorkflow:
                 f"expected={sorted(hypothesis_ids)}, actual={sorted(submitted_ids)}"
             )
         verdicts = []
+        inventory = self.manager.load_inventory(self.campaign_id)
         inventoried_paths = {
-            source.path for source in self.manager.load_inventory(self.campaign_id).source_files
+            source.path for source in inventory.source_files
+        } | {
+            manifest
+            for component in inventory.components
+            for manifest in component.build_manifests
         }
+        line_count_cache: dict[str, int] = {}
         for submission in sorted(submissions, key=lambda item: item.hypothesis_id):
             for anchor in submission.call_chain:
-                self._validate_source_location(anchor, inventoried_paths)
+                self._validate_source_location(
+                    anchor, inventoried_paths, line_count_cache=line_count_cache
+                )
             for reference in (
                 *submission.edge_evidence_ids,
                 *submission.blocking_evidence_ids,
             ):
-                self._validate_evidence_reference(reference, inventoried_paths)
+                self._validate_evidence_reference(
+                    reference,
+                    inventoried_paths,
+                    line_count_cache=line_count_cache,
+                )
             submission_value = asdict(submission)
             submission_digest = self._put_json(submission_value)
             adjudication = self.manager.store.append_event(
@@ -1195,10 +1361,19 @@ class BatchWorkflow:
         return artifact_id
 
     def _validate_evidence_reference(
-        self, reference: str, inventoried_paths: set[str]
+        self,
+        reference: str,
+        inventoried_paths: set[str],
+        *,
+        line_count_cache: dict[str, int] | None = None,
     ) -> None:
         if reference.startswith("LOC-"):
-            self._validate_source_location(reference, inventoried_paths)
+            self._validate_source_location(
+                reference,
+                inventoried_paths,
+                line_count_cache=line_count_cache,
+                allow_evidence_only=True,
+            )
             return
         if reference.startswith("sha256:"):
             try:
@@ -1211,21 +1386,34 @@ class BatchWorkflow:
         )
 
     def _validate_source_location(
-        self, reference: str, inventoried_paths: set[str]
+        self,
+        reference: str,
+        inventoried_paths: set[str],
+        *,
+        line_count_cache: dict[str, int] | None = None,
+        allow_evidence_only: bool = False,
     ) -> None:
         if not reference.startswith("LOC-"):
             raise ModelError(f"call-chain item must be a source LOC anchor: {reference}")
         path_and_line = reference.removeprefix("LOC-")
         source_path, separator, line_text = path_and_line.rpartition(":")
-        if not separator or source_path not in inventoried_paths or not line_text.isdigit():
+        relative_path = PurePosixPath(source_path)
+        if (
+            not separator
+            or not line_text.isdigit()
+            or relative_path.is_absolute()
+            or ".." in relative_path.parts
+            or (source_path not in inventoried_paths and not allow_evidence_only)
+        ):
             raise ModelError(f"source anchor is not in the Campaign inventory: {reference}")
-        try:
-            lines = (self.manager.target_root / source_path).read_text(
-                encoding="utf-8", errors="replace"
-            ).splitlines()
-        except OSError as error:
-            raise ModelError(f"source anchor file cannot be read: {source_path}") from error
-        if not 1 <= int(line_text) <= len(lines):
+        resolved_path = (self.manager.target_root / source_path).resolve()
+        if (
+            not resolved_path.is_relative_to(self.manager.target_root)
+            or not resolved_path.is_file()
+        ):
+            raise ModelError(f"source anchor file is outside the target or missing: {source_path}")
+        cache = line_count_cache if line_count_cache is not None else {}
+        if not 1 <= int(line_text) <= self._source_line_count(source_path, cache):
             raise ModelError(f"source anchor line is outside the file: {reference}")
 
     def build_r0_r3_report(self) -> dict[str, Any]:
@@ -1274,12 +1462,22 @@ class BatchWorkflow:
         value = self.batch.manifest.get("work_units", [])
         return list(value) if isinstance(value, list) else []
 
-    def _events(self) -> list[EventRecord]:
-        return [
-            event
-            for event in self.manager.store.list_events(self.campaign_id)
-            if event.batch_id == self.batch_id
-        ]
+    def _events(
+        self,
+        *,
+        event_type: str | None = None,
+        event_types: set[str] | frozenset[str] | None = None,
+        entity_type: str | None = None,
+        entity_id: str | None = None,
+    ) -> list[EventRecord]:
+        return self.manager.store.list_batch_events(
+            self.campaign_id,
+            self.batch_id,
+            event_type=event_type,
+            event_types=event_types,
+            entity_type=entity_type,
+            entity_id=entity_id,
+        )
 
     def _r3_verdicts(self) -> list[Mapping[str, Any]]:
         event = self._require_stage("R3_COMPLETED")
@@ -1298,7 +1496,12 @@ class BatchWorkflow:
             if item["verdict"] == VerdictKind.REACHABLE.value
             and item["evidence_grade"] == EvidenceGrade.EDGE_PROVEN.value
         }
-        events = self._events()
+        events = self._events(event_types={
+            "REFUTATION_SUBMITTED",
+            "ADJUDICATION_DECIDED",
+            "REVIVAL_SAMPLE_SELECTED",
+            "REVIVAL_REVIEWED",
+        })
         refutations: dict[str, list[Mapping[str, Any]]] = {}
         for event in events:
             if event.event_type != "REFUTATION_SUBMITTED" or event.payload_ref is None:
@@ -1383,10 +1586,8 @@ class BatchWorkflow:
         return hypothesis, verdict
 
     def _stage_event(self, event_type: str) -> EventRecord | None:
-        return next(
-            (event for event in reversed(self._events()) if event.event_type == event_type),
-            None,
-        )
+        events = self._events(event_type=event_type)
+        return events[-1] if events else None
 
     def _require_stage(self, event_type: str) -> EventRecord:
         event = self._stage_event(event_type)

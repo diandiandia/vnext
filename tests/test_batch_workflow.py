@@ -116,6 +116,137 @@ def test_r0_r3_slice_records_canonical_verdict_and_partial_report(tmp_path: Path
         manager.close()
 
 
+def test_r1_and_r3_cache_source_line_counts_per_stage_call(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manager, workflow, plan = _workflow(tmp_path, "CMP-line-cache")
+    work_unit = plan.work_units[0]
+    original_read_text = Path.read_text
+    reads: dict[str, int] = {}
+
+    def counted_read_text(path: Path, *args: object, **kwargs: object) -> str:
+        resolved = path.resolve()
+        if resolved == (tmp_path / "app.py").resolve():
+            reads[str(resolved)] = reads.get(str(resolved), 0) + 1
+        return original_read_text(path, *args, **kwargs)
+
+    try:
+        workflow.run_r0()
+        monkeypatch.setattr(Path, "read_text", counted_read_text)
+        workflow.record_r1([
+            Surface(
+                f"SURF-cache-{line}", work_unit.work_unit_id, work_unit.component_id,
+                "function_entry", "app.py", "handle", "remote",
+                (f"LOC-app.py:{line}",),
+            )
+            for line in (1, 2)
+        ])
+        source_path = str((tmp_path / "app.py").resolve())
+        assert reads[source_path] == 1
+
+        axis_evidence = {
+            "surface": ("LOC-app.py:1",), "mechanism": ("LOC-app.py:2",),
+            "state": ("EVID-state",), "fix_variant": ("EVID-fix",),
+            "boundary": ("EVID-boundary",), "differential": ("EVID-diff",),
+        }
+        workflow.record_r2([Hypothesis(
+            "HYP-line-cache", work_unit.work_unit_id, "surface",
+            ("SURF-cache-1",), ("SURF-cache-1",),
+            Mechanism("INJECTION", "line-cache"),
+            "a source path reaches a sink", HypothesisStatus.NEW,
+        )], axis_evidence=axis_evidence,
+            axis_runs=axis_runs_from_evidence(axis_evidence))
+        reads.clear()
+        edge_ref = manager.artifacts.put_text("edge proof").artifact_id
+        workflow.record_r3([VerdictSubmission(
+            "HYP-line-cache", VerdictKind.REACHABLE, EvidenceGrade.EDGE_PROVEN,
+            "remote", (), ("LOC-app.py:1", "LOC-app.py:2"),
+            (edge_ref,), (), (), "the call chain is source anchored",
+        )])
+        assert reads[source_path] == 1
+    finally:
+        manager.close()
+
+
+def test_r3_accepts_anchor_in_inventory_build_manifest(tmp_path: Path) -> None:
+    (tmp_path / "BUILD.gn").write_text("group('v8_fuzzers') {}\n", encoding="utf-8")
+    manager, workflow, plan = _workflow(tmp_path, "CMP-build-anchor")
+    work_unit = plan.work_units[0]
+    try:
+        workflow.run_r0()
+        workflow.record_r1([Surface(
+            "SURF-build-anchor", work_unit.work_unit_id, work_unit.component_id,
+            "function_entry", "app.py", "handle", "local", ("LOC-app.py:1",),
+        )])
+        axis_evidence = {
+            "surface": ("LOC-app.py:1",), "mechanism": ("LOC-app.py:1",),
+            "state": ("EVID-state",), "fix_variant": ("EVID-fix",),
+            "boundary": ("LOC-BUILD.gn:1",), "differential": ("EVID-diff",),
+        }
+        workflow.record_r2([Hypothesis(
+            "HYP-build-anchor", work_unit.work_unit_id, "boundary",
+            ("SURF-build-anchor",), ("SURF-build-anchor",),
+            Mechanism("INJECTION", "build-declared-entry"),
+            "a build-declared target reaches this path", HypothesisStatus.NEW,
+        )], axis_evidence=axis_evidence,
+            axis_runs=axis_runs_from_evidence(axis_evidence))
+        edge_ref = manager.artifacts.put_text("build declaration evidence").artifact_id
+
+        artifact_id = workflow.record_r3([VerdictSubmission(
+            "HYP-build-anchor", VerdictKind.REACHABLE, EvidenceGrade.EDGE_PROVEN,
+            "local_builder", (), ("LOC-app.py:1", "LOC-BUILD.gn:1"),
+            (edge_ref,), (), (), "the build manifest declares the target input",
+        )])
+
+        assert artifact_id.startswith("sha256:")
+    finally:
+        manager.close()
+
+
+def test_r3_allows_noninventory_schema_as_evidence_not_call_chain(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "schema.yaml").write_text("entry: generated\n", encoding="utf-8")
+    manager, workflow, plan = _workflow(tmp_path, "CMP-schema-evidence")
+    work_unit = plan.work_units[0]
+    try:
+        workflow.run_r0()
+        workflow.record_r1([Surface(
+            "SURF-schema-evidence", work_unit.work_unit_id, work_unit.component_id,
+            "function_entry", "app.py", "handle", "remote", ("LOC-app.py:1",),
+        )])
+        axis_evidence = {
+            "surface": ("LOC-app.py:1",), "mechanism": ("LOC-app.py:1",),
+            "state": ("EVID-state",), "fix_variant": ("EVID-fix",),
+            "boundary": ("EVID-boundary",), "differential": ("EVID-diff",),
+        }
+        workflow.record_r2([Hypothesis(
+            "HYP-schema-evidence", work_unit.work_unit_id, "surface",
+            ("SURF-schema-evidence",), ("SURF-schema-evidence",),
+            Mechanism("INJECTION", "generated-schema-contract"),
+            "the generated schema constrains the source path",
+            HypothesisStatus.NEW,
+        )], axis_evidence=axis_evidence,
+            axis_runs=axis_runs_from_evidence(axis_evidence))
+
+        with pytest.raises(ModelError, match="source anchor is not in the Campaign inventory"):
+            workflow.record_r3([VerdictSubmission(
+                "HYP-schema-evidence", VerdictKind.REACHABLE, EvidenceGrade.EDGE_PROVEN,
+                "remote", (), ("LOC-schema.yaml:1",), ("LOC-app.py:1",), (), (),
+                "a schema file is not itself a source-to-sink call-chain step",
+            )])
+
+        artifact_id = workflow.record_r3([VerdictSubmission(
+            "HYP-schema-evidence", VerdictKind.REACHABLE, EvidenceGrade.EDGE_PROVEN,
+            "remote", (), ("LOC-app.py:1",), ("LOC-schema.yaml:1",), (), (),
+            "the source path is constrained by the generated schema",
+        )])
+
+        assert artifact_id.startswith("sha256:")
+    finally:
+        manager.close()
+
+
 def test_clean_slice_is_valid_when_all_discovery_axes_have_dispositions(
     tmp_path: Path,
 ) -> None:

@@ -11,6 +11,8 @@ from reachable_audit.analysis_models import (
     BatchClosure,
     CampaignClosure,
     HandoffResolution,
+    ScopeDisposition,
+    ScopeDispositionKind,
     SkillIssue,
     SkillIssueKind,
     SkillIssueStatus,
@@ -19,7 +21,7 @@ from reachable_audit.campaign_closure import CampaignCloser
 from reachable_audit.execution import ManualExecutionBackend, TaskResult, TaskSpec, TaskStatus
 from conftest import execution_configuration_fixture
 from reachable_audit.graph import build_component_graph
-from reachable_audit.models import CampaignStatus, ModelError
+from reachable_audit.models import CampaignAuditMode, CampaignStatus, ModelError
 from reachable_audit.resource_cleanup import (
     create_campaign_temp_directory,
     register_process_group,
@@ -27,8 +29,12 @@ from reachable_audit.resource_cleanup import (
 from test_experiments_metrics import _ready_for_r5
 
 
-def _closable_campaign(tmp_path: Path):  # type: ignore[no-untyped-def]
-    manager, workflow = _ready_for_r5(tmp_path)
+def _closable_campaign(
+    tmp_path: Path, *, surface_without_hypothesis: bool = False,
+):  # type: ignore[no-untyped-def]
+    manager, workflow = _ready_for_r5(
+        tmp_path, surface_without_hypothesis=surface_without_hypothesis
+    )
     inventory = manager.load_inventory("CMP-r4")
     manager.record_component_graph(
         campaign_id="CMP-r4", graph=build_component_graph(tmp_path, inventory)
@@ -49,6 +55,9 @@ def _closable_campaign(tmp_path: Path):  # type: ignore[no-untyped-def]
 def test_campaign_closure_passes_ten_gates_and_writes_reports(tmp_path: Path) -> None:
     manager, plan = _closable_campaign(tmp_path)
     try:
+        lessons_path = tmp_path / ".audit_vnext" / "campaigns" / "CMP-r4" / "lessons.md"
+        lessons_path.parent.mkdir(parents=True, exist_ok=True)
+        lessons_path.write_text("# Operator notes\n\nKeep this note.\n", encoding="utf-8")
         report = CampaignCloser(manager, "CMP-r4", plan).close(CampaignClosure(
             architecture_overview="A single Python state component with no external boundary.",
             unreviewed_scope=(),
@@ -59,17 +68,168 @@ def test_campaign_closure_passes_ten_gates_and_writes_reports(tmp_path: Path) ->
             skill_issues=(),
         ))
         assert report["status"] == "PASS"
+        assert report["audit_mode"] == "fresh"
+        assert report["scope_completeness"] == "NO_DECLARED_UNREVIEWED_SCOPE"
         assert set(report["gates"]) == {f"CG{index}" for index in range(1, 11)}
         assert all(gate["pass"] for gate in report["gates"].values())
         assert report["knowledge_published"] is False
         assert manager.store.get_campaign("CMP-r4").status is CampaignStatus.COMPLETE
         report_dir = tmp_path / ".audit_vnext" / "campaigns" / "CMP-r4" / "report"
         assert (report_dir / "report.json").exists()
-        assert (report_dir / "report.md").exists()
-        lessons = (
-            tmp_path / ".audit_vnext" / "campaigns" / "CMP-r4" / "lessons.md"
+        markdown_report = (report_dir / "report.md").read_text(encoding="utf-8")
+        assert "Audit mode: `fresh`" in markdown_report
+        assert "NO_DECLARED_UNREVIEWED_SCOPE" in markdown_report
+        follow_up_markdown = CampaignCloser._markdown({
+            **report, "history_source_campaign_ids": ["CMP-prior"],
+        })
+        assert follow_up_markdown.index("## Coverage") < follow_up_markdown.index(
+            "## Declared History Sources"
+        )
+        lessons = lessons_path.read_text(encoding="utf-8")
+        assert "Keep this note." in lessons
+        assert "clean CategoryRun remains a valid result" in lessons
+        issues = (
+            tmp_path / ".audit_vnext" / "campaigns" / "CMP-r4" / "skill-issues.md"
         ).read_text(encoding="utf-8")
-        assert "no skill issues were reported" in lessons
+        assert "no skill issues were reported" in issues
+    finally:
+        manager.close()
+
+
+def test_campaign_closure_accepts_reviewed_surface_without_hypothesis(
+    tmp_path: Path,
+) -> None:
+    manager, plan = _closable_campaign(tmp_path, surface_without_hypothesis=True)
+    try:
+        report = CampaignCloser(manager, "CMP-r4", plan).close(CampaignClosure(
+            architecture_overview="A reviewed state component with no security hypothesis.",
+            unreviewed_scope=(),
+            residual_risks=(),
+            limitations=(),
+            lessons=("surface reviewed clean across all applicable axes",),
+            knowledge_nominations=(),
+            skill_issues=(),
+        ))
+
+        assert report["gates"]["CG3"]["pass"] is True
+        assert report["gates"]["CG3"]["detail"]["surface_count"] == 1
+        assert report["gates"]["CG3"]["detail"]["surfaces_without_hypothesis"]
+    finally:
+        manager.close()
+
+
+def test_campaign_closure_requires_current_evidence_for_unreviewed_scope(
+    tmp_path: Path,
+) -> None:
+    manager, plan = _closable_campaign(tmp_path)
+    try:
+        with pytest.raises(ModelError, match="CG10"):
+            CampaignCloser(manager, "CMP-r4", plan).close(CampaignClosure(
+                architecture_overview="One reviewed component.",
+                unreviewed_scope=("trusted-input deserializer family",),
+                residual_risks=(), limitations=(), lessons=(),
+                knowledge_nominations=(), skill_issues=(),
+            ))
+
+        disposition = ScopeDisposition(
+            scope_ref="trusted-input deserializer family",
+            disposition=ScopeDispositionKind.EXCLUDED,
+            snapshot_id="fixture:r4",
+            rationale="Current owner review excludes this threat-model class.",
+            approved_by="current-reviewer",
+            evidence_refs=("LOC-state.py:1",),
+        )
+        report = CampaignCloser(manager, "CMP-r4", plan).close(CampaignClosure(
+            architecture_overview="One reviewed component.",
+            unreviewed_scope=("trusted-input deserializer family",),
+            residual_risks=("excluded family remains unreviewed",),
+            limitations=(), lessons=(), knowledge_nominations=(), skill_issues=(),
+            scope_dispositions=(disposition,),
+        ))
+
+        assert report["status"] == "PASS"
+        assert report["scope_completeness"] == "WITH_DECLARED_UNREVIEWED_SCOPE"
+        assert report["scope_dispositions"][0]["approved_by"] == "current-reviewer"
+        markdown_report = (
+            tmp_path / ".audit_vnext" / "campaigns" / "CMP-r4" / "report" / "report.md"
+        ).read_text(encoding="utf-8")
+        assert "trusted-input deserializer family" in markdown_report
+        assert "approved by `current-reviewer`" in markdown_report
+    finally:
+        manager.close()
+
+
+def test_fresh_campaign_rejects_historical_scope_evidence(tmp_path: Path) -> None:
+    manager, plan = _closable_campaign(tmp_path)
+    try:
+        historical_artifact = manager.artifacts.put_text("prior campaign decision")
+        manager.store.append_event(
+            campaign_id="CMP-r4", batch_id=None,
+            entity_type="test_history", entity_id="prior-decision",
+            event_type="HISTORICAL_DECISION_IMPORTED",
+            idempotency_key="test-historical-scope-evidence",
+            actor="test", payload={}, payload_ref=historical_artifact.artifact_id,
+        )
+        disposition = ScopeDisposition(
+            scope_ref="historical scope exclusion",
+            disposition=ScopeDispositionKind.EXCLUDED,
+            snapshot_id="fixture:r4",
+            rationale="Reused a prior decision.",
+            approved_by="reviewer",
+            evidence_refs=(historical_artifact.artifact_id,),
+            history_source_campaign_id="CMP-old",
+        )
+        with pytest.raises(ModelError, match="CG10"):
+            CampaignCloser(manager, "CMP-r4", plan).close(CampaignClosure(
+                architecture_overview="One reviewed component.",
+                unreviewed_scope=("historical scope exclusion",),
+                residual_risks=(), limitations=(), lessons=(),
+                knowledge_nominations=(), skill_issues=(),
+                scope_dispositions=(disposition,),
+            ))
+    finally:
+        manager.close()
+
+
+def test_fresh_campaign_rejects_historical_artifact_reregistered_as_current(
+    tmp_path: Path,
+) -> None:
+    manager, plan = _closable_campaign(tmp_path)
+    try:
+        manager.create_campaign(
+            campaign_id="CMP-old-source", snapshot_id="fixture:old"
+        )
+        old_artifact = manager.artifacts.put_text("prior campaign evidence")
+        manager.store.append_event(
+            campaign_id="CMP-old-source", batch_id=None,
+            entity_type="test_history", entity_id="old-evidence",
+            event_type="OLD_EVIDENCE_RECORDED",
+            idempotency_key="old-evidence-record",
+            actor="test", payload={}, payload_ref=old_artifact.artifact_id,
+        )
+        manager.store.append_event(
+            campaign_id="CMP-r4", batch_id=None,
+            entity_type="test_import", entity_id="copied-evidence",
+            event_type="HISTORICAL_EVIDENCE_COPIED",
+            idempotency_key="copied-evidence-record",
+            actor="test", payload={}, payload_ref=old_artifact.artifact_id,
+        )
+        disposition = ScopeDisposition(
+            scope_ref="copied historical evidence",
+            disposition=ScopeDispositionKind.EXCLUDED,
+            snapshot_id="fixture:r4",
+            rationale="The prior artifact was copied into the fresh run.",
+            approved_by="reviewer",
+            evidence_refs=(old_artifact.artifact_id,),
+        )
+        with pytest.raises(ModelError, match="CG10"):
+            CampaignCloser(manager, "CMP-r4", plan).close(CampaignClosure(
+                architecture_overview="One reviewed component.",
+                unreviewed_scope=("copied historical evidence",),
+                residual_risks=(), limitations=(), lessons=(),
+                knowledge_nominations=(), skill_issues=(),
+                scope_dispositions=(disposition,),
+            ))
     finally:
         manager.close()
 
@@ -96,6 +256,54 @@ def test_campaign_closure_rejects_incomplete_planned_batch(tmp_path: Path) -> No
         manager.close()
 
 
+def test_campaign_closure_uses_latest_r6_report_revision(tmp_path: Path) -> None:
+    manager, workflow = _ready_for_r5(tmp_path)
+    try:
+        plan = manager.load_audit_plan(
+            "CMP-r4", str(workflow.batch.manifest["plan_id"])
+        )
+        inventory = manager.load_inventory("CMP-r4")
+        manager.record_component_graph(
+            campaign_id="CMP-r4", graph=build_component_graph(tmp_path, inventory)
+        )
+        workflow.record_r5([], [])
+        first = workflow.close_r6(BatchClosure(
+            budget_used={"agent_runs": 1}, constraints_observed=(),
+            unreviewed_scope=(), residual_risks=(), lessons=(),
+        ))
+        stale_report = {
+            "schema_version": "1.0",
+            "campaign_id": "CMP-r4",
+            "batch_id": workflow.batch_id,
+            "findings": [{"finding_id": "FND-stale"}],
+        }
+        stale_ref = manager.artifacts.put_text(json.dumps(stale_report)).artifact_id
+        manager.store.append_event(
+            campaign_id="CMP-r4", batch_id=workflow.batch_id,
+            entity_type="batch_stage", entity_id=workflow.batch_id,
+            event_type="R6_COMPLETED", idempotency_key="test-r6-stale-revision",
+            actor="test", payload={"finding_ids": ["FND-stale"]},
+            payload_ref=stale_ref,
+        )
+        latest = workflow.close_r6(BatchClosure(
+            budget_used={"agent_runs": 2}, constraints_observed=(),
+            unreviewed_scope=(), residual_risks=(), lessons=("corrected report",),
+        ))
+        assert latest["artifact_id"] != first["artifact_id"]
+
+        report = CampaignCloser(manager, "CMP-r4", plan).close(CampaignClosure(
+            architecture_overview="One reviewed component.",
+            unreviewed_scope=(), residual_risks=(), limitations=(),
+            lessons=("use latest R6 revision",), knowledge_nominations=(),
+            skill_issues=(),
+        ))
+
+        assert report["gates"]["CG9"]["pass"] is True
+        assert report["findings"] == []
+    finally:
+        manager.close()
+
+
 def test_campaign_closure_rejects_blank_closure_statements(tmp_path: Path) -> None:
     manager, plan = _closable_campaign(tmp_path)
     try:
@@ -111,6 +319,127 @@ def test_campaign_closure_rejects_blank_closure_statements(tmp_path: Path) -> No
             ))
     finally:
         manager.close()
+
+
+def test_campaign_closure_json_requires_explicit_scope_dispositions() -> None:
+    with pytest.raises(ModelError, match="scope_dispositions"):
+        CampaignClosure.from_dict({
+            "architecture_overview": "one component",
+            "unreviewed_scope": [],
+            "residual_risks": [],
+            "limitations": [],
+            "lessons": [],
+            "knowledge_nominations": [],
+            "skill_issues": [],
+        })
+
+
+def test_markdown_report_summarizes_and_details_findings_by_severity() -> None:
+    report = {
+        "campaign_id": "CMP-report",
+        "snapshot_id": "fixture:report",
+        "status": "PASS",
+        "audit_mode": "fresh",
+        "scope_completeness": "NO_DECLARED_UNREVIEWED_SCOPE",
+        "architecture_overview": "A representative test component.",
+        "coverage": {"work_units": 2, "surfaces": 4},
+        "findings": [
+            {
+                "finding_id": "FND-low",
+                "severity": "LOW",
+                "status": "CONFIRMED",
+                "evidence_grade": "edge_proven",
+                "title": "Low severity issue",
+                "root_cause_key": "low-root",
+                "mechanism": {"family": "STATE", "variant": "low-variant"},
+                "evidence_refs": ["LOC-src/low.py:4"],
+                "affected_component_ids": ["COMP-low"],
+                "hypothesis_ids": ["HYP-low"],
+                "source_finding_ids": ["FIND-low"],
+            },
+            {
+                "finding_id": "FND-critical",
+                "severity": "CRITICAL",
+                "status": "CONFIRMED",
+                "evidence_grade": "empirically_confirmed",
+                "title": "Critical severity issue",
+                "root_cause_key": "critical-root",
+                "mechanism": {
+                    "family": "MEMORY-SAFETY",
+                    "variant": "write-overflow",
+                    "freeform": "Controlled input crosses the destination bound.",
+                },
+                "evidence_refs": ["LOC-src/critical.c:42"],
+                "affected_component_ids": ["COMP-critical"],
+                "hypothesis_ids": ["HYP-critical"],
+                "source_finding_ids": ["FIND-critical"],
+            },
+            {
+                "finding_id": "FND-high",
+                "severity": "HIGH",
+                "status": "NEEDS_REVIEW",
+                "evidence_grade": "edge_proven",
+                "title": "High severity issue",
+                "root_cause_key": "high-root",
+                "mechanism": {"family": "RESOURCE-DOS", "variant": "unbounded"},
+                "evidence_refs": ["LOC-src/high.go:8"],
+                "affected_component_ids": ["COMP-high"],
+                "hypothesis_ids": ["HYP-high"],
+                "source_finding_ids": ["FIND-high"],
+            },
+            {
+                "finding_id": "FND-medium",
+                "severity": "MEDIUM",
+                "status": "CONFIRMED",
+                "evidence_grade": "edge_proven",
+                "title": "Medium severity issue",
+                "root_cause_key": "medium-root",
+                "mechanism": {"family": "AUTH", "variant": "missing-check"},
+                "evidence_refs": ["LOC-src/medium.rs:12"],
+                "affected_component_ids": ["COMP-medium"],
+                "hypothesis_ids": ["HYP-medium"],
+                "source_finding_ids": ["FIND-medium"],
+            },
+        ],
+        "unreviewed_scope": [],
+        "scope_dispositions": [],
+        "history_source_campaign_ids": [],
+        "limitations": [],
+        "residual_risks": [],
+        "execution_measurements": {"configuration_complete": True},
+        "gates": {"CG1": {"pass": True}},
+    }
+
+    markdown = CampaignCloser._markdown(report)
+    details = markdown.split("## 3. Detailed Findings by Severity", 1)[1]
+
+    assert "## 1. Audit Summary" in markdown
+    assert "## 2. Findings Overview" in markdown
+    assert "CRITICAL 1, HIGH 1, MEDIUM 1, LOW 1" in markdown
+    assert "NEEDS_REVIEW 1" in markdown
+    assert "Controlled input crosses the destination bound." in markdown
+    assert "LOC-src/critical.c:42" in markdown
+    assert details.index("### Critical") < details.index("### High")
+    assert details.index("### High") < details.index("### Medium")
+    assert details.index("### Medium") < details.index("### Low")
+
+
+def test_markdown_report_handles_legacy_json_without_scope_metadata() -> None:
+    markdown = CampaignCloser._markdown({
+        "campaign_id": "CMP-old-report",
+        "snapshot_id": "fixture:old",
+        "status": "PASS",
+        "architecture_overview": "Legacy report fixture.",
+        "coverage": {},
+        "findings": [],
+        "unreviewed_scope": ["prior scope statement"],
+        "residual_risks": [],
+        "gates": {},
+    })
+
+    assert "NOT_RECORDED (legacy report schema)" in markdown
+    assert "LEGACY_REPORT_WITH_UNSTRUCTURED_UNREVIEWED_SCOPE" in markdown
+    assert "Structured scope dispositions were not recorded" in markdown
 
 
 def test_cancelled_handoff_requires_adjudication() -> None:
@@ -265,17 +594,20 @@ def test_campaign_skill_issue_is_loaded_by_next_campaign(tmp_path: Path) -> None
             )
         )
         assert ledger["pending_issues"][0]["issue_id"] == "SKILL-001"
-        campaign_lessons = (
-            tmp_path / ".audit_vnext" / "campaigns" / "CMP-r4" / "lessons.md"
+        campaign_issues = (
+            tmp_path / ".audit_vnext" / "campaigns" / "CMP-r4" / "skill-issues.md"
         ).read_text(encoding="utf-8")
-        assert "language alias was not enumerated" in campaign_lessons
-        lessons = (tmp_path / ".audit_vnext" / "lessons.md").read_text(
+        assert "language alias was not enumerated" in campaign_issues
+        lessons = (tmp_path / ".audit_vnext" / "skill-regression.md").read_text(
             encoding="utf-8"
         )
         assert "language alias was not enumerated" in lessons
 
         manager.create_campaign(
-            campaign_id="CMP-next", snapshot_id="fixture:next"
+            campaign_id="CMP-next",
+            snapshot_id="fixture:next",
+            audit_mode=CampaignAuditMode.FOLLOW_UP,
+            history_source_campaign_ids=("CMP-r4",),
         )
         baseline = next(
             event for event in manager.store.list_events("CMP-next")

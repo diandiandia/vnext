@@ -29,6 +29,14 @@ src/reachable_audit/
   store.py                    existing SQLite event/state store
   artifacts.py                existing content-addressed artifact store
   inventory.py                language/file ownership and source inventory
+Task specifications declare whether `agent_runs` counts coordinator runs, delegated
+sub-agent runs, or both; collection cannot silently reject honestly delegated work while
+under-reporting its cost. Workers may claim by operation, Batch, or task ID, and an
+unstarted lease may be released explicitly. Failed attempts remain visible; after the
+configured retry budget is exhausted, an operator may append a reasoned
+`TASK_RETRY_AUTHORIZED` event for one bounded additional attempt. Success and cancellation
+remain terminal. Worker IDs identify queue actors but are not authenticated human/agent
+identities without host attestation.
   graph.py                    build-unit graph plus explicit security boundaries
   planning.py                 Work Unit and Batch planning
   handoffs.py                 existing cross-Batch evidence integration
@@ -189,6 +197,13 @@ reports are immutable content-addressed artifacts. Every reference is resolved a
 digest checked before a stage event is accepted. Reports and current status are derived
 views; they are not alternate writable state stores.
 
+Accepted outputs are immutable. A correction is a new amendment event containing the
+target entity/stage, prior artifact digest, replacement artifact reference, reason,
+actor, and evidence refs. Readers derive the current value by applying valid amendments
+in event order; they never overwrite or reuse the original stage idempotency key. A
+correction that changes upstream verdicts marks dependent R3.5/R4/R5/R6 projections stale
+until recomputed.
+
 ### 3.8 Inventory Footprint and Execution Attestations
 
 Inventory records target worktree bytes by summing regular file sizes without following
@@ -205,6 +220,16 @@ completed task supplied the required host attestations. The parity digest covers
 shared host model/runtime/tool policy; the vNext-owned policy digest is recorded
 separately and is not compared with v3's engine policy. Missing values are explicit;
 they are never inferred from budgets.
+
+The execution backend accepts operation, Batch, and task-ID filters when claiming work.
+A worker may release its active lease; release records an event and returns the task to
+PENDING. Tasks have bounded automatic attempts; an exhausted failure remains FAILED until
+an operator appends a reasoned `TASK_RETRY_AUTHORIZED` event, which grants one additional
+attempt. All attempts remain in the event log; success/cancellation remain terminal.
+Task budgets currently count coordinator `agent_runs`; delegated sub-agent work must not
+be hidden in unrelated measurement keys and remains a planned schema extension. Worker
+IDs are scheduling labels, not authenticated identities unless supplied by an attesting
+execution host.
 
 ### 3.7 Snapshot Drift and Evidence Invalidation
 
@@ -271,6 +296,26 @@ Prompt size is budgeted by mechanism coverage and applicable issue rank, not by 
 the whole corpus. The task records which applicable knowledge was omitted due to budget
 so evaluation can detect language/family bias caused by truncation.
 
+### 4.1 Campaign History Isolation and Scope Decisions
+
+Campaign creation records `audit_mode` (`fresh`, `follow-up`, or migrated `legacy`) and
+explicit history-source Campaign IDs. Fresh mode rejects history sources and records an
+empty skill-regression baseline. Follow-up mode requires same-target source IDs and
+limits its regression baseline to those sources. The `skill-backlog` CLI requires a
+Campaign ID, returns no prior issues for fresh/legacy mode, and labels results as
+`tool_regression_only`.
+
+Campaign closure requires an explicit `scope_dispositions` array. Every
+`unreviewed_scope` string maps to exactly one `EXCLUDED` or `DEFERRED` record with the
+current snapshot ID, approver, rationale, and evidence. Source evidence must resolve to
+a current inventory LOC anchor; artifact evidence must be recorded by the current
+Campaign, or by an explicitly declared history source in follow-up mode. The derived
+report includes `audit_mode`, declared history sources, and `scope_completeness`.
+
+This closure-level record does not yet implement per-path exclusions in inventory and
+planning. Plans still assign all inventoried source files to Work Units; SYSR-030 remains
+partially implemented until path-level included/excluded/deferred roles are modeled.
+
 ## 5. Source and Build Adapter Contracts
 
 ### 5.1 Language Adapter
@@ -320,14 +365,20 @@ the edge's existence or security relevance could not be established.
 
 ### 5.4 Work Unit and Handoff Integration
 
-The Planner assigns each inventoried source file to exactly one Work Unit and each Work
-Unit to exactly one Batch. Stable Work Unit identity is derived from the frozen snapshot,
-component identity, shard identity, and owned paths. Any split, merge, or ownership change
-is a Plan Amendment and preserves references to completed evidence.
+The Planner retains every inventoried path and records a scope disposition: included in
+exactly one Work Unit, excluded with role/reason/approver, or deferred with owner/follow-up.
+Work Units and Batches cover included paths exactly; closure reconciles included paths
+plus explicit exclusions/deferred paths against inventory. Stable Work Unit identity is
+derived from the frozen snapshot, component identity, shard identity, and owned paths.
+Any split, merge, or ownership change is a Plan Amendment and preserves references to
+completed evidence.
 
 For every cross-Batch boundary edge, the planner creates one Handoff with a source Batch,
 an owner Batch, and the relevant edge ID. The owner records one of `EDGE_PROVEN`,
-`BLOCKED`, `NEEDS_REVIEW`, or `CANCELLED` with rationale and evidence references.
+`BLOCKED`, `NEEDS_REVIEW`, `NOT_SECURITY_BOUNDARY`, or `CANCELLED` with rationale and
+evidence references. `NOT_SECURITY_BOUNDARY` requires evidence that the edge is
+development/build-only or otherwise outside runtime trust flow; it is not an unresolved
+review.
 `EDGE_PROVEN` must include a chain suffix whose first node joins the submitted chain
 prefix; the integrator deduplicates the join node and records the combined chain as an
 artifact. A dependent finding cannot use an unresolved or cancelled edge as proof.
@@ -371,7 +422,9 @@ six redundant full-repository passes.
 
 Each axis task returns:
 
-- exact `reviewed_paths` and an explicit omitted-path explanation;
+- `reviewed_paths`, review altitude (`screened` or `inspected`), and an explicit
+  omitted-path explanation; the field cannot imply line-by-line review when only triage
+  occurred;
 - knowledge/profile references actually considered;
 - hypotheses or an evidenced zero-result disposition;
 - source anchors and relevant boundary IDs;
@@ -394,15 +447,23 @@ external container or VM.
 - **R0:** every Work Unit path must be present in the frozen baseline and match its
   current digest. Drift blocks the Batch and creates an impact record.
 - **R1:** every Surface has a declared principal, Work Unit/component owner, source file,
-  valid line anchor, and review disposition. Candidate boundaries are confirmed,
-  rejected, or unresolved with evidence; every scoped path has an explicit review state.
+  valid line anchor, and review disposition independent of whether it yields a Hypothesis.
+  Clean/no-hypothesis dispositions and deferred dispositions are explicit. Candidate boundaries are confirmed,
+  rejected, or unresolved with evidence; every included or excluded/deferred path has an
+  explicit scope disposition. Surface review disposition is recorded independently of
+  whether a Hypothesis is created.
 - **R2:** every hypothesis names a valid Work Unit, origin axis, seed evidence, applicable
-  mechanism family, and known Surface references. A zero-hypothesis result still records
-  which applicable axes and knowledge entries were examined.
+  mechanism family, and known Surface references. It does not require every Surface to be
+  copied into a Hypothesis; clean review dispositions plus evidenced axis coverage account
+  for reviewed surfaces. A zero-hypothesis result still records which applicable axes and
+  knowledge entries were examined.
 - **R3:** REACHABLE requires a non-empty, ordered call/dataflow chain with source evidence
   for every asserted edge, plus principal and preconditions. UNREACHABLE requires
   evidence of the blocking condition. Missing proof remains NEEDS_REVIEW. Empirical
-  confirmation is only assigned through R5.
+  confirmation is only assigned through R5. Verdict output models and referenced LOC or
+  content-addressed evidence are preflighted at task collection so malformed anchors can
+  be corrected before terminalization. Verdict amendments are append-only and invalidate
+  dependent stage projections until those stages are recomputed.
 - **R3.5:** required refuters are distinct task identities and do not receive one another's
   conclusions. Adjudication records the disputed claim, evidence for and against, actor,
   and final disposition. Revival reopens the hypothesis and invalidates dependent terminal
@@ -411,7 +472,11 @@ external container or VM.
   structured, evidenced NOT_APPLICABLE/DEFERRED disposition. Finding count may be zero.
 - **R5:** the experiment artifact records target reference, fidelity, prerequisites,
   exact commands or actions, observations, relevant artifacts, cleanup result, and final
-  assessment. Failed setup is not a negative security result. Strong unsupported claims
+  assessment. An experiment-required claim may be `NOT_FEASIBLE` with reason and evidence
+  when the environment cannot perform it; it may not silently change to not-required.
+  A harness run without `hypothesis_id` is standalone and is ineligible for an R5
+  empirical upgrade. Authorized out-of-band observations need reviewer attestation and
+  preserve source/run provenance. Failed setup is not a negative security result. Strong unsupported claims
   remain NEEDS_REVIEW.
 - **R6:** all stage outputs reconcile to the Batch manifest; every open dependent Handoff,
   drift event, omitted path, and residual risk is listed. R6 closes a Batch only.
@@ -430,9 +495,11 @@ Abort records a lifecycle event, moves the Campaign to BLOCKED, runs resource cl
 and writes an abort report. Cleanup failures are surfaced and preserved in that report.
 
 Every completed skill review writes `.audit_vnext/campaigns/<campaign-id>/lessons.md`
-with all reported issues or an explicit no-issues record. The separate
-`.audit_vnext/lessons.md` remains an aggregate pending-regression ledger, not the only
-record of a Campaign's lessons.
+with closure `unreviewed_scope`, residual risks, limitations, and lessons. Writes append
+an idempotent digest-marked section and preserve host-authored content. Skill defects are
+stored separately in `skill-issues.md`; the global `skill-regression.json` and its
+derived Markdown export are the canonical regression backlog. Repeated skill reviews
+append revisions; they do not overwrite closure lessons or reject a corrected review.
 
 Schema validation checks required fields and reference identities. Where a referenced
 artifact is required, the collector resolves the artifact and verifies its digest before

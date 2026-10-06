@@ -32,6 +32,7 @@ class EvidenceGrade(StrEnum):
 class HandoffOutcome(StrEnum):
     EDGE_PROVEN = "EDGE_PROVEN"
     BLOCKED = "BLOCKED"
+    NOT_SECURITY_BOUNDARY = "NOT_SECURITY_BOUNDARY"
     NEEDS_REVIEW = "NEEDS_REVIEW"
     CANCELLED = "CANCELLED"
 
@@ -113,6 +114,11 @@ class SkillIssueKind(StrEnum):
 class SkillIssueStatus(StrEnum):
     REGRESSION_PENDING = "REGRESSION_PENDING"
     RESOLVED = "RESOLVED"
+
+
+class ScopeDispositionKind(StrEnum):
+    EXCLUDED = "EXCLUDED"
+    DEFERRED = "DEFERRED"
 
 
 class FindingSeverity(StrEnum):
@@ -746,6 +752,7 @@ class CampaignClosure:
     lessons: tuple[str, ...]
     knowledge_nominations: tuple[str, ...]
     skill_issues: tuple["SkillIssue", ...]
+    scope_dispositions: tuple["ScopeDisposition", ...] = ()
 
     @classmethod
     def from_dict(cls, value: Mapping[str, Any]) -> "CampaignClosure":
@@ -756,6 +763,7 @@ class CampaignClosure:
             "lessons",
             "knowledge_nominations",
             "skill_issues",
+            "scope_dispositions",
         )
         missing = [name for name in required_lists if name not in value]
         if missing:
@@ -774,10 +782,52 @@ class CampaignClosure:
             skill_issues=tuple(
                 SkillIssue.from_dict(item) for item in value["skill_issues"]
             ),
+            scope_dispositions=tuple(
+                ScopeDisposition.from_dict(item)
+                for item in value["scope_dispositions"]
+            ),
         )
         if not closure.architecture_overview.strip():
             raise ModelError("Campaign closure requires an architecture overview")
         return closure
+
+
+@dataclass(frozen=True)
+class ScopeDisposition:
+    scope_ref: str
+    disposition: ScopeDispositionKind
+    snapshot_id: str
+    rationale: str
+    approved_by: str
+    evidence_refs: tuple[str, ...]
+    history_source_campaign_id: str | None = None
+
+    @classmethod
+    def from_dict(cls, value: Mapping[str, Any]) -> "ScopeDisposition":
+        decision = cls(
+            scope_ref=str(value["scope_ref"]),
+            disposition=ScopeDispositionKind(str(value["disposition"])),
+            snapshot_id=str(value["snapshot_id"]),
+            rationale=str(value["rationale"]),
+            approved_by=str(value["approved_by"]),
+            evidence_refs=tuple(str(item) for item in value.get("evidence_refs", [])),
+            history_source_campaign_id=(
+                str(value["history_source_campaign_id"])
+                if value.get("history_source_campaign_id") is not None
+                else None
+            ),
+        )
+        if not all((
+            decision.scope_ref.strip(),
+            decision.snapshot_id.strip(),
+            decision.rationale.strip(),
+            decision.approved_by.strip(),
+            decision.evidence_refs,
+        )):
+            raise ModelError(
+                "scope disposition requires identity, current review, rationale, and evidence"
+            )
+        return decision
 
 
 @dataclass(frozen=True)

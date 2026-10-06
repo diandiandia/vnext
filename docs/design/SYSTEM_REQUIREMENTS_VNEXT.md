@@ -46,10 +46,18 @@ claims that the current implementation already satisfies them.
 | SYSR-027 | Release evaluation shall certify every approved language and report per-language, per-family, worst-group, noise, uncertainty, budget, and sample-count results. | §8; §10 | SWDR-001, SWDR-021, SWDR-024, SWDR-026, SWDR-027 | Covered; numeric policy is TBD-before-run |
 | SYSR-028 | The release portfolio shall include mixed-language Campaign evidence that tests boundary discovery and evidence-chain integration separately from single-language certification. | §5; §8 | SWDR-010, SWDR-022, SWDR-025 | Covered; portfolio cases are TBD-before-run |
 | SYSR-029 | Registered language hotspot providers shall return source-anchored candidate locations and explicit coverage/limitations; a missing provider or empty match set shall not imply safety. | §6 | SWDR-031 | Partial; Python AST provider is implemented, other language providers and held-out quality evidence remain outstanding |
+| SYSR-030 | Inventory and planning shall distinguish included, explicitly excluded, and deferred paths; exclusions require a reason and remain visible in coverage and final reports. | §5; §9 | SWDR-032 | Partial; closure-level exclusions are recorded, but path-level plan dispositions are not implemented |
+| SYSR-031 | Every discovered Surface shall receive a review disposition independent of whether it produces a Hypothesis; zero-result review is valid evidence when scope and axis coverage are recorded. | §6 | SWDR-033 | Partial; Work Unit axes are accounted, but per-Surface dispositions are not stored |
+| SYSR-032 | Accepted stage decisions and artifacts shall be correctable only through append-only, evidence-backed amendments; derived views shall use the latest valid revision and preserve prior history. | §3.4; §6 | SWDR-034 | Partial; R6 projections are revisionable, general verdict amendments are not implemented |
+| SYSR-033 | Task workers shall be able to claim compatible operations, release/retry eligible work safely, and report delegated effort without falsifying task ownership or exceeding declared budgets. | §3.4; §6 | SWDR-035 | Partial; operation filtering/release/bounded retry exist, delegated budgets and host attestation remain open |
+| SYSR-034 | R5 shall represent required experiments that cannot be run and authorized out-of-band observations with explicit reason, provenance, fidelity, and non-confirming status unless evidence is independently verified. | §6 | SWDR-036 | Partial |
+| SYSR-035 | Handoffs shall support evidence-backed confirmation that a proposed edge is not a security boundary, distinct from unresolved review. | §5; §6 | SWDR-037 | Implemented |
+| SYSR-036 | Campaign closure lessons and skill-regression issues shall be separate, revisionable artifacts; writes shall never overwrite host-authored content without explicit replacement approval. | §3.4; §6 | SWDR-038 | Implemented |
+| SYSR-037 | Fresh Campaigns shall not import prior audit findings, scope decisions, lessons, or regression backlogs into discovery; follow-up history shall be explicitly declared and isolated from R1/R2 vulnerability seeds. | §3.6; §6 | SWDR-039 | Partial; managed CLI/state paths isolate history, but host-authored prompt context is outside runtime enforcement |
 
 ## 3. Software-Design Coverage Result
 
-All 29 system requirements have a named software-design coverage reference. This is a
+All 37 system requirements have a named software-design coverage reference. This is a
 design-level traceability result only; it does not assert implementation completeness.
 The software design freezes the language roster. Minimum per-cell sample counts are
 recorded in the signed evaluation policy; numeric promotion thresholds and representative

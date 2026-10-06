@@ -156,6 +156,11 @@ def run_harness(
         "campaign_id": campaign_id,
         "snapshot_id": campaign.snapshot_id,
         "hypothesis_id": hypothesis_id,
+        "empirical_upgrade_eligible": hypothesis_id is not None,
+        "empirical_upgrade_note": (
+            None if hypothesis_id is not None
+            else "no hypothesis_id was supplied; this run cannot support an R5 empirical upgrade"
+        ),
         "command": list(argv),
         "working_directory": working_directory.relative_to(target_root).as_posix() or ".",
         "timeout_seconds": timeout_seconds,
