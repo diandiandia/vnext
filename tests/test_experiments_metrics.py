@@ -40,10 +40,12 @@ def _ready_for_r5(
     *,
     static_hypothesis: bool = False,
     surface_without_hypothesis: bool = False,
+    screening_work_unit: bool = False,
 ):  # type: ignore[no-untyped-def]
     manager, workflow, plan = _ready_for_r4(
         tmp_path, static_hypothesis=static_hypothesis,
         surface_without_hypothesis=surface_without_hypothesis,
+        screening_work_unit=screening_work_unit,
     )
     category_plan = create_category_audit_plans(plan.work_units, [_card()], budget={})[0]
     workflow.record_category_audit_plan([category_plan])
@@ -51,10 +53,13 @@ def _ready_for_r5(
         "CR-state", category_plan.category_plan_id, category_plan.work_unit_id,
         "STATE", category_plan.mechanism_variants,
         tuple(AxisRun(
-            DiscoveryAxis(axis), Applicability.APPLICABLE, (f"EVID-{axis}",),
+            DiscoveryAxis(axis),
+            Applicability.NOT_APPLICABLE if screening_work_unit else Applicability.APPLICABLE,
+            (f"EVID-{axis}",),
             f"reviewed {axis}",
         ) for axis in category_plan.discovery_axes),
-        Applicability.APPLICABLE, CategoryRunStatus.COMPLETE,
+        Applicability.NOT_APPLICABLE if screening_work_unit else Applicability.APPLICABLE,
+        CategoryRunStatus.COMPLETE,
         ("EVID-r4",), "all planned coverage executed", (), (),
     )])
     return manager, workflow

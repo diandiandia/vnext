@@ -1,4 +1,5 @@
 from pathlib import Path
+from types import SimpleNamespace
 
 from reachable_audit.graph import build_component_graph
 from reachable_audit.inventory import build_inventory
@@ -125,6 +126,41 @@ def test_graph_resolves_npm_maven_gradle_and_swift_local_dependencies(
         unit.ecosystem == "cmake" and unit.name == "native"
         for unit in graph.build_units
     )
+
+
+def test_build_dependency_edge_ids_distinguish_same_name_declarations(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    from reachable_audit import graph
+    from reachable_audit.adapters.builds.base import (
+        ParsedBuildDependency,
+        ParsedBuildUnit,
+    )
+
+    _write(tmp_path / "app" / "Makefile", "# app build\n")
+    _write(tmp_path / "app" / "main.c", "int main(void) { return 0; }\n")
+    _write(tmp_path / "core" / "core.c", "int core(void) { return 0; }\n")
+    inventory = build_inventory(tmp_path, "fixture:duplicate-build-dependencies")
+
+    adapter = SimpleNamespace(
+        manifest_names=frozenset({"Makefile"}),
+        manifest_suffixes=frozenset(),
+        parse=lambda path: ParsedBuildUnit(
+            "test-build",
+            "app",
+            (
+                ParsedBuildDependency("core", "../core", "dependencies.log:1"),
+                ParsedBuildDependency("core", "../core/nested", "build-dependencies.log:8"),
+            ),
+        ),
+    )
+    monkeypatch.setattr(graph, "_adapter_for_manifest", lambda _: adapter)
+
+    component_graph = build_component_graph(tmp_path, inventory)
+    build_edges = [edge for edge in component_graph.edges if edge.kind == "build_dependency"]
+
+    assert len(build_edges) == 2
+    assert len({edge.edge_id for edge in build_edges}) == 2
 
 
 def test_inventory_preserves_mixed_languages_and_unsupported_dispositions(

@@ -1,7 +1,7 @@
 # Reachable Audit vNext Software Requirements
 
 Status: derived from `SOFTWARE_DESIGN_VNEXT.md` and checked against the current
-`/root/vnext` implementation and tests on 2026-10-05. This is an implementation audit,
+`/root/vnext` implementation and tests on 2026-10-06. This is an implementation audit,
 not a claim that the target design is complete.
 
 ## 1. Status Definitions
@@ -54,26 +54,29 @@ real audit capability.
 | SWDR-031 | Registered hotspot providers shall analyze only frozen Work Unit files, emit stable rule IDs and LOC-anchored candidate records, report coverage/limitations, and never promote a match to a verdict. | SYSR-001, SYSR-008, SYSR-029 | §6.0 | **Partial.** Python AST provider is injected into R1/R2 with bounded output, explicit coverage/limitations, and candidate-only instructions. Other language providers and held-out precision/coverage evidence remain outstanding. Evidence: [hotspots.py](vnext/src/reachable_audit/discovery/hotspots.py), [test_hotspots.py](vnext/tests/test_hotspots.py), [test_execution.py](vnext/tests/test_execution.py). |
 | SWDR-032 | Inventory/plans shall retain every path while recording included, excluded, or deferred disposition, file role, reason, approver, and snapshot; closure coverage shall account for exclusions. | SYSR-030 | §3.1, §5.4 | **Partial.** Closure requires evidence-backed EXCLUDED/DEFERRED decisions for unreviewed scope and reports scope completeness. Plans still require all source files to be assigned to Work Units; path-level disposition and file-role modeling remain open. Evidence: [analysis_models.py](vnext/src/reachable_audit/analysis_models.py), [campaign_closure.py](vnext/src/reachable_audit/campaign_closure.py), [test_campaign_closure.py](vnext/tests/test_campaign_closure.py). |
 | SWDR-033 | Every R1 Surface shall have a review disposition independent of Hypothesis creation; clean/no-hypothesis review and deferred review shall remain distinguishable. | SYSR-031 | §6.1 | **Partial.** CG3 accepts complete Work Unit/axis review without a Hypothesis for each Surface, but per-Surface dispositions are not stored. |
-| SWDR-034 | Accepted stage outputs and verdicts shall be revisable only via append-only amendments that reference the prior digest, replacement, rationale, actor, and evidence; downstream projections shall invalidate or recompute dependent results. | SYSR-032 | §3.4, §6.1 | **Partial.** R6 reports are append-revisionable and Campaign closure selects the latest report; general R3 verdict/task-output amendments and downstream invalidation remain unimplemented. |
+| SWDR-034 | Accepted stage outputs and verdicts shall be revisable only via append-only amendments that reference the prior digest, replacement, rationale, actor, and evidence; downstream projections shall invalidate or recompute dependent results, and collected-but-uncommitted stages shall have a supported recovery path. | SYSR-032 | §3.4, §6.1 | **Partial.** R6 reports are append-revisionable; rejected collect inputs can be corrected before terminalization, but accepted-output amendments, failed-commit recovery, and dependent projection invalidation remain incomplete. |
 | SWDR-035 | The durable task backend shall support operation-filtered claims, safe lease release/retry, delegated-work budgets, and collection-time validation without terminally burning incompatible work. | SYSR-033 | §3.8, §6.1 | **Partial.** Operation/task/batch-filtered claims and task listing, indexed task/entity event lookup, explicit release, bounded retries with exhausted-task hints, attempt-bound finalization, and known output-contract validation are implemented. Delegated-run budgets and authenticated worker identity remain outstanding. Evidence: [execution.py](vnext/src/reachable_audit/execution.py), [store.py](vnext/src/reachable_audit/store.py), [cli.py](vnext/src/reachable_audit/cli.py), [test_execution.py](vnext/tests/test_execution.py), [test_cli.py](vnext/tests/test_cli.py). |
 | SWDR-036 | R5 shall preserve experiment-required-but-not-feasible states and accept authorized external observations only with explicit provenance/attestation; these states shall not imply empirical confirmation. | SYSR-034 | §6.1 | **Partial.** Runner execution artifacts are bound to empirical upgrades, but there is no NOT_FEASIBLE disposition or external-evidence registration contract; the harness CLI forwards CPU/address-space limits. |
 | SWDR-037 | Handoff resolution shall support an evidence-backed NOT_SECURITY_BOUNDARY outcome distinct from unresolved review and from call-chain proof. | SYSR-035 | §3.5, §5.4 | **Implemented.** The outcome is modeled and validated without a call-chain suffix; evidence and rationale remain required. Evidence: [analysis_models.py](vnext/src/reachable_audit/analysis_models.py), [test_handoffs.py](vnext/tests/test_handoffs.py). |
 | SWDR-038 | Skill issues and Campaign closure lessons shall be separate artifacts; skill reviews shall be revisionable, and generated closure lessons shall append idempotently without clobbering host-authored content. | SYSR-036 | §6.3 | **Implemented.** Skill reviews append revision events, issues export to `skill-issues.md`, and closure/abort context is digest-marked in `lessons.md`. Evidence: [campaign.py](vnext/src/reachable_audit/campaign.py), [campaign_closure.py](vnext/src/reachable_audit/campaign_closure.py), [test_campaign_closure.py](vnext/tests/test_campaign_closure.py). |
 | SWDR-039 | Campaign creation shall default to fresh history isolation; follow-up history must be explicitly sourced, regression backlogs shall be QA-only, and closure reports shall identify history mode and structured unreviewed-scope decisions. | SYSR-037 | §4.1 | **Partial.** CLI/state enforce fresh defaults, explicit same-target follow-up sources, empty fresh regression baselines, Campaign-scoped QA backlog reads, and evidence-backed closure decisions. Host-authored prompts remain outside runtime enforcement. Evidence: [campaign.py](vnext/src/reachable_audit/campaign.py), [store.py](vnext/src/reachable_audit/store.py), [campaign_closure.py](vnext/src/reachable_audit/campaign_closure.py), [test_campaign_store.py](vnext/tests/test_campaign_store.py), [test_campaign_closure.py](vnext/tests/test_campaign_closure.py). |
+| SWDR-040 | Planner and closure shall report screened versus inspected/excluded/deferred coverage by risk tier and axis, enforce a predeclared screening ceiling, and prevent NOT_APPLICABLE screening from counting as substantive audit coverage. | SYSR-038 | §5.4, §6.1, §6.2 | **Partial.** Campaign init freezes an optional maximum screening fraction; reports count all-NOT_APPLICABLE Work Units and mark screening ceiling/release eligibility. The signed evaluator does not yet enforce the ceiling or attest a human override. Evidence: [cli.py](vnext/src/reachable_audit/cli.py), [campaign_closure.py](vnext/src/reachable_audit/campaign_closure.py), [test_cli.py](vnext/tests/test_cli.py), [test_campaign_closure.py](vnext/tests/test_campaign_closure.py). |
+| SWDR-041 | R1/R3 validators shall enforce typed evidence roles, non-blank snapshot-valid LOC anchors, and reuse inventory/path/line indexes across task collection without weakening call-chain scope. | SYSR-039 | §3.1, §6.1 | **Partial.** Call-chain versus supporting-evidence roles, non-blank checks, stage-local line caches, and an indexed snapshot path registry are implemented. Cross-task line-count caching and large-inventory acceptance remain outstanding. Evidence: [batch_workflow.py](vnext/src/reachable_audit/batch_workflow.py), [execution.py](vnext/src/reachable_audit/execution.py), [store.py](vnext/src/reachable_audit/store.py), [test_execution.py](vnext/tests/test_execution.py). |
+| SWDR-042 | Store and Handoff APIs shall provide indexed filtered reads, ordered task enumeration, atomic bulk resolution, and zero-target stage fast paths; a real 30k-Handoff/10k-event fixture shall gate scale claims. | SYSR-040 | §3.6, §5.4, §6.1 | **Partial.** Indexed event queries/task enumeration, atomic `resolve_many`, map-based Handoff lookup, and zero-target fast paths are implemented. The 30k-Handoff/10k-event performance acceptance fixture has not been run. Evidence: [store.py](vnext/src/reachable_audit/store.py), [handoffs.py](vnext/src/reachable_audit/handoffs.py), [execution.py](vnext/src/reachable_audit/execution.py), [test_handoffs.py](vnext/tests/test_handoffs.py). |
 
 ## 3. Audit Summary
 
-All 39 software requirements are traced to a software-design section and system-level
-requirement. Current implementation status as of 2026-10-05 is:
+All 42 software requirements are traced to a software-design section and system-level
+requirement. Current implementation status as of 2026-10-06 is:
 
 | Status | Count |
 |---|---:|
 | Implemented | 24 |
-| Partial | 11 |
+| Partial | 14 |
 | Not implemented | 0 |
 | Implemented, not release-certified | 4 |
 
-Status counts are requirement-level, not file counts. The eleven partial requirements are
+Status counts are requirement-level, not file counts. The fourteen partial requirements are
 SWDR-003 (reusable, language-variant Mechanism Cards and non-templated guidance),
 SWDR-007 (arbitrary unknown-language syntax), SWDR-023 (complete axis-specific
 discovery protocols), SWDR-028 (mechanically evidenced semantic quality review),
@@ -81,6 +84,8 @@ SWDR-031 (only the initial Python provider exists; other languages and held-out 
 evidence remain outstanding), SWDR-033 (per-Surface dispositions), SWDR-034 (general
 verdict/task amendment), SWDR-035 (delegated budgets and authenticated workers), and
 SWDR-036 (R5 infeasibility and authorized external evidence), SWDR-032 (path-level
-scope exclusions), and SWDR-039 (host-controlled prompt isolation).
+scope exclusions), SWDR-039 (host-controlled prompt isolation), SWDR-040 (screening
+ceiling evaluator enforcement), SWDR-041 (typed/cached evidence validation), and
+SWDR-042 (bulk Handoff and empty-stage scale paths).
 The four implemented but not release-certified requirements still require real held-out
 language/mixed-language evidence; real 20GB+ recovery evidence is also outstanding.

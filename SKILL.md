@@ -13,7 +13,7 @@ inventory, deterministic Work Unit planning, cross-Batch Handoffs, R0-R6 executi
 CG1-CG10 Campaign closure, durable Agent task leases, source-slice drift invalidation,
 15 source-language adapters, 14 build ecosystem adapters, the approved 15-language /
 150-issue knowledge catalog, R5 recipes and bounded toolchain probes, and derived final reports. The implementation remains an
-experimental shadow candidate until RG1-RG13 acceptance is completed on representative
+experimental shadow candidate until RG1-RG15 acceptance is completed on representative
 projects, including all 15 language certifications, a mixed-language Campaign, and a
 20GB+ Campaign. See `docs/design/ACCEPTANCE_PLAN_VNEXT.md`.
 
@@ -172,7 +172,7 @@ Campaign's ID. `cwd` must be an existing directory under the target root.
 
 ```bash
 PYTHONPATH=<vnext>/src python3 -m reachable_audit init <target> --snapshot-id <id> \
-  --audit-mode fresh
+  --audit-mode fresh --max-screening-fraction <0..1>
 PYTHONPATH=<vnext>/src python3 -m reachable_audit init <target> \
   --snapshot-id <id> --campaign-id <new-id> --audit-mode follow-up \
   --history-source <prior-campaign-id>
@@ -215,6 +215,8 @@ PYTHONPATH=<vnext>/src python3 -m reachable_audit task-list \
   <target> <campaign-id> --batch-id <batch-id> --operation <operation>
 PYTHONPATH=<vnext>/src python3 -m reachable_audit task-retry \
   <target> <campaign-id> <task-id> --reason <operator-reason>
+PYTHONPATH=<vnext>/src python3 -m reachable_audit task-amend \
+  <target> <campaign-id> <task-id> --input <amendment.json>
 PYTHONPATH=<vnext>/src python3 -m reachable_audit task-collect \
   <target> <campaign-id> <task-id> <worker-id> --input <result.json>
 PYTHONPATH=<vnext>/src python3 -m reachable_audit task-commit-r1 \
@@ -224,9 +226,10 @@ PYTHONPATH=<vnext>/src python3 -m reachable_audit task-schedule-r2 \
 After a `task-collect` validation error, the task remains leased and non-terminal;
 correct the result JSON and resubmit it with the same task/worker before the lease
 expires, or use `task-release` with a reason. Use `task-list --batch-id` to inspect a
-partial batch. If an output was already accepted and needs correction, do not edit its
-artifact in place; general task-output amendment is not yet implemented, so record the
-blocker and preserve the existing event history.
+partial batch. If a successful task output must be corrected after collection but before
+its R1/R2/R3 stage commits, use `task-amend` with a replacement output, reason, and
+content-addressed evidence refs. The prior output remains immutable. Amendments after
+stage commit are rejected until downstream stage invalidation/recomputation is available.
   <target> <campaign-id> <batch-id>
 PYTHONPATH=<vnext>/src python3 -m reachable_audit task-commit-r2 \
   <target> <campaign-id> <batch-id>

@@ -54,10 +54,13 @@ claims that the current implementation already satisfies them.
 | SYSR-035 | Handoffs shall support evidence-backed confirmation that a proposed edge is not a security boundary, distinct from unresolved review. | §5; §6 | SWDR-037 | Implemented |
 | SYSR-036 | Campaign closure lessons and skill-regression issues shall be separate, revisionable artifacts; writes shall never overwrite host-authored content without explicit replacement approval. | §3.4; §6 | SWDR-038 | Implemented |
 | SYSR-037 | Fresh Campaigns shall not import prior audit findings, scope decisions, lessons, or regression backlogs into discovery; follow-up history shall be explicitly declared and isolated from R1/R2 vulnerability seeds. | §3.6; §6 | SWDR-039 | Partial; managed CLI/state paths isolate history, but host-authored prompt context is outside runtime enforcement |
+| SYSR-038 | Campaign coverage shall distinguish screening from substantive inspection, require evidence-backed reasons for NOT_APPLICABLE dispositions, and enforce a predeclared risk-weighted screening ceiling or record a human override that blocks affected release certification. | §5; §6; §8 | SWDR-040 | Partial; coverage and ceiling are reported, but release evaluator enforcement/override attestation is absent |
+| SYSR-039 | Evidence validation shall distinguish included-scope call-chain anchors from supporting-evidence anchors, reject blank/out-of-snapshot locations, and reuse snapshot-scoped validation indexes across large task collections. | §3.3; §6 | SWDR-041 | Partial; role-aware validation and an indexed snapshot path registry exist, but cross-task line-count caching and scale certification remain open |
+| SYSR-040 | Large Campaign event and Handoff processing shall provide indexed, batchable operations, preserve per-edge evidence/idempotency, and short-circuit zero-target stages without scanning unrelated work. | §3.4; §5; §9 | SWDR-042 | Partial; indexed queries, atomic bulk resolution, and empty-stage fast paths exist, but large-scale acceptance is outstanding |
 
 ## 3. Software-Design Coverage Result
 
-All 37 system requirements have a named software-design coverage reference. This is a
+All 40 system requirements have a named software-design coverage reference. This is a
 design-level traceability result only; it does not assert implementation completeness.
 The software design freezes the language roster. Minimum per-cell sample counts are
 recorded in the signed evaluation policy; numeric promotion thresholds and representative

@@ -157,6 +157,13 @@ Scope exclusions do not delete source inventory. The Plan records excluded path(
 role, reason, approving actor, and snapshot; closure reports excluded/deferred counts and
 requires explicit acknowledgement for security-relevant or fuzzing code.
 
+R1 screening and substantive security analysis are distinct coverage states. A path or
+Work Unit classified as screening-only is not counted as inspected merely because its
+axes are marked `NOT_APPLICABLE`. Each such disposition needs scoped evidence and a
+reason. Campaign policy fixes a risk-weighted screening ceiling before discovery;
+exceeding it requires an explicit human override and remains visible as a limitation.
+An override cannot satisfy held-out substantive-coverage or release-certification gates.
+
 One Campaign can complete mixed-language analysis when all required component and
 boundary work is closed. This is distinct from certifying the system for all 15 languages,
 which is measured over a portfolio of separate language-specific samples.
@@ -192,6 +199,10 @@ Discovery axes are complementary prompts, not six mandatory full-repository pass
 The Planner selects axes by scope and risk; every omitted axis requires an applicability
 reason. The axes are surface, mechanism, state/lifecycle, fix variant, boundary, and
 differential behavior.
+
+Coverage summaries distinguish screened, inspected, excluded, and deferred paths and
+Work Units by risk tier and axis. `NOT_APPLICABLE` is a scoped decision, not a safety
+result; screening-only scope never contributes to substantive inspection recall.
 
 Registered language hotspot providers may add source-anchored candidate locations to
 R1/R2 task context. A hotspot is a review lead, never a vulnerability verdict. Each
@@ -312,6 +323,11 @@ R5 recipes/probes, and signed RG1-RG11 evaluation logic. These are implementatio
 capabilities, not evidence that language recall, automatic cross-language discovery,
 or 20GB+ operation has passed real acceptance.
 
+RG12-RG15 are specified promotion gates, not implemented evaluator checks: hotspot
+provider conformance, clean-room provenance, screening-ceiling enforcement, and the
+30k-Handoff/10k-event scale fixture must not be reported as certified until the signed
+evaluator validates their evidence.
+
 Remaining implementation gaps include recognition of arbitrary unknown-language
 syntax, compiler-wide call-graph resolution, broader automatic FFI/RPC/IPC and
 serialization edge discovery, source-anchored security hotspot providers beyond the
@@ -321,3 +337,8 @@ campaigns, and a 20GB+ recovery campaign remain acceptance evidence to be collec
 
 The detailed module boundaries and schemas are specified in
 `SOFTWARE_DESIGN_VNEXT.md`.
+
+The lifecycle-process mapping to ISO/IEC/IEEE 12207 is maintained separately as an
+engineering self-assessment, not a conformity or certification claim; see
+`LIFECYCLE_CONFORMANCE_VNEXT.md`. Google internal requirements are not available to
+this project unless supplied as controlled evaluation criteria.

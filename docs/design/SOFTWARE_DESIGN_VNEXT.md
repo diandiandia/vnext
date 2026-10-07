@@ -197,12 +197,25 @@ reports are immutable content-addressed artifacts. Every reference is resolved a
 digest checked before a stage event is accepted. Reports and current status are derived
 views; they are not alternate writable state stores.
 
+Hot event queries use composite indexes keyed by Campaign, Batch, entity, and event
+type. APIs provide filtered reads, submission-ordered task-ID enumeration, and atomic
+batch event append while preserving per-entity idempotency. Empty expected task sets
+complete without polling unrelated Campaign tasks. Bulk Handoff resolution preserves an
+individual edge/disposition/evidence record for reconciliation but commits a validated
+batch in one transaction; homogeneous structural dispositions may share a provenance
+artifact only when each edge maps to an explicit entry in that artifact.
+
 Accepted outputs are immutable. A correction is a new amendment event containing the
 target entity/stage, prior artifact digest, replacement artifact reference, reason,
 actor, and evidence refs. Readers derive the current value by applying valid amendments
 in event order; they never overwrite or reuse the original stage idempotency key. A
 correction that changes upstream verdicts marks dependent R3.5/R4/R5/R6 projections stale
 until recomputed.
+
+If stage commit fails after tasks have successfully collected, the Batch remains
+recoverable: an operator can inspect the failed commit, amend a collected output through
+the same append-only contract, or resume commit without direct stage imports. A committed
+output is never reset or edited in place.
 
 ### 3.8 Inventory Footprint and Execution Attestations
 
@@ -220,6 +233,12 @@ completed task supplied the required host attestations. The parity digest covers
 shared host model/runtime/tool policy; the vNext-owned policy digest is recorded
 separately and is not compared with v3's engine policy. Missing values are explicit;
 they are never inferred from budgets.
+
+Campaign budget may freeze `max_screening_fraction` in the range [0, 1] at init. Closure
+reports screened Work Unit IDs, count, fraction, ceiling status, and release eligibility.
+No screening-only Work Units is eligible without a ceiling; any nonzero screening share
+without a frozen ceiling is not release-eligible. The held-out evaluator must independently
+enforce this policy.
 
 The execution backend accepts operation, Batch, and task-ID filters when claiming work.
 A worker may release its active lease; release records an event and returns the task to
@@ -373,6 +392,11 @@ derived from the frozen snapshot, component identity, shard identity, and owned 
 Any split, merge, or ownership change is a Plan Amendment and preserves references to
 completed evidence.
 
+Stable build-dependency edge IDs include the source manifest/build-unit identity, target,
+dependency class, local target/path, and evidence identity. The graph builder rejects
+duplicate IDs with collision details before persistence; downstream plans never repair
+collisions by renaming edges.
+
 For every cross-Batch boundary edge, the planner creates one Handoff with a source Batch,
 an owner Batch, and the relevant edge ID. The owner records one of `EDGE_PROVEN`,
 `BLOCKED`, `NEEDS_REVIEW`, `NOT_SECURITY_BOUNDARY`, or `CANCELLED` with rationale and
@@ -430,6 +454,13 @@ Each axis task returns:
 - source anchors and relevant boundary IDs;
 - time/Agent/tool measurements.
 
+Coverage reports aggregate `screened`, `inspected`, `excluded`, and `deferred` scope by
+path, Work Unit, risk tier, and discovery axis. `NOT_APPLICABLE` screening remains
+visible but does not count toward substantive inspection. Campaign policy fixes the
+allowed screening ceiling before R1; exceeding it blocks closure unless a human records
+a reasoned override, and an override blocks release capability certification for the
+affected strata.
+
 R3, R3.5, and R5 retain the current strict evidence models. R5 adds a versioned harness
 catalog entry containing supported languages, prerequisites, isolation requirements,
 setup/cleanup, input classes, expected observations, and fidelity. Harness execution is
@@ -460,9 +491,11 @@ external container or VM.
 - **R3:** REACHABLE requires a non-empty, ordered call/dataflow chain with source evidence
   for every asserted edge, plus principal and preconditions. UNREACHABLE requires
   evidence of the blocking condition. Missing proof remains NEEDS_REVIEW. Empirical
-  confirmation is only assigned through R5. Verdict output models and referenced LOC or
-  content-addressed evidence are preflighted at task collection so malformed anchors can
-  be corrected before terminalization. Verdict amendments are append-only and invalidate
+  confirmation is only assigned through R5. Call-chain anchors must be in included
+  source/build scope; supporting-evidence anchors may reference any frozen in-repository
+  file. Both must point to non-blank lines. Validators share a snapshot-scoped path/line
+  index, and task collection preflights all anchors before terminalization so malformed
+  output can be corrected while leased. Verdict amendments are append-only and invalidate
   dependent stage projections until those stages are recomputed.
 - **R3.5:** required refuters are distinct task identities and do not receive one another's
   conclusions. Adjudication records the disputed claim, evidence for and against, actor,
@@ -480,6 +513,11 @@ external container or VM.
   remain NEEDS_REVIEW.
 - **R6:** all stage outputs reconcile to the Batch manifest; every open dependent Handoff,
   drift event, omitted path, and residual risk is listed. R6 closes a Batch only.
+
+R3.5 schedulers derive refutation/adjudication targets from the committed R3 artifact.
+When there are no eligible targets, schedule/commit records explicit empty-stage results
+without enumerating unrelated Campaign tasks or reloading unrelated plan state. The same
+short-circuit applies to zero-target revival stages.
 
 ### 6.3 Campaign Abort, Cleanup, and Lessons
 

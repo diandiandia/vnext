@@ -210,6 +210,21 @@ def test_fresh_campaign_does_not_import_prior_skill_regression_history(
         assert baseline_value["issues"] == []
 
 
+@pytest.mark.parametrize("invalid", (-0.1, 1.1, True, "0.5"))
+def test_campaign_rejects_invalid_screening_ceiling(
+    tmp_path: Path, invalid: object,
+) -> None:
+    target = tmp_path / "target"
+    target.mkdir()
+    with CampaignManager(target) as manager:
+        with pytest.raises(ValueError, match="max_screening_fraction"):
+            manager.create_campaign(
+                campaign_id="CMP-bad-screening-limit",
+                snapshot_id="fixture:bad-screening-limit",
+                budget={"max_screening_fraction": invalid},
+            )
+
+
 def test_follow_up_requires_and_limits_history_sources(tmp_path: Path) -> None:
     first_target = tmp_path / "first"
     first_target.mkdir()

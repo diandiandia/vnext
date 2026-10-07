@@ -21,44 +21,69 @@ class HandoffResolver:
         self.manager = manager
         self.campaign_id = campaign_id
         self.plan = plan
+        self._handoffs_by_id = {item.handoff_id: item for item in plan.handoffs}
 
     def resolve(self, resolution: HandoffResolution) -> str:
-        handoff = self._handoff(resolution.handoff_id)
-        if resolution.owner_batch_id != handoff.owner_batch:
-            raise ModelError(
-                f"Handoff resolution submitted by non-owner Batch: {resolution.handoff_id}"
+        return self.resolve_many((resolution,))[0]
+
+    def resolve_many(
+        self, resolutions: Sequence[HandoffResolution]
+    ) -> tuple[str, ...]:
+        if not resolutions:
+            return ()
+        handoffs = [self._handoff(item.handoff_id) for item in resolutions]
+        handoff_ids = [item.handoff_id for item in handoffs]
+        if len(handoff_ids) != len(set(handoff_ids)):
+            raise ModelError("Handoff batch contains duplicate handoff IDs")
+        for handoff, resolution in zip(handoffs, resolutions):
+            if resolution.owner_batch_id != handoff.owner_batch:
+                raise ModelError(
+                    f"Handoff resolution submitted by non-owner Batch: {resolution.handoff_id}"
+                )
+
+        completed_owner_batches = {
+            batch_id
+            for batch_id in {handoff.owner_batch for handoff in handoffs}
+            if self.manager.store.list_batch_events(
+                self.campaign_id, batch_id, event_type="R3_COMPLETED"
             )
-        owner_r3 = next((
-            event
-            for event in self.manager.store.list_events(self.campaign_id)
-            if event.batch_id == handoff.owner_batch and event.event_type == "R3_COMPLETED"
-        ), None)
-        if owner_r3 is None:
-            raise ModelError(
-                f"Handoff owner has not completed R3: {handoff.owner_batch}"
-            )
-        artifact_id = self._put_json({
-            "schema_version": "1.0",
-            **asdict(resolution),
-            "edge_id": handoff.edge_id,
-            "from_batch": handoff.from_batch,
-        })
-        self.manager.store.append_event(
-            campaign_id=self.campaign_id,
-            batch_id=handoff.owner_batch,
-            entity_type="handoff",
-            entity_id=handoff.handoff_id,
-            event_type="HANDOFF_RESOLVED",
-            idempotency_key=f"handoff-resolve:{self.campaign_id}:{handoff.handoff_id}",
-            actor="agent",
-            payload={
-                "outcome": resolution.outcome.value,
-                "from_batch": handoff.from_batch,
-                "owner_batch": handoff.owner_batch,
-            },
-            payload_ref=artifact_id,
+        }
+        missing_owners = sorted(
+            {handoff.owner_batch for handoff in handoffs} - completed_owner_batches
         )
-        return artifact_id
+        if missing_owners:
+            raise ModelError(
+                f"Handoff owner has not completed R3: {missing_owners}"
+            )
+
+        artifact_ids = []
+        events = []
+        for handoff, resolution in zip(handoffs, resolutions):
+            artifact_id = self._put_json({
+                "schema_version": "1.0",
+                **asdict(resolution),
+                "edge_id": handoff.edge_id,
+                "from_batch": handoff.from_batch,
+            })
+            artifact_ids.append(artifact_id)
+            events.append({
+                "batch_id": handoff.owner_batch,
+                "entity_type": "handoff",
+                "entity_id": handoff.handoff_id,
+                "event_type": "HANDOFF_RESOLVED",
+                "idempotency_key": (
+                    f"handoff-resolve:{self.campaign_id}:{handoff.handoff_id}"
+                ),
+                "actor": "agent",
+                "payload": {
+                    "outcome": resolution.outcome.value,
+                    "from_batch": handoff.from_batch,
+                    "owner_batch": handoff.owner_batch,
+                },
+                "payload_ref": artifact_id,
+            })
+        self.manager.store.append_events_batch(self.campaign_id, events)
+        return tuple(artifact_ids)
 
     def integrate(
         self,
@@ -70,13 +95,13 @@ class HandoffResolver:
         handoff = self._handoff(handoff_id)
         if not known_chain_prefix or not evidence_refs:
             raise ModelError("Handoff integration requires chain prefix and evidence refs")
-        resolution_event = next((
-            event
-            for event in reversed(self.manager.store.list_events(self.campaign_id))
-            if event.entity_type == "handoff"
-            and event.entity_id == handoff_id
-            and event.event_type == "HANDOFF_RESOLVED"
-        ), None)
+        resolution_events = self.manager.store.list_events(
+            self.campaign_id,
+            entity_type="handoff",
+            entity_id=handoff_id,
+            event_type="HANDOFF_RESOLVED",
+        )
+        resolution_event = resolution_events[-1] if resolution_events else None
         if resolution_event is None or resolution_event.payload_ref is None:
             raise ModelError(f"Handoff is not resolved: {handoff_id}")
         resolution = json.loads(
@@ -120,10 +145,7 @@ class HandoffResolver:
         return {**value, "artifact_id": artifact_id}
 
     def _handoff(self, handoff_id: str) -> Handoff:
-        handoff = next(
-            (item for item in self.plan.handoffs if item.handoff_id == handoff_id),
-            None,
-        )
+        handoff = self._handoffs_by_id.get(handoff_id)
         if handoff is None:
             raise ModelError(f"Handoff is not part of plan: {handoff_id}")
         return handoff

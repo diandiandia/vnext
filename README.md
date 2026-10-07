@@ -1,7 +1,8 @@
 # Reachable Audit vNext
 
-This directory contains the clean-room vNext implementation. It is isolated from the
-v3 runtime and implements the planned Campaign workflow:
+This directory contains the separate vNext runtime implementation. It does not import
+the v3 runtime and implements the planned Campaign workflow; that code boundary does not
+by itself prove that every knowledge item or external prompt is historically independent:
 
 - canonical Campaign and Batch state models;
 - SQLite-backed append-only events;
@@ -31,7 +32,9 @@ The orchestration core records and validates Agent-produced discovery evidence; 
 not independently discover vulnerabilities. vNext remains experimental until real
 representative-project and 20GB+ evidence passes the release gates. See
 `docs/design/SYSTEM_DESIGN_VNEXT.md`, `docs/design/SOFTWARE_DESIGN_VNEXT.md`, and
-`docs/design/ACCEPTANCE_PLAN_VNEXT.md`.
+`docs/design/ACCEPTANCE_PLAN_VNEXT.md`. The ISO/IEC/IEEE 12207 process mapping is a
+self-assessment, not a conformity claim; see
+`docs/design/LIFECYCLE_CONFORMANCE_VNEXT.md`.
 
 ## Development
 
@@ -44,9 +47,16 @@ PYTHONPATH=src python3 -m reachable_audit --help
 
 ```bash
 PYTHONPATH=src python3 -m reachable_audit init /path/to/target \
-  --snapshot-id git:<commit>
+  --snapshot-id git:<commit> --audit-mode fresh \
+  --max-screening-fraction <predeclared-fraction>
 
 PYTHONPATH=src python3 -m reachable_audit status /path/to/target
+
+PYTHONPATH=src python3 -m reachable_audit task-list /path/to/target <campaign-id> \
+  --batch-id <batch-id>
+
+PYTHONPATH=src python3 -m reachable_audit task-amend /path/to/target \
+  <campaign-id> <task-id> --input /path/to/amendment.json
 
 PYTHONPATH=src python3 -m reachable_audit inventory /path/to/target <campaign-id>
 
@@ -55,11 +65,11 @@ PYTHONPATH=src python3 -m reachable_audit graph /path/to/target <campaign-id>
 PYTHONPATH=src python3 -m reachable_audit plan /path/to/target <campaign-id> \
   --categories MEMORY-SAFETY,STATE,RESOURCE-DOS
 
-PYTHONPATH=vnext/src python3 -m reachable_audit amend /path/to/target \
+PYTHONPATH=src python3 -m reachable_audit amend /path/to/target \
   <campaign-id> <plan-id> --reason "pilot exceeded budget" \
   --max-batch-files 500 --max-batch-work-units 2
 
-PYTHONPATH=vnext/src python3 -m reachable_audit shadow-evaluate \
+PYTHONPATH=src python3 -m reachable_audit shadow-evaluate \
   --input /path/to/paired-runs.json --output /path/to/acceptance-report.json
 ```
 

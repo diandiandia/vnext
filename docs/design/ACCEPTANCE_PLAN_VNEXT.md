@@ -36,6 +36,10 @@ policy, not engine-specific policy. Repository bytes use the inventory-defined
 worktree-footprint policy; scope identity uses the frozen inventory/plan digest. Paired
 v3/vNext runs must use equal scope and host execution-configuration digests.
 
+Each run records its init-frozen `max_screening_fraction` policy and screening/substantive
+Work Unit counts. The signer verifies the policy was set before R1; `shadow-evaluate`
+rejects runs with a missing/exceeded ceiling or a human override in any held-out stratum.
+
 Every clean-room capability run must record `audit_mode: fresh` and an empty
 `history_source_campaign_ids` list. The trusted signer must verify that prior target
 Campaign reports, findings, scope decisions, lessons, and skill-regression backlog were
@@ -96,6 +100,8 @@ returns `ACCEPTED` and a reviewer verifies the manifest against source Campaign 
 | RG11 | All 150 language/issue cells meet the frozen sample floor and at least one real held-out mixed-language Campaign has fully reconciled boundary cases. |
 | RG12 | Every enabled hotspot provider passes positive, negative, alias, and malformed-source conformance fixtures; held-out evaluation reports candidate coverage/precision separately from Agent finding recall. Missing providers and unsupported paths are explicit, never counted as clean coverage. |
 | RG13 | Clean-room capability runs use fresh Campaigns with no declared history sources; signed provenance confirms prior target audit artifacts and regression backlogs are absent from R1/R2 inputs. Follow-up runs cannot satisfy held-out recall gates. |
+| RG14 | The Campaign freezes a screening ceiling before discovery; screened-only Work Units are reported separately and do not count as substantive language/issue recall coverage. Any human override is signed, disclosed, and blocks release certification for affected strata. |
+| RG15 | A 30k-Handoff/10k-event fixture and a real large-Campaign run verify indexed/bulk resolution, per-edge reconciliation, atomic failure behavior, stable oldest-first task ordering, and bounded zero-target-stage cost. |
 
 Synthetic fixtures may test evaluator mechanics only. They cannot satisfy any real
 held-out, language certification, mixed-language, representative-project, or 20GB+
@@ -103,10 +109,10 @@ release gate.
 
 ## 4. Decision
 
-Promotion is authorized only when `shadow-evaluate` reports `ACCEPTED`, all RG1-RG13
+Promotion is authorized only when `shadow-evaluate` reports `ACCEPTED`, all RG1-RG15
 pass, and a reviewer confirms the signed evidence bundle against the actual Campaign
 artifacts. RG12 is a planned gate and is not implemented in the current evaluator;
-RG13 is also not implemented in the current evaluator. Promotion therefore remains
-blocked until hotspot-provider conformance, clean-room provenance verification, and
-coverage evidence are implemented. Until then, vNext remains an experimental shadow
-candidate and v3 remains the production audit skill.
+RG13-RG15 are not implemented in the current evaluator. Promotion therefore remains
+blocked until hotspot-provider conformance, clean-room provenance verification,
+screening-ceiling enforcement, and coverage evidence are implemented. Until then, vNext
+remains an experimental shadow candidate and v3 remains the production audit skill.

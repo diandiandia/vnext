@@ -247,6 +247,86 @@ def test_r3_allows_noninventory_schema_as_evidence_not_call_chain(
         manager.close()
 
 
+def test_evidence_only_anchor_rejects_audit_and_vcs_state(tmp_path: Path) -> None:
+    (tmp_path / "schema.yaml").write_text("field: value\n", encoding="utf-8")
+    (tmp_path / ".audit_vnext").mkdir()
+    (tmp_path / ".audit_vnext" / "report.md").write_text(
+        "prior audit report\n", encoding="utf-8"
+    )
+    (tmp_path / ".git").mkdir()
+    (tmp_path / ".git" / "config").write_text("repository metadata\n", encoding="utf-8")
+    manager, workflow, _ = _workflow(tmp_path, "CMP-evidence-state")
+    try:
+        inventoried = {source.path for source in manager.load_inventory(
+            workflow.campaign_id
+        ).source_files}
+        workflow._validate_source_location(
+            "LOC-schema.yaml:1", inventoried, allow_evidence_only=True
+        )
+        with pytest.raises(ModelError, match="source anchor is not in the Campaign inventory"):
+            workflow._validate_source_location(
+                "LOC-.audit_vnext/report.md:1",
+                inventoried,
+                allow_evidence_only=True,
+            )
+        with pytest.raises(ModelError, match="source anchor is not in the Campaign inventory"):
+            workflow._validate_source_location(
+                "LOC-.git/config:1", inventoried, allow_evidence_only=True
+            )
+    finally:
+        manager.close()
+
+
+def test_r1_rejects_surface_anchor_on_blank_line(tmp_path: Path) -> None:
+    manager, workflow, plan = _workflow(
+        tmp_path, "CMP-blank-surface", source="def handle(value):\n\n    return value\n"
+    )
+    work_unit = plan.work_units[0]
+    try:
+        workflow.run_r0()
+        with pytest.raises(ModelError, match="blank line"):
+            workflow.record_r1([Surface(
+                "SURF-blank", work_unit.work_unit_id, work_unit.component_id,
+                "function_entry", "app.py", "handle", "remote", ("LOC-app.py:2",),
+            )])
+    finally:
+        manager.close()
+
+
+def test_r3_rejects_call_chain_anchor_on_blank_line(tmp_path: Path) -> None:
+    manager, workflow, plan = _workflow(
+        tmp_path, "CMP-blank-chain", source="def handle(value):\n\n    return value\n"
+    )
+    work_unit = plan.work_units[0]
+    try:
+        workflow.run_r0()
+        workflow.record_r1([Surface(
+            "SURF-blank-chain", work_unit.work_unit_id, work_unit.component_id,
+            "function_entry", "app.py", "handle", "remote", ("LOC-app.py:1",),
+        )])
+        axis_evidence = {
+            "surface": ("LOC-app.py:1",), "mechanism": ("LOC-app.py:3",),
+            "state": ("EVID-state",), "fix_variant": ("EVID-fix",),
+            "boundary": ("EVID-boundary",), "differential": ("EVID-diff",),
+        }
+        workflow.record_r2([Hypothesis(
+            "HYP-blank-chain", work_unit.work_unit_id, "surface",
+            ("SURF-blank-chain",), ("SURF-blank-chain",),
+            Mechanism("INJECTION", "blank-anchor"), "blank anchor is not proof",
+            HypothesisStatus.NEW,
+        )], axis_evidence=axis_evidence,
+            axis_runs=axis_runs_from_evidence(axis_evidence))
+        edge_ref = manager.artifacts.put_text("edge proof").artifact_id
+        with pytest.raises(ModelError, match="blank line"):
+            workflow.record_r3([VerdictSubmission(
+                "HYP-blank-chain", VerdictKind.REACHABLE, EvidenceGrade.EDGE_PROVEN,
+                "remote", (), ("LOC-app.py:1", "LOC-app.py:2"),
+                (edge_ref,), (), (), "blank line cannot anchor a call-chain step",
+            )])
+    finally:
+        manager.close()
+
+
 def test_clean_slice_is_valid_when_all_discovery_axes_have_dispositions(
     tmp_path: Path,
 ) -> None:

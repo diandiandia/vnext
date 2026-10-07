@@ -380,6 +380,17 @@ class CampaignManager:
             raise ValueError(
                 f"inventory snapshot does not match Campaign: {inventory.snapshot_id} != {campaign.snapshot_id}"
             )
+        self.store.record_evidence_paths(
+            campaign_id,
+            tuple(
+                (source.path, "source", source.component_id)
+                for source in inventory.source_files
+            ) + tuple(
+                (manifest, "build_manifest", component.component_id)
+                for component in inventory.components
+                for manifest in component.build_manifests
+            ),
+        )
         value = asdict(inventory)
         encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
         artifact = self.artifacts.put_text(encoded)

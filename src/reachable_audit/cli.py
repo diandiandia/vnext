@@ -77,6 +77,10 @@ def _parser() -> argparse.ArgumentParser:
         "--history-source", action="append", default=[], metavar="CAMPAIGN_ID",
         help="prior Campaign used only for follow-up QA/regression context",
     )
+    init.add_argument(
+        "--max-screening-fraction", type=float,
+        help="predeclare the maximum fraction of Work Units allowed as screening-only (0..1)",
+    )
 
     status = subparsers.add_parser("status", help="show Campaign and Batch state")
     status.add_argument("target")
@@ -371,6 +375,7 @@ def _parser() -> argparse.ArgumentParser:
     task_list.add_argument("campaign_id")
     task_list.add_argument("--batch-id")
     task_list.add_argument("--operation")
+    task_list.add_argument("--operation-prefix")
     task_list.add_argument("--state-dir", default=".audit_vnext")
 
     task_claim = subparsers.add_parser("task-claim", help="lease the next execution task")
@@ -390,6 +395,15 @@ def _parser() -> argparse.ArgumentParser:
     task_collect.add_argument("worker_id")
     task_collect.add_argument("--input", required=True)
     task_collect.add_argument("--state-dir", default=".audit_vnext")
+
+    task_amend = subparsers.add_parser(
+        "task-amend", help="append an evidence-backed correction to a collected stage output"
+    )
+    task_amend.add_argument("target")
+    task_amend.add_argument("campaign_id")
+    task_amend.add_argument("task_id")
+    task_amend.add_argument("--input", required=True)
+    task_amend.add_argument("--state-dir", default=".audit_vnext")
 
     task_cancel = subparsers.add_parser("task-cancel", help="cancel a pending task")
     task_cancel.add_argument("target")
@@ -435,10 +449,20 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if arguments.command == "init":
             snapshot_id = arguments.snapshot_id or detect_clean_git_snapshot(arguments.target)
+            if arguments.max_screening_fraction is not None and not (
+                0 <= arguments.max_screening_fraction <= 1
+            ):
+                raise ValueError("max-screening-fraction must be between 0 and 1")
+            budget = (
+                {"max_screening_fraction": arguments.max_screening_fraction}
+                if arguments.max_screening_fraction is not None
+                else None
+            )
             with CampaignManager(arguments.target, arguments.state_dir) as manager:
                 campaign = manager.create_campaign(
                     snapshot_id=snapshot_id,
                     campaign_id=arguments.campaign_id,
+                    budget=budget,
                     audit_mode=CampaignAuditMode(arguments.audit_mode),
                     history_source_campaign_ids=tuple(arguments.history_source),
                 )
@@ -694,8 +718,17 @@ def main(argv: list[str] | None = None) -> int:
                 plan = manager.load_audit_plan(arguments.campaign_id, arguments.plan_id)
                 resolver = HandoffResolver(manager, arguments.campaign_id, plan)
                 if arguments.command == "handoff-resolve":
-                    artifact_id = resolver.resolve(HandoffResolution.from_dict(value))
-                    _print({"artifact_id": artifact_id})
+                    if "resolutions" in value:
+                        if not isinstance(value["resolutions"], list):
+                            raise ValueError("Handoff resolutions must be an array")
+                        artifact_ids = resolver.resolve_many(tuple(
+                            HandoffResolution.from_dict(item)
+                            for item in value["resolutions"]
+                        ))
+                        _print({"artifact_ids": artifact_ids})
+                    else:
+                        artifact_id = resolver.resolve(HandoffResolution.from_dict(value))
+                        _print({"artifact_id": artifact_id})
                 else:
                     _print(resolver.integrate(
                         arguments.handoff_id,
@@ -869,6 +902,7 @@ def main(argv: list[str] | None = None) -> int:
                     for view in backend.list_tasks(
                         operation=arguments.operation,
                         batch_id=arguments.batch_id,
+                        operation_prefix=arguments.operation_prefix,
                     ):
                         task = asdict(view)
                         if view.status.value == "FAILED":
@@ -925,6 +959,26 @@ def main(argv: list[str] | None = None) -> int:
                             for key, item in value.get("configuration", {}).items()
                         },
                     ))))
+                elif arguments.command == "task-amend":
+                    value = json.loads(
+                        Path(arguments.input).read_text(encoding="utf-8")
+                    )
+                    if not isinstance(value, dict) or not isinstance(value.get("output"), dict):
+                        raise ValueError("task amendment input requires an output object")
+                    output_ref = manager.artifacts.put_text(json.dumps(
+                        value["output"],
+                        ensure_ascii=False,
+                        sort_keys=True,
+                        separators=(",", ":"),
+                    )).artifact_id
+                    view = backend.amend_completed_output(
+                        arguments.task_id,
+                        output_ref,
+                        reason=str(value.get("reason", "")),
+                        evidence_refs=tuple(str(item) for item in value.get("evidence_refs", [])),
+                        actor=str(value.get("actor", "operator")),
+                    )
+                    _print(asdict(view))
                 elif arguments.command == "task-release":
                     lease = backend.current_lease(
                         arguments.task_id, arguments.worker_id

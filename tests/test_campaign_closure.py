@@ -31,9 +31,12 @@ from test_experiments_metrics import _ready_for_r5
 
 def _closable_campaign(
     tmp_path: Path, *, surface_without_hypothesis: bool = False,
+    screening_work_unit: bool = False,
 ):  # type: ignore[no-untyped-def]
     manager, workflow = _ready_for_r5(
-        tmp_path, surface_without_hypothesis=surface_without_hypothesis
+        tmp_path,
+        surface_without_hypothesis=surface_without_hypothesis,
+        screening_work_unit=screening_work_unit,
     )
     inventory = manager.load_inventory("CMP-r4")
     manager.record_component_graph(
@@ -92,6 +95,28 @@ def test_campaign_closure_passes_ten_gates_and_writes_reports(tmp_path: Path) ->
             tmp_path / ".audit_vnext" / "campaigns" / "CMP-r4" / "skill-issues.md"
         ).read_text(encoding="utf-8")
         assert "no skill issues were reported" in issues
+    finally:
+        manager.close()
+
+
+def test_campaign_report_marks_screening_scope_not_release_eligible(
+    tmp_path: Path,
+) -> None:
+    manager, plan = _closable_campaign(tmp_path, screening_work_unit=True)
+    try:
+        report = CampaignCloser(manager, "CMP-r4", plan).close(CampaignClosure(
+            architecture_overview="A screening-only component.",
+            unreviewed_scope=(), residual_risks=(), limitations=(), lessons=(),
+            knowledge_nominations=(), skill_issues=(),
+        ))
+
+        assert report["status"] == "PASS"
+        assert report["coverage"]["screened_work_units"] == 1
+        assert report["coverage"]["substantive_work_units"] == 0
+        assert report["screening_coverage"]["screened_fraction"] == 1.0
+        assert report["screening_coverage"]["ceiling_status"] == "NOT_CONFIGURED"
+        assert report["screening_coverage"]["release_eligible"] is False
+        assert report["scope_completeness"] == "WITH_SCREENING_ONLY_WORK_UNITS"
     finally:
         manager.close()
 

@@ -7,7 +7,7 @@ import datetime as dt
 import json
 from pathlib import Path
 import sqlite3
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 import uuid
 
 from .models import (
@@ -87,6 +87,20 @@ class AuditStore(AbstractContextManager["AuditStore"]):
                 PRIMARY KEY (campaign_id, batch_id)
             );
 
+            CREATE TABLE IF NOT EXISTS campaign_evidence_paths (
+                campaign_id TEXT NOT NULL REFERENCES campaigns(campaign_id),
+                path TEXT NOT NULL,
+                role TEXT NOT NULL,
+                component_id TEXT NOT NULL,
+                PRIMARY KEY (campaign_id, path, role)
+            );
+
+            CREATE TABLE IF NOT EXISTS campaign_evidence_path_indexes (
+                campaign_id TEXT PRIMARY KEY REFERENCES campaigns(campaign_id),
+                snapshot_id TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+
             CREATE TABLE IF NOT EXISTS events (
                 sequence INTEGER PRIMARY KEY AUTOINCREMENT,
                 event_id TEXT NOT NULL UNIQUE,
@@ -118,6 +132,8 @@ class AuditStore(AbstractContextManager["AuditStore"]):
                 ON events(campaign_id, batch_id, event_type, entity_id, sequence);
             CREATE INDEX IF NOT EXISTS idx_events_payload_ref
                 ON events(payload_ref);
+            CREATE INDEX IF NOT EXISTS idx_evidence_paths_campaign_role_path
+                ON campaign_evidence_paths(campaign_id, role, path);
             """
         )
         campaign_columns = {
@@ -153,6 +169,13 @@ class AuditStore(AbstractContextManager["AuditStore"]):
             raise ValueError("fresh Campaigns cannot declare historical Campaign sources")
         if audit_mode is CampaignAuditMode.FOLLOW_UP and not history_source_campaign_ids:
             raise ValueError("follow-up Campaigns require explicit history sources")
+        screening_fraction = (budget or {}).get("max_screening_fraction")
+        if screening_fraction is not None and (
+            isinstance(screening_fraction, bool)
+            or not isinstance(screening_fraction, (int, float))
+            or not 0 <= screening_fraction <= 1
+        ):
+            raise ValueError("max_screening_fraction must be a number between 0 and 1")
         now = _utc_now()
         budget_json = _json(dict(budget or {}))
         constraints_json = _json(list(constraints or ()))
@@ -385,6 +408,33 @@ class AuditStore(AbstractContextManager["AuditStore"]):
                 created_at=_utc_now(),
             )
 
+    def append_events_batch(
+        self,
+        campaign_id: str,
+        events: Sequence[Mapping[str, Any]],
+    ) -> list[AppendResult]:
+        self.get_campaign(campaign_id)
+        created_at = _utc_now()
+        results = []
+        with self._connection:
+            for item in events:
+                results.append(self._append_event_tx(
+                    campaign_id=campaign_id,
+                    batch_id=(str(item["batch_id"]) if item.get("batch_id") is not None else None),
+                    entity_type=str(item["entity_type"]),
+                    entity_id=str(item["entity_id"]),
+                    event_type=str(item["event_type"]),
+                    idempotency_key=str(item["idempotency_key"]),
+                    actor=str(item.get("actor", "tool")),
+                    payload=dict(item.get("payload", {})),
+                    payload_ref=(
+                        str(item["payload_ref"])
+                        if item.get("payload_ref") is not None else None
+                    ),
+                    created_at=created_at,
+                ))
+        return results
+
     def list_events(
         self,
         campaign_id: str,
@@ -468,6 +518,97 @@ class AuditStore(AbstractContextManager["AuditStore"]):
             parameters,
         ).fetchall()
         return tuple(str(row["entity_id"]) for row in rows)
+
+    def record_evidence_paths(
+        self,
+        campaign_id: str,
+        paths: list[tuple[str, str, str]] | tuple[tuple[str, str, str], ...],
+    ) -> None:
+        self.get_campaign(campaign_id)
+        values = sorted(set(paths))
+        owner_by_role: dict[tuple[str, str], str] = {}
+        for path, role, component_id in values:
+            key = (path, role)
+            previous = owner_by_role.setdefault(key, component_id)
+            if previous != component_id:
+                raise ConflictError(
+                    f"evidence path has multiple owners within Campaign: {path}"
+                )
+        with self._connection:
+            campaign = self.get_campaign(campaign_id)
+            self._connection.execute(
+                "INSERT OR IGNORE INTO campaign_evidence_path_indexes "
+                "(campaign_id, snapshot_id, created_at) VALUES (?, ?, ?)",
+                (campaign_id, campaign.snapshot_id, _utc_now()),
+            )
+            index = self._connection.execute(
+                "SELECT snapshot_id FROM campaign_evidence_path_indexes "
+                "WHERE campaign_id = ?",
+                (campaign_id,),
+            ).fetchone()
+            if index is None or index["snapshot_id"] != campaign.snapshot_id:
+                raise ConflictError("evidence path index snapshot mismatch")
+            self._connection.execute(
+                "CREATE TEMP TABLE IF NOT EXISTS incoming_evidence_paths ("
+                "path TEXT NOT NULL, role TEXT NOT NULL, component_id TEXT NOT NULL, "
+                "PRIMARY KEY(path, role))"
+            )
+            self._connection.execute("DELETE FROM incoming_evidence_paths")
+            self._connection.executemany(
+                "INSERT INTO incoming_evidence_paths (path, role, component_id) "
+                "VALUES (?, ?, ?)",
+                values,
+            )
+            conflict = self._connection.execute(
+                "SELECT incoming.path FROM incoming_evidence_paths AS incoming "
+                "JOIN campaign_evidence_paths AS existing "
+                "ON existing.campaign_id = ? AND existing.path = incoming.path "
+                "AND existing.role = incoming.role "
+                "WHERE existing.component_id != incoming.component_id LIMIT 1",
+                (campaign_id,),
+            ).fetchone()
+            if conflict is not None:
+                raise ConflictError(
+                    "evidence path ownership changed within Campaign: "
+                    f"{conflict['path']}"
+                )
+            self._connection.execute(
+                "INSERT OR IGNORE INTO campaign_evidence_paths "
+                "(campaign_id, path, role, component_id) "
+                "SELECT ?, path, role, component_id FROM incoming_evidence_paths",
+                (campaign_id,),
+            )
+            self._connection.execute("DELETE FROM incoming_evidence_paths")
+
+    def has_evidence_path_index(self, campaign_id: str) -> bool:
+        row = self._connection.execute(
+            "SELECT snapshot_id FROM campaign_evidence_path_indexes "
+            "WHERE campaign_id = ?",
+            (campaign_id,),
+        ).fetchone()
+        if row is None:
+            return False
+        return row["snapshot_id"] == self.get_campaign(campaign_id).snapshot_id
+
+    def has_evidence_path(
+        self, campaign_id: str, path: str, *, roles: tuple[str, ...] | None = None
+    ) -> bool:
+        if roles is None:
+            row = self._connection.execute(
+                "SELECT 1 FROM campaign_evidence_paths "
+                "WHERE campaign_id = ? AND path = ? LIMIT 1",
+                (campaign_id, path),
+            ).fetchone()
+        elif not roles:
+            return False
+        else:
+            placeholders = ",".join("?" for _ in roles)
+            row = self._connection.execute(
+                "SELECT 1 FROM campaign_evidence_paths "
+                f"WHERE campaign_id = ? AND path = ? AND role IN ({placeholders}) LIMIT 1",
+                (campaign_id, path, *roles),
+            ).fetchone()
+        return row is not None
 
     def artifact_campaign_owners(
         self, artifact_ids: set[str] | tuple[str, ...]

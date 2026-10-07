@@ -305,18 +305,29 @@ class ManualExecutionBackend:
         else:
             status = TaskStatus.PENDING
         claim = claims[-1] if claims else None
+        output_ref = (
+            latest_state.payload_ref
+            if latest_state is not None and latest_state.event_type in {
+                "TASK_COMPLETED", "TASK_FAILED", "TASK_CANCELLED",
+            } else None
+        )
+        amendments = self.manager.store.list_events(
+            self.campaign_id,
+            entity_type="execution_task_amendment",
+            entity_id=task_id,
+            event_type="TASK_OUTPUT_AMENDED",
+        )
+        for amendment in amendments:
+            if amendment.payload.get("prior_output_ref") != output_ref:
+                raise ModelError(f"task output amendment chain is invalid: {task_id}")
+            output_ref = amendment.payload_ref
         return TaskView(
             task=task,
             status=status,
             worker_id=claim.actor if claim else None,
             attempt=int(claim.payload["attempt"]) if claim else 0,
             lease_expires_at=str(claim.payload["lease_expires_at"]) if claim else None,
-            output_ref=(
-                latest_state.payload_ref
-                if latest_state is not None and latest_state.event_type in {
-                    "TASK_COMPLETED", "TASK_FAILED", "TASK_CANCELLED",
-                } else None
-            ),
+            output_ref=output_ref,
         )
 
     def claim(
@@ -361,19 +372,7 @@ class ManualExecutionBackend:
         if result.succeeded and lease.task.required_output in _TASK_OUTPUT_REQUIRED_FIELDS:
             if result.output_ref is None:
                 raise ModelError("successful execution task requires an output artifact")
-            try:
-                output = json.loads(self.manager.artifacts.get_bytes(result.output_ref))
-            except (OSError, ValueError, json.JSONDecodeError) as error:
-                raise ModelError(f"task output is not valid JSON: {lease.task.task_id}") from error
-            if not isinstance(output, dict) or output.get("schema_version") != "1.0":
-                raise ModelError(f"task output schema_version mismatch: {lease.task.task_id}")
-            missing = _TASK_OUTPUT_REQUIRED_FIELDS[lease.task.required_output] - set(output)
-            if missing:
-                raise ModelError(
-                    f"task output contract missing {sorted(missing)}: {lease.task.task_id}"
-                )
-            if lease.task.required_output == "verdict-submission/v1":
-                self._validate_verdict_output(lease.task, output)
+            self._validate_task_output(lease.task, result.output_ref)
         exceeded = {
             name: (result.measurements[name], limit)
             for name, limit in lease.task.budget.items()
@@ -400,6 +399,90 @@ class ManualExecutionBackend:
         )
         return self.poll(lease.task.task_id)
 
+    def amend_completed_output(
+        self,
+        task_id: str,
+        replacement_output_ref: str,
+        *,
+        reason: str,
+        evidence_refs: Sequence[str],
+        actor: str = "operator",
+    ) -> TaskView:
+        view = self.poll(task_id)
+        if view.status is not TaskStatus.SUCCEEDED or view.output_ref is None:
+            raise ModelError("only a successfully collected task output can be amended")
+        if replacement_output_ref == view.output_ref:
+            raise ModelError("task output amendment must replace the current artifact")
+        if not reason.strip() or not actor.strip() or not evidence_refs:
+            raise ModelError("task output amendment requires actor, reason, and evidence")
+        stage_by_operation = {
+            "discover_surfaces": "R1_COMPLETED",
+            "generate_hypotheses": "R2_COMPLETED",
+            "generate_hypotheses_compact": "R2_COMPLETED",
+            "verify_reachability": "R3_COMPLETED",
+        }
+        committed_stage = stage_by_operation.get(view.task.operation)
+        if committed_stage is None:
+            raise ModelError(
+                f"task output amendment is not supported for operation: {view.task.operation}"
+            )
+        if self.manager.store.list_batch_events(
+            self.campaign_id,
+            view.task.batch_id,
+            event_type=committed_stage,
+        ):
+            raise ModelError(
+                "task output cannot be amended after its stage has committed; "
+                "downstream stage amendment is required"
+            )
+        self._validate_task_output(view.task, replacement_output_ref)
+        for evidence_ref in evidence_refs:
+            try:
+                self.manager.artifacts.get_bytes(evidence_ref)
+            except (OSError, ValueError) as error:
+                raise ModelError(
+                    f"task amendment evidence artifact cannot be resolved: {evidence_ref}"
+                ) from error
+        self.manager.store.append_event(
+            campaign_id=self.campaign_id,
+            batch_id=view.task.batch_id,
+            entity_type="execution_task_amendment",
+            entity_id=task_id,
+            event_type="TASK_OUTPUT_AMENDED",
+            idempotency_key=(
+                f"task-output-amend:{self.campaign_id}:{task_id}:"
+                f"{view.output_ref}:{replacement_output_ref}"
+            ),
+            actor=actor,
+            payload={
+                "prior_output_ref": view.output_ref,
+                "replacement_output_ref": replacement_output_ref,
+                "reason": reason.strip(),
+                "evidence_refs": list(evidence_refs),
+                "stage": committed_stage,
+            },
+            payload_ref=replacement_output_ref,
+        )
+        return self.poll(task_id)
+
+    def _validate_task_output(self, task: TaskSpec, output_ref: str) -> Mapping[str, Any]:
+        try:
+            output = json.loads(self.manager.artifacts.get_bytes(output_ref))
+        except (OSError, ValueError, json.JSONDecodeError) as error:
+            raise ModelError(f"task output is not valid JSON: {task.task_id}") from error
+        if not isinstance(output, dict) or output.get("schema_version") != "1.0":
+            raise ModelError(f"task output schema_version mismatch: {task.task_id}")
+        required = _TASK_OUTPUT_REQUIRED_FIELDS.get(task.required_output)
+        if required is not None:
+            missing = required - set(output)
+            if missing:
+                raise ModelError(
+                    f"task output contract missing {sorted(missing)}: {task.task_id}"
+                )
+        if task.required_output == "verdict-submission/v1":
+            self._validate_verdict_output(task, output)
+        return output
+
     def _validate_verdict_output(
         self, task: TaskSpec, output: Mapping[str, Any],
     ) -> None:
@@ -407,21 +490,28 @@ class ManualExecutionBackend:
         if not isinstance(verdict_value, dict):
             raise ModelError(f"task output requires a verdict object: {task.task_id}")
         submission = VerdictSubmission.from_dict(verdict_value)
-        inventory = self.manager.load_inventory(task.campaign_id)
-        evidence_paths = {source.path for source in inventory.source_files}
-        evidence_paths.update(
-            manifest
-            for component in inventory.components
-            for manifest in component.build_manifests
-        )
         workflow = BatchWorkflow(self.manager, task.campaign_id, task.batch_id)
+        line_count_cache: dict[str, tuple[int, frozenset[int]]] = {}
+        evidence_paths = None
+        if not self.manager.store.has_evidence_path_index(task.campaign_id):
+            inventory = self.manager.load_inventory(task.campaign_id)
+            evidence_paths = {source.path for source in inventory.source_files}
+            evidence_paths.update(
+                manifest
+                for component in inventory.components
+                for manifest in component.build_manifests
+            )
         for reference in submission.call_chain:
-            workflow._validate_source_location(reference, evidence_paths)
+            workflow._validate_source_location(
+                reference, evidence_paths, line_count_cache=line_count_cache
+            )
         for reference in (
             *submission.edge_evidence_ids,
             *submission.blocking_evidence_ids,
         ):
-            workflow._validate_evidence_reference(reference, evidence_paths)
+            workflow._validate_evidence_reference(
+                reference, evidence_paths, line_count_cache=line_count_cache
+            )
 
     def release(
         self, lease: TaskLease, *, reason: str = "worker released lease",
@@ -491,13 +581,19 @@ class ManualExecutionBackend:
         *,
         operation: str | None = None,
         batch_id: str | None = None,
+        operation_prefix: str | None = None,
     ) -> tuple[TaskView, ...]:
         views = tuple(
             self.poll(task_id) for task_id in self._task_ids(batch_id=batch_id)
         )
-        if operation is None:
-            return views
-        return tuple(view for view in views if view.task.operation == operation)
+        return tuple(
+            view for view in views
+            if (operation is None or view.task.operation == operation)
+            and (
+                operation_prefix is None
+                or view.task.operation.startswith(operation_prefix)
+            )
+        )
 
     def _task_events(self, task_id: str) -> list[Any]:
         events = self.manager.store.list_events(
@@ -1571,14 +1667,16 @@ class DiscoveryCoordinator:
         *,
         prefix: bool = False,
     ) -> tuple[TaskView, ...]:
+        if not expected:
+            return ()
+        if not expected:
+            return ()
         views = tuple(
-            view for view in self.backend.list_tasks()
-            if (
-                view.task.operation.startswith(operation)
-                if prefix
-                else view.task.operation == operation
+            self.backend.list_tasks(
+                operation=None if prefix else operation,
+                operation_prefix=operation if prefix else None,
+                batch_id=self.workflow.batch_id,
             )
-            and view.task.batch_id == self.workflow.batch_id
         )
         actual = {view.task.task_id for view in views}
         if actual != set(expected):

@@ -88,6 +88,66 @@ def test_manual_backend_leases_once_and_collects_idempotently(tmp_path: Path) ->
         manager.close()
 
 
+def test_collected_r1_output_can_be_amended_before_stage_commit(
+    tmp_path: Path,
+) -> None:
+    manager, workflow, plan = _workflow(tmp_path, "CMP-r1-amend")
+    try:
+        workflow.run_r0()
+        backend = ManualExecutionBackend(manager, workflow.campaign_id)
+        coordinator = DiscoveryCoordinator(workflow, backend)
+        task = coordinator.schedule_r1()[0].task
+        lease = backend.claim("surface-worker", task_id_filter=task.task_id)
+        assert lease is not None
+        original_ref = manager.artifacts.put_text(json.dumps({
+            "schema_version": "1.0",
+            "reviewed_paths": [],
+            "surfaces": [],
+            "boundary_reviews": [],
+        })).artifact_id
+        backend.collect(lease, TaskResult(
+            True, original_ref, "incomplete reviewed_paths",
+            {"agent_runs": 1, "wall_seconds": 1},
+        ))
+        with pytest.raises(ModelError, match="reviewed path coverage mismatch"):
+            coordinator.commit_r1()
+
+        corrected_ref = manager.artifacts.put_text(json.dumps({
+            "schema_version": "1.0",
+            "reviewed_paths": list(plan.work_units[0].source_files),
+            "surfaces": [],
+            "boundary_reviews": [],
+        })).artifact_id
+        amended = backend.amend_completed_output(
+            task.task_id,
+            corrected_ref,
+            reason="restored omitted in-scope reviewed path",
+            evidence_refs=(original_ref, corrected_ref),
+        )
+        assert amended.status is TaskStatus.SUCCEEDED
+        assert amended.output_ref == corrected_ref
+
+        coordinator.commit_r1()
+        assert workflow._stage_event("R1_COMPLETED") is not None
+        with pytest.raises(ModelError, match="after its stage has committed"):
+            backend.amend_completed_output(
+                task.task_id,
+                original_ref,
+                reason="attempted post-commit correction",
+                evidence_refs=(corrected_ref,),
+            )
+        amendments = manager.store.list_events(
+            workflow.campaign_id,
+            entity_type="execution_task_amendment",
+            entity_id=task.task_id,
+            event_type="TASK_OUTPUT_AMENDED",
+        )
+        assert len(amendments) == 1
+        assert amendments[0].payload["prior_output_ref"] == original_ref
+    finally:
+        manager.close()
+
+
 def test_manual_backend_claim_filters_by_operation(tmp_path: Path) -> None:
     manager, task = _setup(tmp_path)
     try:
@@ -123,6 +183,56 @@ def test_manual_backend_claim_targets_specific_task_and_batch(tmp_path: Path) ->
         assert lease is not None
         assert lease.task.task_id == task.task_id
         assert backend.poll(earlier.task_id).status is TaskStatus.PENDING
+    finally:
+        manager.close()
+
+
+def test_empty_expected_task_stage_does_not_poll_campaign_queue(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manager, workflow, _ = _workflow(tmp_path, "CMP-empty-stage")
+    try:
+        backend = ManualExecutionBackend(manager, "CMP-empty-stage")
+        coordinator = DiscoveryCoordinator(workflow, backend)
+
+        def unexpected_poll(*args: object, **kwargs: object):
+            raise AssertionError("empty stage must not poll unrelated tasks")
+
+        monkeypatch.setattr(backend, "list_tasks", unexpected_poll)
+        assert coordinator._successful_tasks("refute_reachability", {}) == ()
+    finally:
+        manager.close()
+
+
+def test_zero_hypothesis_r35_stages_short_circuit_without_task_listing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manager, workflow, _ = _workflow(tmp_path, "CMP-zero-r35")
+    try:
+        workflow.run_r0()
+        workflow.record_r1([])
+        evidence = {
+            axis.value: (f"EVID-{axis.value}",) for axis in DiscoveryAxis
+        }
+        workflow.record_r2(
+            [], axis_evidence=evidence,
+            axis_runs=axis_runs_from_evidence(evidence),
+        )
+        workflow.record_r3([])
+        backend = ManualExecutionBackend(manager, workflow.campaign_id)
+        coordinator = DiscoveryCoordinator(workflow, backend)
+
+        def unexpected_list_tasks(*_args: object, **_kwargs: object):
+            raise AssertionError("zero-target stage must not enumerate tasks")
+
+        monkeypatch.setattr(backend, "list_tasks", unexpected_list_tasks)
+        assert coordinator.schedule_r35_refutations() == ()
+        assert coordinator.commit_r35_refutations() == ()
+        assert coordinator.schedule_r35_adjudications() == ()
+        assert coordinator.commit_r35_adjudications() == ()
+        assert coordinator.schedule_r35_revivals() == ()
+        coordinator.commit_r35_revivals()
+        assert workflow._require_stage("R3_5_COMPLETED") is not None
     finally:
         manager.close()
 
@@ -578,7 +688,9 @@ def test_discovery_commit_rejects_incomplete_reviewed_paths(tmp_path: Path) -> N
         manager.close()
 
 
-def test_discovery_coordinator_schedules_and_commits_r3(tmp_path: Path) -> None:
+def test_discovery_coordinator_schedules_and_commits_r3(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
     (tmp_path / "schema.yaml").write_text("entry: generated\n", encoding="utf-8")
     manager, workflow, plan = _workflow(tmp_path, "CMP-r3-tasks")
     try:
@@ -624,11 +736,20 @@ def test_discovery_coordinator_schedules_and_commits_r3(tmp_path: Path) -> None:
                 "rationale": "transcription error in a source anchor",
             },
         })).artifact_id
-        with pytest.raises(ModelError, match="not in the Campaign inventory"):
-            backend.collect(lease, TaskResult(
-                True, bad_output_ref, "bad anchor", {"agent_runs": 1, "wall_seconds": 1},
-                execution_configuration_fixture(),
-            ))
+        with monkeypatch.context() as patch:
+            patch.setattr(
+                manager,
+                "load_inventory",
+                lambda *_args, **_kwargs: (_ for _ in ()).throw(
+                    AssertionError("indexed collect must not reload Campaign inventory")
+                ),
+            )
+            with pytest.raises(ModelError, match="not in the Campaign inventory"):
+                backend.collect(lease, TaskResult(
+                    True, bad_output_ref, "bad anchor",
+                    {"agent_runs": 1, "wall_seconds": 1},
+                    execution_configuration_fixture(),
+                ))
         assert backend.poll(lease.task.task_id).status is TaskStatus.LEASED
         output_ref = manager.artifacts.put_text(json.dumps({
             "schema_version": "1.0",
@@ -645,9 +766,19 @@ def test_discovery_coordinator_schedules_and_commits_r3(tmp_path: Path) -> None:
                 "rationale": "direct call and data-flow edge",
             },
         })).artifact_id
-        backend.collect(lease, TaskResult(
-            True, output_ref, "verified", {"agent_runs": 1, "wall_seconds": 1}, execution_configuration_fixture()
-        ))
+        with monkeypatch.context() as patch:
+            patch.setattr(
+                manager,
+                "load_inventory",
+                lambda *_args, **_kwargs: (_ for _ in ()).throw(
+                    AssertionError("indexed collect must not reload Campaign inventory")
+                ),
+            )
+            backend.collect(lease, TaskResult(
+                True, output_ref, "verified",
+                {"agent_runs": 1, "wall_seconds": 1},
+                execution_configuration_fixture(),
+            ))
         coordinator.commit_r3()
         assert workflow.build_r0_r3_report()["verdict_counts"] == {"REACHABLE": 1}
     finally:

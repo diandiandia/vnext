@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from reachable_audit.analysis_models import (
     BoundaryDisposition,
     BoundaryReview,
@@ -10,6 +12,7 @@ from reachable_audit.batch_workflow import BatchWorkflow
 from reachable_audit.campaign import CampaignManager
 from reachable_audit.handoffs import HandoffResolver
 from reachable_audit.inventory import build_inventory
+from reachable_audit.models import ModelError
 from reachable_audit.plan_models import BoundaryEdge
 from reachable_audit.planning import create_audit_plan
 from conftest import axis_runs_from_evidence
@@ -25,25 +28,37 @@ def test_resolved_handoff_merges_a_cross_batch_call_chain(tmp_path: Path) -> Non
     _write(tmp_path / "entry" / "entry.py", "def receive(): pass\n")
     _write(tmp_path / "parser" / "pyproject.toml", "[project]\nname='parser'\n")
     _write(tmp_path / "parser" / "parser.py", "def parse(): pass\n")
+    _write(tmp_path / "decoder" / "pyproject.toml", "[project]\nname='decoder'\n")
+    _write(tmp_path / "decoder" / "decoder.py", "def decode(): pass\n")
     inventory = build_inventory(tmp_path, "fixture:handoff")
     components = {component.root: component.component_id for component in inventory.components}
     plan = create_audit_plan(
         campaign_id="CMP-handoff",
         inventory=inventory,
         category_families=["PARSING"],
-        boundary_edges=[BoundaryEdge(
-            edge_id="EDGE-entry-parser",
-            source_component_id=components["entry"],
-            target_component_id=components["parser"],
-            kind="call",
-            evidence="EVID-build-edge",
-            source_path="entry/entry.py",
-        )],
+        boundary_edges=[
+            BoundaryEdge(
+                edge_id="EDGE-entry-parser",
+                source_component_id=components["entry"],
+                target_component_id=components["parser"],
+                kind="call",
+                evidence="EVID-build-edge-parser",
+                source_path="entry/entry.py",
+            ),
+            BoundaryEdge(
+                edge_id="EDGE-entry-decoder",
+                source_component_id=components["entry"],
+                target_component_id=components["decoder"],
+                kind="call",
+                evidence="EVID-build-edge-decoder",
+                source_path="entry/entry.py",
+            ),
+        ],
         max_source_files_per_work_unit=1,
         max_source_files_per_batch=1,
         max_work_units_per_batch=1,
     )
-    handoff = plan.handoffs[0]
+    handoffs = plan.handoffs
 
     with CampaignManager(tmp_path) as manager:
         manager.create_campaign(
@@ -85,14 +100,38 @@ def test_resolved_handoff_merges_a_cross_batch_call_chain(tmp_path: Path) -> Non
             workflow.record_r3([])
 
         resolver = HandoffResolver(manager, "CMP-handoff", plan)
-        resolver.resolve(HandoffResolution(
+        resolutions = tuple(HandoffResolution(
             handoff_id=handoff.handoff_id,
             owner_batch_id=handoff.owner_batch,
             outcome=HandoffOutcome.EDGE_PROVEN,
-            chain_suffix=("LOC-boundary", "LOC-parser.py:1"),
-            evidence_refs=("EVID-owner-edge",),
-            rationale="owner verified the parser entry edge",
-        ))
+            chain_suffix=("LOC-boundary", f"LOC-{handoff.edge_id}.py:1"),
+            evidence_refs=(f"EVID-owner-{handoff.edge_id}",),
+            rationale="owner verified the cross-batch entry edge",
+        ) for handoff in handoffs)
+        with pytest.raises(ModelError, match="duplicate handoff IDs"):
+            resolver.resolve_many((resolutions[0], resolutions[0]))
+        with pytest.raises(ModelError, match="non-owner Batch"):
+            resolver.resolve_many((
+                resolutions[0],
+                HandoffResolution(
+                    **{
+                        **resolutions[1].__dict__,
+                        "owner_batch_id": "B-not-owner",
+                    }
+                ),
+            ))
+        assert not [
+            event for event in manager.store.list_events("CMP-handoff")
+            if event.event_type == "HANDOFF_RESOLVED"
+        ]
+        artifact_ids = resolver.resolve_many(resolutions)
+        assert len(artifact_ids) == 2
+        assert len([
+            event for event in manager.store.list_events("CMP-handoff")
+            if event.event_type == "HANDOFF_RESOLVED"
+        ]) == 2
+
+        handoff = handoffs[0]
         integrated = resolver.integrate(
             handoff.handoff_id,
             known_chain_prefix=("LOC-entry.py:1", "LOC-boundary"),
@@ -100,15 +139,15 @@ def test_resolved_handoff_merges_a_cross_batch_call_chain(tmp_path: Path) -> Non
         )
 
         assert integrated["call_chain"] == [
-            "LOC-entry.py:1", "LOC-boundary", "LOC-parser.py:1"
+            "LOC-entry.py:1", "LOC-boundary", resolutions[0].chain_suffix[1]
         ]
         assert integrated["evidence_refs"] == [
-            "EVID-source-edge", "EVID-owner-edge"
+            "EVID-source-edge", *resolutions[0].evidence_refs
         ]
         event_types = [
             event.event_type for event in manager.store.list_events("CMP-handoff")
         ]
-        assert event_types.count("HANDOFF_RESOLVED") == 1
+        assert event_types.count("HANDOFF_RESOLVED") == 2
         assert event_types.count("HANDOFF_INTEGRATED") == 1
 
 

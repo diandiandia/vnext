@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 from .analysis_models import (
     CampaignClosure,
@@ -251,6 +251,53 @@ class CampaignCloser:
             if item["axis"] == "surface"
         }
         work_unit_ids = {unit.work_unit_id for unit in self.plan.work_units}
+        axis_applicability: dict[str, dict[str, str]] = {}
+        for item in discovery_axis_runs:
+            axis_applicability.setdefault(
+                str(item.get("work_unit_id", "")),
+                {},
+            )[str(item["axis"])] = str(item["applicability"])
+        hypotheses_by_work_unit: dict[str, int] = {}
+        for item in hypotheses:
+            work_unit_id = str(item["work_unit_id"])
+            hypotheses_by_work_unit[work_unit_id] = (
+                hypotheses_by_work_unit.get(work_unit_id, 0) + 1
+            )
+        screening_work_unit_ids = sorted(
+            work_unit_id for work_unit_id in work_unit_ids
+            if set(axis_applicability.get(work_unit_id, {})) == set(self.plan.discovery_axes)
+            and all(
+                axis_applicability[work_unit_id][axis] == "NOT_APPLICABLE"
+                for axis in self.plan.discovery_axes
+            )
+            and hypotheses_by_work_unit.get(work_unit_id, 0) == 0
+        )
+        substantive_work_unit_ids = sorted(
+            work_unit_id for work_unit_id in work_unit_ids
+            if any(
+                applicability == "APPLICABLE"
+                for applicability in axis_applicability.get(work_unit_id, {}).values()
+            )
+        )
+        screening_fraction = (
+            len(screening_work_unit_ids) / len(work_unit_ids)
+            if work_unit_ids else 0.0
+        )
+        screening_ceiling = self.campaign.budget.get("max_screening_fraction")
+        screening_ceiling_configured = (
+            isinstance(screening_ceiling, (int, float))
+            and not isinstance(screening_ceiling, bool)
+            and 0 <= screening_ceiling <= 1
+        )
+        screening_ceiling_status = (
+            "WITHIN_CEILING"
+            if screening_fraction == 0
+            else "NOT_CONFIGURED"
+            if not screening_ceiling_configured
+            else "WITHIN_CEILING"
+            if screening_fraction <= screening_ceiling
+            else "EXCEEDS_CEILING"
+        )
         expected_axis_coverage = {
             (work_unit_id, axis)
             for work_unit_id in work_unit_ids
@@ -508,6 +555,22 @@ class CampaignCloser:
                 "category_runs": len(category_runs),
                 "boundary_edges": len(self.plan.boundary_edges),
                 "handoffs": len(self.plan.handoffs),
+                "screened_work_units": len(screening_work_unit_ids),
+                "substantive_work_units": len(substantive_work_unit_ids),
+                "deferred_work_units": (
+                    len(work_unit_ids)
+                    - len(screening_work_unit_ids)
+                    - len(substantive_work_unit_ids)
+                ),
+            },
+            "screening_coverage": {
+                "screened_work_unit_ids": screening_work_unit_ids,
+                "screened_work_unit_count": len(screening_work_unit_ids),
+                "total_work_unit_count": len(work_unit_ids),
+                "screened_fraction": screening_fraction,
+                "max_screening_fraction": screening_ceiling if screening_ceiling_configured else None,
+                "ceiling_status": screening_ceiling_status,
+                "release_eligible": screening_ceiling_status == "WITHIN_CEILING",
             },
             "attack_surface": {
                 "kinds": _counts(item["kind"] for item in surfaces),
@@ -531,9 +594,13 @@ class CampaignCloser:
             ],
             "unreviewed_scope": list(closure.unreviewed_scope),
             "scope_completeness": (
-                "WITH_DECLARED_UNREVIEWED_SCOPE"
-                if closure.unreviewed_scope
-                else "NO_DECLARED_UNREVIEWED_SCOPE"
+                "WITH_SCREENING_ONLY_WORK_UNITS"
+                if screening_work_unit_ids
+                else (
+                    "WITH_DECLARED_UNREVIEWED_SCOPE"
+                    if closure.unreviewed_scope
+                    else "NO_DECLARED_UNREVIEWED_SCOPE"
+                )
             ),
             "scope_dispositions": gates["CG10"]["detail"]["scope_dispositions"],
             "residual_risks": list(closure.residual_risks),
@@ -690,6 +757,11 @@ class CampaignCloser:
             f"- Status: **{report['status']}**",
             f"- Audit mode: `{audit_mode}`",
             f"- Scope completeness: `{scope_completeness}`",
+            "- Screening-only Work Units: "
+            f"{report.get('screening_coverage', {}).get('screened_work_unit_count', 'not recorded')} / "
+            f"{report.get('screening_coverage', {}).get('total_work_unit_count', 'not recorded')}",
+            "- Screening ceiling: "
+            f"{report.get('screening_coverage', {}).get('ceiling_status', 'not recorded')}",
             "",
             "## 1. Audit Summary", "",
             f"- Findings: {len(findings)}",

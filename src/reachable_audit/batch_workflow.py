@@ -161,7 +161,7 @@ class BatchWorkflow:
         plan = self.manager.load_audit_plan(self.campaign_id, plan_id)
         inventory = self.manager.load_inventory(self.campaign_id)
         inventoried_paths = {source.path for source in inventory.source_files}
-        line_count_cache: dict[str, int] = {}
+        line_count_cache: dict[str, tuple[int, frozenset[int]]] = {}
         boundary_edges = {edge.edge_id: edge for edge in plan.boundary_edges}
         expected_boundary_reviews = {
             (str(edge_id), work_unit_id)
@@ -223,6 +223,10 @@ class BatchWorkflow:
                     raise ModelError(
                         f"surface source anchor is outside the file: {anchor}"
                     )
+                if int(line_value) not in line_count_cache[surface.entry_path][1]:
+                    raise ModelError(
+                        f"surface source anchor points to a blank line: {anchor}"
+                    )
         value = {
             "schema_version": "1.0",
             "surfaces": [asdict(surface) for surface in surfaces],
@@ -250,26 +254,38 @@ class BatchWorkflow:
             )
         return artifact_id
 
-    def _source_line_count(
-        self, source_path: str, cache: dict[str, int]
-    ) -> int:
+    def _source_line_index(
+        self, source_path: str, cache: dict[str, tuple[int, frozenset[int]]]
+    ) -> tuple[int, frozenset[int]]:
         if source_path not in cache:
             try:
-                cache[source_path] = len((
+                lines = (
                     self.manager.target_root / source_path
-                ).read_text(encoding="utf-8", errors="replace").splitlines())
+                ).read_text(encoding="utf-8", errors="replace").splitlines()
+                cache[source_path] = (
+                    len(lines),
+                    frozenset(
+                        index for index, line in enumerate(lines, start=1)
+                        if line.strip()
+                    ),
+                )
             except OSError as error:
                 raise ModelError(
                     f"source anchor file cannot be read: {source_path}"
                 ) from error
         return cache[source_path]
 
+    def _source_line_count(
+        self, source_path: str, cache: dict[str, tuple[int, frozenset[int]]]
+    ) -> int:
+        return self._source_line_index(source_path, cache)[0]
+
     def _validate_boundary_evidence(
         self,
         evidence_refs: Sequence[str],
         edge_id: str,
         inventoried_paths: set[str],
-        line_count_cache: dict[str, int],
+        line_count_cache: dict[str, tuple[int, frozenset[int]]],
     ) -> None:
         for reference in evidence_refs:
             if not reference.startswith("LOC-"):
@@ -283,6 +299,8 @@ class BatchWorkflow:
             line_count = self._source_line_count(source_path, line_count_cache)
             if not 1 <= int(line_text) <= line_count:
                 raise ModelError(f"boundary source anchor is outside the file: {reference}")
+            if int(line_text) not in line_count_cache[source_path][1]:
+                raise ModelError(f"boundary source anchor points to a blank line: {reference}")
 
     def record_r2(
         self,
@@ -1297,7 +1315,7 @@ class BatchWorkflow:
             for component in inventory.components
             for manifest in component.build_manifests
         }
-        line_count_cache: dict[str, int] = {}
+        line_count_cache: dict[str, tuple[int, frozenset[int]]] = {}
         for submission in sorted(submissions, key=lambda item: item.hypothesis_id):
             for anchor in submission.call_chain:
                 self._validate_source_location(
@@ -1363,9 +1381,9 @@ class BatchWorkflow:
     def _validate_evidence_reference(
         self,
         reference: str,
-        inventoried_paths: set[str],
+        inventoried_paths: set[str] | None,
         *,
-        line_count_cache: dict[str, int] | None = None,
+        line_count_cache: dict[str, tuple[int, frozenset[int]]] | None = None,
     ) -> None:
         if reference.startswith("LOC-"):
             self._validate_source_location(
@@ -1388,9 +1406,9 @@ class BatchWorkflow:
     def _validate_source_location(
         self,
         reference: str,
-        inventoried_paths: set[str],
+        inventoried_paths: set[str] | None,
         *,
-        line_count_cache: dict[str, int] | None = None,
+        line_count_cache: dict[str, tuple[int, frozenset[int]]] | None = None,
         allow_evidence_only: bool = False,
     ) -> None:
         if not reference.startswith("LOC-"):
@@ -1398,12 +1416,30 @@ class BatchWorkflow:
         path_and_line = reference.removeprefix("LOC-")
         source_path, separator, line_text = path_and_line.rpartition(":")
         relative_path = PurePosixPath(source_path)
+        forbidden_evidence_roots = {
+            ".audit_vnext", ".audit_results", ".git", ".hg", ".svn",
+        }
         if (
             not separator
             or not line_text.isdigit()
             or relative_path.is_absolute()
             or ".." in relative_path.parts
-            or (source_path not in inventoried_paths and not allow_evidence_only)
+            or (
+                allow_evidence_only
+                and any(part.casefold() in forbidden_evidence_roots for part in relative_path.parts)
+            )
+            or (
+                not allow_evidence_only
+                and not (
+                    source_path in inventoried_paths
+                    if inventoried_paths is not None
+                    else self.manager.store.has_evidence_path(
+                        self.campaign_id,
+                        source_path,
+                        roles=("source", "build_manifest"),
+                    )
+                )
+            )
         ):
             raise ModelError(f"source anchor is not in the Campaign inventory: {reference}")
         resolved_path = (self.manager.target_root / source_path).resolve()
@@ -1413,8 +1449,12 @@ class BatchWorkflow:
         ):
             raise ModelError(f"source anchor file is outside the target or missing: {source_path}")
         cache = line_count_cache if line_count_cache is not None else {}
-        if not 1 <= int(line_text) <= self._source_line_count(source_path, cache):
+        line_number = int(line_text)
+        line_count, nonblank_lines = self._source_line_index(source_path, cache)
+        if not 1 <= line_number <= line_count:
             raise ModelError(f"source anchor line is outside the file: {reference}")
+        if line_number not in nonblank_lines:
+            raise ModelError(f"source anchor points to a blank line: {reference}")
 
     def build_r0_r3_report(self) -> dict[str, Any]:
         required = ("R0_COMPLETED", "R1_COMPLETED", "R2_COMPLETED", "R3_COMPLETED")

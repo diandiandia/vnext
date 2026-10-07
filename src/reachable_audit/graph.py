@@ -156,6 +156,8 @@ def build_component_graph(
                     source_unit.build_unit_id,
                     target_component_id,
                     dependency.name,
+                    dependency.local_path or "",
+                    dependency.evidence,
                 ),
                 source_component_id=source_unit.component_id,
                 target_component_id=target_component_id,

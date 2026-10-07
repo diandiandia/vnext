@@ -25,6 +25,20 @@ def test_cli_initializes_and_reports_campaign(tmp_path: Path, capsys: object) ->
     assert status_output["campaigns"][0]["campaign_id"] == init_output["campaign_id"]
 
 
+def test_cli_freezes_max_screening_fraction_at_campaign_init(
+    tmp_path: Path, capsys: object
+) -> None:
+    target = tmp_path / "screening-policy"
+    target.mkdir()
+    assert main([
+        "init", str(target), "--snapshot-id", "fixture:screening-policy",
+        "--campaign-id", "CMP-screening-policy",
+        "--max-screening-fraction", "0.2",
+    ]) == 0
+    campaign = json.loads(capsys.readouterr().out)  # type: ignore[attr-defined]
+    assert campaign["budget"]["max_screening_fraction"] == 0.2
+
+
 def test_cli_runs_registered_language_toolchain_probe(capsys: object) -> None:
     assert main(["toolchain-probe", "python"]) == 0
     result = json.loads(capsys.readouterr().out)  # type: ignore[attr-defined]
@@ -148,6 +162,63 @@ def test_task_list_help_exposes_filters() -> None:
     task_list_help = task_list_parser.format_help()
     assert "--batch-id" in task_list_help
     assert "--operation" in task_list_help
+
+
+def test_cli_amends_successful_uncommitted_task_output(
+    tmp_path: Path, capsys: object
+) -> None:
+    target = tmp_path / "amend-target"
+    target.mkdir()
+    assert main([
+        "init", str(target), "--snapshot-id", "fixture:task-amend",
+        "--campaign-id", "CMP-task-amend",
+    ]) == 0
+    capsys.readouterr()  # type: ignore[attr-defined]
+    with CampaignManager(target) as manager:
+        manager.add_batch(
+            campaign_id="CMP-task-amend", batch_id="B-amend",
+            manifest={"work_unit_ids": ["WU-amend"]},
+        )
+        input_ref = manager.artifacts.put_text("{}").artifact_id
+        task = TaskSpec(
+            "TASK-amend", "CMP-task-amend", "B-amend", "WU-amend",
+            "discover_surfaces", (input_ref,), "surface-set/v1", {},
+        )
+        backend = ManualExecutionBackend(manager, "CMP-task-amend")
+        backend.submit(task)
+        lease = backend.claim("worker")
+        assert lease is not None
+        prior_ref = manager.artifacts.put_text(json.dumps({
+            "schema_version": "1.0", "reviewed_paths": [],
+            "surfaces": [], "boundary_reviews": [],
+        })).artifact_id
+        backend.collect(lease, TaskResult(
+            True, prior_ref, "collected before failed stage commit",
+            {"agent_runs": 1, "wall_seconds": 1},
+        ))
+
+    amend_path = tmp_path / "amendment.json"
+    amend_path.write_text(json.dumps({
+        "output": {
+            "schema_version": "1.0", "reviewed_paths": ["app.py"],
+            "surfaces": [], "boundary_reviews": [],
+        },
+        "reason": "repair transcription error before R1 commit",
+        "evidence_refs": [prior_ref],
+    }), encoding="utf-8")
+    assert main([
+        "task-amend", str(target), "CMP-task-amend", "TASK-amend",
+        "--input", str(amend_path),
+    ]) == 0
+    amended = json.loads(capsys.readouterr().out)  # type: ignore[attr-defined]
+    assert amended["status"] == "SUCCEEDED"
+    assert amended["output_ref"] != prior_ref
+    with CampaignManager(target) as manager:
+        event = next(
+            event for event in manager.store.list_events("CMP-task-amend")
+            if event.event_type == "TASK_OUTPUT_AMENDED"
+        )
+        assert event.payload["prior_output_ref"] == prior_ref
 
 
 def test_harness_help_documents_hypothesis_and_cwd_constraints() -> None:
