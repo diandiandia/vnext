@@ -237,7 +237,7 @@ they are never inferred from budgets.
 Hosts may also report `input_tokens` (uncached), `cache_read_tokens`, and `output_tokens`
 measurements. Closure adds per-operation totals and a `usage` block with the number of
 tasks reporting or missing usage and the aggregate cache-hit ratio; absent usage is never
-estimated. Task result artifacts above 1 MiB are rejected at collection, and every task
+estimated. Task result artifacts are asked to stay under 1 MiB and hard-rejected above 4 MiB at collection, and every task
 input carries an `output_discipline` instruction (write once, compact, anchors instead of
 quoted source). `plan` output lists per-batch work-unit, source-file, and source-byte
 counts so operators can size runs before dispatching them; these are planning facts, not

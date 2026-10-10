@@ -18,6 +18,7 @@ from reachable_audit.analysis_models import (
 )
 from reachable_audit.campaign import CampaignManager
 from reachable_audit.execution import (
+    _MAX_TASK_OUTPUT_BYTES,
     DiscoveryCoordinator,
     ManualExecutionBackend,
     TaskResult,
@@ -279,7 +280,7 @@ def test_collect_rejects_output_above_size_ceiling(tmp_path: Path) -> None:
             "reviewed_paths": [],
             "surfaces": [],
             "boundary_reviews": [],
-            "padding": "x" * (1024 * 1024),
+            "padding": "x" * (_MAX_TASK_OUTPUT_BYTES + 1),
         })).artifact_id
         with pytest.raises(ModelError, match="exceeds"):
             backend.collect(lease, TaskResult(

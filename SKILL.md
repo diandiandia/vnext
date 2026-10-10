@@ -61,8 +61,8 @@ a Handoff rather than silently expanding ownership.
 Every `task-collect` input must include measured `agent_runs` and `wall_seconds`.
 When the host exposes them, also report `input_tokens` (uncached), `cache_read_tokens`,
 and `output_tokens` as integers; Campaign reports derive per-operation totals and the
-cache-hit ratio from them. Result artifacts larger than 1 MiB are rejected; write one
-compact result in a single call.
+cache-hit ratio from them. Result artifacts are asked to stay under 1 MiB (output_discipline) and are hard-rejected
+above 4 MiB; write one compact result in a single call.
 `configuration` may report `model_id`, `runtime_version`, and
 `host_tool_policy_digest` (`sha256:<64 lowercase hex>`) when the host exposes them; never
 invent host values. The runtime always adds its own deterministic `vnext_policy_digest`.

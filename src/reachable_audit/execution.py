@@ -81,13 +81,20 @@ _HOTSPOT_CONTRACT = (
 )
 
 
-_MAX_TASK_OUTPUT_BYTES = 1024 * 1024
+# Hard collection/amendment ceiling. 4 MiB leaves headroom for Work Units whose
+# *mandatory* content cannot fit in 1 MiB (observed: a 5,453-boundary-review WU whose
+# minimal valid result is ~1.48 MiB once every review carries its required evidence
+# anchor and rationale).
+_MAX_TASK_OUTPUT_BYTES = 4 * 1024 * 1024
+# What agents are asked to target — kept tight so the ceiling stays a backstop, not
+# a budget.
+_OUTPUT_DISCIPLINE_BYTES = 1024 * 1024
 
 _OUTPUT_DISCIPLINE = (
     "Compose the complete result once and write it in a single call; do not rewrite or "
     "patch it incrementally. Keep it compact: cite anchors instead of quoting source, "
     "give each evidence item one concise sentence, and omit fields the contract does "
-    f"not ask for. The result must stay under {_MAX_TASK_OUTPUT_BYTES} bytes."
+    f"not ask for. The result must stay under {_OUTPUT_DISCIPLINE_BYTES} bytes."
 )
 
 
