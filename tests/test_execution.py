@@ -267,6 +267,41 @@ def test_collect_rejects_bad_output_before_terminalizing_task(tmp_path: Path) ->
         manager.close()
 
 
+def test_collect_rejects_output_above_size_ceiling(tmp_path: Path) -> None:
+    manager, task = _setup(tmp_path)
+    try:
+        backend = ManualExecutionBackend(manager, "CMP-exec")
+        backend.submit(task)
+        lease = backend.claim("worker-a")
+        assert lease is not None
+        oversized_ref = manager.artifacts.put_text(json.dumps({
+            "schema_version": "1.0",
+            "reviewed_paths": [],
+            "surfaces": [],
+            "boundary_reviews": [],
+            "padding": "x" * (1024 * 1024),
+        })).artifact_id
+        with pytest.raises(ModelError, match="exceeds"):
+            backend.collect(lease, TaskResult(
+                True, oversized_ref, "too large", {"agent_runs": 1, "wall_seconds": 1},
+            ))
+        assert backend.poll(task.task_id).status is TaskStatus.LEASED
+    finally:
+        manager.close()
+
+
+def test_task_inputs_carry_write_once_output_discipline(tmp_path: Path) -> None:
+    manager, workflow, _ = _workflow(tmp_path, "CMP-discipline")
+    try:
+        workflow.run_r0()
+        backend = ManualExecutionBackend(manager, workflow.campaign_id)
+        task = DiscoveryCoordinator(workflow, backend).schedule_r1()[0].task
+        task_input = json.loads(manager.artifacts.get_bytes(task.input_refs[0]))
+        assert "single call" in task_input["output_discipline"]
+    finally:
+        manager.close()
+
+
 def test_task_result_requires_usage_and_execution_configuration() -> None:
     with pytest.raises(ModelError, match="requires measurements"):
         TaskResult(True, "sha256:" + "a" * 64, "done", {}, execution_configuration_fixture())

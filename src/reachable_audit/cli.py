@@ -634,12 +634,35 @@ def main(argv: list[str] | None = None) -> int:
                 artifact_id = manager.record_plan(
                     campaign_id=arguments.campaign_id, plan=plan, inventory=inventory
                 )
+                files_by_unit = {
+                    unit.work_unit_id: unit.source_files for unit in plan.work_units
+                }
+
+                def _size(path: str) -> int:
+                    try:
+                        return (manager.target_root / path).stat().st_size
+                    except OSError:
+                        return 0
+
                 _print({
                     "artifact_id": artifact_id,
                     "plan_id": plan.plan_id,
                     "work_units": len(plan.work_units),
                     "batches": len(plan.batches),
                     "handoffs": len(plan.handoffs),
+                    "batch_summaries": [
+                        {
+                            "batch_id": batch.batch_id,
+                            "work_units": len(batch.work_unit_ids),
+                            "source_files": batch.source_file_count,
+                            "source_bytes": sum(
+                                _size(path)
+                                for unit_id in batch.work_unit_ids
+                                for path in files_by_unit[unit_id]
+                            ),
+                        }
+                        for batch in plan.batches
+                    ],
                 })
             return 0
 

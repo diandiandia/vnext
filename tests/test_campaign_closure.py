@@ -526,7 +526,10 @@ def test_campaign_report_exports_scope_and_execution_measurements(tmp_path: Path
             True,
             output_ref,
             "measured execution",
-            {"agent_runs": 1, "wall_seconds": 7, "tokens": 1234},
+            {
+                "agent_runs": 1, "wall_seconds": 7, "tokens": 1234,
+                "input_tokens": 100, "cache_read_tokens": 300, "output_tokens": 50,
+            },
             {**execution_configuration_fixture(), "host_tool_policy_digest": "sha256:" + "c" * 64},
         ))
 
@@ -540,6 +543,11 @@ def test_campaign_report_exports_scope_and_execution_measurements(tmp_path: Path
         assert measurements["completed_task_count"] == 1
         assert measurements["totals"] == {
             "agent_runs": 1, "wall_seconds": 7, "tokens": 1234,
+            "input_tokens": 100, "cache_read_tokens": 300, "output_tokens": 50,
+        }
+        assert measurements["totals_by_operation"]["measurement-fixture"]["tasks"] == 1
+        assert measurements["usage"] == {
+            "tasks_reporting_usage": 1, "tasks_missing_usage": 0, "cache_hit_ratio": 0.75,
         }
         assert measurements["configuration_complete"] is True
         assert measurements["configuration_digest"].startswith("sha256:")

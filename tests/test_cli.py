@@ -258,6 +258,8 @@ def test_cli_runs_inventory_graph_plan_in_order(tmp_path: Path, capsys: object) 
     plan_output = json.loads(capsys.readouterr().out)  # type: ignore[attr-defined]
     assert plan_output["work_units"] == 1
     assert plan_output["batches"] == 1
+    assert plan_output["batch_summaries"][0]["source_files"] == 1
+    assert plan_output["batch_summaries"][0]["source_bytes"] == len("print('ok')\n")
 
 
 def test_cli_writes_shadow_evaluation_report(

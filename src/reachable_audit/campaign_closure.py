@@ -432,6 +432,22 @@ class CampaignCloser:
         for task_measurement in completed_task_measurements:
             for name, amount in task_measurement["measurements"].items():
                 measurement_totals[name] = measurement_totals.get(name, 0) + int(amount)
+        totals_by_operation: dict[str, dict[str, int]] = {}
+        for task_measurement in completed_task_measurements:
+            operation_totals = totals_by_operation.setdefault(task_measurement["operation"], {})
+            operation_totals["tasks"] = operation_totals.get("tasks", 0) + 1
+            for name, amount in task_measurement["measurements"].items():
+                operation_totals[name] = operation_totals.get(name, 0) + int(amount)
+        usage_reported_tasks = [
+            item["task_id"] for item in completed_task_measurements
+            if {"input_tokens", "cache_read_tokens", "output_tokens"}.issubset(item["measurements"])
+        ]
+        input_total = measurement_totals.get("input_tokens", 0)
+        cache_read_total = measurement_totals.get("cache_read_tokens", 0)
+        cache_hit_ratio = (
+            round(cache_read_total / (cache_read_total + input_total), 4)
+            if cache_read_total + input_total else None
+        )
         gates["CG6"] = {
             "pass": len({item["root_cause_key"] for item in merged_findings})
             == len(merged_findings),
@@ -630,6 +646,12 @@ class CampaignCloser:
                 }),
                 "completed_task_count": len(completed_task_measurements),
                 "totals": measurement_totals,
+                "totals_by_operation": totals_by_operation,
+                "usage": {
+                    "tasks_reporting_usage": len(usage_reported_tasks),
+                    "tasks_missing_usage": len(completed_task_measurements) - len(usage_reported_tasks),
+                    "cache_hit_ratio": cache_hit_ratio,
+                },
                 "configuration_digest": execution_config_digest,
                 "vnext_policy_digest": execution_policy_digest(),
                 "host_configuration_profiles": [dict(row) for row in configuration_rows],
@@ -791,6 +813,8 @@ class CampaignCloser:
                 f"- Wall seconds: {totals.get('wall_seconds', 'not recorded')}",
                 f"- Host configuration complete: "
                 f"{execution.get('configuration_complete', 'not recorded')}",
+                "- Cache-hit ratio: "
+                f"{execution.get('usage', {}).get('cache_hit_ratio', 'not recorded')}",
             ])
         lines.extend([
             "",

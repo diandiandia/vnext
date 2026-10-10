@@ -81,6 +81,16 @@ _HOTSPOT_CONTRACT = (
 )
 
 
+_MAX_TASK_OUTPUT_BYTES = 1024 * 1024
+
+_OUTPUT_DISCIPLINE = (
+    "Compose the complete result once and write it in a single call; do not rewrite or "
+    "patch it incrementally. Keep it compact: cite anchors instead of quoting source, "
+    "give each evidence item one concise sentence, and omit fields the contract does "
+    f"not ask for. The result must stay under {_MAX_TASK_OUTPUT_BYTES} bytes."
+)
+
+
 class TaskStatus(StrEnum):
     PENDING = "PENDING"
     LEASED = "LEASED"
@@ -467,9 +477,15 @@ class ManualExecutionBackend:
 
     def _validate_task_output(self, task: TaskSpec, output_ref: str) -> Mapping[str, Any]:
         try:
-            output = json.loads(self.manager.artifacts.get_bytes(output_ref))
+            output_bytes = self.manager.artifacts.get_bytes(output_ref)
+            output = json.loads(output_bytes)
         except (OSError, ValueError, json.JSONDecodeError) as error:
             raise ModelError(f"task output is not valid JSON: {task.task_id}") from error
+        if len(output_bytes) > _MAX_TASK_OUTPUT_BYTES:
+            raise ModelError(
+                f"task output exceeds {_MAX_TASK_OUTPUT_BYTES} bytes ({len(output_bytes)}); "
+                f"resubmit a compact result: {task.task_id}"
+            )
         if not isinstance(output, dict) or output.get("schema_version") != "1.0":
             raise ModelError(f"task output schema_version mismatch: {task.task_id}")
         required = _TASK_OUTPUT_REQUIRED_FIELDS.get(task.required_output)
@@ -1712,6 +1728,8 @@ class DiscoveryCoordinator:
         return value
 
     def _put_json(self, value: Mapping[str, Any]) -> str:
+        if "output_contract" in value:
+            value = {**value, "output_discipline": _OUTPUT_DISCIPLINE}
         encoded = json.dumps(
             value, ensure_ascii=False, sort_keys=True, separators=(",", ":")
         )

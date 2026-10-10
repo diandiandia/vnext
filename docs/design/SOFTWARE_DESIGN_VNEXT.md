@@ -234,6 +234,15 @@ shared host model/runtime/tool policy; the vNext-owned policy digest is recorded
 separately and is not compared with v3's engine policy. Missing values are explicit;
 they are never inferred from budgets.
 
+Hosts may also report `input_tokens` (uncached), `cache_read_tokens`, and `output_tokens`
+measurements. Closure adds per-operation totals and a `usage` block with the number of
+tasks reporting or missing usage and the aggregate cache-hit ratio; absent usage is never
+estimated. Task result artifacts above 1 MiB are rejected at collection, and every task
+input carries an `output_discipline` instruction (write once, compact, anchors instead of
+quoted source). `plan` output lists per-batch work-unit, source-file, and source-byte
+counts so operators can size runs before dispatching them; these are planning facts, not
+price estimates.
+
 Campaign budget may freeze `max_screening_fraction` in the range [0, 1] at init. Closure
 reports screened Work Unit IDs, count, fraction, ceiling status, and release eligibility.
 No screening-only Work Units is eligible without a ceiling; any nonzero screening share
