@@ -25,8 +25,6 @@ _POLICY: dict[str, Any] = {
 }
 
 
-def execution_policy() -> dict[str, Any]:
-    return json.loads(json.dumps(_POLICY, sort_keys=True))
 
 
 def execution_policy_digest() -> str:

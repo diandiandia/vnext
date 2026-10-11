@@ -137,10 +137,6 @@ class LanguageAdapter:
             raise ValueError("source location must be a project-relative path and positive line")
         return f"LOC-{parsed.as_posix()}:{line}"
 
-    def is_generated_path(self, path: str) -> bool:
-        normalized = "/" + path.replace("\\", "/").lower().strip("/") + "/"
-        return any(marker in normalized for marker in self.generated_path_markers)
-
 
 _ADAPTERS = (
     LanguageAdapter("c", frozenset({".c", ".h"}), r"^\s*#\s*include\s*[<\"]([^>\"]+)", r"^\s*(?:static\s+)?[\w*\s]+\s+(\w+)\s*\([^;]*\)\s*\{", ("extern \"C\"", "dlopen", "LoadLibrary"), ("cc --version", "clang --version")),

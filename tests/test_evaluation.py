@@ -158,10 +158,10 @@ def test_rg8_rejects_manifest_claim_when_runtime_scan_finds_residue(
 ) -> None:
     monkeypatch.setattr(
         "reachable_audit.evaluation.scan_runtime_deproject",
-        lambda _root: {
+        lambda _root, _tokens=(): {
             "schema_version": "1.0",
             "passed": False,
-            "findings": [{"path": "knowledge/profiles/sample.json", "value": "swr-v3.11-004"}],
+            "findings": [{"path": "knowledge/profiles/sample.json", "value": "acme-widget"}],
             "scanned_knowledge_files": 1,
         },
     )

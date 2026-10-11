@@ -61,8 +61,16 @@ a Handoff rather than silently expanding ownership.
 Every `task-collect` input must include measured `agent_runs` and `wall_seconds`.
 When the host exposes them, also report `input_tokens` (uncached), `cache_read_tokens`,
 and `output_tokens` as integers; Campaign reports derive per-operation totals and the
-cache-hit ratio from them. Result artifacts are asked to stay under 1 MiB (output_discipline) and are hard-rejected
-above 4 MiB; write one compact result in a single call.
+cache-hit ratio from them, and flag `usage_complete: false` when any task omits them.
+Missing usage never blocks collection. Result artifacts are asked to stay under 1 MiB
+(output_discipline) and are hard-rejected above 4 MiB; coverage always wins over size.
+A `discover_surfaces` result is checked at `task-collect`: `reviewed_paths` must equal the
+Work Unit's `source_files` and `boundary_reviews` must cover every supplied edge exactly
+once. A rejection lists the gap (counts plus the first ten edge IDs) and leaves the task
+leased so the same worker can resubmit the complete result.
+`plan` prints `oversize_work_units` (required-output floor above the hard ceiling) and
+per-batch `max_required_output_floor_bytes`; split or amend the plan before dispatching
+any Work Unit listed there, because no valid result can fit the ceiling.
 `configuration` may report `model_id`, `runtime_version`, and
 `host_tool_policy_digest` (`sha256:<64 lowercase hex>`) when the host exposes them; never
 invent host values. The runtime always adds its own deterministic `vnext_policy_digest`.
@@ -192,18 +200,14 @@ PYTHONPATH=<vnext>/src python3 -m reachable_audit resource-cleanup \
   <target> <campaign-id>
 PYTHONPATH=<vnext>/src python3 -m reachable_audit campaign-abort \
   <target> <campaign-id> --reason <reason> --input <skill-review.json>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit campaign-abort \
-  <target> <campaign-id> --reason <reason> --input <skill-review.json>
 PYTHONPATH=<vnext>/src python3 -m reachable_audit harness-run \
   <target> <campaign-id> --input <harness-run.json>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit compatibility-scan
+PYTHONPATH=<vnext>/src python3 -m reachable_audit compatibility-scan \
+  [--forbidden-tokens-file <tokens.txt>]
 PYTHONPATH=<vnext>/src python3 -m reachable_audit batch-add <target> \
   <campaign-id> <batch-id> --manifest <manifest.json>
 PYTHONPATH=<vnext>/src python3 -m reachable_audit inventory <target> <campaign-id>
 PYTHONPATH=<vnext>/src python3 -m reachable_audit toolchain-probe <language>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit compatibility-scan
-PYTHONPATH=<vnext>/src python3 -m reachable_audit harness-run \
-  <target> <campaign-id> --input <harness-run.json>
 PYTHONPATH=<vnext>/src python3 -m reachable_audit graph <target> <campaign-id>
 PYTHONPATH=<vnext>/src python3 -m reachable_audit plan <target> <campaign-id> \
   --categories MEMORY-SAFETY,STATE,RESOURCE-DOS
@@ -219,6 +223,10 @@ PYTHONPATH=<vnext>/src python3 -m reachable_audit task-list \
   <target> <campaign-id> --batch-id <batch-id> --operation <operation>
 PYTHONPATH=<vnext>/src python3 -m reachable_audit task-retry \
   <target> <campaign-id> <task-id> --reason <operator-reason>
+PYTHONPATH=<vnext>/src python3 -m reachable_audit task-release \
+  <target> <campaign-id> <task-id> <worker-id> --reason <reason>
+PYTHONPATH=<vnext>/src python3 -m reachable_audit task-cancel \
+  <target> <campaign-id> <task-id> --reason <reason>
 PYTHONPATH=<vnext>/src python3 -m reachable_audit task-amend \
   <target> <campaign-id> <task-id> --input <amendment.json>
 PYTHONPATH=<vnext>/src python3 -m reachable_audit task-collect \
@@ -226,14 +234,6 @@ PYTHONPATH=<vnext>/src python3 -m reachable_audit task-collect \
 PYTHONPATH=<vnext>/src python3 -m reachable_audit task-commit-r1 \
   <target> <campaign-id> <batch-id>
 PYTHONPATH=<vnext>/src python3 -m reachable_audit task-schedule-r2 \
-
-After a `task-collect` validation error, the task remains leased and non-terminal;
-correct the result JSON and resubmit it with the same task/worker before the lease
-expires, or use `task-release` with a reason. Use `task-list --batch-id` to inspect a
-partial batch. If a successful task output must be corrected after collection but before
-its R1/R2/R3 stage commits, use `task-amend` with a replacement output, reason, and
-content-addressed evidence refs. The prior output remains immutable. Amendments after
-stage commit are rejected until downstream stage invalidation/recomputation is available.
   <target> <campaign-id> <batch-id>
 PYTHONPATH=<vnext>/src python3 -m reachable_audit task-commit-r2 \
   <target> <campaign-id> <batch-id>
@@ -287,6 +287,8 @@ PYTHONPATH=<vnext>/src python3 -m reachable_audit r35-adjudicate \
   <target> <campaign-id> <batch-id> --input <adjudication.json>
 PYTHONPATH=<vnext>/src python3 -m reachable_audit r35-revival-select \
   <target> <campaign-id> <batch-id> --input <selection.json>
+PYTHONPATH=<vnext>/src python3 -m reachable_audit r35-revival-review \
+  <target> <campaign-id> <batch-id> --input <revival-review.json>
 PYTHONPATH=<vnext>/src python3 -m reachable_audit r35-complete \
   <target> <campaign-id> <batch-id>
 PYTHONPATH=<vnext>/src python3 -m reachable_audit category-plan \
@@ -308,6 +310,14 @@ PYTHONPATH=<vnext>/src python3 -m reachable_audit drift-resolve \
 PYTHONPATH=<vnext>/src python3 -m reachable_audit shadow-evaluate \
   --input <paired-runs.json> --output <acceptance-report.json>
 ```
+
+After a `task-collect` validation error, the task remains leased and non-terminal;
+correct the result JSON and resubmit it with the same task/worker before the lease
+expires, or use `task-release` with a reason. Use `task-list --batch-id` to inspect a
+partial batch. If a successful task output must be corrected after collection but before
+its R1/R2/R3 stage commits, use `task-amend` with a replacement output, reason, and
+content-addressed evidence refs. The prior output remains immutable. Amendments after
+stage commit are rejected until downstream stage invalidation/recomputation is available.
 
 `shadow-evaluate` requires a valid HMAC-signed manifest and
 `VNA_EVALUATION_HMAC_KEY`; the key must be held only by the independent evaluation

@@ -54,15 +54,31 @@ def test_cli_runs_runtime_compatibility_scan(capsys: object) -> None:
     assert report["findings"] == []
 
 
-def test_runtime_deproject_scan_rejects_known_project_token(tmp_path: Path) -> None:
+def test_runtime_deproject_scan_rejects_operator_supplied_token(tmp_path: Path) -> None:
     profile = tmp_path / "knowledge" / "profiles" / "sample.json"
     profile.parent.mkdir(parents=True)
-    profile.write_text('{"note":"SWR-V3.11-004"}', encoding="utf-8")
+    profile.write_text('{"note":"Acme-Widget"}', encoding="utf-8")
+
+    assert scan_runtime_deproject(tmp_path)["passed"] is True
+    report = scan_runtime_deproject(tmp_path, ["acme-widget"])
+
+    assert report["passed"] is False
+    assert report["findings"][0]["value"] == "acme-widget"
+
+
+def test_runtime_deproject_scan_rejects_generic_residue_patterns(tmp_path: Path) -> None:
+    profile = tmp_path / "knowledge" / "cards" / "sample.json"
+    profile.parent.mkdir(parents=True)
+    profile.write_text(
+        '{"note":"see CVE-2024-12345 and https://example.org/x/y/commit/abc123"}',
+        encoding="utf-8",
+    )
 
     report = scan_runtime_deproject(tmp_path)
 
-    assert report["passed"] is False
-    assert report["findings"][0]["value"] == "swr-v3.11-004"
+    assert {item["value"] for item in report["findings"]} == {
+        "cve_identifier", "vcs_reference_url",
+    }
 
 
 def test_cli_managed_harness_run_records_output_artifacts(
@@ -260,6 +276,8 @@ def test_cli_runs_inventory_graph_plan_in_order(tmp_path: Path, capsys: object) 
     assert plan_output["batches"] == 1
     assert plan_output["batch_summaries"][0]["source_files"] == 1
     assert plan_output["batch_summaries"][0]["source_bytes"] == len("print('ok')\n")
+    assert plan_output["oversize_work_units"] == []
+    assert plan_output["batch_summaries"][0]["max_required_output_floor_bytes"] > 0
 
 
 def test_cli_writes_shadow_evaluation_report(

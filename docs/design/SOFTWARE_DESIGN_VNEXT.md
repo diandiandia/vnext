@@ -236,12 +236,19 @@ they are never inferred from budgets.
 
 Hosts may also report `input_tokens` (uncached), `cache_read_tokens`, and `output_tokens`
 measurements. Closure adds per-operation totals and a `usage` block with the number of
-tasks reporting or missing usage and the aggregate cache-hit ratio; absent usage is never
-estimated. Task result artifacts are asked to stay under 1 MiB and hard-rejected above 4 MiB at collection, and every task
-input carries an `output_discipline` instruction (write once, compact, anchors instead of
-quoted source). `plan` output lists per-batch work-unit, source-file, and source-byte
-counts so operators can size runs before dispatching them; these are planning facts, not
-price estimates.
+tasks reporting or missing usage, a `usage_complete` flag, and the aggregate cache-hit
+ratio; absent usage is never estimated and never blocks collection. Task result artifacts
+are asked to stay under 1 MiB and are hard-rejected above 4 MiB at collection. Coverage
+takes precedence over size: `output_discipline` states that required items are never
+dropped, sampled, or truncated to meet the soft target. Collection of a `discover_surfaces`
+result additionally verifies, before the task becomes terminal, that `reviewed_paths`
+equals the Work Unit `source_files` and that `boundary_reviews` cover every supplied edge
+exactly once; a rejection reports counts and the first ten missing or extra edge IDs and
+leaves the task leased. `plan` output lists per-batch work-unit, source-file, and
+source-byte counts, an estimated required-output floor per Work Unit, and
+`oversize_work_units` whose floor exceeds the hard ceiling (no valid result can fit), so
+operators can split or amend the plan before dispatch. These are planning facts, not price
+estimates.
 
 Campaign budget may freeze `max_screening_fraction` in the range [0, 1] at init. Closure
 reports screened Work Unit IDs, count, fraction, ceiling status, and release eligibility.

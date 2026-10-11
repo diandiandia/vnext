@@ -471,7 +471,8 @@ def evaluate_release(
     }
     deproject = value.get("runtime_deproject_scan", {})
     runtime_root = Path(__file__).resolve().parents[2]
-    actual_deproject = scan_runtime_deproject(runtime_root)
+    forbidden_tokens = [str(item) for item in value.get("forbidden_residue_tokens", [])]
+    actual_deproject = scan_runtime_deproject(runtime_root, forbidden_tokens)
     gates["RG8"] = {
         "pass": deproject.get("passed") is True
         and bool(deproject.get("evidence_refs"))
@@ -482,7 +483,7 @@ def evaluate_release(
         },
     }
     compatibility = value.get("compatibility_scan", {})
-    actual_compatibility = scan_runtime_compatibility(runtime_root)
+    actual_compatibility = scan_runtime_compatibility(runtime_root, forbidden_tokens)
     gates["RG9"] = {
         "pass": bool(compatibility.get("passed"))
         and bool(compatibility.get("evidence_refs"))

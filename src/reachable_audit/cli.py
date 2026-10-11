@@ -36,7 +36,9 @@ from .batch_workflow import BatchWorkflow
 from .evaluation import evaluate_release, write_evaluation_report
 from .experiments.environment import probe_toolchain
 from .experiments.runner import run_harness
-from .execution import DiscoveryCoordinator, ManualExecutionBackend, TaskResult
+from .execution import (
+    DiscoveryCoordinator, ManualExecutionBackend, TaskResult, _MAX_TASK_OUTPUT_BYTES,
+)
 from .drift import resolve_snapshot_drift
 from .graph import build_component_graph
 from .handoffs import HandoffResolver
@@ -44,7 +46,7 @@ from .inventory import build_inventory
 from .knowledge import create_category_audit_plans
 from .knowledge_catalog import KnowledgeCatalog, default_knowledge_root
 from .plan_models import BoundaryEdge, WorkUnit
-from .planning import amend_plan, create_audit_plan
+from .planning import amend_plan, create_audit_plan, discovery_output_floor_bytes
 from .resource_cleanup import (
     cleanup_campaign_resources,
     create_campaign_temp_directory,
@@ -117,6 +119,10 @@ def _parser() -> argparse.ArgumentParser:
     )
     compatibility_scan.add_argument(
         "--root", default=str(Path(__file__).resolve().parents[2])
+    )
+    compatibility_scan.add_argument(
+        "--forbidden-tokens-file",
+        help="operator-supplied file with one project-specific token per line",
     )
 
     harness_run = subparsers.add_parser(
@@ -347,8 +353,6 @@ def _parser() -> argparse.ArgumentParser:
         ("task-commit-r2", "aggregate compact Work Unit tasks into R2"),
         ("task-schedule-r2-per-axis", "schedule six separate axis tasks per Work Unit"),
         ("task-commit-r2-per-axis", "aggregate per-axis hypothesis tasks into R2"),
-        ("task-schedule-r2-compact", "schedule one six-axis task per Work Unit"),
-        ("task-commit-r2-compact", "aggregate compact Work Unit tasks into R2"),
         ("task-schedule-r3", "schedule per-hypothesis reachability verification"),
         ("task-commit-r3", "aggregate successful verifier tasks into R3"),
         ("task-schedule-r35-refutations", "schedule independent refutation tasks"),
@@ -579,7 +583,16 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         if arguments.command == "compatibility-scan":
-            report = scan_runtime_compatibility(arguments.root)
+            report = scan_runtime_compatibility(
+                arguments.root,
+                [
+                    line.strip()
+                    for line in Path(arguments.forbidden_tokens_file).read_text(
+                        encoding="utf-8"
+                    ).splitlines()
+                    if line.strip()
+                ] if arguments.forbidden_tokens_file else (),
+            )
             _print(report)
             return 0 if report["passed"] else 1
 
@@ -637,6 +650,10 @@ def main(argv: list[str] | None = None) -> int:
                 files_by_unit = {
                     unit.work_unit_id: unit.source_files for unit in plan.work_units
                 }
+                floor_by_unit = {
+                    unit.work_unit_id: discovery_output_floor_bytes(unit)
+                    for unit in plan.work_units
+                }
 
                 def _size(path: str) -> int:
                     try:
@@ -650,6 +667,12 @@ def main(argv: list[str] | None = None) -> int:
                     "work_units": len(plan.work_units),
                     "batches": len(plan.batches),
                     "handoffs": len(plan.handoffs),
+                    "output_ceiling_bytes": _MAX_TASK_OUTPUT_BYTES,
+                    "oversize_work_units": [
+                        {"work_unit_id": unit_id, "required_output_floor_bytes": floor}
+                        for unit_id, floor in sorted(floor_by_unit.items())
+                        if floor > _MAX_TASK_OUTPUT_BYTES
+                    ],
                     "batch_summaries": [
                         {
                             "batch_id": batch.batch_id,
@@ -659,6 +682,9 @@ def main(argv: list[str] | None = None) -> int:
                                 _size(path)
                                 for unit_id in batch.work_unit_ids
                                 for path in files_by_unit[unit_id]
+                            ),
+                            "max_required_output_floor_bytes": max(
+                                floor_by_unit[unit_id] for unit_id in batch.work_unit_ids
                             ),
                         }
                         for batch in plan.batches
@@ -1028,11 +1054,11 @@ def main(argv: list[str] | None = None) -> int:
                         ]})
                     elif arguments.command == "task-commit-r1":
                         _print({"artifact_id": coordinator.commit_r1()})
-                    elif arguments.command in {"task-schedule-r2", "task-schedule-r2-compact"}:
+                    elif arguments.command == "task-schedule-r2":
                         _print({"tasks": [
                             asdict(view) for view in coordinator.schedule_r2_compact()
                         ]})
-                    elif arguments.command in {"task-commit-r2", "task-commit-r2-compact"}:
+                    elif arguments.command == "task-commit-r2":
                         _print({"artifact_id": coordinator.commit_r2_compact()})
                     elif arguments.command == "task-schedule-r2-per-axis":
                         _print({"tasks": [

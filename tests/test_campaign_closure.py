@@ -547,7 +547,8 @@ def test_campaign_report_exports_scope_and_execution_measurements(tmp_path: Path
         }
         assert measurements["totals_by_operation"]["measurement-fixture"]["tasks"] == 1
         assert measurements["usage"] == {
-            "tasks_reporting_usage": 1, "tasks_missing_usage": 0, "cache_hit_ratio": 0.75,
+            "tasks_reporting_usage": 1, "tasks_missing_usage": 0,
+            "usage_complete": True, "cache_hit_ratio": 0.75,
         }
         assert measurements["configuration_complete"] is True
         assert measurements["configuration_digest"].startswith("sha256:")

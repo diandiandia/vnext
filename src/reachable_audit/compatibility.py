@@ -6,7 +6,7 @@ import ast
 from dataclasses import asdict, dataclass
 from pathlib import Path
 import re
-from typing import Any
+from typing import Any, Sequence
 
 
 _FORBIDDEN_MODULES = frozenset({
@@ -18,16 +18,32 @@ _FORBIDDEN_RUNTIME_STRINGS = (
     "verify_" + "queue.json", "r2_filter_" + "result.json",
     "input_" + "surface.json", "TOOLING" + "_VERSION",
 )
-_PROJECT_TOKENS = (
-    "gpac", "freetype", "s2n-tls", "nghttp2", "libarchive", "frameworks/av",
-    "nacos", "tomcat", "mbedtls", "jsrsasign", "puma", "elasticsearch",
-    "pillow", "flutter", "protobuf", "zookeeper", "kafka", "shardingsphere",
-    "aiohttp", "gson", "libpng", "libjpeg", "libvpx", "aom", "media3",
-    "quic-go", "pyjwt", "quarkus", "phpseclib", "cosign", "etcd", "sinatra",
-    "lighttpd", "django", "nestjs", "ktor", "actix", "webrick", "usb-storage",
-    "dummy_hcd", "nciemp", "quickjs", "qjs", "bjson", "awstats", "maintainwise",
-    "swr-v3.11-004", "newresponserecorder", "matchquery.matchwitherror",
+_RESIDUE_PATTERNS = (
+    ("cve_identifier", re.compile(r"CVE-\d{4}-\d{4,}", re.IGNORECASE)),
+    ("vcs_reference_url", re.compile(r"https?://[^\s\"']+/(?:commit|pull|issues)/[^\s\"']+", re.IGNORECASE)),
 )
+
+
+def _residue_findings(
+    relative: str, text: str, forbidden_tokens: Sequence[str],
+) -> list["CompatibilityFinding"]:
+    findings = []
+    lower = text.lower()
+    for token in forbidden_tokens:
+        offset = lower.find(token.lower())
+        if offset >= 0:
+            findings.append(CompatibilityFinding(
+                relative, text[:offset].count("\n") + 1,
+                "project_specific_runtime_knowledge", token.lower(),
+            ))
+    for rule, pattern in _RESIDUE_PATTERNS:
+        match = pattern.search(text)
+        if match:
+            findings.append(CompatibilityFinding(
+                relative, text[:match.start()].count("\n") + 1,
+                "project_specific_runtime_knowledge", rule,
+            ))
+    return findings
 
 
 @dataclass(frozen=True)
@@ -38,7 +54,7 @@ class CompatibilityFinding:
     value: str
 
 
-def scan_runtime_compatibility(root: str | Path) -> dict[str, Any]:
+def scan_runtime_compatibility(root: str | Path, forbidden_tokens: Sequence[str] = ()) -> dict[str, Any]:
     base = Path(root).resolve()
     findings: list[CompatibilityFinding] = []
     source_root = base / "src"
@@ -84,14 +100,7 @@ def scan_runtime_compatibility(root: str | Path) -> dict[str, Any]:
                     "runtime_knowledge_read_error", str(error),
                 ))
                 continue
-            lower = text.lower()
-            for token in _PROJECT_TOKENS:
-                if token in lower:
-                    line = text[:lower.index(token)].count("\n") + 1
-                    findings.append(CompatibilityFinding(
-                        path.relative_to(base).as_posix(), line,
-                        "project_specific_runtime_knowledge", token,
-                    ))
+            findings.extend(_residue_findings(path.relative_to(base).as_posix(), text, forbidden_tokens))
 
     findings.sort(key=lambda item: (item.path, item.line, item.rule, item.value))
     return {
@@ -104,8 +113,8 @@ def scan_runtime_compatibility(root: str | Path) -> dict[str, Any]:
     }
 
 
-def scan_runtime_deproject(root: str | Path) -> dict[str, Any]:
-    """Scan runtime-eligible knowledge for known project-specific residue."""
+def scan_runtime_deproject(root: str | Path, forbidden_tokens: Sequence[str] = ()) -> dict[str, Any]:
+    """Scan runtime-eligible knowledge for project-specific residue (generic patterns plus operator-supplied tokens)."""
     base = Path(root).resolve()
     knowledge_root = base / "knowledge"
     runtime_roots = (
@@ -132,15 +141,7 @@ def scan_runtime_deproject(root: str | Path) -> dict[str, Any]:
                 "runtime_knowledge_read_error", str(error),
             ))
             continue
-        lower = text.lower()
-        for token in _PROJECT_TOKENS:
-            offset = lower.find(token)
-            if offset >= 0:
-                findings.append(CompatibilityFinding(
-                    path.relative_to(base).as_posix(),
-                    text[:offset].count("\n") + 1,
-                    "project_specific_runtime_knowledge", token,
-                ))
+        findings.extend(_residue_findings(path.relative_to(base).as_posix(), text, forbidden_tokens))
     findings.sort(key=lambda item: (item.path, item.line, item.rule, item.value))
     return {
         "schema_version": "1.0",

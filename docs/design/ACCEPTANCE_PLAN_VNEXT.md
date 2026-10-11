@@ -94,7 +94,7 @@ returns `ACCEPTED` and a reviewer verifies the manifest against source Campaign 
 | RG5 | Every Handoff in every real run is reconciled. |
 | RG6 | Exactly the 15 approved languages are certified; missing, duplicate, extra, or failed languages block release. |
 | RG7 | The worst family, language, and language/issue recall delta stays within policy; per-language and per-cell confidence intervals are reported. |
-| RG8 | Runtime knowledge passes provenance and deprojecting scans. |
+| RG8 | Runtime knowledge passes provenance and deprojecting scans, including evaluator-supplied `forbidden_residue_tokens` from the signed manifest. |
 | RG9 | Runtime, CLI, schemas, and docs pass the no-v2/v3-runtime-compatibility scan. |
 | RG10 | Every referenced evidence artifact resolves and its digest verifies under the signed manifest. |
 | RG11 | All 150 language/issue cells meet the frozen sample floor and at least one real held-out mixed-language Campaign has fully reconciled boundary cases. |

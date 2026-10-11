@@ -9,7 +9,7 @@ import hashlib
 import json
 from pathlib import Path
 import re
-from typing import Any, Callable, Mapping, Protocol, Sequence
+from typing import Any, Callable, Mapping, Sequence
 
 from .analysis_models import (
     Adjudication,
@@ -43,7 +43,9 @@ from .store import NotFoundError
 
 _SURFACE_INSTRUCTIONS = (
     "Enumerate externally or cross-trust-boundary reachable entry points, identify the "
-    "effective principal, and anchor every Surface to an exact source line."
+    "effective principal, and anchor every Surface to an exact source line. Every "
+    "Surface entry_path must be one of this Work Unit's source_files; a Surface in "
+    "another file belongs to that file's Work Unit or to a Handoff."
 )
 
 _AXIS_INSTRUCTIONS = {
@@ -228,19 +230,6 @@ class TaskView:
     output_ref: str | None
 
 
-class ExecutionBackend(Protocol):
-    def capabilities(self) -> frozenset[str]: ...
-    def submit(self, task: TaskSpec) -> TaskView: ...
-    def poll(self, task_id: str) -> TaskView: ...
-    def claim(
-        self, worker_id: str, *, lease_seconds: int = 900,
-        operation: str | None = None, batch_id: str | None = None,
-        task_id_filter: str | None = None,
-    ) -> TaskLease | None: ...
-    def collect(self, lease: TaskLease, result: TaskResult) -> TaskView: ...
-    def release(self, lease: TaskLease, *, reason: str) -> TaskView: ...
-    def retry(self, task_id: str, *, reason: str, actor: str = "operator") -> TaskView: ...
-    def cancel(self, task_id: str, *, reason: str) -> TaskView: ...
 
 
 class ManualExecutionBackend:
@@ -257,11 +246,6 @@ class ManualExecutionBackend:
         self.campaign_id = campaign_id
         self._clock = clock or (lambda: dt.datetime.now(dt.UTC))
 
-    def capabilities(self) -> frozenset[str]:
-        return frozenset({
-            "durable_queue", "leases", "operation_filter", "lease_release",
-            "bounded_retry", "artifact_io", "manual_worker",
-        })
 
     def submit(self, task: TaskSpec) -> TaskView:
         if task.campaign_id != self.campaign_id:
@@ -524,7 +508,40 @@ class ManualExecutionBackend:
                 )
         if task.required_output == "verdict-submission/v1":
             self._validate_verdict_output(task, output)
+        if task.required_output == "surface-set/v1":
+            self._validate_surface_coverage(task, output)
         return output
+
+    def _validate_surface_coverage(
+        self, task: TaskSpec, output: Mapping[str, Any],
+    ) -> None:
+        try:
+            task_input = json.loads(self.manager.artifacts.get_bytes(task.input_refs[0]))
+        except (IndexError, OSError, ValueError):
+            return
+        work_unit = task_input.get("work_unit") if isinstance(task_input, dict) else None
+        if not isinstance(work_unit, dict):
+            return
+        DiscoveryCoordinator._validate_reviewed_paths(output, work_unit, task.task_id)
+        expected = {str(edge["edge_id"]) for edge in task_input.get("boundary_edges", [])}
+        reviews = output.get("boundary_reviews")
+        if not isinstance(reviews, list):
+            raise ModelError(f"task output requires boundary_reviews: {task.task_id}")
+        reviewed = [
+            str(item.get("edge_id", "")) if isinstance(item, dict) else "" for item in reviews
+        ]
+        actual = set(reviewed)
+        missing = sorted(expected - actual)
+        extra = sorted(actual - expected)
+        duplicated = len(reviewed) - len(actual)
+        if missing or extra or duplicated:
+            raise ModelError(
+                f"boundary review coverage mismatch: {task.task_id}; "
+                f"expected={len(expected)}, delivered={len(actual)}, "
+                f"missing={len(missing)} (first {missing[:10]}), "
+                f"extra={len(extra)} (first {extra[:10]}), duplicates={duplicated}; "
+                "resubmit one review for every supplied boundary edge"
+            )
 
     def _validate_verdict_output(
         self, task: TaskSpec, output: Mapping[str, Any],

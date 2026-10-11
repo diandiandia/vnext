@@ -102,15 +102,24 @@ def test_collected_r1_output_can_be_amended_before_stage_commit(
         assert lease is not None
         original_ref = manager.artifacts.put_text(json.dumps({
             "schema_version": "1.0",
-            "reviewed_paths": [],
-            "surfaces": [],
+            "reviewed_paths": list(plan.work_units[0].source_files),
+            "surfaces": [{
+                "surface_id": "SURF-stray",
+                "work_unit_id": plan.work_units[0].work_unit_id,
+                "component_id": plan.work_units[0].component_id,
+                "kind": "function_entry",
+                "entry_path": "elsewhere.py",
+                "entry_symbol": "handle",
+                "principal": "remote",
+                "evidence_refs": ["LOC-elsewhere.py:1"],
+            }],
             "boundary_reviews": [],
         })).artifact_id
         backend.collect(lease, TaskResult(
-            True, original_ref, "incomplete reviewed_paths",
+            True, original_ref, "stray surface path",
             {"agent_runs": 1, "wall_seconds": 1},
         ))
-        with pytest.raises(ModelError, match="reviewed path coverage mismatch"):
+        with pytest.raises(ModelError, match="outside Work Unit"):
             coordinator.commit_r1()
 
         corrected_ref = manager.artifacts.put_text(json.dumps({
@@ -702,24 +711,55 @@ def test_compact_r2_runs_all_axes_in_one_task_per_work_unit(tmp_path: Path) -> N
         manager.close()
 
 
-def test_discovery_commit_rejects_incomplete_reviewed_paths(tmp_path: Path) -> None:
+def test_collect_rejects_incomplete_reviewed_paths_with_gap_list(tmp_path: Path) -> None:
     manager, workflow, _ = _workflow(tmp_path, "CMP-coverage")
     try:
         workflow.run_r0()
         backend = ManualExecutionBackend(manager, "CMP-coverage")
         coordinator = DiscoveryCoordinator(workflow, backend)
-        coordinator.schedule_r1()
+        task = coordinator.schedule_r1()[0].task
         lease = backend.claim("worker")
         assert lease is not None
         output_ref = manager.artifacts.put_text(json.dumps({
             "schema_version": "1.0", "reviewed_paths": [], "surfaces": [],
             "boundary_reviews": [],
         })).artifact_id
-        backend.collect(lease, TaskResult(
-              True, output_ref, "partial", {"agent_runs": 1, "wall_seconds": 1}, execution_configuration_fixture()
-        ))
-        with pytest.raises(ModelError, match="reviewed path coverage mismatch"):
-            coordinator.commit_r1()
+        with pytest.raises(ModelError, match=r"reviewed path coverage mismatch.*app\.py"):
+            backend.collect(lease, TaskResult(
+                True, output_ref, "partial", {"agent_runs": 1, "wall_seconds": 1},
+                execution_configuration_fixture(),
+            ))
+        assert backend.poll(task.task_id).status is TaskStatus.LEASED
+    finally:
+        manager.close()
+
+
+def test_collect_rejects_missing_boundary_reviews_with_gap_list(tmp_path: Path) -> None:
+    manager, task = _setup(tmp_path)
+    try:
+        backend = ManualExecutionBackend(manager, "CMP-exec")
+        input_ref = manager.artifacts.put_text(json.dumps({
+            "work_unit": {"work_unit_id": "WU-1", "source_files": []},
+            "boundary_edges": [{"edge_id": "EDGE-a"}, {"edge_id": "EDGE-b"}],
+        })).artifact_id
+        backend.submit(replace(task, input_refs=(input_ref,)))
+        lease = backend.claim("worker")
+        assert lease is not None
+        partial_ref = manager.artifacts.put_text(json.dumps({
+            "schema_version": "1.0", "reviewed_paths": [], "surfaces": [],
+            "boundary_reviews": [{"edge_id": "EDGE-a"}],
+        })).artifact_id
+        with pytest.raises(ModelError, match=r"missing=1 \(first \['EDGE-b'\]\)"):
+            backend.collect(lease, TaskResult(
+                True, partial_ref, "partial", {"agent_runs": 1, "wall_seconds": 1},
+            ))
+        complete_ref = manager.artifacts.put_text(json.dumps({
+            "schema_version": "1.0", "reviewed_paths": [], "surfaces": [],
+            "boundary_reviews": [{"edge_id": "EDGE-a"}, {"edge_id": "EDGE-b"}],
+        })).artifact_id
+        assert backend.collect(lease, TaskResult(
+            True, complete_ref, "complete", {"agent_runs": 1, "wall_seconds": 1},
+        )).status is TaskStatus.SUCCEEDED
     finally:
         manager.close()
 

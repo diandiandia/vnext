@@ -46,6 +46,20 @@ def _chunks(values: Sequence[str], size: int) -> Iterable[tuple[str, ...]]:
         yield tuple(values[offset:offset + size])
 
 
+def discovery_output_floor_bytes(work_unit: WorkUnit) -> int:
+    """Lower bound on a valid R1 result: reviewed paths plus one minimal review per owned edge."""
+    per_review = len(json.dumps({
+        "disposition": "unresolved",
+        "edge_id": "",
+        "evidence_refs": ["LOC-:1"],
+        "rationale": "x",
+        "work_unit_id": work_unit.work_unit_id,
+    }, separators=(",", ":")))
+    edge_bytes = sum(per_review + len(edge_id) for edge_id in work_unit.boundary_edge_ids)
+    path_bytes = sum(len(path) + 3 for path in work_unit.source_files)
+    return 64 + path_bytes + edge_bytes
+
+
 def create_audit_plan(
     *,
     campaign_id: str,

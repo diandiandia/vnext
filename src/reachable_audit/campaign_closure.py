@@ -650,6 +650,7 @@ class CampaignCloser:
                 "usage": {
                     "tasks_reporting_usage": len(usage_reported_tasks),
                     "tasks_missing_usage": len(completed_task_measurements) - len(usage_reported_tasks),
+                    "usage_complete": len(usage_reported_tasks) == len(completed_task_measurements),
                     "cache_hit_ratio": cache_hit_ratio,
                 },
                 "configuration_digest": execution_config_digest,
@@ -815,6 +816,8 @@ class CampaignCloser:
                 f"{execution.get('configuration_complete', 'not recorded')}",
                 "- Cache-hit ratio: "
                 f"{execution.get('usage', {}).get('cache_hit_ratio', 'not recorded')}",
+                "- Usage reported for every task: "
+                f"{execution.get('usage', {}).get('usage_complete', 'not recorded')}",
             ])
         lines.extend([
             "",

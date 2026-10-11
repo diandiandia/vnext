@@ -166,3 +166,19 @@ def test_boundary_source_path_must_belong_to_source_component(tmp_path: Path) ->
         assert "not owned by source component" in str(error)
     else:
         raise AssertionError("invalid boundary source path was accepted")
+
+def test_output_floor_grows_with_owned_edges_and_paths() -> None:
+    from reachable_audit.plan_models import WorkUnit
+    from reachable_audit.planning import discovery_output_floor_bytes
+
+    def unit(paths: tuple[str, ...], edges: tuple[str, ...]) -> WorkUnit:
+        return WorkUnit(
+            work_unit_id="WU-x", component_id="C", source_files=paths, languages=(),
+            category_families=(), discovery_axes=(), boundary_edge_ids=edges,
+        )
+
+    base = discovery_output_floor_bytes(unit(("a.py",), ()))
+    with_edges = discovery_output_floor_bytes(
+        unit(("a.py",), tuple(f"E-{i}" for i in range(1000)))
+    )
+    assert with_edges > base + 1000 * 100
