@@ -92,9 +92,14 @@ _OUTPUT_DISCIPLINE_BYTES = 1024 * 1024
 
 _OUTPUT_DISCIPLINE = (
     "Compose the complete result once and write it in a single call; do not rewrite or "
-    "patch it incrementally. Keep it compact: cite anchors instead of quoting source, "
-    "give each evidence item one concise sentence, and omit fields the contract does "
-    f"not ask for. The result must stay under {_OUTPUT_DISCIPLINE_BYTES} bytes."
+    "patch it incrementally. Cover every required element — every surface and every "
+    "boundary review the task lists — even when that is thousands of items: never drop, "
+    "sample, or truncate required coverage to save space. Keep each item terse: cite "
+    "anchors instead of quoting source, one concise sentence per evidence item, and "
+    f"omit fields the contract does not ask for, so the total targets under "
+    f"{_OUTPUT_DISCIPLINE_BYTES} bytes. If full coverage genuinely needs more, write it "
+    f"anyway and stay within the {_MAX_TASK_OUTPUT_BYTES}-byte hard ceiling — coverage "
+    "always wins over the size target, and the ceiling is never exceeded."
 )
 
 
