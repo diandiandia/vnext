@@ -32,7 +32,7 @@ from .analysis_models import (
 )
 from .batch_workflow import BatchWorkflow
 from .campaign import CampaignManager
-from .discovery.hotspots import scan_work_unit_hotspots
+from .discovery.hotspots import compact_hotspot_report, scan_work_unit_hotspots
 from .adapters.languages import LANGUAGE_ADAPTERS
 from .knowledge_catalog import KnowledgeCatalog, default_knowledge_root
 from .experiments.harness_catalog import DEFAULT_HARNESS_CATALOG
@@ -92,6 +92,46 @@ _MAX_TASK_OUTPUT_BYTES = 4 * 1024 * 1024
 # a budget.
 _OUTPUT_DISCIPLINE_BYTES = 1024 * 1024
 
+_REVIEWED_ALL = "ALL_SOURCE_FILES"
+_REVIEWED_SCOPE_OUTPUTS = frozenset({
+    "surface-set/v1", "hypothesis-set/v1", "compact-hypothesis-set/v1",
+})
+_REVIEWED_SCOPE_CONTRACT = (
+    f'"{_REVIEWED_ALL}" in reviewed_scope when every Work Unit source file was reviewed '
+    "(preferred; do not echo the file list), or reviewed_paths as the exact array; "
+    "partial coverage is rejected at collection"
+)
+
+
+def _agent_work_unit(
+    work_unit: Mapping[str, Any], *, drop_edge_ids: bool = False,
+) -> dict[str, Any]:
+    """Agent-facing Work Unit: files grouped by directory to avoid repeating path prefixes."""
+    grouped: dict[str, list[str]] = {}
+    files = [str(item) for item in work_unit.get("source_files", [])]
+    for path in files:
+        directory, _, name = path.rpartition("/")
+        grouped.setdefault(directory or ".", []).append(name)
+    omitted = {"source_files"} | ({"boundary_edge_ids"} if drop_edge_ids else set())
+    view = {key: value for key, value in work_unit.items() if key not in omitted}
+    view["source_file_count"] = len(files)
+    view["source_files_by_directory"] = grouped
+    view["path_note"] = "full path = directory + '/' + name; '.' is the project root"
+    if drop_edge_ids:
+        view["boundary_edge_count"] = len(work_unit.get("boundary_edge_ids", []))
+    return view
+
+
+def _expand_agent_work_unit_files(work_unit: Mapping[str, Any]) -> list[str]:
+    grouped = work_unit.get("source_files_by_directory")
+    if not isinstance(grouped, dict):
+        return [str(item) for item in work_unit.get("source_files", [])]
+    return [
+        name if directory == "." else f"{directory}/{name}"
+        for directory, names in grouped.items()
+        for name in names
+    ]
+
 _OUTPUT_DISCIPLINE = (
     "Compose the complete result once and write it in a single call; do not rewrite or "
     "patch it incrementally. Cover every required element — every surface and every "
@@ -126,9 +166,9 @@ _TASK_OUTPUT_CONTRACTS = {
     "collect_batch_closure_evidence": "batch-closure-evidence/v1",
 }
 _TASK_OUTPUT_REQUIRED_FIELDS = {
-    "surface-set/v1": {"reviewed_paths", "surfaces", "boundary_reviews"},
-    "hypothesis-set/v1": {"reviewed_paths", "axis_run", "hypotheses"},
-    "compact-hypothesis-set/v1": {"reviewed_paths", "axis_runs", "hypotheses"},
+    "surface-set/v1": {"surfaces", "boundary_reviews"},
+    "hypothesis-set/v1": {"axis_run", "hypotheses"},
+    "compact-hypothesis-set/v1": {"axis_runs", "hypotheses"},
     "verdict-submission/v1": {"verdict"},
     "refutation/v1": {"refutation"},
     "adjudication/v1": {"adjudication"},
@@ -506,6 +546,14 @@ class ManualExecutionBackend:
                 raise ModelError(
                     f"task output contract missing {sorted(missing)}: {task.task_id}"
                 )
+        if (
+            task.required_output in _REVIEWED_SCOPE_OUTPUTS
+            and "reviewed_paths" not in output
+            and "reviewed_scope" not in output
+        ):
+            raise ModelError(
+                f"task output contract missing ['reviewed_scope']: {task.task_id}"
+            )
         if task.required_output == "verdict-submission/v1":
             self._validate_verdict_output(task, output)
         if task.required_output == "surface-set/v1":
@@ -522,7 +570,9 @@ class ManualExecutionBackend:
         work_unit = task_input.get("work_unit") if isinstance(task_input, dict) else None
         if not isinstance(work_unit, dict):
             return
-        DiscoveryCoordinator._validate_reviewed_paths(output, work_unit, task.task_id)
+        DiscoveryCoordinator._validate_reviewed_paths(
+            output, {"source_files": _expand_agent_work_unit_files(work_unit)}, task.task_id,
+        )
         expected = {str(edge["edge_id"]) for edge in task_input.get("boundary_edges", [])}
         reviews = output.get("boundary_reviews")
         if not isinstance(reviews, list):
@@ -744,11 +794,8 @@ class DiscoveryCoordinator:
                 "schema_version": "1.0",
                 "operation": "discover_surfaces",
                 "snapshot_id": self.workflow.campaign.snapshot_id,
-                "work_unit": work_unit,
-                "hotspot_report": scan_work_unit_hotspots(
-                    self.workflow.manager.target_root,
-                    work_unit.get("source_files", []),
-                ),
+                "work_unit": _agent_work_unit(work_unit, drop_edge_ids=True),
+                "hotspot_report": self._hotspot_context(work_unit),
                 "hotspot_contract": _HOTSPOT_CONTRACT,
                 "language_adapters": self._language_adapter_context(work_unit),
                 "boundary_edges": boundary_edges,
@@ -759,7 +806,7 @@ class DiscoveryCoordinator:
                 ),
                 "output_contract": {
                     "schema_version": "1.0",
-                    "reviewed_paths": "exact array of Work Unit source_files",
+                    "reviewed_scope": _REVIEWED_SCOPE_CONTRACT,
                     "surfaces": "array<Surface>",
                     "boundary_reviews": "array<BoundaryReview>, one per supplied boundary edge",
                 },
@@ -817,10 +864,7 @@ class DiscoveryCoordinator:
         views = []
         for work_unit in self._work_units():
             work_unit_id = str(work_unit["work_unit_id"])
-            hotspot_report = scan_work_unit_hotspots(
-                self.workflow.manager.target_root,
-                work_unit.get("source_files", []),
-            )
+            hotspot_report = self._hotspot_context(work_unit)
             for axis in DiscoveryAxis:
                 knowledge_context = self.knowledge_catalog.task_context(
                     work_unit.get("languages", []),
@@ -832,7 +876,7 @@ class DiscoveryCoordinator:
                     "operation": "generate_hypotheses",
                     "axis": axis.value,
                     "snapshot_id": self.workflow.campaign.snapshot_id,
-                    "work_unit": work_unit,
+                    "work_unit": _agent_work_unit(work_unit),
                     "hotspot_report": hotspot_report,
                     "hotspot_contract": _HOTSPOT_CONTRACT,
                     "surfaces": surfaces_by_work_unit.get(work_unit_id, []),
@@ -841,7 +885,7 @@ class DiscoveryCoordinator:
                     "analysis_contract": _AXIS_INSTRUCTIONS[axis.value],
                     "output_contract": {
                         "schema_version": "1.0",
-                        "reviewed_paths": "exact array of Work Unit source_files",
+                        "reviewed_scope": _REVIEWED_SCOPE_CONTRACT,
                         "axis_run": "AxisRun with APPLICABLE/NOT_APPLICABLE/DEFERRED, evidence_refs, rationale",
                         "hypotheses": "array<Hypothesis>",
                     },
@@ -873,10 +917,7 @@ class DiscoveryCoordinator:
         axes = [axis.value for axis in DiscoveryAxis]
         for work_unit in self._work_units():
             work_unit_id = str(work_unit["work_unit_id"])
-            hotspot_report = scan_work_unit_hotspots(
-                self.workflow.manager.target_root,
-                work_unit.get("source_files", []),
-            )
+            hotspot_report = self._hotspot_context(work_unit)
             knowledge_context = self.knowledge_catalog.task_context(
                 work_unit.get("languages", []),
                 families=work_unit.get("category_families", []),
@@ -886,7 +927,7 @@ class DiscoveryCoordinator:
                 "schema_version": "1.0",
                 "operation": "generate_hypotheses_compact",
                 "snapshot_id": self.workflow.campaign.snapshot_id,
-                "work_unit": work_unit,
+                "work_unit": _agent_work_unit(work_unit),
                 "hotspot_report": hotspot_report,
                 "hotspot_contract": _HOTSPOT_CONTRACT,
                 "surfaces": surfaces_by_work_unit.get(work_unit_id, []),
@@ -897,7 +938,7 @@ class DiscoveryCoordinator:
                 },
                 "output_contract": {
                     "schema_version": "1.0",
-                    "reviewed_paths": "exact array of Work Unit source_files",
+                    "reviewed_scope": _REVIEWED_SCOPE_CONTRACT,
                     "axis_runs": "exactly one evidenced AxisRun per listed axis",
                     "hypotheses": "array<Hypothesis>, each with its origin_axis",
                 },
@@ -1395,7 +1436,7 @@ class DiscoveryCoordinator:
                 "operation": "run_category_audit",
                 "snapshot_id": self.workflow.campaign.snapshot_id,
                 "category_plan": category_plan,
-                "work_unit": work_units[work_unit_id],
+                "work_unit": _agent_work_unit(work_units[work_unit_id]),
                 "language_adapters": self._language_adapter_context(work_units[work_unit_id]),
                 "knowledge_context": knowledge_context,
                 "mechanism_cards": mechanism_cards,
@@ -1785,18 +1826,37 @@ class DiscoveryCoordinator:
         work_unit: Mapping[str, Any],
         task_id: str,
     ) -> None:
+        expected = {str(item) for item in work_unit.get("source_files", [])}
+        if value.get("reviewed_paths") is None and value.get("reviewed_scope") == _REVIEWED_ALL:
+            excluded = value.get("excluded_paths", [])
+            if not isinstance(excluded, list) or any(not isinstance(i, str) for i in excluded):
+                raise ModelError(f"task output excluded_paths must be a string array: {task_id}")
+            if excluded:
+                raise ModelError(
+                    f"task reviewed path coverage mismatch: {task_id}; "
+                    f"{_REVIEWED_ALL} conflicts with {len(excluded)} excluded paths "
+                    f"(first {sorted(excluded)[:10]})"
+                )
+            return
         reviewed = value.get("reviewed_paths")
         if not isinstance(reviewed, list) or any(
             not isinstance(item, str) for item in reviewed
         ):
-            raise ModelError(f"task output requires reviewed_paths: {task_id}")
-        expected = {str(item) for item in work_unit.get("source_files", [])}
+            raise ModelError(f"task output requires reviewed_scope or reviewed_paths: {task_id}")
         actual = set(reviewed)
         if actual != expected or len(reviewed) != len(actual):
+            missing = sorted(expected - actual)
+            extra = sorted(actual - expected)
             raise ModelError(
                 f"task reviewed path coverage mismatch: {task_id}; "
-                f"missing={sorted(expected - actual)}, extra={sorted(actual - expected)}"
+                f"missing={len(missing)} (first {missing[:10]}), "
+                f"extra={len(extra)} (first {extra[:10]})"
             )
+
+    def _hotspot_context(self, work_unit: Mapping[str, Any]) -> dict[str, Any]:
+        return compact_hotspot_report(scan_work_unit_hotspots(
+            self.workflow.manager.target_root, work_unit.get("source_files", []),
+        ))
 
     def _task_id(self, operation: str, *parts: str) -> str:
         source = ":".join((

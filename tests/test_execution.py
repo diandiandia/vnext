@@ -734,6 +734,65 @@ def test_collect_rejects_incomplete_reviewed_paths_with_gap_list(tmp_path: Path)
         manager.close()
 
 
+def test_r1_accepts_reviewed_scope_all_and_input_groups_files_by_directory(
+    tmp_path: Path,
+) -> None:
+    manager, workflow, plan = _workflow(tmp_path, "CMP-scope-all")
+    try:
+        workflow.run_r0()
+        backend = ManualExecutionBackend(manager, "CMP-scope-all")
+        coordinator = DiscoveryCoordinator(workflow, backend)
+        task = coordinator.schedule_r1()[0].task
+        task_input = json.loads(manager.artifacts.get_bytes(task.input_refs[0]))
+        assert "source_files" not in task_input["work_unit"]
+        assert task_input["work_unit"]["source_files_by_directory"] == {".": ["app.py"]}
+        assert task_input["work_unit"]["source_file_count"] == 1
+        assert "unsupported_paths" not in task_input["hotspot_report"]
+
+        lease = backend.claim("worker")
+        assert lease is not None
+        conflicting_ref = manager.artifacts.put_text(json.dumps({
+            "schema_version": "1.0", "reviewed_scope": "ALL_SOURCE_FILES",
+            "excluded_paths": ["app.py"], "surfaces": [], "boundary_reviews": [],
+        })).artifact_id
+        with pytest.raises(ModelError, match="conflicts with 1 excluded paths"):
+            backend.collect(lease, TaskResult(
+                True, conflicting_ref, "conflict", {"agent_runs": 1, "wall_seconds": 1},
+            ))
+        missing_ref = manager.artifacts.put_text(json.dumps({
+            "schema_version": "1.0", "surfaces": [], "boundary_reviews": [],
+        })).artifact_id
+        with pytest.raises(ModelError, match="reviewed_scope"):
+            backend.collect(lease, TaskResult(
+                True, missing_ref, "no scope", {"agent_runs": 1, "wall_seconds": 1},
+            ))
+        complete_ref = manager.artifacts.put_text(json.dumps({
+            "schema_version": "1.0", "reviewed_scope": "ALL_SOURCE_FILES",
+            "surfaces": [], "boundary_reviews": [],
+        })).artifact_id
+        backend.collect(lease, TaskResult(
+            True, complete_ref, "complete", {"agent_runs": 1, "wall_seconds": 1},
+        ))
+        coordinator.commit_r1()
+        assert workflow._stage_event("R1_COMPLETED") is not None
+    finally:
+        manager.close()
+
+
+def test_agent_work_unit_round_trips_grouped_paths() -> None:
+    from reachable_audit.execution import _agent_work_unit, _expand_agent_work_unit_files
+
+    unit = {
+        "work_unit_id": "WU-1",
+        "source_files": ["a.py", "pkg/b.py", "pkg/sub/c.py"],
+        "boundary_edge_ids": ["E1", "E2"],
+    }
+    view = _agent_work_unit(unit, drop_edge_ids=True)
+    assert sorted(_expand_agent_work_unit_files(view)) == sorted(unit["source_files"])
+    assert view["boundary_edge_count"] == 2 and "boundary_edge_ids" not in view
+    assert _agent_work_unit(unit)["boundary_edge_ids"] == ["E1", "E2"]
+
+
 def test_collect_rejects_missing_boundary_reviews_with_gap_list(tmp_path: Path) -> None:
     manager, task = _setup(tmp_path)
     try:

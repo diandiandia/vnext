@@ -74,3 +74,21 @@ def test_python_hotspots_ignore_unrelated_api_lookalikes(tmp_path: Path) -> None
     assert report["scanned_paths"] == ["app.py"]
     assert report["candidate_count"] == 0
     assert any("no match is not evidence of safety" in item for item in report["limitations"])
+
+def test_compact_hotspot_report_replaces_path_lists_with_counts(tmp_path) -> None:
+    from reachable_audit.discovery.hotspots import (
+        compact_hotspot_report, scan_work_unit_hotspots,
+    )
+
+    (tmp_path / "app.py").write_text("import os\nos.system('x')\n", encoding="utf-8")
+    (tmp_path / "Main.java").write_text("class Main {}\n", encoding="utf-8")
+    (tmp_path / "Other.java").write_text("class Other {}\n", encoding="utf-8")
+    report = compact_hotspot_report(
+        scan_work_unit_hotspots(tmp_path, ["app.py", "Main.java", "Other.java"])
+    )
+
+    assert "scanned_paths" not in report and "unsupported_paths" not in report
+    assert report["scanned_path_count"] == 1
+    assert report["unsupported_path_count"] == 2
+    assert report["unsupported_extension_counts"] == {".java": 2}
+    assert report["candidate_count"] == 1

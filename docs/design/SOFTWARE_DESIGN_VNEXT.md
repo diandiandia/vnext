@@ -241,10 +241,16 @@ ratio; absent usage is never estimated and never blocks collection. Task result 
 are asked to stay under 1 MiB and are hard-rejected above 4 MiB at collection. Coverage
 takes precedence over size: `output_discipline` states that required items are never
 dropped, sampled, or truncated to meet the soft target. Collection of a `discover_surfaces`
-result additionally verifies, before the task becomes terminal, that `reviewed_paths`
-equals the Work Unit `source_files` and that `boundary_reviews` cover every supplied edge
+result additionally verifies, before the task becomes terminal, that coverage is complete
+(`reviewed_scope` is `ALL_SOURCE_FILES`, or `reviewed_paths` equals the Work Unit
+`source_files`; the scope form avoids echoing the file list) and that `boundary_reviews`
+cover every supplied edge
 exactly once; a rejection reports counts and the first ten missing or extra edge IDs and
-leaves the task leased. `plan` output lists per-batch work-unit, source-file, and
+leaves the task leased. Agent-facing task inputs are compacted without changing the
+canonical Work Unit: files are grouped by directory (`source_files_by_directory`), the
+hotspot report carries counts instead of path lists derivable from the Work Unit, and R1
+inputs replace `boundary_edge_ids` with a count because the full edges are already
+supplied. `plan` output lists per-batch work-unit, source-file, and
 source-byte counts, an estimated required-output floor per Work Unit, and
 `oversize_work_units` whose floor exceeds the hard ceiling (no valid result can fit), so
 operators can split or amend the plan before dispatch. These are planning facts, not price

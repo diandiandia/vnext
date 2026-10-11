@@ -99,6 +99,26 @@ def _python_candidates(path: str, source: str, tree: ast.Module) -> list[dict[st
     ))
 
 
+def compact_hotspot_report(report: dict[str, Any]) -> dict[str, Any]:
+    """Agent-facing form: path lists are derivable from the Work Unit, so report counts."""
+    extensions: dict[str, int] = {}
+    for path in report["unsupported_paths"]:
+        suffix = Path(path).suffix.lower() or "(none)"
+        extensions[suffix] = extensions.get(suffix, 0) + 1
+    compact = {
+        key: value for key, value in report.items()
+        if key not in {"scanned_paths", "unsupported_paths"}
+    }
+    compact["scanned_path_count"] = len(report["scanned_paths"])
+    compact["unsupported_path_count"] = len(report["unsupported_paths"])
+    compact["unsupported_extension_counts"] = dict(sorted(extensions.items()))
+    compact["path_lists_note"] = (
+        "scanned paths are the Work Unit's .py/.pyw files; all other Work Unit files "
+        "were not scanned by this provider"
+    )
+    return compact
+
+
 def scan_work_unit_hotspots(
     project_root: str | Path,
     source_files: list[str] | tuple[str, ...],

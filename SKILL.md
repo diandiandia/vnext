@@ -25,7 +25,7 @@ projects, including all 15 language certifications, a mixed-language Campaign, a
 4. Store facts as events and artifacts; derive status and reports from the store.
 5. Do not import v3 queues, compatibility fields, prompts, or runtime knowledge.
 6. Default R1/R2 execution uses durable tasks; direct `r1`/`r2` imports are recovery-only.
-7. Never claim a path in `reviewed_paths` unless its scoped source was actually inspected.
+7. Never claim review coverage (`reviewed_scope` or a path in `reviewed_paths`) unless the scoped source was actually inspected.
 8. Every reported Surface needs a real `LOC-<project-relative-path>:<line>` anchor.
 9. Register every background process group and temporary runtime directory with the
   Campaign. Successful closure releases registered resources. For a deliberate stop,
@@ -53,7 +53,9 @@ immediately register the group. Use only temporary directories returned by
 `resource-create-temp` for disposable runtime state.
 
 After R0, schedule R1 and repeatedly claim tasks until the command returns `null`.
-Each claim contains the canonical Work Unit, project-relative source paths, output
+Each claim contains the Work Unit (source files grouped by directory under
+`source_files_by_directory`; full path = directory + `/` + name, `.` is the project
+root), a compact hotspot report (counts, not path lists), output
 contract, and analysis contract. Read the scoped files, then submit one result JSON.
 Do not inspect files outside the Work Unit except to follow an explicit boundary; create
 a Handoff rather than silently expanding ownership.
@@ -64,7 +66,8 @@ and `output_tokens` as integers; Campaign reports derive per-operation totals an
 cache-hit ratio from them, and flag `usage_complete: false` when any task omits them.
 Missing usage never blocks collection. Result artifacts are asked to stay under 1 MiB
 (output_discipline) and are hard-rejected above 4 MiB; coverage always wins over size.
-A `discover_surfaces` result is checked at `task-collect`: `reviewed_paths` must equal the
+A `discover_surfaces` result is checked at `task-collect`: `reviewed_scope` must be
+`"ALL_SOURCE_FILES"` (preferred; do not echo the file list) or `reviewed_paths` must equal the
 Work Unit's `source_files` and `boundary_reviews` must cover every supplied edge exactly
 once. A rejection lists the gap (counts plus the first ten edge IDs) and leaves the task
 leased so the same worker can resubmit the complete result.
