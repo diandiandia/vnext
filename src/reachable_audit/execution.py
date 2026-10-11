@@ -280,7 +280,22 @@ class ManualExecutionBackend:
         if existing_submissions and any(
             event.payload_ref != artifact.artifact_id for event in existing_submissions
         ):
-            raise ModelError(f"execution task ID reused with different spec: {task.task_id}")
+            # Re-scheduling an already-submitted task whose payload was revised (e.g. an
+            # output_discipline text change between skill versions) must not silently
+            # rewrite a task that may be in flight or complete: the first submitted spec
+            # stays authoritative and re-scheduling is a no-op. Only a change of task
+            # identity remains an error.
+            existing_spec = TaskSpec.from_dict(json.loads(
+                self.manager.artifacts.get_bytes(existing_submissions[-1].payload_ref)
+            ))
+            same_identity = (
+                existing_spec.work_unit_id == task.work_unit_id
+                and existing_spec.operation == task.operation
+                and existing_spec.required_output == task.required_output
+            )
+            if not same_identity:
+                raise ModelError(f"execution task ID reused with different spec: {task.task_id}")
+            return self.poll(task.task_id)
         digest = hashlib.sha256(encoded.encode("utf-8")).hexdigest()
         self.manager.store.append_event(
             campaign_id=task.campaign_id,
