@@ -47,17 +47,26 @@ def _chunks(values: Sequence[str], size: int) -> Iterable[tuple[str, ...]]:
 
 
 def discovery_output_floor_bytes(work_unit: WorkUnit) -> int:
-    """Lower bound on a valid R1 result: reviewed paths plus one minimal review per owned edge."""
-    per_review = len(json.dumps({
-        "disposition": "unresolved",
-        "edge_id": "",
-        "evidence_refs": ["LOC-:1"],
-        "rationale": "x",
-        "work_unit_id": work_unit.work_unit_id,
-    }, separators=(",", ":")))
-    edge_bytes = sum(per_review + len(edge_id) for edge_id in work_unit.boundary_edge_ids)
-    path_bytes = sum(len(path) + 3 for path in work_unit.source_files)
-    return 64 + path_bytes + edge_bytes
+    """Estimate a minimal valid R1 JSON result, including each mandatory boundary review."""
+    shortest_path = min(work_unit.source_files, key=len, default="")
+    output = {
+        "schema_version": "1.0",
+        "reviewed_scope": "ALL_SOURCE_FILES",
+        "surfaces": [],
+        "boundary_reviews": [
+            {
+                "edge_id": edge_id,
+                "work_unit_id": work_unit.work_unit_id,
+                "disposition": "unresolved",
+                "evidence_refs": [f"LOC-{shortest_path}:1"],
+                "rationale": "x",
+            }
+            for edge_id in work_unit.boundary_edge_ids
+        ],
+    }
+    return len(json.dumps(
+        output, ensure_ascii=False, separators=(",", ":")
+    ).encode("utf-8"))
 
 
 def create_audit_plan(

@@ -136,7 +136,21 @@ def test_clean_r5_and_transmission_metrics_are_non_gating(tmp_path: Path) -> Non
         }
         assert metrics["hypothesis_count"] == 0
         assert metrics["finding_count"] == 0
+        assert metrics["r4_linked_finding_count"] == 0
         assert metrics["gate_effect"] == "NONE"
+        manager.store.append_event(
+            campaign_id=workflow.campaign_id,
+            batch_id=workflow.batch_id,
+            entity_type="finding",
+            entity_id="FND-canonical",
+            event_type="FINDING_RECORDED",
+            idempotency_key="finding:CMP-r4:FND-canonical",
+            actor="test",
+            payload={"status": "CONFIRMED"},
+        )
+        metrics = workflow.build_transmission_metrics()
+        assert metrics["finding_count"] == 1
+        assert metrics["r4_linked_finding_count"] == 0
     finally:
         manager.close()
 

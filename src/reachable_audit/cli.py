@@ -36,9 +36,8 @@ from .batch_workflow import BatchWorkflow
 from .evaluation import evaluate_release, write_evaluation_report
 from .experiments.environment import probe_toolchain
 from .experiments.runner import run_harness
-from .execution import (
-    DiscoveryCoordinator, ManualExecutionBackend, TaskResult, _MAX_TASK_OUTPUT_BYTES,
-)
+from .execution import DiscoveryCoordinator, ManualExecutionBackend, TaskResult
+from .runtime_policy import TASK_OUTPUT_MAX_BYTES
 from .drift import resolve_snapshot_drift
 from .graph import build_component_graph
 from .handoffs import HandoffResolver
@@ -654,6 +653,10 @@ def main(argv: list[str] | None = None) -> int:
                     unit.work_unit_id: discovery_output_floor_bytes(unit)
                     for unit in plan.work_units
                 }
+                boundary_reviews_by_unit = {
+                    unit.work_unit_id: len(unit.boundary_edge_ids)
+                    for unit in plan.work_units
+                }
 
                 def _size(path: str) -> int:
                     try:
@@ -667,11 +670,15 @@ def main(argv: list[str] | None = None) -> int:
                     "work_units": len(plan.work_units),
                     "batches": len(plan.batches),
                     "handoffs": len(plan.handoffs),
-                    "output_ceiling_bytes": _MAX_TASK_OUTPUT_BYTES,
+                    "output_ceiling_bytes": TASK_OUTPUT_MAX_BYTES,
                     "oversize_work_units": [
-                        {"work_unit_id": unit_id, "required_output_floor_bytes": floor}
+                        {
+                            "work_unit_id": unit_id,
+                            "estimated_r1_output_floor_bytes": floor,
+                            "boundary_review_count": boundary_reviews_by_unit[unit_id],
+                        }
                         for unit_id, floor in sorted(floor_by_unit.items())
-                        if floor > _MAX_TASK_OUTPUT_BYTES
+                        if floor > TASK_OUTPUT_MAX_BYTES
                     ],
                     "batch_summaries": [
                         {
@@ -683,8 +690,12 @@ def main(argv: list[str] | None = None) -> int:
                                 for unit_id in batch.work_unit_ids
                                 for path in files_by_unit[unit_id]
                             ),
-                            "max_required_output_floor_bytes": max(
+                            "max_estimated_r1_output_floor_bytes": max(
                                 floor_by_unit[unit_id] for unit_id in batch.work_unit_ids
+                            ),
+                            "max_boundary_review_count": max(
+                                boundary_reviews_by_unit[unit_id]
+                                for unit_id in batch.work_unit_ids
                             ),
                         }
                         for batch in plan.batches

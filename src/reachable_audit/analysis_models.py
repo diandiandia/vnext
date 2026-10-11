@@ -178,6 +178,21 @@ class BoundaryReview:
 
     @classmethod
     def from_dict(cls, value: Mapping[str, Any]) -> "BoundaryReview":
+        if not isinstance(value, Mapping):
+            raise ModelError("boundary review must be an object")
+        required = {"edge_id", "work_unit_id", "disposition", "rationale"}
+        missing = required - set(value)
+        if missing:
+            raise ModelError(f"boundary review is missing fields: {sorted(missing)}")
+        evidence_refs = value.get("evidence_refs", [])
+        rationale = value.get("rationale")
+        if (
+            not isinstance(evidence_refs, list)
+            or any(not isinstance(ref, str) or not ref.strip() for ref in evidence_refs)
+            or not isinstance(rationale, str)
+            or not rationale.strip()
+        ):
+            raise ModelError("boundary review requires evidence references and rationale")
         review = cls(
             edge_id=str(value["edge_id"]),
             work_unit_id=str(value["work_unit_id"]),
@@ -200,6 +215,19 @@ class Mechanism:
 
     @classmethod
     def from_dict(cls, value: Mapping[str, Any]) -> "Mechanism":
+        if not isinstance(value, Mapping):
+            raise ModelError("mechanism must be an object")
+        missing = {"family", "variant"} - set(value)
+        if missing:
+            raise ModelError(
+                "mechanism requires family and variant fields; "
+                f"missing {sorted(missing)}"
+            )
+        if any(
+            not isinstance(value[field_name], str) or not value[field_name].strip()
+            for field_name in ("family", "variant")
+        ):
+            raise ModelError("mechanism family and variant must be non-empty strings")
         mechanism = cls(
             family=str(value["family"]).upper(),
             variant=str(value["variant"]),
@@ -223,6 +251,20 @@ class Hypothesis:
 
     @classmethod
     def from_dict(cls, value: Mapping[str, Any]) -> "Hypothesis":
+        if not isinstance(value, Mapping):
+            raise ModelError("hypothesis must be an object")
+        required = {
+            "hypothesis_id", "work_unit_id", "origin_axis", "seed_refs",
+            "surface_ids", "mechanism", "claim",
+        }
+        missing = required - set(value)
+        if missing:
+            raise ModelError(f"hypothesis is missing fields: {sorted(missing)}")
+        if not isinstance(value["mechanism"], Mapping):
+            raise ModelError("hypothesis mechanism must be an object")
+        for field_name in ("seed_refs", "surface_ids"):
+            if not isinstance(value[field_name], list):
+                raise ModelError(f"hypothesis {field_name} must be an array")
         hypothesis = cls(
             hypothesis_id=str(value["hypothesis_id"]),
             work_unit_id=str(value["work_unit_id"]),

@@ -800,7 +800,9 @@ class BatchWorkflow:
             actor="agent",
             payload={
                 "category_run_ids": sorted(run.category_run_id for run in runs),
-                "finding_count": sum(len(run.finding_ids) for run in runs),
+                "linked_finding_count": len({
+                    finding_id for run in runs for finding_id in run.finding_ids
+                }),
             },
             payload_ref=artifact_id,
         )
@@ -1249,14 +1251,18 @@ class BatchWorkflow:
         plan_event = self._require_stage("CATEGORY_AUDIT_PLAN_RECORDED")
         for plan in self._read_artifact(plan_event.payload_ref)["category_plans"]:
             seed_cards_planned += len(plan["seed_card_ids"])
-        finding_count = 0
+        linked_finding_ids = set()
         for category_run in r4["category_runs"]:
-            finding_count += len(category_run["finding_ids"])
+            linked_finding_ids.update(category_run["finding_ids"])
             for axis_run in category_run["axis_runs"]:
                 axis_runs[axis_run["axis"]] += 1
                 if axis_run["applicability"] == Applicability.APPLICABLE.value:
                     axis_applicable[axis_run["axis"]] += 1
         total_hypotheses = len(r2["hypotheses"])
+        finding_ids = {
+            event.entity_id for event in self._events(event_type="FINDING_RECORDED")
+        }
+        finding_count = len(finding_ids)
         metrics = {
             "schema_version": "1.0",
             "batch_id": self.batch_id,
@@ -1276,6 +1282,7 @@ class BatchWorkflow:
             "hypothesis_count": total_hypotheses,
             "finding_count": finding_count,
             "finding_yield": finding_count / total_hypotheses if total_hypotheses else None,
+            "r4_linked_finding_count": len(linked_finding_ids),
             "gate_effect": "NONE",
         }
         artifact_id = self._put_json(metrics)

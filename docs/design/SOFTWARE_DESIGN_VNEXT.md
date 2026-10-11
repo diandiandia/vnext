@@ -29,14 +29,6 @@ src/reachable_audit/
   store.py                    existing SQLite event/state store
   artifacts.py                existing content-addressed artifact store
   inventory.py                language/file ownership and source inventory
-Task specifications declare whether `agent_runs` counts coordinator runs, delegated
-sub-agent runs, or both; collection cannot silently reject honestly delegated work while
-under-reporting its cost. Workers may claim by operation, Batch, or task ID, and an
-unstarted lease may be released explicitly. Failed attempts remain visible; after the
-configured retry budget is exhausted, an operator may append a reasoned
-`TASK_RETRY_AUTHORIZED` event for one bounded additional attempt. Success and cancellation
-remain terminal. Worker IDs identify queue actors but are not authenticated human/agent
-identities without host attestation.
   graph.py                    build-unit graph plus explicit security boundaries
   planning.py                 Work Unit and Batch planning
   handoffs.py                 existing cross-Batch evidence integration
@@ -136,6 +128,9 @@ Each profile is one language and contains exactly ten ordered issue entries:
   "profile_id": "LANG-python-v1",
   "language_id": "python",
   "portfolio_version": "portfolio-v1",
+supplied. `plan` output lists per-batch work-unit, source-file, and source-byte counts,
+maximum boundary-review count, and an estimated minimum R1 result size per Work Unit.
+`oversize_work_units` identifies estimates above the hard ceiling. The estimate assumes one minimal evidence reference and rationale per required boundary review; actual Agent output can be larger, so edge counts are shown alongside the estimate. These are planning signals, not result-size guarantees or price estimates.
   "entries": [{
     "issue_id": "python-issue-01",
     "rank": 1,
@@ -240,21 +235,34 @@ tasks reporting or missing usage, a `usage_complete` flag, and the aggregate cac
 ratio; absent usage is never estimated and never blocks collection. Task result artifacts
 are asked to stay under 1 MiB and are hard-rejected above 4 MiB at collection. Coverage
 takes precedence over size: `output_discipline` states that required items are never
-dropped, sampled, or truncated to meet the soft target. Collection of a `discover_surfaces`
-result additionally verifies, before the task becomes terminal, that coverage is complete
-(`reviewed_scope` is `ALL_SOURCE_FILES`, or `reviewed_paths` equals the Work Unit
-`source_files`; the scope form avoids echoing the file list) and that `boundary_reviews`
-cover every supplied edge
-exactly once; a rejection reports counts and the first ten missing or extra edge IDs and
-leaves the task leased. Agent-facing task inputs are compacted without changing the
-canonical Work Unit: files are grouped by directory (`source_files_by_directory`), the
+dropped, sampled, or truncated to meet the soft target. Collection of `discover_surfaces`,
+`generate_hypotheses`, and compact R2 results verifies, before the task becomes terminal,
+that coverage is complete: use the exact scalar `reviewed_scope: "ALL_SOURCE_FILES"` and
+omit `reviewed_paths`, or provide `reviewed_paths` equal to the Work Unit `source_files`.
+Partial coverage and `excluded_paths` are rejected. R1 `boundary_reviews` must cover
+every supplied edge exactly once, with matching Work Unit ID, valid disposition, non-empty
+evidence references, and rationale; source-anchor validity is checked at stage commit.
+R2 hypothesis and axis records are parsed at collection so malformed nested objects fail
+as `ModelError` while still leased. A rejection reports counts and the first ten missing
+or extra edge IDs and leaves the task leased. Agent-facing task inputs are compacted
+without changing the canonical Work Unit: files are grouped by directory
+(`source_files_by_directory`), the
 hotspot report carries counts instead of path lists derivable from the Work Unit, and R1
 inputs replace `boundary_edge_ids` with a count because the full edges are already
-supplied. `plan` output lists per-batch work-unit, source-file, and
-source-byte counts, an estimated required-output floor per Work Unit, and
-`oversize_work_units` whose floor exceeds the hard ceiling (no valid result can fit), so
-operators can split or amend the plan before dispatch. These are planning facts, not price
-estimates.
+supplied. `plan` output lists per-batch work-unit, source-file, and source-byte counts,
+maximum boundary-review count, and an estimated minimum R1 result size per Work Unit.
+`oversize_work_units` identifies estimates above the hard ceiling. The estimate assumes
+one minimal evidence reference and rationale per required boundary review; actual Agent
+output can be larger, so edge counts are shown alongside it. These are planning signals,
+not result-size guarantees or price estimates.
+
+Each task records `agent_runs` and `wall_seconds`; hosts define and report whether
+`agent_runs` includes delegated sub-agent runs. Workers may claim by operation, Batch,
+or task ID and release an unstarted lease. Failed attempts remain visible; after the
+configured retry budget is exhausted, an operator may append a reasoned
+`TASK_RETRY_AUTHORIZED` event for one bounded additional attempt. Success and cancellation
+remain terminal. Worker IDs identify queue actors but are not authenticated human/Agent
+identities without host attestation.
 
 Campaign budget may freeze `max_screening_fraction` in the range [0, 1] at init. Closure
 reports screened Work Unit IDs, count, fraction, ceiling status, and release eligibility.
@@ -525,6 +533,10 @@ external container or VM.
   conclusions until rechecked.
 - **R4:** each planned Work Unit/category pair has a COMPLETE, evidenced run or a
   structured, evidenced NOT_APPLICABLE/DEFERRED disposition. Finding count may be zero.
+- `CategoryRun.finding_ids` optionally attributes canonical Findings already recorded
+  for the Batch; R4 tasks do not create Findings. R4 metrics report distinct linked
+  Findings separately, while canonical finding count/yield come from
+  `FINDING_RECORDED` events, including Findings recorded after R5.
 - **R5:** the experiment artifact records target reference, fidelity, prerequisites,
   exact commands or actions, observations, relevant artifacts, cleanup result, and final
   assessment. An experiment-required claim may be `NOT_FEASIBLE` with reason and evidence

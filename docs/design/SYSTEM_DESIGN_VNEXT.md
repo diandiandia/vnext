@@ -179,7 +179,7 @@ The existing R0-R6 semantics remain the workflow vocabulary, with one canonical 
 | R2 | Generate and screen hypotheses using multiple discovery axes and approved knowledge | Falsifiable hypotheses with axis, language, mechanism, and seed provenance |
 | R3 | Verify reachability and vulnerability mechanism | Call/dataflow evidence, counterevidence, and provisional verdict |
 | R3.5 | Independent refutation and adjudication | Reviewer evidence and explicit disposition |
-| R4 | Execute applicable security-category reviews | CategoryRun records; zero findings is valid if review is evidenced |
+| R4 | Execute applicable security-category reviews against planned Work Units and hypotheses | CategoryRun records; zero findings is valid if review is evidenced |
 | R5 | Run a justified experiment where behavior requires it | Reproducible experiment artifact and fidelity level, or evidenced NEEDS_REVIEW/NOT_FEASIBLE disposition |
 | R6 | Close the Batch and reconcile scope, evidence, and handoffs | Derived report and unresolved-risk statement |
 
@@ -187,6 +187,13 @@ Campaign closure is separate from Batch closure. No Batch completion may be repo
 whole-project completion. A finding cannot be promoted to reachable without an evidenced
 path from a declared principal to the affected operation. An unsupported strong impact
 claim must be downgraded or marked NEEDS_REVIEW.
+
+R4 CategoryRuns may optionally attribute already-recorded canonical Findings through
+`finding_ids`; this field is not a Finding creation channel. The canonical Batch finding
+count is derived from `FINDING_RECORDED` events, while R4 reports the distinct count of
+linked findings separately. A category review with no linked findings is not evidence
+that no issue exists beyond the hypotheses in scope; preserve any new candidate as an
+explicit unresolved risk or route it through the hypothesis workflow.
 
 Every R1 Surface receives a review disposition independent of whether it produces a
 Hypothesis. A reviewed Surface may yield a hypothesis, an evidenced clean result, or a

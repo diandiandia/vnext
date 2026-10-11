@@ -139,7 +139,7 @@ def test_r4_tracks_six_axis_coverage_with_zero_findings(tmp_path: Path) -> None:
             event for event in manager.store.list_events("CMP-r4")
             if event.event_type == "R4_COMPLETED"
         )
-        assert r4_event.payload["finding_count"] == 0
+        assert r4_event.payload["linked_finding_count"] == 0
     finally:
         manager.close()
 

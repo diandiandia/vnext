@@ -195,7 +195,10 @@ def test_cli_amends_successful_uncommitted_task_output(
             campaign_id="CMP-task-amend", batch_id="B-amend",
             manifest={"work_unit_ids": ["WU-amend"]},
         )
-        input_ref = manager.artifacts.put_text("{}").artifact_id
+        input_ref = manager.artifacts.put_text(json.dumps({
+            "work_unit": {"work_unit_id": "WU-amend", "source_files": []},
+            "boundary_edges": [],
+        })).artifact_id
         task = TaskSpec(
             "TASK-amend", "CMP-task-amend", "B-amend", "WU-amend",
             "discover_surfaces", (input_ref,), "surface-set/v1", {},
@@ -216,10 +219,10 @@ def test_cli_amends_successful_uncommitted_task_output(
     amend_path = tmp_path / "amendment.json"
     amend_path.write_text(json.dumps({
         "output": {
-            "schema_version": "1.0", "reviewed_paths": ["app.py"],
+                "schema_version": "1.0", "reviewed_scope": "ALL_SOURCE_FILES",
             "surfaces": [], "boundary_reviews": [],
         },
-        "reason": "repair transcription error before R1 commit",
+            "reason": "replace legacy path echo with the full-scope sentinel",
         "evidence_refs": [prior_ref],
     }), encoding="utf-8")
     assert main([
@@ -277,7 +280,8 @@ def test_cli_runs_inventory_graph_plan_in_order(tmp_path: Path, capsys: object) 
     assert plan_output["batch_summaries"][0]["source_files"] == 1
     assert plan_output["batch_summaries"][0]["source_bytes"] == len("print('ok')\n")
     assert plan_output["oversize_work_units"] == []
-    assert plan_output["batch_summaries"][0]["max_required_output_floor_bytes"] > 0
+    assert plan_output["batch_summaries"][0]["max_estimated_r1_output_floor_bytes"] > 0
+    assert plan_output["batch_summaries"][0]["max_boundary_review_count"] == 0
 
 
 def test_cli_writes_shadow_evaluation_report(

@@ -60,20 +60,38 @@ contract, and analysis contract. Read the scoped files, then submit one result J
 Do not inspect files outside the Work Unit except to follow an explicit boundary; create
 a Handoff rather than silently expanding ownership.
 
+The host prompt must not restate or override the output schema. Treat the task's
+`output_contract` as the single source of truth and pass it to the worker unchanged.
+
 Every `task-collect` input must include measured `agent_runs` and `wall_seconds`.
 When the host exposes them, also report `input_tokens` (uncached), `cache_read_tokens`,
 and `output_tokens` as integers; Campaign reports derive per-operation totals and the
 cache-hit ratio from them, and flag `usage_complete: false` when any task omits them.
 Missing usage never blocks collection. Result artifacts are asked to stay under 1 MiB
 (output_discipline) and are hard-rejected above 4 MiB; coverage always wins over size.
-A `discover_surfaces` result is checked at `task-collect`: `reviewed_scope` must be
-`"ALL_SOURCE_FILES"` (preferred; do not echo the file list) or `reviewed_paths` must equal the
-Work Unit's `source_files` and `boundary_reviews` must cover every supplied edge exactly
-once. A rejection lists the gap (counts plus the first ten edge IDs) and leaves the task
-leased so the same worker can resubmit the complete result.
-`plan` prints `oversize_work_units` (required-output floor above the hard ceiling) and
-per-batch `max_required_output_floor_bytes`; split or amend the plan before dispatching
-any Work Unit listed there, because no valid result can fit the ceiling.
+A `discover_surfaces`, `generate_hypotheses`, or compact R2 result is checked at
+`task-collect`: when all source files were reviewed, set `reviewed_scope` to the exact
+scalar string `"ALL_SOURCE_FILES"` and omit `reviewed_paths`; otherwise provide
+`reviewed_paths` as the exact full Work Unit file list. Partial coverage and
+`excluded_paths` are rejected. For R1, `boundary_reviews` must also cover every supplied
+edge exactly once; each review must have the task Work Unit ID, a valid disposition,
+non-empty evidence references, and a non-empty rationale. Evidence anchors are checked
+against the snapshot during stage commit.
+Malformed or missing task scope fails closed. A rejection lists the gap (counts plus the
+first ten edge IDs/paths where applicable) and leaves the task leased so the same worker
+can resubmit the complete result.
+`plan` prints `oversize_work_units` (estimated minimum R1 output above the hard ceiling)
+and per-batch maximum boundary-review count/output estimate. Treat the estimate as a
+lower-bound planning signal, not a cost or actual-size prediction. Split or amend the plan
+before dispatching any Work Unit listed as oversize.
+If R1 coverage retries exhaust on a large Work Unit, compare a new plan using
+`--max-work-unit-files 500` and `250` against the current default of `1000`. This changes
+Work Unit IDs and task counts, so compare full-campaign token/cost, retry rate, and coverage;
+do not assume smaller Work Units are cheaper. Keep the default unchanged until that paired
+measurement shows a repeatable benefit.
+R2 hypotheses are schema-checked at collection; `mechanism` must be an object containing
+non-empty `family` and `variant` strings, with optional `freeform`. Shape errors leave the
+task leased and return an actionable `ModelError` rather than failing later during commit.
 `configuration` may report `model_id`, `runtime_version`, and
 `host_tool_policy_digest` (`sha256:<64 lowercase hex>`) when the host exposes them; never
 invent host values. The runtime always adds its own deterministic `vnext_policy_digest`.
@@ -95,7 +113,7 @@ Successful R1 output:
   },
   "output": {
     "schema_version": "1.0",
-    "reviewed_paths": ["src/example.py"],
+    "reviewed_scope": "ALL_SOURCE_FILES",
     "surfaces": [{
       "surface_id": "SURF-stable-id",
       "work_unit_id": "WU-from-task",
@@ -105,7 +123,8 @@ Successful R1 output:
       "entry_symbol": "handle",
       "principal": "remote_unauthenticated",
       "evidence_refs": ["LOC-src/example.py:42"]
-    }]
+    }],
+    "boundary_reviews": []
   }
 }
 ```
@@ -120,28 +139,21 @@ Surfaces when applicable, stay within planned mechanism families, and state a
 falsifiable security claim. Submit failures with `succeeded: false`, no `output`, and a
 specific summary; failed or missing tasks block commit.
 
-Successful R2 `output`:
+Successful compact R2 `output` (all six axes are required):
 
 ```json
 {
   "schema_version": "1.0",
-  "reviewed_paths": ["src/example.py"],
-  "axis_run": {
-    "axis": "state",
-    "applicability": "APPLICABLE",
-    "evidence_refs": ["LOC-src/example.py:60"],
-    "rationale": "reviewed lifecycle and state transitions"
-  },
-  "hypotheses": [{
-    "hypothesis_id": "HYP-stable-id",
-    "work_unit_id": "WU-from-task",
-    "origin_axis": "state",
-    "seed_refs": ["LOC-src/example.py:60"],
-    "surface_ids": ["SURF-stable-id"],
-    "mechanism": {"family": "STATE", "variant": "stale-owner"},
-    "claim": "a cancelled owner remains usable by a retained callback",
-    "status": "NEW"
-  }]
+  "reviewed_scope": "ALL_SOURCE_FILES",
+  "axis_runs": [
+    {"axis":"surface","applicability":"NOT_APPLICABLE","evidence_refs":["LOC-src/example.py:1"],"rationale":"no additional surface-axis hypothesis in this scoped review"},
+    {"axis":"mechanism","applicability":"NOT_APPLICABLE","evidence_refs":["LOC-src/example.py:1"],"rationale":"no mechanism candidate in this scoped review"},
+    {"axis":"state","applicability":"APPLICABLE","evidence_refs":["LOC-src/example.py:60"],"rationale":"reviewed lifecycle and state transitions"},
+    {"axis":"fix_variant","applicability":"NOT_APPLICABLE","evidence_refs":["LOC-src/example.py:1"],"rationale":"no relevant fix variant in this scoped review"},
+    {"axis":"boundary","applicability":"NOT_APPLICABLE","evidence_refs":["LOC-src/example.py:1"],"rationale":"no additional trust boundary in this scoped review"},
+    {"axis":"differential","applicability":"NOT_APPLICABLE","evidence_refs":["LOC-src/example.py:1"],"rationale":"no relevant mode or implementation differential in this scoped review"}
+  ],
+  "hypotheses": []
 }
 ```
 

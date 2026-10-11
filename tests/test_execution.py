@@ -18,7 +18,6 @@ from reachable_audit.analysis_models import (
 )
 from reachable_audit.campaign import CampaignManager
 from reachable_audit.execution import (
-    _MAX_TASK_OUTPUT_BYTES,
     DiscoveryCoordinator,
     ManualExecutionBackend,
     TaskResult,
@@ -27,7 +26,7 @@ from reachable_audit.execution import (
 )
 from reachable_audit.models import ModelError
 from reachable_audit.store import ConflictError
-from reachable_audit.runtime_policy import execution_policy_digest
+from reachable_audit.runtime_policy import TASK_OUTPUT_MAX_BYTES, execution_policy_digest
 from conftest import axis_runs_from_evidence
 from conftest import execution_configuration_fixture
 from test_batch_workflow import _workflow
@@ -43,7 +42,10 @@ def _setup(tmp_path: Path) -> tuple[CampaignManager, TaskSpec]:
         batch_id="B-1",
         manifest={"work_unit_ids": ["WU-1"]},
     )
-    input_ref = manager.artifacts.put_text('{"scope":"WU-1"}').artifact_id
+    input_ref = manager.artifacts.put_text(json.dumps({
+        "work_unit": {"work_unit_id": "WU-1", "source_files": []},
+        "boundary_edges": [],
+    })).artifact_id
     return manager, TaskSpec(
         task_id="TASK-r1-WU-1",
         campaign_id="CMP-exec",
@@ -289,7 +291,7 @@ def test_collect_rejects_output_above_size_ceiling(tmp_path: Path) -> None:
             "reviewed_paths": [],
             "surfaces": [],
             "boundary_reviews": [],
-            "padding": "x" * (_MAX_TASK_OUTPUT_BYTES + 1),
+            "padding": "x" * (TASK_OUTPUT_MAX_BYTES + 1),
         })).artifact_id
         with pytest.raises(ModelError, match="exceeds"):
             backend.collect(lease, TaskResult(
@@ -319,6 +321,24 @@ def test_task_result_requires_usage_and_execution_configuration() -> None:
             "agent_runs": 1, "wall_seconds": 1,
         })
     assert result.configuration == {}
+
+
+def test_successful_task_requires_positive_agent_and_wall_measurements() -> None:
+    with pytest.raises(ModelError, match="requires positive agent_runs and wall_seconds"):
+        TaskResult(
+            True, "sha256:" + "a" * 64, "done",
+            {"agent_runs": 0, "wall_seconds": 1},
+        )
+    with pytest.raises(ModelError, match="requires positive agent_runs and wall_seconds"):
+        TaskResult(
+            True, "sha256:" + "a" * 64, "done",
+            {"agent_runs": 1, "wall_seconds": 0},
+        )
+    failed = TaskResult(
+        False, None, "worker failed before execution",
+        {"agent_runs": 0, "wall_seconds": 0},
+    )
+    assert failed.succeeded is False
 
 
 def test_runtime_policy_digest_is_available_without_host_attestation(tmp_path: Path) -> None:
@@ -755,7 +775,7 @@ def test_r1_accepts_reviewed_scope_all_and_input_groups_files_by_directory(
             "schema_version": "1.0", "reviewed_scope": "ALL_SOURCE_FILES",
             "excluded_paths": ["app.py"], "surfaces": [], "boundary_reviews": [],
         })).artifact_id
-        with pytest.raises(ModelError, match="conflicts with 1 excluded paths"):
+        with pytest.raises(ModelError, match="excluded_paths is unsupported"):
             backend.collect(lease, TaskResult(
                 True, conflicting_ref, "conflict", {"agent_runs": 1, "wall_seconds": 1},
             ))
@@ -766,6 +786,24 @@ def test_r1_accepts_reviewed_scope_all_and_input_groups_files_by_directory(
             backend.collect(lease, TaskResult(
                 True, missing_ref, "no scope", {"agent_runs": 1, "wall_seconds": 1},
             ))
+        list_scope_ref = manager.artifacts.put_text(json.dumps({
+            "schema_version": "1.0", "reviewed_scope": ["ALL_SOURCE_FILES"],
+            "surfaces": [], "boundary_reviews": [],
+        })).artifact_id
+        with pytest.raises(ModelError, match="scalar string ALL_SOURCE_FILES"):
+            backend.collect(lease, TaskResult(
+                True, list_scope_ref, "ambiguous scope", {"agent_runs": 1, "wall_seconds": 1},
+            ))
+        contradictory_ref = manager.artifacts.put_text(json.dumps({
+            "schema_version": "1.0", "reviewed_scope": "ALL_SOURCE_FILES",
+            "reviewed_paths": list(plan.work_units[0].source_files),
+            "excluded_paths": ["app.py"], "surfaces": [], "boundary_reviews": [],
+        })).artifact_id
+        with pytest.raises(ModelError, match="excluded_paths is unsupported"):
+            backend.collect(lease, TaskResult(
+                True, contradictory_ref, "contradictory scope",
+                {"agent_runs": 1, "wall_seconds": 1},
+            ))
         complete_ref = manager.artifacts.put_text(json.dumps({
             "schema_version": "1.0", "reviewed_scope": "ALL_SOURCE_FILES",
             "surfaces": [], "boundary_reviews": [],
@@ -775,6 +813,67 @@ def test_r1_accepts_reviewed_scope_all_and_input_groups_files_by_directory(
         ))
         coordinator.commit_r1()
         assert workflow._stage_event("R1_COMPLETED") is not None
+    finally:
+        manager.close()
+
+
+def test_collect_rejects_scope_from_another_work_unit(tmp_path: Path) -> None:
+    manager, task = _setup(tmp_path)
+    try:
+        backend = ManualExecutionBackend(manager, "CMP-exec")
+        input_ref = manager.artifacts.put_text(json.dumps({
+            "work_unit": {"work_unit_id": "WU-other", "source_files": []},
+            "boundary_edges": [],
+        })).artifact_id
+        backend.submit(replace(task, input_refs=(input_ref,)))
+        lease = backend.claim("worker")
+        assert lease is not None
+        output_ref = manager.artifacts.put_text(json.dumps({
+            "schema_version": "1.0", "reviewed_scope": "ALL_SOURCE_FILES",
+            "surfaces": [], "boundary_reviews": [],
+        })).artifact_id
+        with pytest.raises(ModelError, match="Work Unit ID mismatch"):
+            backend.collect(lease, TaskResult(
+                True, output_ref, "wrong scope owner",
+                {"agent_runs": 1, "wall_seconds": 1},
+            ))
+        assert backend.poll(task.task_id).status is TaskStatus.LEASED
+    finally:
+        manager.close()
+
+
+def test_r2_coverage_is_checked_during_collect(tmp_path: Path) -> None:
+    manager, original = _setup(tmp_path)
+    work_unit_input = manager.artifacts.put_text(json.dumps({
+        "work_unit": {
+            "work_unit_id": "WU-1",
+            "source_files_by_directory": {"src": ["a.py", "b.py"]},
+        },
+    })).artifact_id
+    task = replace(
+        original,
+        task_id="TASK-r2-WU-1",
+        operation="generate_hypotheses_compact",
+        input_refs=(work_unit_input,),
+        required_output="compact-hypothesis-set/v1",
+    )
+    try:
+        backend = ManualExecutionBackend(manager, "CMP-exec")
+        backend.submit(task)
+        lease = backend.claim("worker")
+        assert lease is not None
+        partial_ref = manager.artifacts.put_text(json.dumps({
+            "schema_version": "1.0",
+            "reviewed_paths": ["src/a.py"],
+            "axis_runs": [],
+            "hypotheses": [],
+        })).artifact_id
+        with pytest.raises(ModelError, match="missing=1 .*src/b.py"):
+            backend.collect(lease, TaskResult(
+                True, partial_ref, "partial R2 scope",
+                {"agent_runs": 1, "wall_seconds": 1},
+            ))
+        assert backend.poll(task.task_id).status is TaskStatus.LEASED
     finally:
         manager.close()
 
@@ -793,6 +892,48 @@ def test_agent_work_unit_round_trips_grouped_paths() -> None:
     assert _agent_work_unit(unit)["boundary_edge_ids"] == ["E1", "E2"]
 
 
+def test_collect_rejects_variant_outside_nested_mechanism(tmp_path: Path) -> None:
+    manager, original = _setup(tmp_path)
+    input_ref = manager.artifacts.put_text(json.dumps({
+        "work_unit": {"work_unit_id": "WU-1", "source_files": []},
+    })).artifact_id
+    task = replace(
+        original,
+        task_id="TASK-r2-bad-mechanism",
+        operation="generate_hypotheses_compact",
+        input_refs=(input_ref,),
+        required_output="compact-hypothesis-set/v1",
+    )
+    try:
+        backend = ManualExecutionBackend(manager, "CMP-exec")
+        backend.submit(task)
+        lease = backend.claim("worker")
+        assert lease is not None
+        output_ref = manager.artifacts.put_text(json.dumps({
+            "schema_version": "1.0",
+            "reviewed_scope": "ALL_SOURCE_FILES",
+            "axis_runs": [],
+            "hypotheses": [{
+                "hypothesis_id": "HYP-bad-mechanism",
+                "work_unit_id": "WU-1",
+                "origin_axis": "state",
+                "seed_refs": ["EVID-seed"],
+                "surface_ids": [],
+                "mechanism": {"family": "STATE"},
+                "variant": "stale-owner",
+                "claim": "a stale owner remains usable",
+            }],
+        })).artifact_id
+        with pytest.raises(ModelError, match="place it inside mechanism.variant"):
+            backend.collect(lease, TaskResult(
+                True, output_ref, "malformed mechanism shape",
+                {"agent_runs": 1, "wall_seconds": 1},
+            ))
+        assert backend.poll(task.task_id).status is TaskStatus.LEASED
+    finally:
+        manager.close()
+
+
 def test_collect_rejects_missing_boundary_reviews_with_gap_list(tmp_path: Path) -> None:
     manager, task = _setup(tmp_path)
     try:
@@ -806,19 +947,66 @@ def test_collect_rejects_missing_boundary_reviews_with_gap_list(tmp_path: Path) 
         assert lease is not None
         partial_ref = manager.artifacts.put_text(json.dumps({
             "schema_version": "1.0", "reviewed_paths": [], "surfaces": [],
-            "boundary_reviews": [{"edge_id": "EDGE-a"}],
+            "boundary_reviews": [{
+                "edge_id": "EDGE-a", "work_unit_id": "WU-1",
+                "disposition": "confirmed", "evidence_refs": [], "rationale": "checked",
+            }],
         })).artifact_id
-        with pytest.raises(ModelError, match=r"missing=1 \(first \['EDGE-b'\]\)"):
+        with pytest.raises(ModelError, match="boundary review requires evidence references and rationale"):
             backend.collect(lease, TaskResult(
                 True, partial_ref, "partial", {"agent_runs": 1, "wall_seconds": 1},
             ))
+        evidenced_partial_ref = manager.artifacts.put_text(json.dumps({
+            "schema_version": "1.0", "reviewed_paths": [], "surfaces": [],
+            "boundary_reviews": [{
+                "edge_id": "EDGE-a", "work_unit_id": "WU-1",
+                "disposition": "confirmed", "evidence_refs": ["LOC-app.py:1"],
+                "rationale": "reviewed the endpoint boundary",
+            }],
+        })).artifact_id
+        with pytest.raises(ModelError, match=r"missing=1 \(first \['EDGE-b'\]\)"):
+            backend.collect(lease, TaskResult(
+                True, evidenced_partial_ref, "one edge omitted",
+                {"agent_runs": 1, "wall_seconds": 1},
+            ))
         complete_ref = manager.artifacts.put_text(json.dumps({
             "schema_version": "1.0", "reviewed_paths": [], "surfaces": [],
-            "boundary_reviews": [{"edge_id": "EDGE-a"}, {"edge_id": "EDGE-b"}],
+            "boundary_reviews": [
+                {
+                    "edge_id": edge_id, "work_unit_id": "WU-1",
+                    "disposition": "confirmed", "evidence_refs": ["LOC-app.py:1"],
+                    "rationale": "reviewed the endpoint boundary",
+                }
+                for edge_id in ("EDGE-a", "EDGE-b")
+            ],
         })).artifact_id
         assert backend.collect(lease, TaskResult(
             True, complete_ref, "complete", {"agent_runs": 1, "wall_seconds": 1},
         )).status is TaskStatus.SUCCEEDED
+    finally:
+        manager.close()
+
+
+def test_collect_rejects_r1_task_without_scope_instead_of_skipping_coverage(
+    tmp_path: Path,
+) -> None:
+    manager, task = _setup(tmp_path)
+    try:
+        backend = ManualExecutionBackend(manager, "CMP-exec")
+        malformed_input = manager.artifacts.put_text('{"operation":"discover_surfaces"}').artifact_id
+        backend.submit(replace(task, input_refs=(malformed_input,)))
+        lease = backend.claim("worker")
+        assert lease is not None
+        output_ref = manager.artifacts.put_text(json.dumps({
+            "schema_version": "1.0", "reviewed_scope": "ALL_SOURCE_FILES",
+            "surfaces": [], "boundary_reviews": [],
+        })).artifact_id
+        with pytest.raises(ModelError, match="missing Work Unit scope"):
+            backend.collect(lease, TaskResult(
+                True, output_ref, "missing task scope",
+                {"agent_runs": 1, "wall_seconds": 1},
+            ))
+        assert backend.poll(task.task_id).status is TaskStatus.LEASED
     finally:
         manager.close()
 

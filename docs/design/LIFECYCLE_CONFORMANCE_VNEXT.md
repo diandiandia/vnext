@@ -4,7 +4,7 @@ Status: engineering self-assessment, not certification. The applicable ISO/IEC/I
 
 ## Assessment Basis
 
-The assessment covers the vNext repository, documented requirements/design, test suite, and release-acceptance plan as of 2026-10-06. It does not assess the user's organization, independent evaluation authority, acquisition/supplier contracts, deployment operations, or proprietary Google engineering policies. Those require external evidence and authorized assessors.
+The assessment covers the vNext repository, documented requirements/design, test suite, and release-acceptance plan as of 2026-10-11. It does not assess the user's organization, independent evaluation authority, acquisition/supplier contracts, deployment operations, or proprietary Google engineering policies. Those require external evidence and authorized assessors.
 
 Statuses mean:
 

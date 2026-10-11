@@ -37,7 +37,9 @@ from .adapters.languages import LANGUAGE_ADAPTERS
 from .knowledge_catalog import KnowledgeCatalog, default_knowledge_root
 from .experiments.harness_catalog import DEFAULT_HARNESS_CATALOG
 from .models import ModelError
-from .runtime_policy import execution_policy_digest
+from .runtime_policy import (
+    TASK_OUTPUT_MAX_BYTES, TASK_OUTPUT_TARGET_BYTES, execution_policy_digest,
+)
 from .store import NotFoundError
 
 
@@ -83,23 +85,15 @@ _HOTSPOT_CONTRACT = (
 )
 
 
-# Hard collection/amendment ceiling. 4 MiB leaves headroom for Work Units whose
-# *mandatory* content cannot fit in 1 MiB (observed: a 5,453-boundary-review WU whose
-# minimal valid result is ~1.48 MiB once every review carries its required evidence
-# anchor and rationale).
-_MAX_TASK_OUTPUT_BYTES = 4 * 1024 * 1024
-# What agents are asked to target — kept tight so the ceiling stays a backstop, not
-# a budget.
-_OUTPUT_DISCIPLINE_BYTES = 1024 * 1024
-
 _REVIEWED_ALL = "ALL_SOURCE_FILES"
 _REVIEWED_SCOPE_OUTPUTS = frozenset({
     "surface-set/v1", "hypothesis-set/v1", "compact-hypothesis-set/v1",
 })
 _REVIEWED_SCOPE_CONTRACT = (
-    f'"{_REVIEWED_ALL}" in reviewed_scope when every Work Unit source file was reviewed '
-    "(preferred; do not echo the file list), or reviewed_paths as the exact array; "
-    "partial coverage is rejected at collection"
+    f'If every Work Unit source file was reviewed, set reviewed_scope to the exact '
+    f'scalar string "{_REVIEWED_ALL}" and omit reviewed_paths. Otherwise, provide '
+    "reviewed_paths as the exact full array of Work Unit source files. Partial coverage, "
+    "excluded_paths, or a non-scalar reviewed_scope is rejected at collection."
 )
 
 
@@ -139,8 +133,8 @@ _OUTPUT_DISCIPLINE = (
     "sample, or truncate required coverage to save space. Keep each item terse: cite "
     "anchors instead of quoting source, one concise sentence per evidence item, and "
     f"omit fields the contract does not ask for, so the total targets under "
-    f"{_OUTPUT_DISCIPLINE_BYTES} bytes. If full coverage genuinely needs more, write it "
-    f"anyway and stay within the {_MAX_TASK_OUTPUT_BYTES}-byte hard ceiling — coverage "
+    f"{TASK_OUTPUT_TARGET_BYTES} bytes. If full coverage genuinely needs more, write it "
+    f"anyway and stay within the {TASK_OUTPUT_MAX_BYTES}-byte hard ceiling — coverage "
     "always wins over the size target, and the ceiling is never exceeded."
 )
 
@@ -250,6 +244,12 @@ class TaskResult:
         if missing_measurements:
             raise ModelError(
                 f"execution result requires measurements: {sorted(missing_measurements)}"
+            )
+        if self.succeeded and any(
+            self.measurements[name] <= 0 for name in required_measurements
+        ):
+            raise ModelError(
+                "successful execution task requires positive agent_runs and wall_seconds"
             )
         if any(not str(key).strip() or not str(value).strip() for key, value in self.configuration.items()):
             raise ModelError("execution configuration attestations cannot be empty")
@@ -532,9 +532,9 @@ class ManualExecutionBackend:
             output = json.loads(output_bytes)
         except (OSError, ValueError, json.JSONDecodeError) as error:
             raise ModelError(f"task output is not valid JSON: {task.task_id}") from error
-        if len(output_bytes) > _MAX_TASK_OUTPUT_BYTES:
+        if len(output_bytes) > TASK_OUTPUT_MAX_BYTES:
             raise ModelError(
-                f"task output exceeds {_MAX_TASK_OUTPUT_BYTES} bytes ({len(output_bytes)}); "
+                f"task output exceeds {TASK_OUTPUT_MAX_BYTES} bytes ({len(output_bytes)}); "
                 f"resubmit a compact result: {task.task_id}"
             )
         if not isinstance(output, dict) or output.get("schema_version") != "1.0":
@@ -556,30 +556,120 @@ class ManualExecutionBackend:
             )
         if task.required_output == "verdict-submission/v1":
             self._validate_verdict_output(task, output)
-        if task.required_output == "surface-set/v1":
-            self._validate_surface_coverage(task, output)
+        if task.required_output in _REVIEWED_SCOPE_OUTPUTS:
+            work_unit = self._task_work_unit(task)
+            DiscoveryCoordinator._validate_reviewed_paths(
+                output, {"source_files": _expand_agent_work_unit_files(work_unit)},
+                task.task_id,
+            )
+            if task.required_output == "surface-set/v1":
+                self._validate_surface_coverage(task, output)
+            else:
+                self._validate_hypothesis_output(task, output)
         return output
+
+    @staticmethod
+    def _validate_hypothesis_output(
+        task: TaskSpec, output: Mapping[str, Any],
+    ) -> None:
+        compact = task.required_output == "compact-hypothesis-set/v1"
+        raw_axis_runs = output.get("axis_runs" if compact else "axis_run")
+        if compact:
+            if not isinstance(raw_axis_runs, list):
+                raise ModelError(f"R2 axis_runs must be an array: {task.task_id}")
+            axis_values = raw_axis_runs
+        else:
+            if not isinstance(raw_axis_runs, dict):
+                raise ModelError(f"R2 axis_run must be an object: {task.task_id}")
+            axis_values = [raw_axis_runs]
+        for axis_run in axis_values:
+            if not isinstance(axis_run, dict):
+                raise ModelError(f"R2 axis run must be an object: {task.task_id}")
+            try:
+                AxisRun.from_dict(axis_run)
+            except (KeyError, TypeError, ValueError) as error:
+                raise ModelError(
+                    f"invalid R2 axis run structure: {task.task_id}: {error}"
+                ) from error
+        hypotheses = output.get("hypotheses")
+        if not isinstance(hypotheses, list):
+            raise ModelError(f"R2 hypotheses must be an array: {task.task_id}")
+        for item in hypotheses:
+            if not isinstance(item, dict):
+                raise ModelError(f"R2 hypothesis must be an object: {task.task_id}")
+            if (
+                isinstance(item.get("mechanism"), dict)
+                and "variant" not in item["mechanism"]
+                and "variant" in item
+            ):
+                raise ModelError(
+                    f"R2 hypothesis {item.get('hypothesis_id', '<unknown>')} has variant "
+                    "at the top level; place it inside mechanism.variant"
+                )
+            try:
+                Hypothesis.from_dict(item)
+            except (KeyError, TypeError, ValueError) as error:
+                raise ModelError(
+                    f"invalid R2 hypothesis {item.get('hypothesis_id', '<unknown>')}: {error}"
+                ) from error
+
+    def _task_work_unit(self, task: TaskSpec) -> Mapping[str, Any]:
+        if not task.input_refs:
+            raise ModelError(f"task input is missing Work Unit scope: {task.task_id}")
+        try:
+            task_input = json.loads(self.manager.artifacts.get_bytes(task.input_refs[0]))
+        except (OSError, ValueError, json.JSONDecodeError) as error:
+            raise ModelError(f"task input scope is not valid JSON: {task.task_id}") from error
+        work_unit = task_input.get("work_unit") if isinstance(task_input, dict) else None
+        if not isinstance(work_unit, dict):
+            raise ModelError(f"task input is missing Work Unit scope: {task.task_id}")
+        if str(work_unit.get("work_unit_id", "")) != task.work_unit_id:
+            raise ModelError(f"task input Work Unit ID mismatch: {task.task_id}")
+        if "source_files_by_directory" in work_unit:
+            grouped = work_unit["source_files_by_directory"]
+            if not isinstance(grouped, dict) or any(
+                not isinstance(directory, str)
+                or not isinstance(names, list)
+                or any(not isinstance(name, str) for name in names)
+                for directory, names in grouped.items()
+            ):
+                raise ModelError(f"task input has malformed grouped file scope: {task.task_id}")
+        elif not isinstance(work_unit.get("source_files"), list):
+            raise ModelError(f"task input has malformed file scope: {task.task_id}")
+        return work_unit
 
     def _validate_surface_coverage(
         self, task: TaskSpec, output: Mapping[str, Any],
     ) -> None:
-        try:
-            task_input = json.loads(self.manager.artifacts.get_bytes(task.input_refs[0]))
-        except (IndexError, OSError, ValueError):
-            return
-        work_unit = task_input.get("work_unit") if isinstance(task_input, dict) else None
-        if not isinstance(work_unit, dict):
-            return
-        DiscoveryCoordinator._validate_reviewed_paths(
-            output, {"source_files": _expand_agent_work_unit_files(work_unit)}, task.task_id,
-        )
-        expected = {str(edge["edge_id"]) for edge in task_input.get("boundary_edges", [])}
+        task_input = json.loads(self.manager.artifacts.get_bytes(task.input_refs[0]))
+        edges = task_input.get("boundary_edges") if isinstance(task_input, dict) else None
+        if not isinstance(edges, list) or any(
+            not isinstance(edge, dict)
+            or not isinstance(edge.get("edge_id"), str)
+            or not edge["edge_id"]
+            for edge in edges
+        ):
+            raise ModelError(f"task input has malformed boundary edge scope: {task.task_id}")
+        expected = {edge["edge_id"] for edge in edges}
+        if len(expected) != len(edges):
+            raise ModelError(f"task input has duplicate boundary edge IDs: {task.task_id}")
         reviews = output.get("boundary_reviews")
         if not isinstance(reviews, list):
             raise ModelError(f"task output requires boundary_reviews: {task.task_id}")
-        reviewed = [
-            str(item.get("edge_id", "")) if isinstance(item, dict) else "" for item in reviews
-        ]
+        parsed_reviews = []
+        for item in reviews:
+            try:
+                review = BoundaryReview.from_dict(item)
+            except (KeyError, TypeError, ValueError) as error:
+                raise ModelError(
+                    f"invalid boundary review structure: {task.task_id}: {error}"
+                ) from error
+            if review.work_unit_id != task.work_unit_id:
+                raise ModelError(
+                    f"boundary review Work Unit mismatch: {task.task_id}: {review.edge_id}"
+                )
+            parsed_reviews.append(review)
+        reviewed = [review.edge_id for review in parsed_reviews]
         actual = set(reviewed)
         missing = sorted(expected - actual)
         extra = sorted(actual - expected)
@@ -808,7 +898,10 @@ class DiscoveryCoordinator:
                     "schema_version": "1.0",
                     "reviewed_scope": _REVIEWED_SCOPE_CONTRACT,
                     "surfaces": "array<Surface>",
-                    "boundary_reviews": "array<BoundaryReview>, one per supplied boundary edge",
+                    "boundary_reviews": (
+                        "array<BoundaryReview>, exactly one per supplied edge, with this "
+                        "Work Unit ID, valid disposition, non-empty evidence_refs and rationale"
+                    ),
                 },
             })
             views.append(self.backend.submit(TaskSpec(
@@ -887,7 +980,10 @@ class DiscoveryCoordinator:
                         "schema_version": "1.0",
                         "reviewed_scope": _REVIEWED_SCOPE_CONTRACT,
                         "axis_run": "AxisRun with APPLICABLE/NOT_APPLICABLE/DEFERRED, evidence_refs, rationale",
-                        "hypotheses": "array<Hypothesis>",
+                        "hypotheses": (
+                            "array<Hypothesis>; each mechanism is an object with required "
+                            "family and variant fields, optional freeform"
+                        ),
                     },
                 })
                 views.append(self.backend.submit(TaskSpec(
@@ -940,7 +1036,10 @@ class DiscoveryCoordinator:
                     "schema_version": "1.0",
                     "reviewed_scope": _REVIEWED_SCOPE_CONTRACT,
                     "axis_runs": "exactly one evidenced AxisRun per listed axis",
-                    "hypotheses": "array<Hypothesis>, each with its origin_axis",
+                    "hypotheses": (
+                        "array<Hypothesis>, each with its origin_axis; mechanism is an "
+                        "object with required family and variant fields, optional freeform"
+                    ),
                 },
                 "required_axes": axes,
             })
@@ -1827,16 +1926,21 @@ class DiscoveryCoordinator:
         task_id: str,
     ) -> None:
         expected = {str(item) for item in work_unit.get("source_files", [])}
-        if value.get("reviewed_paths") is None and value.get("reviewed_scope") == _REVIEWED_ALL:
-            excluded = value.get("excluded_paths", [])
-            if not isinstance(excluded, list) or any(not isinstance(i, str) for i in excluded):
-                raise ModelError(f"task output excluded_paths must be a string array: {task_id}")
-            if excluded:
-                raise ModelError(
-                    f"task reviewed path coverage mismatch: {task_id}; "
-                    f"{_REVIEWED_ALL} conflicts with {len(excluded)} excluded paths "
-                    f"(first {sorted(excluded)[:10]})"
-                )
+        scope = value.get("reviewed_scope")
+        excluded = value.get("excluded_paths", [])
+        if not isinstance(excluded, list) or any(not isinstance(i, str) for i in excluded):
+            raise ModelError(f"task output excluded_paths must be a string array: {task_id}")
+        if excluded:
+            raise ModelError(
+                f"task reviewed path coverage mismatch: {task_id}; "
+                "excluded_paths is unsupported and conflicts with full Work Unit coverage "
+                f"({len(excluded)} paths; first {sorted(excluded)[:10]})"
+            )
+        if "reviewed_scope" in value and scope != _REVIEWED_ALL:
+            raise ModelError(
+                f"task reviewed_scope must equal the scalar string {_REVIEWED_ALL}: {task_id}"
+            )
+        if value.get("reviewed_paths") is None and scope == _REVIEWED_ALL:
             return
         reviewed = value.get("reviewed_paths")
         if not isinstance(reviewed, list) or any(

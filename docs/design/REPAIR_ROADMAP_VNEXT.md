@@ -1,6 +1,6 @@
 # vNext Repair Roadmap
 
-Status: ordered implementation plan, reviewed 2026-10-06. This roadmap separates local engineering fixes from claims requiring external evaluation evidence. A completed code milestone does not imply improved vulnerability recall until its acceptance criteria are measured.
+Status: ordered implementation plan, reviewed 2026-10-11. This roadmap separates local engineering fixes from claims requiring external evaluation evidence. A completed code milestone does not imply improved vulnerability recall until its acceptance criteria are measured.
 
 ## Baseline
 
@@ -39,6 +39,9 @@ document. Preserve the original evidence only in the access-controlled Campaign 
 | P2 | Import heuristics and Handoffs need precise runtime-boundary semantics; review altitude must be explicit. | **Partially fixed:** Python stdlib leaf-name false edges are removed and evidence-backed `NOT_SECURITY_BOUNDARY` exists. Review altitude is specified in design but not yet enforced by task schema. |
 | P2 | Campaign lessons and skill issues must not overwrite or drift from one another. | **Code fixed and tested:** issues and closure lessons are separate; reviews append revisions; digest-marked closure lessons preserve host-authored content. |
 | P1 | Soft output-size guidance can displace mandatory coverage, and a Work Unit with many owned boundary edges can have a required-output floor above any ceiling. | **Partially fixed:** guidance is coverage-first with a 1 MiB soft target and 4 MiB hard ceiling; `discover_surfaces` coverage (reviewed paths, one review per supplied edge) is verified at collection with a gap list; `plan` reports `oversize_work_units`. Automatic splitting of edge-heavy Work Units and schema-level deduplication of repeated review fields remain open. |
+| P1 | R4 exposes `CategoryRun.finding_ids` but the normal R4 task flow does not create canonical Findings; linked-finding counts were easy to misread as total findings. | **Clarified:** R4's field is optional attribution only; canonical batch finding counts/yield derive from `FINDING_RECORDED` events, and distinct R4 links are separately labeled. Finding creation remains the explicit finding workflow after adjudication/R5. |
+| P1 | Malformed R2 Hypothesis objects can raise raw `KeyError` during stage commit after collection marked the task successful. | **Fixed and tested:** mechanism family/variant and hypothesis/axis shapes are parsed at collection; malformed shape returns `ModelError` while the lease remains repairable. The contract states the nested mechanism shape. |
+| P1 | R1 can collect boundary reviews with empty evidence/rationale and rely on host repair to fill placeholders. | **Partially fixed:** collection now requires a valid disposition, matching Work Unit, non-empty evidence refs, rationale, and exact edge coverage. Anchor/snapshot validity remains a stage-commit check; evidence quality still needs semantic review. |
 | P2 | Structural debt: `cli.main` and `CampaignCloser.close` are several-hundred-line functions and several store paths catch `Exception` broadly. | **Open:** split into per-command handlers and per-gate evaluators, narrow the exception types, and keep behavior pinned by the existing tests before any change. |
 
 The system/software design documents define contracts for these groups. Implementation
