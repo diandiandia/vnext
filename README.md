@@ -1,77 +1,123 @@
 # Reachable Audit vNext
 
-This directory contains the separate vNext runtime implementation. It does not import
-the v3 runtime and implements the planned Campaign workflow; that code boundary does not
-by itself prove that every knowledge item or external prompt is historically independent:
+Reachable Audit vNext is an experimental, evidence-oriented workflow for auditing
+whether inputs from declared principals can reach security-sensitive operations in
+large, mixed-language repositories.
 
-- canonical Campaign and Batch state models;
-- SQLite-backed append-only events;
-- idempotent event collection;
-- content-addressed artifacts;
-- resumable Campaign state;
-- build-boundary component inventory;
-- deterministic Work Unit and Batch planning;
-- cross-Batch Handoff generation;
-- R0-R6 analysis, refutation, CategoryRun, and experiment records;
-- BG1-BG8 Batch and CG1-CG10 Campaign gates;
-- root-cause Finding deduplication and derived Campaign reports;
-- paired v3/vNext shadow-run release evaluation;
-- durable leased R1/R2 execution tasks for host or manual Agents;
-- compact six-axis R2 task mode to reduce claim/collect overhead per Work Unit;
-- source-slice drift detection with reverse-dependency invalidation;
-- source adapters for the approved 15-language portfolio;
-- 150 ranked language-issue profiles and approved Mechanism Cards with provenance;
-- build graph adapters for 14 ecosystems, including CMake, Make, .NET, Composer, Bundler, sbt, and Perl;
-- R5 harness recipes and bounded, non-shell toolchain probes;
-- managed POSIX-limited harness execution with artifactized observations;
-- per-Campaign lessons, explicit abort cleanup, and runtime compatibility scanning;
-- signed release manifests with evidence digests and per-language issue-stratum gates;
-- a command-line interface.
+It provides the durable campaign engine around an AI host: frozen scope, inventory,
+work planning, task leases, evidence validation, independent refutation, experiments,
+handoffs, recovery, and derived reports. The host Agent performs the source analysis;
+the runtime records and validates its submissions. vNext is not a standalone static
+analyzer and does not discover vulnerabilities without an Agent and an execution host.
 
-The orchestration core records and validates Agent-produced discovery evidence; it does
-not independently discover vulnerabilities. vNext remains experimental until real
-representative-project and 20GB+ evidence passes the release gates. See
-`docs/design/SYSTEM_DESIGN_VNEXT.md`, `docs/design/SOFTWARE_DESIGN_VNEXT.md`, and
-`docs/design/ACCEPTANCE_PLAN_VNEXT.md`. The ISO/IEC/IEEE 12207 process mapping is a
-self-assessment, not a conformity claim; see
-`docs/design/LIFECYCLE_CONFORMANCE_VNEXT.md`.
+> **Status:** vNext is a shadow candidate, not a replacement for v3. Promotion requires
+> real paired, held-out acceptance across the approved language portfolio, mixed-language
+> boundary tests, and a qualifying large-repository recovery run. The current evidence
+> does not establish that vNext finds more vulnerabilities than v3.
+
+## How It Works
+
+An audit is a Campaign over a frozen repository snapshot. The planner divides its
+inventory into Work Units and resumable Batches; cross-Batch work is assigned through
+Handoffs. Campaign and Batch state is persisted in an SQLite event store, while evidence
+and task outputs are retained as content-addressed artifacts.
+
+The analysis workflow is organized into stages:
+
+| Stage | Purpose |
+|---|---|
+| R0 | Freeze the snapshot, scope, tools, and declared constraints |
+| R1 | Map entry surfaces, principals, components, and trust boundaries |
+| R2 | Generate falsifiable hypotheses across applicable discovery axes |
+| R3 | Verify reachability and the proposed vulnerability mechanism |
+| R3.5 | Independently refute, adjudicate, and review selected dispositions |
+| R4 | Audit planned security categories and record evidenced coverage |
+| R5 | Run justified experiments or preserve an explicit unresolved disposition |
+| R6 | Reconcile evidence, scope, handoffs, risks, and Batch completion |
+
+Campaign closure is separate from Batch completion. A passed gate means the recorded
+requirements were satisfied; it does not mean that every file was inspected or that no
+undiscovered vulnerability exists. Reports preserve excluded, deferred, and unresolved
+scope.
+
+## What Is Included
+
+- Durable task scheduling, leases, retries, collection-time contracts, and resumable
+  Campaign state.
+- Source and build inventory, deterministic Work Unit/Batch plans, boundary records,
+  and cross-Batch Handoff resolution.
+- Append-only events, content-addressed evidence, drift tracking, and derived reports.
+- Refutation/adjudication workflows and bounded, non-shell harness execution with
+  artifactized observations. Harness resource limits are not a security sandbox for
+  hostile native code; use an external container or VM for that threat model.
+- A versioned 15-language certification portfolio, language/build adapters, issue
+  profiles, and provenance-backed Mechanism Cards.
+- Signed paired-run evaluation contracts and release gates.
+
+Adapter presence is not language certification. The current static hotspot provider is
+an advisory Python AST implementation; other language providers and balanced held-out
+quality evidence remain incomplete. Build and import edges are not a complete security
+call graph. Unsupported syntax, unresolved boundaries, and missing tools must remain
+visible as limitations, not be treated as evidence of safety.
+
+The runtime uses its own `.audit_vnext` state and canonical schemas. It does not load v3
+queues or findings as discovery input. Fresh Campaigns isolate prior audit history;
+follow-up history must be declared and remains context, not proof.
+
+## Quick Start
+
+Requirements: Python 3.11 or newer. The runtime has no third-party Python dependencies;
+pytest is required for development tests. A host Agent and model/runtime are required to
+perform the audit work.
+
+From the repository root, set the target and Campaign ID, then initialize a Campaign.
+Automatic snapshot detection accepts only a clean Git worktree; otherwise provide an
+explicit frozen snapshot ID.
+
+```bash
+export PYTHONPATH="$PWD/src${PYTHONPATH:+:$PYTHONPATH}"
+TARGET=/path/to/target
+CAMPAIGN_ID=audit-2026-01
+
+python3 -m reachable_audit init "$TARGET" \
+  --campaign-id "$CAMPAIGN_ID" --snapshot-id "git:<commit>" --audit-mode fresh
+python3 -m reachable_audit inventory "$TARGET" "$CAMPAIGN_ID"
+python3 -m reachable_audit graph "$TARGET" "$CAMPAIGN_ID"
+python3 -m reachable_audit plan "$TARGET" "$CAMPAIGN_ID" \
+  --categories MEMORY-SAFETY,STATE,RESOURCE-DOS
+```
+
+`plan` records planned Batches and prints their IDs and scope summaries. For each planned
+Batch, run R0 and use the durable task schedule/claim/collect/commit workflow with a host
+Agent. The complete host protocol, evidence rules, and recovery commands are in
+[`SKILL.md`](SKILL.md). Use the CLI help for the exact arguments supported by this build:
+
+```bash
+python3 -m reachable_audit --help
+```
 
 ## Development
 
 ```bash
-python3 -m pytest tests -q
-PYTHONPATH=src python3 -m reachable_audit --help
+env -u PYTHONPATH python3 -m pytest tests -q
+PYTHONPATH=src python3 -m reachable_audit compatibility-scan
 ```
 
-## Minimal Usage
+The compatibility scan checks runtime imports and generic residue patterns. Project-
+specific residue tokens can be supplied by the evaluation authority; they are not baked
+into the generic runtime.
 
-```bash
-PYTHONPATH=src python3 -m reachable_audit init /path/to/target \
-  --snapshot-id git:<commit> --audit-mode fresh \
-  --max-screening-fraction <predeclared-fraction>
+## Project Documents
 
-PYTHONPATH=src python3 -m reachable_audit status /path/to/target
+- [Host skill and operating contract](SKILL.md)
+- [System architecture](docs/design/SYSTEM_DESIGN_VNEXT.md)
+- [Software design and data contracts](docs/design/SOFTWARE_DESIGN_VNEXT.md)
+- [System requirements](docs/design/SYSTEM_REQUIREMENTS_VNEXT.md)
+- [Software requirements and implementation status](docs/design/SOFTWARE_REQUIREMENTS_VNEXT.md)
+- [Release acceptance plan](docs/design/ACCEPTANCE_PLAN_VNEXT.md)
+- [Repair roadmap](docs/design/REPAIR_ROADMAP_VNEXT.md)
+- [ISO/IEC/IEEE 12207 lifecycle self-assessment](docs/design/LIFECYCLE_CONFORMANCE_VNEXT.md)
 
-PYTHONPATH=src python3 -m reachable_audit task-list /path/to/target <campaign-id> \
-  --batch-id <batch-id>
-
-PYTHONPATH=src python3 -m reachable_audit task-amend /path/to/target \
-  <campaign-id> <task-id> --input /path/to/amendment.json
-
-PYTHONPATH=src python3 -m reachable_audit inventory /path/to/target <campaign-id>
-
-PYTHONPATH=src python3 -m reachable_audit graph /path/to/target <campaign-id>
-
-PYTHONPATH=src python3 -m reachable_audit plan /path/to/target <campaign-id> \
-  --categories MEMORY-SAFETY,STATE,RESOURCE-DOS
-
-PYTHONPATH=src python3 -m reachable_audit amend /path/to/target \
-  <campaign-id> <plan-id> --reason "pilot exceeded budget" \
-  --max-batch-files 500 --max-batch-work-units 2
-
-PYTHONPATH=src python3 -m reachable_audit shadow-evaluate \
-  --input /path/to/paired-runs.json --output /path/to/acceptance-report.json
-```
-
-When `--snapshot-id` is omitted, automatic detection accepts only a clean Git
-worktree. Non-Git or dirty targets must provide an explicit frozen snapshot ID.
+The ISO/IEC/IEEE 12207 document is an engineering self-assessment, not a conformity
+claim or certification. Google internal engineering requirements were not supplied and
+have not been assessed.
