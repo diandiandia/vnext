@@ -87,9 +87,15 @@ python3 -m reachable_audit plan "$TARGET" "$CAMPAIGN_ID" \
   --categories MEMORY-SAFETY,STATE,RESOURCE-DOS
 ```
 
-`plan` records planned Batches and prints their IDs and scope summaries. For each planned
-Batch, run R0 and use the durable task schedule/claim/collect/commit workflow with a host
-Agent. The complete host protocol, evidence rules, and recovery commands are in
+`plan` records planned Batches and prints their IDs and scope summaries. An optional
+`--cost-profile <json>` adds task-fanout and cost scenarios from caller-supplied measured
+rates and explicit assumptions; it does not replan. For R4, the default remains one task
+per CategoryAuditPlan. `task-schedule-r4 --bundle-work-units 2` opts into bundling same-
+family plans while retaining a separate CategoryRun per plan and Work Unit; compare total
+cost, retries, coverage, and review quality before using it on a production Campaign.
+
+For each planned Batch, run R0 and use the durable task schedule/claim/collect/commit
+workflow with a host Agent. The complete host protocol, evidence rules, and recovery commands are in
 [`SKILL.md`](SKILL.md). Use the CLI help for the exact arguments supported by this build:
 
 ```bash
@@ -109,6 +115,7 @@ into the generic runtime.
 
 ## Project Documents
 
+- [面向非代码审计读者的项目介绍（中文）](docs/PROJECT_OVERVIEW_ZH.md)
 - [Host skill and operating contract](SKILL.md)
 - [System architecture](docs/design/SYSTEM_DESIGN_VNEXT.md)
 - [Software design and data contracts](docs/design/SOFTWARE_DESIGN_VNEXT.md)
@@ -118,6 +125,8 @@ into the generic runtime.
 - [Repair roadmap](docs/design/REPAIR_ROADMAP_VNEXT.md)
 - [ISO/IEC/IEEE 12207 lifecycle self-assessment](docs/design/LIFECYCLE_CONFORMANCE_VNEXT.md)
 
-The ISO/IEC/IEEE 12207 document is an engineering self-assessment, not a conformity
-claim or certification. Google internal engineering requirements were not supplied and
-have not been assessed.
+The lifecycle document is a preliminary engineering self-assessment, not an ISO/IEC/IEEE
+12207 conformity claim or certification. ISO/IEC/IEEE 12207:2017 was withdrawn and
+replaced by the 2026 edition; vNext has not been assessed clause-by-clause against the
+2026 text. Google internal engineering requirements were not supplied and have not been
+assessed.
