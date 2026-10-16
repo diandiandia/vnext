@@ -532,6 +532,28 @@ def test_campaign_report_exports_scope_and_execution_measurements(tmp_path: Path
             },
             {**execution_configuration_fixture(), "host_tool_policy_digest": "sha256:" + "c" * 64},
         ))
+        for task_id, task_measurements in (
+            ("TASK-failed-measured", {
+                "agent_runs": 1, "wall_seconds": 2, "input_tokens": 50,
+                "cache_read_tokens": 0, "output_tokens": 4,
+            }),
+            ("TASK-failed-missing-usage", {"agent_runs": 1, "wall_seconds": 1}),
+        ):
+            backend.submit(TaskSpec(
+                task_id=task_id,
+                campaign_id="CMP-r4",
+                batch_id=batch.batch_id,
+                work_unit_id=plan.work_units[0].work_unit_id,
+                operation="measurement-fixture",
+                input_refs=(input_ref,),
+                required_output="fixture/v1",
+                budget={"agent_runs": 1},
+            ))
+            failed_lease = backend.claim("measurement-worker", task_id_filter=task_id)
+            assert failed_lease is not None
+            backend.collect(failed_lease, TaskResult(
+                False, None, "failed attempt", task_measurements,
+            ))
 
         report = CampaignCloser(manager, "CMP-r4", plan).close(CampaignClosure(
             architecture_overview="One component.",
@@ -549,6 +571,28 @@ def test_campaign_report_exports_scope_and_execution_measurements(tmp_path: Path
         assert measurements["usage"] == {
             "tasks_reporting_usage": 1, "tasks_missing_usage": 0,
             "usage_complete": True, "cache_hit_ratio": 0.75,
+        }
+        assert measurements["attempt_usage"] == {
+            "attempt_count": 3,
+            "attempts_reporting_usage": 2,
+            "attempts_missing_usage": 1,
+            "usage_complete": False,
+            "totals": {
+                "input_tokens": 150, "cache_read_tokens": 300, "output_tokens": 54,
+            },
+            "totals_by_operation": {
+                "measurement-fixture": {
+                    "attempts_reporting_usage": 2,
+                    "input_tokens": 150,
+                    "cache_read_tokens": 300,
+                    "output_tokens": 54,
+                },
+            },
+            "missing_attempts": [{
+                "task_id": "TASK-failed-missing-usage",
+                "event_id": measurements["attempt_usage"]["missing_attempts"][0]["event_id"],
+                "event_type": "TASK_FAILED",
+            }],
         }
         assert measurements["configuration_complete"] is True
         assert measurements["configuration_digest"].startswith("sha256:")

@@ -12,7 +12,7 @@ TASK_OUTPUT_TARGET_BYTES = 1024 * 1024
 
 
 _POLICY: dict[str, Any] = {
-    "policy_version": "vnext-task-policy-5",
+    "policy_version": "vnext-task-policy-6",
     "task_collection": {
         "shell_execution_by_scheduler": False,
         "required_measurements": ["agent_runs", "wall_seconds"],
@@ -30,6 +30,10 @@ _POLICY: dict[str, Any] = {
         "r4_bundle_default_work_units": 1,
         "r4_bundle_max_input_bytes": 524288,
         "empty_component_planning": "omit_only_without_source_manifest_or_boundary_obligation",
+        "r2_hypothesis_id": "HYP-work_unit_id-origin_axis-positive_ordinal",
+        "r4_category_run_validation": "collect_plan_scope_axes_and_verbatim_variants",
+        "released_exhausted_lease_retry": "explicit_bounded_operator_authorization",
+        "attempt_usage": "completed_and_failed_terminal_attempts",
     },
     "harness_limits": {
         "max_timeout_seconds": 300,

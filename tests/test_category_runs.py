@@ -205,6 +205,30 @@ def test_r4_category_plan_runs_as_durable_task(tmp_path: Path) -> None:
         assert task_input["knowledge_context"]["knowledge_version"] == "portfolio-2026-09-v1"
         lease = backend.claim("category-auditor")
         assert lease is not None
+        assert category_plan.mechanism_variants
+        missing_status = asdict(run)
+        missing_status.pop("status")
+        missing_status_ref = manager.artifacts.put_text(json.dumps({
+            "schema_version": "1.0", "category_run": missing_status,
+        })).artifact_id
+        with pytest.raises(ModelError, match="CategoryRun is missing fields.*status"):
+            backend.collect(lease, TaskResult(
+                True, missing_status_ref, "missing status",
+                {"agent_runs": 1, "wall_seconds": 1},
+            ))
+        split_variant = asdict(run)
+        split_variant["mechanism_variants_examined"] = [
+            category_plan.mechanism_variants[0] + "-split"
+        ]
+        split_variant_ref = manager.artifacts.put_text(json.dumps({
+            "schema_version": "1.0", "category_run": split_variant,
+        })).artifact_id
+        with pytest.raises(ModelError, match="R4 mechanism coverage mismatch"):
+            backend.collect(lease, TaskResult(
+                True, split_variant_ref, "variant split from planned literal",
+                {"agent_runs": 1, "wall_seconds": 1},
+            ))
+        assert backend.poll(scheduled[0].task.task_id).status.value == "LEASED"
         output_ref = manager.artifacts.put_text(json.dumps({
             "schema_version": "1.0",
             "category_run": asdict(run),

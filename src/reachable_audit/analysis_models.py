@@ -592,6 +592,17 @@ class CategoryRun:
 
     @classmethod
     def from_dict(cls, value: Mapping[str, Any]) -> "CategoryRun":
+        if not isinstance(value, Mapping):
+            raise ModelError("CategoryRun must be an object")
+        required = {
+            "category_run_id", "category_plan_id", "work_unit_id", "family",
+            "axis_runs", "applicability", "status", "rationale",
+        }
+        missing = required - set(value)
+        if missing:
+            raise ModelError(f"CategoryRun is missing fields: {sorted(missing)}")
+        if not isinstance(value["axis_runs"], list):
+            raise ModelError("CategoryRun axis_runs must be an array")
         run = cls(
             category_run_id=str(value["category_run_id"]),
             category_plan_id=str(value["category_plan_id"]),

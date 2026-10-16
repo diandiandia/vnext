@@ -387,17 +387,17 @@ class CampaignCloser:
         execution_task_events = [
             event for event in events if event.entity_type == "execution_task"
         ]
+        task_specs = {}
+        for event in execution_task_events:
+            if event.event_type == "TASK_SUBMITTED" and event.payload_ref:
+                task_specs[event.entity_id] = json.loads(
+                    self.manager.artifacts.get_bytes(event.payload_ref)
+                )
         completed_task_measurements = []
         for event in execution_task_events:
             if event.event_type != "TASK_COMPLETED":
                 continue
-            task_spec = {}
-            submission = next((
-                item for item in execution_task_events
-                if item.entity_id == event.entity_id and item.event_type == "TASK_SUBMITTED"
-            ), None)
-            if submission is not None and submission.payload_ref:
-                task_spec = json.loads(self.manager.artifacts.get_bytes(submission.payload_ref))
+            task_spec = task_specs.get(event.entity_id, {})
             completed_task_measurements.append({
                 "task_id": event.entity_id,
                 "operation": task_spec.get("operation", "unknown"),
@@ -446,6 +446,36 @@ class CampaignCloser:
             item["task_id"] for item in completed_task_measurements
             if {"input_tokens", "cache_read_tokens", "output_tokens"}.issubset(item["measurements"])
         ]
+        terminal_attempts = [
+            event for event in execution_task_events
+            if event.event_type in {"TASK_COMPLETED", "TASK_FAILED"}
+        ]
+        attempt_usage_by_operation: dict[str, dict[str, int]] = {}
+        missing_usage_attempts = []
+        for event in terminal_attempts:
+            task_spec = task_specs.get(event.entity_id, {})
+            measurements = event.payload.get("measurements", {})
+            token_fields = {"input_tokens", "cache_read_tokens", "output_tokens"}
+            if not isinstance(measurements, dict) or not token_fields.issubset(measurements):
+                missing_usage_attempts.append({
+                    "task_id": event.entity_id,
+                    "event_id": event.event_id,
+                    "event_type": event.event_type,
+                })
+                continue
+            operation = str(task_spec.get("operation", "unknown"))
+            operation_totals = attempt_usage_by_operation.setdefault(operation, {})
+            operation_totals["attempts_reporting_usage"] = (
+                operation_totals.get("attempts_reporting_usage", 0) + 1
+            )
+            for name in token_fields:
+                operation_totals[name] = operation_totals.get(name, 0) + int(
+                    measurements[name]
+                )
+        attempt_usage_totals = {
+            name: sum(values.get(name, 0) for values in attempt_usage_by_operation.values())
+            for name in ("input_tokens", "cache_read_tokens", "output_tokens")
+        }
         input_total = measurement_totals.get("input_tokens", 0)
         cache_read_total = measurement_totals.get("cache_read_tokens", 0)
         cache_hit_ratio = (
@@ -656,6 +686,15 @@ class CampaignCloser:
                     "tasks_missing_usage": len(completed_task_measurements) - len(usage_reported_tasks),
                     "usage_complete": len(usage_reported_tasks) == len(completed_task_measurements),
                     "cache_hit_ratio": cache_hit_ratio,
+                },
+                "attempt_usage": {
+                    "attempt_count": len(terminal_attempts),
+                    "attempts_reporting_usage": len(terminal_attempts) - len(missing_usage_attempts),
+                    "attempts_missing_usage": len(missing_usage_attempts),
+                    "usage_complete": not missing_usage_attempts,
+                    "totals": attempt_usage_totals,
+                    "totals_by_operation": attempt_usage_by_operation,
+                    "missing_attempts": missing_usage_attempts,
                 },
                 "configuration_digest": execution_config_digest,
                 "vnext_policy_digest": execution_policy_digest(),

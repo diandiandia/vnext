@@ -229,11 +229,14 @@ shared host model/runtime/tool policy; the vNext-owned policy digest is recorded
 separately and is not compared with v3's engine policy. Missing values are explicit;
 they are never inferred from budgets.
 
-Hosts may also report `input_tokens` (uncached), `cache_read_tokens`, and `output_tokens`
-measurements. Closure adds per-operation totals and a `usage` block with the number of
-tasks reporting or missing usage, a `usage_complete` flag, and the aggregate cache-hit
-ratio; absent usage is never estimated and never blocks collection. Task result artifacts
-are asked to stay under 1 MiB and are hard-rejected above 4 MiB at collection. Coverage
+Optional token usage remains non-blocking for audit collection. Hosts may report
+`input_tokens` (uncached), `cache_read_tokens`, and `output_tokens`; closure preserves
+success-only totals and separately aggregates token usage for every terminal attempt,
+including failures and retries. Missing attempt usage is never estimated and makes the
+attempt-level cost view incomplete; cost comparisons must not treat it as a full spend
+total. The existing `usage` block reports success-task completeness and cache-hit ratio.
+Task result artifacts are asked to stay under 1 MiB and are hard-rejected above 4 MiB at
+collection. Coverage
 takes precedence over size: `output_discipline` states that required items are never
 dropped, sampled, or truncated to meet the soft target. Collection of `discover_surfaces`,
 `generate_hypotheses`, and compact R2 results verifies, before the task becomes terminal,
@@ -243,8 +246,13 @@ Partial coverage and `excluded_paths` are rejected. R1 `boundary_reviews` must c
 every supplied edge exactly once, with matching Work Unit ID, valid disposition, non-empty
 evidence references, and rationale; source-anchor validity is checked at stage commit.
 R2 hypothesis and axis records are parsed at collection so malformed nested objects fail
-as `ModelError` while still leased. A rejection reports counts and the first ten missing
-or extra edge IDs and leaves the task leased. Agent-facing task inputs are compacted
+as `ModelError` while still leased. Hypothesis IDs use the deterministic
+`HYP-<work_unit_id>-<origin_axis>-<positive ordinal>` namespace, preventing collisions
+between R2 Work Unit/axis tasks. Individual and bundled R4 CategoryRuns are checked at
+collection against their plan identity, axis coverage, and verbatim mechanism-variant
+coverage; missing fields return actionable `ModelError`s rather than raw `KeyError`s.
+A rejection reports counts and the first ten missing or extra edge IDs and leaves the
+task leased. Agent-facing task inputs are compacted
 without changing the canonical Work Unit: files are grouped by directory
 (`source_files_by_directory`), the
 hotspot report carries counts instead of path lists derivable from the Work Unit, and R1

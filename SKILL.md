@@ -65,9 +65,11 @@ The host prompt must not restate or override the output schema. Treat the task's
 
 Every `task-collect` input must include measured `agent_runs` and `wall_seconds`.
 When the host exposes them, also report `input_tokens` (uncached), `cache_read_tokens`,
-and `output_tokens` as integers; Campaign reports derive per-operation totals and the
-cache-hit ratio from them, and flag `usage_complete: false` when any task omits them.
-Missing usage never blocks collection. Result artifacts are asked to stay under 1 MiB
+and `output_tokens` as integers on every terminal task attempt, including failed attempts.
+Campaign reports derive success-only totals and separate attempt-level totals; any missing
+attempt usage makes the attempt cost report incomplete. Missing usage never blocks audit
+collection, but do not claim comparable or complete costs when `usage_complete` is false.
+Result artifacts are asked to stay under 1 MiB
 (output_discipline) and are hard-rejected above 4 MiB; coverage always wins over size.
 A `discover_surfaces`, `generate_hypotheses`, or compact R2 result is checked at
 `task-collect`: when all source files were reviewed, set `reviewed_scope` to the exact
@@ -96,6 +98,9 @@ measurement shows a repeatable benefit.
 R2 hypotheses are schema-checked at collection; `mechanism` must be an object containing
 non-empty `family` and `variant` strings, with optional `freeform`. Shape errors leave the
 task leased and return an actionable `ModelError` rather than failing later during commit.
+Each R2 hypothesis ID must be `HYP-<work_unit_id>-<origin_axis>-<positive ordinal>`;
+number ordinals independently within each Work Unit/axis. This makes IDs unique across
+R2 tasks without post-hoc renaming.
 `configuration` may report `model_id`, `runtime_version`, and
 `host_tool_policy_digest` (`sha256:<64 lowercase hex>`) when the host exposes them; never
 invent host values. The runtime always adds its own deterministic `vnext_policy_digest`.

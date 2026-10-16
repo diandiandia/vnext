@@ -1,10 +1,10 @@
 # Lifecycle Conformance Self-Assessment
 
-Status: engineering self-assessment, not certification. The applicable ISO/IEC/IEEE 12207 edition and organizational tailoring rules have not been formally baselined. This document maps vNext design evidence to life-cycle process groups at a high level; it does not reproduce normative standard text or claim conformity.
+Status: preliminary engineering self-assessment, not certification. ISO/IEC/IEEE 12207:2017 was withdrawn and replaced by ISO/IEC/IEEE 12207:2026, published 2026-04. This repository has not baselined organizational tailoring rules or performed clause-by-clause verification against the 2026 text. This document maps vNext evidence to selected lifecycle process concepts at a high level; it does not reproduce normative standard text or claim conformity.
 
 ## Assessment Basis
 
-The assessment covers the vNext repository, documented requirements/design, test suite, and release-acceptance plan as of 2026-10-11. It does not assess the user's organization, independent evaluation authority, acquisition/supplier contracts, deployment operations, or proprietary Google engineering policies. Those require external evidence and authorized assessors.
+The assessment covers the vNext repository, documented requirements/design, test suite, and release-acceptance plan as of 2026-10-16. It does not assess the user's organization, independent evaluation authority, acquisition/supplier contracts, deployment operations, or proprietary Google engineering policies. Those require external evidence and authorized assessors.
 
 Statuses mean:
 
@@ -28,6 +28,6 @@ Statuses mean:
 
 ## Decision
 
-The current evidence supports **partial alignment of the tool's engineering workflow** with selected 12207 process outcomes. It does not establish full ISO/IEC/IEEE 12207 conformity, organizational compliance, or certification. A formal assessment needs a pinned edition, tailored process set, accountable process owners, objective work-product evidence, independent audit, and closure of the gaps above.
+The current evidence supports **partial alignment of the tool's engineering workflow** with selected lifecycle process concepts. It does not establish conformity to ISO/IEC/IEEE 12207:2017 or 12207:2026, organizational compliance, or certification. A formal assessment needs the controlled 2026 text, a tailored process set, accountable process owners, objective work-product evidence, independent audit, and closure of the gaps above.
 
 Google internal engineering/security requirements are not publicly available to this assessment and were not supplied as controlled criteria. No claim of meeting them is made. A comparison requires the authorized requirement set and evidence mapping.

@@ -442,6 +442,33 @@ def test_exhausted_task_requires_operator_retry_authorization(tmp_path: Path) ->
         manager.close()
 
 
+def test_exhausted_released_lease_can_be_authorized_for_one_more_attempt(
+    tmp_path: Path,
+) -> None:
+    manager, original = _setup(tmp_path)
+    task = replace(original, max_attempts=1)
+    try:
+        backend = ManualExecutionBackend(manager, "CMP-exec")
+        backend.submit(task)
+        first = backend.claim("worker-a")
+        assert first is not None
+        backend.collect(first, TaskResult(
+            False, None, "first attempt failed", {"agent_runs": 1, "wall_seconds": 1},
+        ))
+        backend.retry(task.task_id, reason="retry transient failure")
+        second = backend.claim("worker-b")
+        assert second is not None and second.attempt == 2
+        backend.release(second, reason="worker process exited before work")
+
+        assert backend.retry(
+            task.task_id, reason="released attempt had no output",
+        ).status is TaskStatus.PENDING
+        third = backend.claim("worker-c")
+        assert third is not None and third.attempt == 3
+    finally:
+        manager.close()
+
+
 def test_worker_can_release_lease_for_another_compatible_worker(tmp_path: Path) -> None:
     manager, task = _setup(tmp_path)
     try:
@@ -554,7 +581,9 @@ def test_discovery_coordinator_commits_r1_and_six_axis_r2(tmp_path: Path) -> Non
             hypotheses = []
             if axis == "surface":
                 hypotheses.append({
-                    "hypothesis_id": "HYP-coordinated",
+                    "hypothesis_id": (
+                        f"HYP-{work_unit.work_unit_id}-surface-001"
+                    ),
                     "work_unit_id": work_unit.work_unit_id,
                     "origin_axis": "surface",
                     "seed_refs": ["SURF-coordinated"],
@@ -914,7 +943,7 @@ def test_collect_rejects_variant_outside_nested_mechanism(tmp_path: Path) -> Non
             "reviewed_scope": "ALL_SOURCE_FILES",
             "axis_runs": [],
             "hypotheses": [{
-                "hypothesis_id": "HYP-bad-mechanism",
+                "hypothesis_id": "HYP-WU-1-state-001",
                 "work_unit_id": "WU-1",
                 "origin_axis": "state",
                 "seed_refs": ["EVID-seed"],
@@ -927,6 +956,49 @@ def test_collect_rejects_variant_outside_nested_mechanism(tmp_path: Path) -> Non
         with pytest.raises(ModelError, match="place it inside mechanism.variant"):
             backend.collect(lease, TaskResult(
                 True, output_ref, "malformed mechanism shape",
+                {"agent_runs": 1, "wall_seconds": 1},
+            ))
+        assert backend.poll(task.task_id).status is TaskStatus.LEASED
+    finally:
+        manager.close()
+
+
+def test_collect_rejects_hypothesis_id_without_work_unit_axis_namespace(
+    tmp_path: Path,
+) -> None:
+    manager, original = _setup(tmp_path)
+    input_ref = manager.artifacts.put_text(json.dumps({
+        "work_unit": {"work_unit_id": "WU-1", "source_files": []},
+    })).artifact_id
+    task = replace(
+        original,
+        task_id="TASK-r2-id-namespace",
+        operation="generate_hypotheses_compact",
+        input_refs=(input_ref,),
+        required_output="compact-hypothesis-set/v1",
+    )
+    try:
+        backend = ManualExecutionBackend(manager, "CMP-exec")
+        backend.submit(task)
+        lease = backend.claim("worker")
+        assert lease is not None
+        output_ref = manager.artifacts.put_text(json.dumps({
+            "schema_version": "1.0",
+            "reviewed_scope": "ALL_SOURCE_FILES",
+            "axis_runs": [],
+            "hypotheses": [{
+                "hypothesis_id": "HYP-1",
+                "work_unit_id": "WU-1",
+                "origin_axis": "state",
+                "seed_refs": ["EVID-seed"],
+                "surface_ids": [],
+                "mechanism": {"family": "STATE", "variant": "stale-owner"},
+                "claim": "a stale owner remains usable",
+            }],
+        })).artifact_id
+        with pytest.raises(ModelError, match="HYP-WU-1-state-<positive ordinal>"):
+            backend.collect(lease, TaskResult(
+                True, output_ref, "unscoped hypothesis ID",
                 {"agent_runs": 1, "wall_seconds": 1},
             ))
         assert backend.poll(task.task_id).status is TaskStatus.LEASED

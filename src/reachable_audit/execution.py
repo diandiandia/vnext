@@ -582,7 +582,62 @@ class ManualExecutionBackend:
                 self._validate_hypothesis_output(task, output)
         if task.required_output == "category-run-bundle/v1":
             self._validate_category_run_bundle(task, output)
+        if task.required_output == "category-run/v1":
+            self._validate_category_run(task, output)
         return output
+
+    def _validate_category_run_plan(
+        self, run: CategoryRun, category_plan: Mapping[str, Any], task_id: str,
+    ) -> None:
+        plan_id = str(category_plan.get("category_plan_id", ""))
+        work_unit_id = str(category_plan.get("work_unit_id", ""))
+        family = str(category_plan.get("family", "")).upper()
+        if (
+            run.category_plan_id != plan_id
+            or run.work_unit_id != work_unit_id
+            or run.family != family
+        ):
+            raise ModelError(f"R4 task scope mismatch: {run.category_run_id}")
+        expected_axes = tuple(str(item) for item in category_plan.get("discovery_axes", []))
+        actual_axes = tuple(axis_run.axis.value for axis_run in run.axis_runs)
+        if len(actual_axes) != len(set(actual_axes)) or set(actual_axes) != set(expected_axes):
+            raise ModelError(
+                f"R4 axis coverage mismatch: {task_id}; "
+                f"missing={sorted(set(expected_axes) - set(actual_axes))}, "
+                f"extra={sorted(set(actual_axes) - set(expected_axes))}"
+            )
+        if run.applicability is Applicability.APPLICABLE:
+            expected_variants = tuple(
+                str(item) for item in category_plan.get("mechanism_variants", [])
+            )
+            actual_variants = run.mechanism_variants_examined
+            if (
+                len(actual_variants) != len(set(actual_variants))
+                or set(actual_variants) != set(expected_variants)
+            ):
+                raise ModelError(
+                    f"R4 mechanism coverage mismatch: {task_id}; "
+                    f"missing={sorted(set(expected_variants) - set(actual_variants))}, "
+                    f"extra={sorted(set(actual_variants) - set(expected_variants))}"
+                )
+
+    def _validate_category_run(
+        self, task: TaskSpec, output: Mapping[str, Any],
+    ) -> None:
+        run_value = output.get("category_run")
+        if not isinstance(run_value, dict):
+            raise ModelError(f"R4 task output requires a CategoryRun: {task.task_id}")
+        try:
+            task_input = json.loads(self.manager.artifacts.get_bytes(task.input_refs[0]))
+        except (OSError, ValueError, json.JSONDecodeError) as error:
+            raise ModelError(f"R4 task input is not valid JSON: {task.task_id}") from error
+        category_plan = (
+            task_input.get("category_plan") if isinstance(task_input, dict) else None
+        )
+        if not isinstance(category_plan, dict):
+            raise ModelError(f"R4 task input is missing its CategoryAuditPlan: {task.task_id}")
+        run = CategoryRun.from_dict(run_value)
+        self._validate_category_run_plan(run, category_plan, task.task_id)
 
     def _validate_category_run_bundle(
         self, task: TaskSpec, output: Mapping[str, Any],
@@ -605,13 +660,13 @@ class ManualExecutionBackend:
             plan_id = str(category_plan.get("category_plan_id", ""))
             if not plan_id or plan_id in expected:
                 raise ModelError(f"R4 bundle input has duplicate or missing plan IDs: {task.task_id}")
-            expected[plan_id] = (
-                str(category_plan.get("work_unit_id", "")),
-                str(category_plan.get("family", "")).upper(),
-            )
+            expected[plan_id] = category_plan
         if set(expected) != set(task.bundle_item_ids):
             raise ModelError(f"R4 bundle member IDs mismatch: {task.task_id}")
-        if set(task.work_unit_ids) != {work_unit_id for work_unit_id, _ in expected.values()}:
+        if set(task.work_unit_ids) != {
+            str(category_plan.get("work_unit_id", ""))
+            for category_plan in expected.values()
+        }:
             raise ModelError(f"R4 bundle Work Unit membership mismatch: {task.task_id}")
         actual = set()
         for value in runs_value:
@@ -622,8 +677,10 @@ class ManualExecutionBackend:
             if run.category_plan_id in actual:
                 raise ModelError(f"duplicate CategoryRun in bundle: {run.category_plan_id}")
             actual.add(run.category_plan_id)
-            if expected.get(run.category_plan_id) != (run.work_unit_id, run.family):
+            category_plan = expected.get(run.category_plan_id)
+            if category_plan is None:
                 raise ModelError(f"CategoryRun is outside bundle scope: {run.category_run_id}")
+            self._validate_category_run_plan(run, category_plan, task.task_id)
         if actual != set(expected):
             missing = sorted(set(expected) - actual)
             extra = sorted(actual - set(expected))
@@ -658,6 +715,7 @@ class ManualExecutionBackend:
         hypotheses = output.get("hypotheses")
         if not isinstance(hypotheses, list):
             raise ModelError(f"R2 hypotheses must be an array: {task.task_id}")
+        hypothesis_ids = set()
         for item in hypotheses:
             if not isinstance(item, dict):
                 raise ModelError(f"R2 hypothesis must be an object: {task.task_id}")
@@ -671,11 +729,28 @@ class ManualExecutionBackend:
                     "at the top level; place it inside mechanism.variant"
                 )
             try:
-                Hypothesis.from_dict(item)
+                hypothesis = Hypothesis.from_dict(item)
             except (KeyError, TypeError, ValueError) as error:
                 raise ModelError(
                     f"invalid R2 hypothesis {item.get('hypothesis_id', '<unknown>')}: {error}"
                 ) from error
+            if hypothesis.work_unit_id != task.work_unit_id:
+                raise ModelError(
+                    f"R2 hypothesis Work Unit mismatch: {hypothesis.hypothesis_id}: "
+                    f"expected {task.work_unit_id}"
+                )
+            prefix = f"HYP-{task.work_unit_id}-{hypothesis.origin_axis}-"
+            ordinal = hypothesis.hypothesis_id.removeprefix(prefix)
+            if not ordinal.isdecimal() or int(ordinal) < 1:
+                raise ModelError(
+                    f"R2 hypothesis ID must be {prefix}<positive ordinal>: "
+                    f"{hypothesis.hypothesis_id}"
+                )
+            if hypothesis.hypothesis_id in hypothesis_ids:
+                raise ModelError(
+                    f"duplicate R2 hypothesis ID in task: {hypothesis.hypothesis_id}"
+                )
+            hypothesis_ids.add(hypothesis.hypothesis_id)
 
     def _task_work_unit(self, task: TaskSpec) -> Mapping[str, Any]:
         if not task.input_refs:
@@ -1046,7 +1121,8 @@ class DiscoveryCoordinator:
                         "axis_run": "AxisRun with APPLICABLE/NOT_APPLICABLE/DEFERRED, evidence_refs, rationale",
                         "hypotheses": (
                             "array<Hypothesis>; each mechanism is an object with required "
-                            "family and variant fields, optional freeform"
+                            "family and variant fields, optional freeform; hypothesis_id must "
+                            "be HYP-<work_unit_id>-<origin_axis>-<positive ordinal>"
                         ),
                     },
                 })
@@ -1102,7 +1178,9 @@ class DiscoveryCoordinator:
                     "axis_runs": "exactly one evidenced AxisRun per listed axis",
                     "hypotheses": (
                         "array<Hypothesis>, each with its origin_axis; mechanism is an "
-                        "object with required family and variant fields, optional freeform"
+                        "object with required family and variant fields, optional freeform; "
+                        "hypothesis_id must be "
+                        "HYP-<work_unit_id>-<origin_axis>-<positive ordinal>"
                     ),
                 },
                 "required_axes": axes,

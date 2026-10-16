@@ -812,8 +812,21 @@ class AuditStore(AbstractContextManager["AuditStore"]):
                 "TASK_FAILED", "TASK_RETRY_AUTHORIZED", "TASK_CANCELLED",
             }]
             latest_state = state_events[-1] if state_events else None
-            if latest_state is None or latest_state.event_type != "TASK_FAILED":
-                raise ConflictError("only an exhausted failed task can be retried")
+            released_claim = (
+                len(state_events) >= 2
+                and latest_state is not None
+                and latest_state.event_type == "TASK_LEASE_RELEASED"
+                and state_events[-2].event_type == "TASK_CLAIMED"
+                and claims[-1].event_id == state_events[-2].event_id
+            )
+            retryable_state = (
+                latest_state is not None
+                and latest_state.event_type == "TASK_FAILED"
+            ) or released_claim
+            if not retryable_state:
+                raise ConflictError(
+                    "only an exhausted failed task or released claim can be retried"
+                )
             max_attempts = int(events[0].payload.get("max_attempts", 3))
             if len(claims) < max_attempts + len(retries):
                 raise ConflictError("task still has configured attempts remaining")
