@@ -256,6 +256,23 @@ one minimal evidence reference and rationale per required boundary review; actua
 output can be larger, so edge counts are shown alongside it. These are planning signals,
 not result-size guarantees or price estimates.
 
+An optional plan cost profile supplies measured per-operation task cost, currency,
+low/expected/high hypotheses per Work Unit, expected reachable fraction, and optional R4
+bundle width. Forecasts report fixed and hypothesis-dependent task counts, cost scenarios,
+and per-Batch ranges; the profile is caller-owned and is not inferred from a repository or
+historical Campaign. R4 `CategoryAuditPlan` task bundling is opt-in and groups plans only
+within the same mechanism family. A bundle retains each original `work_unit_id` and
+`category_plan_id`, returns one `CategoryRun` per plan, and validates exact member coverage
+before collection succeeds. Its default width is one (the existing task mode); input-size
+limits can force a smaller group or individual scheduling. Bundling reduces session
+startup/context replay but does not merge WU ownership, findings, or evidence records.
+
+Planning may omit a component only when it owns no source files, build manifests, or
+boundary-edge obligations; manifest-only and boundary-only components remain planned.
+Omitted component IDs are persisted in the plan. If every component is otherwise empty,
+one Work Unit is retained so the Campaign still has a closure path. Forecasts and bundling
+are advisory/opt-in controls: their cost and quality effects require measured paired runs.
+
 Each task records `agent_runs` and `wall_seconds`; hosts define and report whether
 `agent_runs` includes delegated sub-agent runs. Workers may claim by operation, Batch,
 or task ID and release an unstarted lease. Failed attempts remain visible; after the

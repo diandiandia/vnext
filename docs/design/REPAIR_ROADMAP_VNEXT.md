@@ -1,6 +1,6 @@
 # vNext Repair Roadmap
 
-Status: ordered implementation plan, reviewed 2026-10-11. This roadmap separates local engineering fixes from claims requiring external evaluation evidence. A completed code milestone does not imply improved vulnerability recall until its acceptance criteria are measured.
+Status: ordered implementation plan, reviewed 2026-10-16. This roadmap separates local engineering fixes from claims requiring external evaluation evidence. A completed code milestone does not imply improved vulnerability recall until its acceptance criteria are measured.
 
 ## Baseline
 
@@ -18,6 +18,7 @@ The current implementation has a durable Campaign/Batch workflow, source/build i
 | 5 | Add reusable cross-language mechanism variants and durable source archives. | Not started | Shared cards are used only when semantics match; language differences are explicit; provenance basis is digest-verifiable and linked to an access-controlled source archive/reviewer decision. |
 | 6 | Close remaining evidence-contract and trust gaps. | Not started | Typed evidence references resolve to source/artifact records across stages; worker independence is attested by the execution host or explicitly remains uncertified. |
 | 7 | Run real paired capability and scale evaluation. | Blocked on external evidence | Frozen held-out samples for all 150 cells, at least one mixed-language Campaign, comparable v3/vNext budgets, independent adjudication, and a real 20GB+ recovery run. Promotion only on signed acceptance. |
+| 8 | Control task fan-out without changing audit scope: caller-profiled plan forecasts, safe omission of obligation-free empty components, and opt-in same-family R4 bundles. | Implemented; savings/quality effect unvalidated | Compare matched campaigns on total cost, coverage, retry rate, and independently reviewed effective findings; keep default R4 scheduling unbundled until the pilot supports enabling it. |
 
 ## Campaign-Scale Defect Register
 

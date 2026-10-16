@@ -220,6 +220,124 @@ def test_r4_category_plan_runs_as_durable_task(tmp_path: Path) -> None:
         manager.close()
 
 
+def test_r4_bundle_schedules_two_work_units_and_commits_each_plan(tmp_path: Path) -> None:
+    files = {
+        tmp_path / "services" / "api" / "pyproject.toml": "[project]\nname='api'\n",
+        tmp_path / "services" / "api" / "api.py": "def handle(): pass\n",
+        tmp_path / "services" / "worker" / "pyproject.toml": "[project]\nname='worker'\n",
+        tmp_path / "services" / "worker" / "worker.py": "def run(): pass\n",
+    }
+    for path, contents in files.items():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(contents, encoding="utf-8")
+    inventory = build_inventory(tmp_path, "fixture:r4-bundle")
+    plan = create_audit_plan(
+        campaign_id="CMP-r4-bundle",
+        inventory=inventory,
+        category_families=["STATE"],
+        max_source_files_per_work_unit=1,
+        max_source_files_per_batch=2,
+        max_work_units_per_batch=2,
+    )
+    assert len(plan.work_units) == 2
+    manager = CampaignManager(tmp_path)
+    manager.create_campaign(campaign_id="CMP-r4-bundle", snapshot_id="fixture:r4-bundle")
+    manager.record_inventory(campaign_id="CMP-r4-bundle", inventory=inventory)
+    manager.record_plan(campaign_id="CMP-r4-bundle", plan=plan, inventory=inventory)
+    workflow = BatchWorkflow(manager, "CMP-r4-bundle", plan.batches[0].batch_id)
+    try:
+        workflow.run_r0()
+        workflow.record_r1([])
+        evidence = {
+            axis.value: (f"EVID-{axis.value}",) for axis in DiscoveryAxis
+        }
+        workflow.record_r2(
+            [],
+            axis_evidence=evidence,
+            axis_runs=tuple(
+                AxisRun(
+                    axis=DiscoveryAxis(axis),
+                    applicability=Applicability.APPLICABLE,
+                    evidence_refs=(f"EVID-{axis}-{unit.work_unit_id}",),
+                    rationale=f"reviewed {axis} for {unit.work_unit_id}",
+                    work_unit_id=unit.work_unit_id,
+                )
+                for unit in plan.work_units
+                for axis in (item.value for item in DiscoveryAxis)
+            ),
+        )
+        workflow.record_r3([])
+        workflow.record_revival_selection(
+            [], rationale="no unreachable hypotheses", evidence_refs=("EVID-r3",)
+        )
+        workflow.complete_r35()
+        catalog = KnowledgeCatalog.load(default_knowledge_root())
+        state_card = next(
+            card for card in catalog.cards.values()
+            if card["family"] == "STATE"
+            and all("python" in work_unit.languages for work_unit in plan.work_units)
+        )
+        category_plans = create_category_audit_plans(
+            plan.work_units, [MechanismCard.from_dict(state_card)], budget={},
+        )
+        workflow.record_category_audit_plan(category_plans)
+        backend = ManualExecutionBackend(manager, workflow.campaign_id)
+        coordinator = DiscoveryCoordinator(workflow, backend, catalog)
+        with pytest.raises(ModelError, match="above bundle limit"):
+            coordinator.schedule_r4_bundled(
+                max_work_units_per_task=2, max_task_input_bytes=1,
+            )
+        tasks = coordinator.schedule_r4_bundled(max_work_units_per_task=2)
+        assert len(tasks) == 1
+        resumed_tasks = coordinator.schedule_r4_bundled(max_work_units_per_task=2)
+        assert [view.task.task_id for view in resumed_tasks] == [tasks[0].task.task_id]
+        with pytest.raises(ModelError, match="already has bundled tasks"):
+            coordinator.schedule_r4()
+        assert set(tasks[0].task.work_unit_ids) == {
+            unit.work_unit_id for unit in plan.work_units
+        }
+        task_input = json.loads(manager.artifacts.get_bytes(tasks[0].task.input_refs[0]))
+        assert len(task_input["category_items"]) == 2
+        lease = backend.claim("bundle-worker")
+        assert lease is not None
+        output_ref = manager.artifacts.put_text(json.dumps({
+            "schema_version": "1.0",
+            "category_runs": [asdict(CategoryRun(
+                category_run_id=f"CR-{category_plan.category_plan_id}",
+                category_plan_id=category_plan.category_plan_id,
+                work_unit_id=category_plan.work_unit_id,
+                family=category_plan.family,
+                mechanism_variants_examined=category_plan.mechanism_variants,
+                axis_runs=tuple(AxisRun(
+                    axis=DiscoveryAxis(axis),
+                    applicability=Applicability.APPLICABLE,
+                    evidence_refs=(f"EVID-{axis}-{category_plan.work_unit_id}",),
+                    rationale=f"reviewed {axis}",
+                    work_unit_id=category_plan.work_unit_id,
+                ) for axis in category_plan.discovery_axes),
+                applicability=Applicability.APPLICABLE,
+                status=CategoryRunStatus.COMPLETE,
+                evidence_refs=(f"EVID-r4-{category_plan.work_unit_id}",),
+                rationale="all planned category checks were completed",
+                hypothesis_ids=(),
+                finding_ids=(),
+            )) for category_plan in category_plans],
+        })).artifact_id
+        backend.collect(lease, TaskResult(
+            True, output_ref, "bundled R4 review complete",
+            {"agent_runs": 1, "wall_seconds": 2},
+        ))
+        coordinator.commit_r4()
+        r4_event = workflow._require_stage("R4_COMPLETED")
+        assert r4_event.payload_ref is not None
+        r4 = json.loads(manager.artifacts.get_bytes(r4_event.payload_ref))
+        assert {run["category_plan_id"] for run in r4["category_runs"]} == {
+            item.category_plan_id for item in category_plans
+        }
+    finally:
+        manager.close()
+
+
 def test_r4_screening_work_unit_needs_no_agent_category_tasks(
     tmp_path: Path,
 ) -> None:

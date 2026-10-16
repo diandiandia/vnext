@@ -244,6 +244,7 @@ class AuditPlan:
     batches: tuple[PlannedBatch, ...]
     handoffs: tuple[Handoff, ...]
     boundary_edges: tuple[BoundaryEdge, ...]
+    omitted_empty_component_ids: tuple[str, ...] = ()
 
     @classmethod
     def from_dict(cls, value: Mapping[str, Any]) -> "AuditPlan":
@@ -260,6 +261,9 @@ class AuditPlan:
             handoffs=tuple(Handoff.from_dict(item) for item in value["handoffs"]),
             boundary_edges=tuple(
                 BoundaryEdge.from_dict(item) for item in value["boundary_edges"]
+            ),
+            omitted_empty_component_ids=tuple(
+                str(item) for item in value.get("omitted_empty_component_ids", [])
             ),
         )
 

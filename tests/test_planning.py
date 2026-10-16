@@ -1,10 +1,11 @@
+from dataclasses import replace
 from pathlib import Path
 
 from reachable_audit.campaign import CampaignManager
 from reachable_audit.inventory import build_inventory
 from reachable_audit.models import ModelError
-from reachable_audit.plan_models import BoundaryEdge
-from reachable_audit.planning import create_audit_plan
+from reachable_audit.plan_models import BoundaryEdge, Component
+from reachable_audit.planning import create_audit_plan, forecast_plan_cost
 
 
 def _write(path: Path, text: str = "") -> None:
@@ -72,6 +73,67 @@ def test_manifest_only_component_has_a_unique_planned_owner(tmp_path: Path) -> N
     assert plan.work_units[0].component_id == inventory.components[0].component_id
     assert plan.work_units[0].source_files == ()
     assert plan.batches[0].work_unit_ids == (plan.work_units[0].work_unit_id,)
+
+
+def test_plan_omits_only_empty_components_without_analysis_obligations(
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "components"
+    target.mkdir()
+    _fixture_monorepo(target)
+    inventory = build_inventory(target, "fixture:empty-components")
+    empty = Component("COMP-empty", "unused", (), (), 0)
+    inventory = replace(inventory, components=(*inventory.components, empty))
+
+    plan = create_audit_plan(
+        campaign_id="CMP-empty-component",
+        inventory=inventory,
+        category_families=["STATE"],
+    )
+
+    assert plan.omitted_empty_component_ids == ("COMP-empty",)
+    assert "COMP-empty" not in {unit.component_id for unit in plan.work_units}
+    assert {path for unit in plan.work_units for path in unit.source_files} == {
+        source.path for source in inventory.source_files
+    }
+
+    target_component = next(
+        item.component_id for item in inventory.components if item.root == "tools"
+    )
+    edge_plan = create_audit_plan(
+        campaign_id="CMP-empty-component-edge",
+        inventory=inventory,
+        category_families=["STATE"],
+        boundary_edges=[BoundaryEdge(
+            "EDGE-empty-tools", "COMP-empty", target_component, "ipc",
+            "empty component still owns a boundary obligation",
+        )],
+    )
+    assert edge_plan.omitted_empty_component_ids == ()
+    empty_owner = next(
+        unit for unit in edge_plan.work_units if unit.component_id == "COMP-empty"
+    )
+    assert empty_owner.source_files == ()
+    assert empty_owner.boundary_edge_ids == ("EDGE-empty-tools",)
+
+
+def test_plan_retains_one_work_unit_when_all_components_are_empty(tmp_path: Path) -> None:
+    target = tmp_path / "components"
+    target.mkdir()
+    _fixture_monorepo(target)
+    inventory = build_inventory(target, "fixture:all-empty-components")
+    empty = Component("COMP-empty", "unused", (), (), 0)
+    inventory = replace(inventory, source_files=(), components=(empty,))
+
+    plan = create_audit_plan(
+        campaign_id="CMP-all-empty",
+        inventory=inventory,
+        category_families=["STATE"],
+    )
+
+    assert len(plan.work_units) == 1
+    assert plan.work_units[0].component_id == "COMP-empty"
+    assert plan.omitted_empty_component_ids == ()
 
 
 def test_plan_has_exact_ownership_limits_and_cross_batch_handoff(tmp_path: Path) -> None:
@@ -182,3 +244,81 @@ def test_output_floor_grows_with_owned_edges_and_paths() -> None:
         unit(("a.py",), tuple(f"E-{i}" for i in range(1000)))
     )
     assert with_edges > base + 1000 * 100
+
+
+def test_task_fanout_forecast_uses_explicit_assumptions_and_rates(tmp_path: Path) -> None:
+    target = tmp_path / "forecast"
+    target.mkdir()
+    _write(target / "app.py", "print('ok')\n")
+    inventory = build_inventory(target, "fixture:forecast")
+    plan = create_audit_plan(
+        campaign_id="CMP-forecast",
+        inventory=inventory,
+        category_families=["STATE"],
+    )
+    operations = (
+        "discover_surfaces", "generate_hypotheses_compact", "run_category_audit",
+        "verify_reachability", "refute_reachability", "adjudicate_refutations",
+        "assess_experiment", "collect_batch_closure_evidence",
+    )
+    forecast = forecast_plan_cost(plan, {
+        "profile_id": "fixture-cost-profile",
+        "currency": "TEST",
+        "assumptions": {
+            "hypotheses_per_work_unit": {"low": 1, "expected": 2, "high": 3},
+            "reachable_fraction": 0.5,
+        },
+        "cost_per_task": {operation: 1.0 for operation in operations},
+    })
+
+    assert forecast["fixed_task_counts"] == {
+        "discover_surfaces": 1,
+        "generate_hypotheses_compact": 1,
+        "run_category_audit_plan_upper_bound": 1,
+        "run_category_audit_task_upper_bound": 1,
+        "collect_batch_closure_evidence": 1,
+        "omitted_empty_components": 0,
+    }
+    assert forecast["scenarios"]["low"]["estimated_total_tasks"] == 9
+    assert forecast["scenarios"]["expected"]["estimated_total_tasks"] == 11
+    assert forecast["scenarios"]["high"]["estimated_total_tasks"] == 16
+    assert forecast["scenarios"]["expected"]["estimated_cost"] == 11.0
+
+
+def test_task_fanout_forecast_models_r4_bundling_as_an_explicit_scenario(
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "forecast-bundle"
+    target.mkdir()
+    _write(target / "a.py", "print('a')\n")
+    _write(target / "b.py", "print('b')\n")
+    inventory = build_inventory(target, "fixture:forecast-bundle")
+    plan = create_audit_plan(
+        campaign_id="CMP-forecast-bundle",
+        inventory=inventory,
+        category_families=["STATE"],
+        max_source_files_per_work_unit=1,
+        max_source_files_per_batch=2,
+        max_work_units_per_batch=2,
+    )
+    operations = (
+        "discover_surfaces", "generate_hypotheses_compact", "run_category_audit_bundle",
+        "verify_reachability", "refute_reachability", "adjudicate_refutations",
+        "assess_experiment", "collect_batch_closure_evidence",
+    )
+    forecast = forecast_plan_cost(plan, {
+        "profile_id": "fixture-bundle-profile",
+        "currency": "TEST",
+        "assumptions": {
+            "hypotheses_per_work_unit": {"low": 0, "expected": 0, "high": 0},
+            "reachable_fraction": 0,
+            "r4_bundle_work_units_per_task": 2,
+        },
+        "cost_per_task": {operation: 1.0 for operation in operations},
+    })
+
+    assert forecast["fixed_task_counts"]["run_category_audit_plan_upper_bound"] == 2
+    assert forecast["fixed_task_counts"]["run_category_audit_task_upper_bound"] == 1
+    assert forecast["scenarios"]["expected"]["estimated_task_counts"][
+        "run_category_audit_bundle"
+    ] == 1

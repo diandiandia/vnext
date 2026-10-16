@@ -84,6 +84,10 @@ can resubmit the complete result.
 and per-batch maximum boundary-review count/output estimate. Treat the estimate as a
 lower-bound planning signal, not a cost or actual-size prediction. Split or amend the plan
 before dispatching any Work Unit listed as oversize.
+An optional `--cost-profile <json>` adds low/expected/high task-fanout and cost scenarios.
+The caller must supply measured cost per operation and explicit hypothesis/reachability
+assumptions; the forecast never changes the plan and omits retries, revival sampling, and
+host repair costs.
 If R1 coverage retries exhaust on a large Work Unit, compare a new plan using
 `--max-work-unit-files 500` and `250` against the current default of `1000`. This changes
 Work Unit IDs and task counts, so compare full-campaign token/cost, retry rate, and coverage;
@@ -273,7 +277,7 @@ PYTHONPATH=<vnext>/src python3 -m reachable_audit task-schedule-r35-revivals \
 PYTHONPATH=<vnext>/src python3 -m reachable_audit task-commit-r35-revivals \
   <target> <campaign-id> <batch-id>
 PYTHONPATH=<vnext>/src python3 -m reachable_audit task-schedule-r4 \
-  <target> <campaign-id> <batch-id>
+  <target> <campaign-id> <batch-id> [--bundle-work-units <N>]
 PYTHONPATH=<vnext>/src python3 -m reachable_audit task-commit-r4 \
   <target> <campaign-id> <batch-id>
 PYTHONPATH=<vnext>/src python3 -m reachable_audit task-schedule-r5 \

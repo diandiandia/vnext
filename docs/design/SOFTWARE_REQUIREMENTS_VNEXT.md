@@ -1,7 +1,7 @@
 # Reachable Audit vNext Software Requirements
 
 Status: derived from `SOFTWARE_DESIGN_VNEXT.md` and checked against the current
-repository implementation and tests on 2026-10-11. This is an implementation audit,
+repository implementation and tests on 2026-10-16. This is an implementation audit,
 not a claim that the target design is complete.
 
 ## 1. Status Definitions
@@ -63,15 +63,18 @@ real audit capability.
 | SWDR-040 | Planner and closure shall report screened versus inspected/excluded/deferred coverage by risk tier and axis, enforce a predeclared screening ceiling, and prevent NOT_APPLICABLE screening from counting as substantive audit coverage. | SYSR-038 | §5.4, §6.1, §6.2 | **Partial.** Campaign init freezes an optional maximum screening fraction; reports count all-NOT_APPLICABLE Work Units and mark screening ceiling/release eligibility. The signed evaluator does not yet enforce the ceiling or attest a human override. Evidence: [cli.py](vnext/src/reachable_audit/cli.py), [campaign_closure.py](vnext/src/reachable_audit/campaign_closure.py), [test_cli.py](vnext/tests/test_cli.py), [test_campaign_closure.py](vnext/tests/test_campaign_closure.py). |
 | SWDR-041 | R1/R3 validators shall enforce typed evidence roles, non-blank snapshot-valid LOC anchors, and reuse inventory/path/line indexes across task collection without weakening call-chain scope. | SYSR-039 | §3.1, §6.1 | **Partial.** Call-chain versus supporting-evidence roles, non-blank checks, stage-local line caches, and an indexed snapshot path registry are implemented. Cross-task line-count caching and large-inventory acceptance remain outstanding. Evidence: [batch_workflow.py](vnext/src/reachable_audit/batch_workflow.py), [execution.py](vnext/src/reachable_audit/execution.py), [store.py](vnext/src/reachable_audit/store.py), [test_execution.py](vnext/tests/test_execution.py). |
 | SWDR-042 | Store and Handoff APIs shall provide indexed filtered reads, ordered task enumeration, atomic bulk resolution, and zero-target stage fast paths; a real 30k-Handoff/10k-event fixture shall gate scale claims. | SYSR-040 | §3.6, §5.4, §6.1 | **Partial.** Indexed event queries/task enumeration, atomic `resolve_many`, map-based Handoff lookup, and zero-target fast paths are implemented. The 30k-Handoff/10k-event performance acceptance fixture has not been run. Evidence: [store.py](vnext/src/reachable_audit/store.py), [handoffs.py](vnext/src/reachable_audit/handoffs.py), [execution.py](vnext/src/reachable_audit/execution.py), [test_handoffs.py](vnext/tests/test_handoffs.py). |
+| SWDR-043 | Planning shall optionally forecast task fan-out and cost from caller-supplied currency, per-operation rates, and low/expected/high workload assumptions without changing the plan. | SYSR-020, 026 | §5.2 | **Implemented, estimate quality unvalidated.** Forecast reports fixed and hypothesis-dependent task counts, scenario costs, and per-Batch estimates; R4 bundle width is explicit and caller-supplied. Tests cover profile validation, CLI output, and bundle-aware task counts. Evidence: [planning.py](vnext/src/reachable_audit/planning.py), [cli.py](vnext/src/reachable_audit/cli.py), [test_planning.py](vnext/tests/test_planning.py), [test_cli.py](vnext/tests/test_cli.py). |
+| SWDR-044 | Planning shall omit a component only when it has no source files, build manifests, or boundary-edge obligations, persist omitted IDs, and retain one Work Unit if all components are otherwise empty. | SYSR-005, 019 | §5.2 | **Implemented.** Manifest-only and boundary-only components remain planned; tests cover omission eligibility and the all-empty fallback. Evidence: [planning.py](vnext/src/reachable_audit/planning.py), [plan_models.py](vnext/src/reachable_audit/plan_models.py), [test_planning.py](vnext/tests/test_planning.py). |
+| SWDR-045 | R4 may opt into bounded same-family task bundling while preserving per-plan Work Unit identity, exact CategoryRun coverage, and a maximum serialized input size. | SYSR-008, 020 | §6.1 | **Implemented, cost/quality effect unvalidated.** Default scheduling remains individual; bundle collection and commit preserve each CategoryRun and reject changed membership or oversized single-plan inputs. Tests cover multi-Work-Unit commit and the size bound. Evidence: [execution.py](vnext/src/reachable_audit/execution.py), [cli.py](vnext/src/reachable_audit/cli.py), [test_category_runs.py](vnext/tests/test_category_runs.py). |
 
 ## 3. Audit Summary
 
-All 42 software requirements are traced to a software-design section and system-level
-requirement. Current implementation status as of 2026-10-11 is:
+All 45 software requirements are traced to a software-design section and system-level
+requirement. Current implementation status as of 2026-10-16 is:
 
 | Status | Count |
 |---|---:|
-| Implemented | 24 |
+| Implemented | 27 |
 | Partial | 14 |
 | Not implemented | 0 |
 | Implemented, not release-certified | 4 |

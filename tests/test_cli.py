@@ -271,8 +271,26 @@ def test_cli_runs_inventory_graph_plan_in_order(tmp_path: Path, capsys: object) 
     assert main(["graph", str(target), "CMP-pipeline"]) == 0
     graph_output = json.loads(capsys.readouterr().out)  # type: ignore[attr-defined]
     assert graph_output["build_units"] == 1
+    cost_profile = tmp_path / "cost-profile.json"
+    cost_profile.write_text(json.dumps({
+        "profile_id": "fixture-profile",
+        "currency": "TEST",
+        "assumptions": {
+            "hypotheses_per_work_unit": {"low": 1, "expected": 2, "high": 3},
+            "reachable_fraction": 0.5,
+        },
+        "cost_per_task": {
+            operation: 1.0 for operation in (
+                "discover_surfaces", "generate_hypotheses_compact",
+                "run_category_audit", "verify_reachability",
+                "refute_reachability", "adjudicate_refutations",
+                "assess_experiment", "collect_batch_closure_evidence",
+            )
+        },
+    }), encoding="utf-8")
     assert main([
         "plan", str(target), "CMP-pipeline", "--categories", "STATE",
+        "--cost-profile", str(cost_profile),
     ]) == 0
     plan_output = json.loads(capsys.readouterr().out)  # type: ignore[attr-defined]
     assert plan_output["work_units"] == 1
@@ -282,6 +300,7 @@ def test_cli_runs_inventory_graph_plan_in_order(tmp_path: Path, capsys: object) 
     assert plan_output["oversize_work_units"] == []
     assert plan_output["batch_summaries"][0]["max_estimated_r1_output_floor_bytes"] > 0
     assert plan_output["batch_summaries"][0]["max_boundary_review_count"] == 0
+    assert plan_output["cost_forecast"]["scenarios"]["expected"]["estimated_total_tasks"] == 11
 
 
 def test_cli_writes_shadow_evaluation_report(

@@ -5,7 +5,8 @@ from __future__ import annotations
 from dataclasses import asdict, replace
 import hashlib
 import json
-from typing import Iterable, Sequence
+import math
+from typing import Any, Iterable, Mapping, Sequence
 
 from .models import ModelError
 from .plan_models import (
@@ -69,6 +70,137 @@ def discovery_output_floor_bytes(work_unit: WorkUnit) -> int:
     ).encode("utf-8"))
 
 
+_FORECAST_BASE_OPERATIONS = (
+    "discover_surfaces", "generate_hypotheses_compact", "verify_reachability",
+    "refute_reachability", "adjudicate_refutations", "assess_experiment",
+    "collect_batch_closure_evidence",
+)
+
+
+def _r4_task_count(units: Sequence[WorkUnit], bundle_size: int) -> int:
+    plans_by_family: dict[str, int] = {}
+    for unit in units:
+        for family in unit.category_families:
+            plans_by_family[family] = plans_by_family.get(family, 0) + 1
+    return sum(math.ceil(count / bundle_size) for count in plans_by_family.values())
+
+
+def forecast_plan_cost(plan: AuditPlan, profile: Mapping[str, Any]) -> dict[str, Any]:
+    """Forecast task fanout/cost from explicit assumptions and caller-measured task rates."""
+    profile_id = profile.get("profile_id")
+    currency = profile.get("currency")
+    assumptions = profile.get("assumptions")
+    rates = profile.get("cost_per_task")
+    if not isinstance(profile_id, str) or not profile_id.strip():
+        raise ModelError("cost profile requires a non-empty profile_id")
+    if not isinstance(currency, str) or not currency.strip():
+        raise ModelError("cost profile requires a currency label")
+    if not isinstance(assumptions, dict) or not isinstance(rates, dict):
+        raise ModelError("cost profile requires assumptions and cost_per_task objects")
+    hypotheses_per_unit = assumptions.get("hypotheses_per_work_unit")
+    if not isinstance(hypotheses_per_unit, dict) or set(hypotheses_per_unit) != {
+        "low", "expected", "high",
+    }:
+        raise ModelError("hypotheses_per_work_unit requires low, expected, and high")
+    hypothesis_rates = {}
+    for label, value in hypotheses_per_unit.items():
+        if not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
+            raise ModelError(f"invalid hypotheses_per_work_unit.{label}")
+        hypothesis_rates[label] = float(value)
+    if not hypothesis_rates["low"] <= hypothesis_rates["expected"] <= hypothesis_rates["high"]:
+        raise ModelError("hypothesis scenario rates must satisfy low <= expected <= high")
+    reachable_fraction = assumptions.get("reachable_fraction")
+    if (
+        not isinstance(reachable_fraction, (int, float))
+        or not math.isfinite(reachable_fraction)
+        or not 0 <= reachable_fraction <= 1
+    ):
+        raise ModelError("reachable_fraction must be between 0 and 1")
+    bundle_size = assumptions.get("r4_bundle_work_units_per_task", 1)
+    if not isinstance(bundle_size, int) or bundle_size < 1:
+        raise ModelError("r4_bundle_work_units_per_task must be a positive integer")
+    r4_operation = "run_category_audit_bundle" if bundle_size > 1 else "run_category_audit"
+    operations = (*_FORECAST_BASE_OPERATIONS, r4_operation)
+    missing_rates = sorted(set(operations) - set(rates))
+    if missing_rates:
+        raise ModelError(f"cost profile missing cost_per_task rates: {missing_rates}")
+    for operation in operations:
+        rate = rates[operation]
+        if not isinstance(rate, (int, float)) or not math.isfinite(rate) or rate < 0:
+            raise ModelError(f"invalid cost_per_task rate for {operation}")
+
+    units_by_batch = {
+        batch.batch_id: [
+            unit for unit in plan.work_units if unit.work_unit_id in batch.work_unit_ids
+        ] for batch in plan.batches
+    }
+
+    def task_counts(units: Sequence[WorkUnit], hypothesis_rate: float, *, include_r6: bool) -> dict[str, int]:
+        hypotheses = math.ceil(len(units) * hypothesis_rate)
+        reachable = math.ceil(hypotheses * float(reachable_fraction))
+        counts = {
+            "discover_surfaces": len(units),
+            "generate_hypotheses_compact": len(units),
+            r4_operation: _r4_task_count(units, bundle_size),
+            "verify_reachability": hypotheses,
+            "refute_reachability": 2 * reachable,
+            "adjudicate_refutations": reachable,
+            "assess_experiment": hypotheses,
+        }
+        if include_r6:
+            counts["collect_batch_closure_evidence"] = 1
+        return counts
+
+    total_units = len(plan.work_units)
+    fixed_task_counts = {
+        "discover_surfaces": total_units,
+        "generate_hypotheses_compact": total_units,
+        "run_category_audit_plan_upper_bound": sum(
+            len(unit.category_families) for unit in plan.work_units
+        ),
+        "run_category_audit_task_upper_bound": _r4_task_count(plan.work_units, bundle_size),
+        "collect_batch_closure_evidence": len(plan.batches),
+        "omitted_empty_components": len(plan.omitted_empty_component_ids),
+    }
+    scenarios = {}
+    for label, hypothesis_rate in hypothesis_rates.items():
+        counts = task_counts(plan.work_units, hypothesis_rate, include_r6=True)
+        per_batch = {}
+        for batch_id, units in units_by_batch.items():
+            batch_counts = task_counts(units, hypothesis_rate, include_r6=True)
+            per_batch[batch_id] = {
+                "work_units": len(units),
+                "estimated_hypotheses": math.ceil(len(units) * hypothesis_rate),
+                "estimated_task_counts": batch_counts,
+                "estimated_cost": round(sum(
+                    batch_counts[op] * float(rates[op]) for op in operations
+                ), 4),
+            }
+        scenarios[label] = {
+            "hypotheses_per_work_unit": hypothesis_rate,
+            "estimated_hypotheses": math.ceil(total_units * hypothesis_rate),
+            "reachable_fraction": float(reachable_fraction),
+            "estimated_task_counts": counts,
+            "estimated_total_tasks": sum(counts.values()),
+            "estimated_cost": round(sum(
+                counts[op] * float(rates[op]) for op in operations
+            ), 4),
+            "per_batch": per_batch,
+        }
+    return {
+        "profile_id": profile_id,
+        "currency": currency,
+        "assumptions": assumptions,
+        "fixed_task_counts": fixed_task_counts,
+        "scenarios": scenarios,
+        "limitations": [
+            "R4 task counts are upper bounds; all-NOT_APPLICABLE plans can short-circuit.",
+            "R3.5 revival reviews, retries, host repairs, and standalone findings tasks are not modeled.",
+            "Hypothesis/reachability assumptions and measured per-task rates must match the host/model configuration.",
+        ],
+    }
+
+
 def create_audit_plan(
     *,
     campaign_id: str,
@@ -125,8 +257,22 @@ def create_audit_plan(
         edges_by_component[edge.source_component_id].append(edge.edge_id)
         edges_by_component[edge.target_component_id].append(edge.edge_id)
 
+    components_by_id = {item.component_id: item for item in inventory.components}
+    omitted_empty_component_ids = tuple(sorted(
+        component_id
+        for component_id, paths in files_by_component.items()
+        if not paths
+        and not components_by_id[component_id].build_manifests
+        and not edges_by_component[component_id]
+    ))
+    if known_components and len(omitted_empty_component_ids) == len(known_components):
+        omitted_empty_component_ids = omitted_empty_component_ids[1:]
+    omitted_empty = set(omitted_empty_component_ids)
+
     work_units = []
     for component_id in sorted(files_by_component):
+        if component_id in omitted_empty:
+            continue
         component_files = sorted(files_by_component[component_id])
         paths = [path for path, _ in component_files]
         languages_by_path = {path: language for path, language in component_files}
@@ -167,6 +313,7 @@ def create_audit_plan(
         "categories": categories,
         "axes": axes,
         "edges": [asdict(edge) for edge in boundary_edges],
+        "omitted_empty_component_ids": omitted_empty_component_ids,
         "limits": [max_source_files_per_work_unit, max_source_files_per_batch, max_work_units_per_batch],
     }, sort_keys=True, separators=(",", ":"))
     plan_id = _stable_id("PLAN", plan_seed)
@@ -227,12 +374,43 @@ def create_audit_plan(
         batches=tuple(batches),
         handoffs=tuple(handoffs),
         boundary_edges=tuple(sorted(owned_edges, key=lambda item: item.edge_id)),
+        omitted_empty_component_ids=omitted_empty_component_ids,
     )
     validate_plan(plan, inventory)
     return plan
 
 
 def validate_plan(plan: AuditPlan, inventory: ProjectInventory) -> None:
+    components = {component.component_id: component for component in inventory.components}
+    omitted = set(plan.omitted_empty_component_ids)
+    if len(omitted) != len(plan.omitted_empty_component_ids):
+        raise ModelError("plan duplicates omitted empty component IDs")
+    unknown_omissions = omitted - set(components)
+    if unknown_omissions:
+        raise ModelError(f"plan omits unknown components: {sorted(unknown_omissions)}")
+    boundary_components = {
+        component_id
+        for edge in plan.boundary_edges
+        for component_id in (edge.source_component_id, edge.target_component_id)
+    }
+    source_components = {source.component_id for source in inventory.source_files}
+    invalid_omissions = sorted(
+        component_id for component_id in omitted
+        if components[component_id].build_manifests
+        or component_id in boundary_components
+        or component_id in source_components
+    )
+    if invalid_omissions:
+        raise ModelError(
+            f"plan omits components with analysis obligations: {invalid_omissions}"
+        )
+    planned_components = {unit.component_id for unit in plan.work_units}
+    unassigned_components = set(components) - planned_components
+    if unassigned_components != omitted:
+        raise ModelError(
+            "plan component ownership mismatch: "
+            f"unassigned={sorted(unassigned_components)}, declared_omitted={sorted(omitted)}"
+        )
     inventory_paths = [source_file.path for source_file in inventory.source_files]
     planned_paths = [path for unit in plan.work_units for path in unit.source_files]
     if len(planned_paths) != len(set(planned_paths)):
@@ -376,6 +554,7 @@ def amend_plan(
         batches=tuple(batches),
         handoffs=tuple(handoffs),
         boundary_edges=base_plan.boundary_edges,
+        omitted_empty_component_ids=base_plan.omitted_empty_component_ids,
     )
 
     new_batches_by_work_unit = {

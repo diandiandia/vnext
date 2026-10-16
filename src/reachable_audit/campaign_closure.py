@@ -402,6 +402,10 @@ class CampaignCloser:
                 "task_id": event.entity_id,
                 "operation": task_spec.get("operation", "unknown"),
                 "work_unit_id": task_spec.get("work_unit_id", "unknown"),
+                "work_unit_ids": task_spec.get(
+                    "work_unit_ids", [task_spec.get("work_unit_id", "unknown")]
+                ),
+                "bundle_item_ids": task_spec.get("bundle_item_ids", []),
                 "budget": task_spec.get("budget", {}),
                 "configuration": event.payload.get("configuration", {}),
                 "measurements": event.payload.get("measurements", {}),

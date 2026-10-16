@@ -156,6 +156,7 @@ _TASK_OUTPUT_CONTRACTS = {
     "adjudicate_refutations": "adjudication/v1",
     "review_unreachable_verdict": "revival-review/v1",
     "run_category_audit": "category-run/v1",
+    "run_category_audit_bundle": "category-run-bundle/v1",
     "assess_experiment": "r5-assessment/v1",
     "collect_batch_closure_evidence": "batch-closure-evidence/v1",
 }
@@ -168,6 +169,7 @@ _TASK_OUTPUT_REQUIRED_FIELDS = {
     "adjudication/v1": {"adjudication"},
     "revival-review/v1": {"revival_review"},
     "category-run/v1": {"category_run"},
+    "category-run-bundle/v1": {"category_runs"},
     "r5-assessment/v1": {"experiments", "assessment"},
     "batch-closure-evidence/v1": {"closure"},
 }
@@ -184,6 +186,8 @@ class TaskSpec:
     required_output: str
     budget: Mapping[str, int]
     max_attempts: int = 3
+    work_unit_ids: tuple[str, ...] = ()
+    bundle_item_ids: tuple[str, ...] = ()
 
     @classmethod
     def from_dict(cls, value: Mapping[str, Any]) -> "TaskSpec":
@@ -197,6 +201,8 @@ class TaskSpec:
             required_output=str(value["required_output"]),
             budget={str(key): int(amount) for key, amount in value.get("budget", {}).items()},
             max_attempts=int(value.get("max_attempts", 3)),
+            work_unit_ids=tuple(str(item) for item in value.get("work_unit_ids", [])),
+            bundle_item_ids=tuple(str(item) for item in value.get("bundle_item_ids", [])),
         )
         if not all((
             task.task_id,
@@ -213,6 +219,12 @@ class TaskSpec:
             raise ModelError("execution task budget cannot be negative")
         if task.max_attempts < 1:
             raise ModelError("execution task max_attempts must be positive")
+        if len(task.work_unit_ids) != len(set(task.work_unit_ids)):
+            raise ModelError("execution task work_unit_ids must be unique")
+        if task.work_unit_ids and task.work_unit_id not in task.work_unit_ids:
+            raise ModelError("execution task primary Work Unit must be in work_unit_ids")
+        if len(task.bundle_item_ids) != len(set(task.bundle_item_ids)):
+            raise ModelError("execution task bundle_item_ids must be unique")
         return task
 
 
@@ -481,6 +493,8 @@ class ManualExecutionBackend:
             "generate_hypotheses": "R2_COMPLETED",
             "generate_hypotheses_compact": "R2_COMPLETED",
             "verify_reachability": "R3_COMPLETED",
+            "run_category_audit": "R4_COMPLETED",
+            "run_category_audit_bundle": "R4_COMPLETED",
         }
         committed_stage = stage_by_operation.get(view.task.operation)
         if committed_stage is None:
@@ -566,7 +580,57 @@ class ManualExecutionBackend:
                 self._validate_surface_coverage(task, output)
             else:
                 self._validate_hypothesis_output(task, output)
+        if task.required_output == "category-run-bundle/v1":
+            self._validate_category_run_bundle(task, output)
         return output
+
+    def _validate_category_run_bundle(
+        self, task: TaskSpec, output: Mapping[str, Any],
+    ) -> None:
+        if not task.work_unit_ids or not task.bundle_item_ids:
+            raise ModelError(f"R4 bundle task has no declared members: {task.task_id}")
+        try:
+            task_input = json.loads(self.manager.artifacts.get_bytes(task.input_refs[0]))
+        except (OSError, ValueError, json.JSONDecodeError) as error:
+            raise ModelError(f"R4 bundle input is not valid JSON: {task.task_id}") from error
+        items = task_input.get("category_items") if isinstance(task_input, dict) else None
+        runs_value = output.get("category_runs")
+        if not isinstance(items, list) or not isinstance(runs_value, list):
+            raise ModelError(f"R4 bundle requires category_items and category_runs arrays: {task.task_id}")
+        expected = {}
+        for item in items:
+            if not isinstance(item, dict) or not isinstance(item.get("category_plan"), dict):
+                raise ModelError(f"R4 bundle input has malformed category item: {task.task_id}")
+            category_plan = item["category_plan"]
+            plan_id = str(category_plan.get("category_plan_id", ""))
+            if not plan_id or plan_id in expected:
+                raise ModelError(f"R4 bundle input has duplicate or missing plan IDs: {task.task_id}")
+            expected[plan_id] = (
+                str(category_plan.get("work_unit_id", "")),
+                str(category_plan.get("family", "")).upper(),
+            )
+        if set(expected) != set(task.bundle_item_ids):
+            raise ModelError(f"R4 bundle member IDs mismatch: {task.task_id}")
+        if set(task.work_unit_ids) != {work_unit_id for work_unit_id, _ in expected.values()}:
+            raise ModelError(f"R4 bundle Work Unit membership mismatch: {task.task_id}")
+        actual = set()
+        for value in runs_value:
+            try:
+                run = CategoryRun.from_dict(value)
+            except (KeyError, TypeError, ValueError) as error:
+                raise ModelError(f"invalid CategoryRun in bundle {task.task_id}: {error}") from error
+            if run.category_plan_id in actual:
+                raise ModelError(f"duplicate CategoryRun in bundle: {run.category_plan_id}")
+            actual.add(run.category_plan_id)
+            if expected.get(run.category_plan_id) != (run.work_unit_id, run.family):
+                raise ModelError(f"CategoryRun is outside bundle scope: {run.category_run_id}")
+        if actual != set(expected):
+            missing = sorted(set(expected) - actual)
+            extra = sorted(actual - set(expected))
+            raise ModelError(
+                f"R4 bundle coverage mismatch: {task.task_id}; "
+                f"missing={missing}, extra={extra}"
+            )
 
     @staticmethod
     def _validate_hypothesis_output(
@@ -1459,6 +1523,12 @@ class DiscoveryCoordinator:
         return self.workflow.complete_r35()
 
     def schedule_r4(self) -> tuple[TaskView, ...]:
+        if self.backend.list_tasks(
+            operation="run_category_audit_bundle", batch_id=self.workflow.batch_id,
+        ):
+            raise ModelError(
+                "R4 Batch already has bundled tasks; resume with bundled scheduling"
+            )
         plan_event = self._require_stage("CATEGORY_AUDIT_PLAN_RECORDED")
         r2_event = self._require_stage("R2_COMPLETED")
         r3_event = self._require_stage("R3_COMPLETED")
@@ -1570,6 +1640,201 @@ class DiscoveryCoordinator:
             self.workflow.record_r4_screening_runs(screening_runs)
         return tuple(views)
 
+    def schedule_r4_bundled(
+        self,
+        *,
+        max_work_units_per_task: int = 4,
+        max_task_input_bytes: int = 512 * 1024,
+    ) -> tuple[TaskView, ...]:
+        if max_work_units_per_task < 2 or max_task_input_bytes < 1:
+            raise ModelError("R4 bundle limits must be at least two Work Units and one byte")
+        plan_event = self._require_stage("CATEGORY_AUDIT_PLAN_RECORDED")
+        r2_event = self._require_stage("R2_COMPLETED")
+        r3_event = self._require_stage("R3_COMPLETED")
+        if any(event.payload_ref is None for event in (plan_event, r2_event, r3_event)):
+            raise ModelError("R4 input stage is missing its artifact")
+        value = json.loads(self.workflow.manager.artifacts.get_bytes(plan_event.payload_ref))
+        work_units = {str(item["work_unit_id"]): item for item in self._work_units()}
+        r2 = json.loads(self.workflow.manager.artifacts.get_bytes(r2_event.payload_ref))
+        axis_runs = {
+            (str(item["work_unit_id"]), str(item["axis"])): item
+            for item in r2["axis_runs"]
+        }
+        hypotheses_by_work_unit: dict[str, list[Mapping[str, Any]]] = {}
+        for hypothesis in r2["hypotheses"]:
+            hypotheses_by_work_unit.setdefault(str(hypothesis["work_unit_id"]), []).append(hypothesis)
+
+        screening_runs = []
+        active_plans = []
+        for category_plan in value["category_plans"]:
+            work_unit_id = str(category_plan["work_unit_id"])
+            planned_axes = tuple(str(axis) for axis in category_plan["discovery_axes"])
+            if (
+                planned_axes
+                and not hypotheses_by_work_unit.get(work_unit_id)
+                and all(
+                    axis_runs.get((work_unit_id, axis), {}).get("applicability")
+                    == Applicability.NOT_APPLICABLE.value
+                    for axis in planned_axes
+                )
+            ):
+                category_plan_id = str(category_plan["category_plan_id"])
+                source_runs = [axis_runs[(work_unit_id, axis)] for axis in planned_axes]
+                screening_runs.append(CategoryRun(
+                    category_run_id=f"CR-screening-{category_plan_id}",
+                    category_plan_id=category_plan_id,
+                    work_unit_id=work_unit_id,
+                    family=str(category_plan["family"]),
+                    mechanism_variants_examined=(),
+                    axis_runs=tuple(AxisRun.from_dict(item) for item in source_runs),
+                    applicability=Applicability.NOT_APPLICABLE,
+                    status=CategoryRunStatus.COMPLETE,
+                    evidence_refs=tuple(dict.fromkeys(
+                        ref for item in source_runs for ref in item["evidence_refs"]
+                    )),
+                    rationale=(
+                        "All planned discovery axes were explicitly NOT_APPLICABLE "
+                        "in R2; no category-analysis task was required."
+                    ),
+                    hypothesis_ids=(),
+                    finding_ids=(),
+                ))
+                continue
+            active_plans.append(category_plan)
+
+        plans_by_family: dict[str, list[Mapping[str, Any]]] = {}
+        for category_plan in active_plans:
+            plans_by_family.setdefault(str(category_plan["family"]), []).append(category_plan)
+        groups = []
+        for family, family_plans in sorted(plans_by_family.items()):
+            family_plans.sort(key=lambda item: (
+                str(item["work_unit_id"]), str(item["category_plan_id"]),
+            ))
+            current = []
+            for category_plan in family_plans:
+                candidate = [*current, category_plan]
+                candidate_payload = self._r4_bundle_input(
+                    family, candidate, work_units,
+                )
+                candidate_bytes = len(json.dumps(
+                    candidate_payload, ensure_ascii=False, sort_keys=True,
+                    separators=(",", ":"),
+                ).encode("utf-8"))
+                if current and (
+                    len(candidate) > max_work_units_per_task
+                    or candidate_bytes > max_task_input_bytes
+                ):
+                    groups.append((family, current))
+                    current = [category_plan]
+                else:
+                    current = candidate
+                if len(current) == 1:
+                    single_size = len(json.dumps(
+                        self._r4_bundle_input(family, current, work_units),
+                        ensure_ascii=False, sort_keys=True, separators=(",", ":"),
+                    ).encode("utf-8"))
+                    if single_size > max_task_input_bytes:
+                        raise ModelError(
+                            f"R4 CategoryAuditPlan {current[0]['category_plan_id']} "
+                            f"requires {single_size} input bytes, above bundle limit "
+                            f"{max_task_input_bytes}; use individual R4 scheduling"
+                        )
+            if current:
+                groups.append((family, current))
+
+        expected_group_ids = {
+            self._task_id(
+                "run_category_audit_bundle", family,
+                *(str(item["category_plan_id"]) for item in group),
+            )
+            for family, group in groups
+        }
+        existing_individual = self.backend.list_tasks(
+            operation="run_category_audit", batch_id=self.workflow.batch_id,
+        )
+        if existing_individual:
+            raise ModelError("cannot mix individual and bundled R4 tasks in one Batch")
+        existing_bundles = self.backend.list_tasks(
+            operation="run_category_audit_bundle", batch_id=self.workflow.batch_id,
+        )
+        if existing_bundles and {
+            view.task.task_id for view in existing_bundles
+        } != expected_group_ids:
+            raise ModelError(
+                "R4 bundle layout changed after scheduling; keep bundle limits stable "
+                "or create a new Batch"
+            )
+
+        if screening_runs:
+            self.workflow.record_r4_screening_runs(screening_runs)
+
+        views = []
+        for family, group in groups:
+            category_plan_ids = tuple(str(item["category_plan_id"]) for item in group)
+            unit_ids = tuple(dict.fromkeys(str(item["work_unit_id"]) for item in group))
+            task_input = self._r4_bundle_input(family, group, work_units)
+            input_ref = self._put_json(task_input)
+            budgets: dict[str, int] = {}
+            for category_plan in group:
+                for name, amount in category_plan.get("budget", {}).items():
+                    budgets[str(name)] = budgets.get(str(name), 0) + int(amount)
+            views.append(self.backend.submit(TaskSpec(
+                task_id=self._task_id("run_category_audit_bundle", family, *category_plan_ids),
+                campaign_id=self.workflow.campaign_id,
+                batch_id=self.workflow.batch_id,
+                work_unit_id=unit_ids[0],
+                work_unit_ids=unit_ids,
+                bundle_item_ids=category_plan_ids,
+                operation="run_category_audit_bundle",
+                input_refs=(
+                    input_ref, plan_event.payload_ref,
+                    r2_event.payload_ref, r3_event.payload_ref,
+                ),
+                required_output="category-run-bundle/v1",
+                budget=budgets,
+            )))
+        return tuple(views)
+
+    def _r4_bundle_input(
+        self,
+        family: str,
+        category_plans: Sequence[Mapping[str, Any]],
+        work_units: Mapping[str, Mapping[str, Any]],
+    ) -> dict[str, Any]:
+        items = []
+        for category_plan in category_plans:
+            work_unit = work_units[str(category_plan["work_unit_id"])]
+            card_ids = tuple(str(item) for item in category_plan["seed_card_ids"])
+            items.append({
+                "category_plan": category_plan,
+                "work_unit": _agent_work_unit(work_unit),
+                "language_adapters": self._language_adapter_context(work_unit),
+                "knowledge_context": self.knowledge_catalog.task_context(
+                    work_unit.get("languages", []),
+                    families=[family],
+                    max_entries=10,
+                ).to_dict(),
+                "mechanism_cards": [
+                    asdict(self.knowledge_catalog.cards[card_id]) for card_id in card_ids
+                ],
+            })
+        return {
+            "schema_version": "1.0",
+            "operation": "run_category_audit_bundle",
+            "snapshot_id": self.workflow.campaign.snapshot_id,
+            "family": family,
+            "category_items": items,
+            "analysis_contract": (
+                "Review each category_item independently within its Work Unit. Do not "
+                "transfer evidence or conclusions across Work Units. Return exactly one "
+                "CategoryRun for every listed category_plan_id; preserve each Work Unit ID."
+            ),
+            "output_contract": {
+                "schema_version": "1.0",
+                "category_runs": "one CategoryRun per category_item, no missing or extra IDs",
+            },
+        }
+
     def commit_r4(self) -> str:
         plan_event = self._require_stage("CATEGORY_AUDIT_PLAN_RECORDED")
         if plan_event.payload_ref is None:
@@ -1600,6 +1865,37 @@ class DiscoveryCoordinator:
             screening_plan_ids = {
                 run.category_plan_id for run in screening_runs
             }
+        bundle_tasks = self.backend.list_tasks(
+            operation="run_category_audit_bundle", batch_id=self.workflow.batch_id,
+        )
+        if bundle_tasks:
+            individual_tasks = self.backend.list_tasks(
+                operation="run_category_audit", batch_id=self.workflow.batch_id,
+            )
+            if individual_tasks:
+                raise ModelError("R4 Batch contains mixed individual and bundled tasks")
+            bundled_plan_ids = [
+                plan_id for view in bundle_tasks for plan_id in view.task.bundle_item_ids
+            ]
+            expected_plan_ids = set(plans) - screening_plan_ids
+            if (
+                len(bundled_plan_ids) != len(set(bundled_plan_ids))
+                or set(bundled_plan_ids) != expected_plan_ids
+            ):
+                raise ModelError(
+                    "R4 bundle layout coverage mismatch: "
+                    f"missing={sorted(expected_plan_ids - set(bundled_plan_ids))}, "
+                    f"extra={sorted(set(bundled_plan_ids) - expected_plan_ids)}"
+                )
+            views = self._successful_tasks(
+                "run_category_audit_bundle",
+                {view.task.task_id: view.task.work_unit_ids for view in bundle_tasks},
+            )
+            runs = list(screening_runs)
+            for view in views:
+                output = self._read_output(view)
+                runs.extend(CategoryRun.from_dict(item) for item in output["category_runs"])
+            return self.workflow.record_r4(runs)
         expected = {
             self._task_id("run_category_audit", category_plan_id): category_plan_id
             for category_plan_id in plans

@@ -45,7 +45,9 @@ from .inventory import build_inventory
 from .knowledge import create_category_audit_plans
 from .knowledge_catalog import KnowledgeCatalog, default_knowledge_root
 from .plan_models import BoundaryEdge, WorkUnit
-from .planning import amend_plan, create_audit_plan, discovery_output_floor_bytes
+from .planning import (
+    amend_plan, create_audit_plan, discovery_output_floor_bytes, forecast_plan_cost,
+)
 from .resource_cleanup import (
     cleanup_campaign_resources,
     create_campaign_temp_directory,
@@ -161,6 +163,13 @@ def _parser() -> argparse.ArgumentParser:
     plan.add_argument("--max-work-unit-files", type=int, default=1000)
     plan.add_argument("--max-batch-files", type=int, default=2000)
     plan.add_argument("--max-batch-work-units", type=int, default=4)
+    plan.add_argument(
+        "--cost-profile",
+        help=(
+            "JSON profile with measured per-task costs and low/expected/high "
+            "hypotheses-per-Work-Unit assumptions; forecast only, never replans"
+        ),
+    )
     plan.add_argument("--state-dir", default=".audit_vnext")
 
     amend = subparsers.add_parser(
@@ -372,6 +381,16 @@ def _parser() -> argparse.ArgumentParser:
         task_stage.add_argument("campaign_id")
         task_stage.add_argument("batch_id")
         task_stage.add_argument("--state-dir", default=".audit_vnext")
+
+    task_schedule_r4 = subparsers.choices["task-schedule-r4"]
+    task_schedule_r4.add_argument(
+        "--bundle-work-units", type=int, default=1,
+        help="opt-in: bundle this many same-family Work Units per R4 agent task",
+    )
+    task_schedule_r4.add_argument(
+        "--bundle-max-input-bytes", type=int, default=512 * 1024,
+        help="maximum serialized R4 bundle task input size",
+    )
 
     task_list = subparsers.add_parser("task-list", help="list durable execution tasks")
     task_list.add_argument("target")
@@ -643,6 +662,14 @@ def main(argv: list[str] | None = None) -> int:
                     max_source_files_per_batch=arguments.max_batch_files,
                     max_work_units_per_batch=arguments.max_batch_work_units,
                 )
+                forecast = None
+                if arguments.cost_profile:
+                    profile = json.loads(
+                        Path(arguments.cost_profile).read_text(encoding="utf-8")
+                    )
+                    if not isinstance(profile, dict):
+                        raise ValueError("cost profile must be a JSON object")
+                    forecast = forecast_plan_cost(plan, profile)
                 artifact_id = manager.record_plan(
                     campaign_id=arguments.campaign_id, plan=plan, inventory=inventory
                 )
@@ -668,6 +695,7 @@ def main(argv: list[str] | None = None) -> int:
                     "artifact_id": artifact_id,
                     "plan_id": plan.plan_id,
                     "work_units": len(plan.work_units),
+                    "omitted_empty_components": list(plan.omitted_empty_component_ids),
                     "batches": len(plan.batches),
                     "handoffs": len(plan.handoffs),
                     "output_ceiling_bytes": TASK_OUTPUT_MAX_BYTES,
@@ -700,6 +728,7 @@ def main(argv: list[str] | None = None) -> int:
                         }
                         for batch in plan.batches
                     ],
+                    "cost_forecast": forecast,
                 })
             return 0
 
@@ -1111,9 +1140,14 @@ def main(argv: list[str] | None = None) -> int:
                             "artifact_id": coordinator.commit_r35_revivals()
                         })
                     elif arguments.command == "task-schedule-r4":
-                        _print({"tasks": [
-                            asdict(view) for view in coordinator.schedule_r4()
-                        ]})
+                        if arguments.bundle_work_units == 1:
+                            scheduled = coordinator.schedule_r4()
+                        else:
+                            scheduled = coordinator.schedule_r4_bundled(
+                                max_work_units_per_task=arguments.bundle_work_units,
+                                max_task_input_bytes=arguments.bundle_max_input_bytes,
+                            )
+                        _print({"tasks": [asdict(view) for view in scheduled]})
                     elif arguments.command == "task-commit-r4":
                         _print({"artifact_id": coordinator.commit_r4()})
                     elif arguments.command == "task-schedule-r5":
