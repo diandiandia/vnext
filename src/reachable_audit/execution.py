@@ -495,6 +495,8 @@ class ManualExecutionBackend:
             "verify_reachability": "R3_COMPLETED",
             "run_category_audit": "R4_COMPLETED",
             "run_category_audit_bundle": "R4_COMPLETED",
+            "assess_experiment": "R5_COMPLETED",
+            "collect_batch_closure_evidence": "R6_COMPLETED",
         }
         stage_by_operation.update({
             f"generate_hypotheses:{axis.value}": "R2_COMPLETED"
@@ -588,10 +590,49 @@ class ManualExecutionBackend:
             self._validate_category_run_bundle(task, output)
         if task.required_output == "category-run/v1":
             self._validate_category_run(task, output)
+        if task.required_output == "r5-assessment/v1":
+            try:
+                task_input = json.loads(self.manager.artifacts.get_bytes(task.input_refs[0]))
+                hypothesis_id = task_input["hypothesis"]["hypothesis_id"]
+            except (OSError, ValueError, KeyError, IndexError, TypeError) as error:
+                raise ModelError(f"invalid R5 task input: {task.task_id}") from error
+            self._parse_r5_output(output, task.task_id, hypothesis_id)
         return output
+
+    @staticmethod
+    def _parse_r5_output(
+        output: Mapping[str, Any], task_id: str, hypothesis_id: str,
+    ) -> tuple[list[Experiment], R5Assessment]:
+        experiment_values = output.get("experiments")
+        assessment_value = output.get("assessment")
+        if not isinstance(experiment_values, list) or not isinstance(assessment_value, dict):
+            raise ModelError(f"R5 task output is malformed: {task_id}")
+        experiment_id = assessment_value.get("experiment_id")
+        if experiment_id is not None and (
+            not isinstance(experiment_id, str) or not experiment_id.strip()
+        ):
+            raise ModelError("R5 experiment_id must be null or a non-empty experiment ID")
+        try:
+            experiments = [Experiment.from_dict(item) for item in experiment_values]
+            assessment = R5Assessment.from_dict(assessment_value)
+        except (KeyError, TypeError, ValueError) as error:
+            raise ModelError(f"invalid R5 experiment assessment: {task_id}: {error}") from error
+        if assessment.hypothesis_id != hypothesis_id or any(
+            experiment.hypothesis_id != hypothesis_id for experiment in experiments
+        ):
+            raise ModelError(f"R5 task scope mismatch: {task_id}")
+        if assessment.experiment_id is not None and assessment.experiment_id not in {
+            experiment.experiment_id for experiment in experiments
+        }:
+            raise ModelError(
+                "R5 assessment references an experiment outside its task: "
+                f"{assessment.experiment_id}"
+            )
+        return experiments, assessment
 
     def _validate_category_run_plan(
         self, run: CategoryRun, category_plan: Mapping[str, Any], task_id: str,
+        *, allowed_hypothesis_ids: Sequence[str] | None = None,
     ) -> None:
         plan_id = str(category_plan.get("category_plan_id", ""))
         work_unit_id = str(category_plan.get("work_unit_id", ""))
@@ -602,6 +643,10 @@ class ManualExecutionBackend:
             or run.family != family
         ):
             raise ModelError(f"R4 task scope mismatch: {run.category_run_id}")
+        if allowed_hypothesis_ids is not None and not set(run.hypothesis_ids).issubset(
+            allowed_hypothesis_ids
+        ):
+            raise ModelError(f"R4 hypothesis_ids must use allowed_hypothesis_ids: {task_id}")
         expected_axes = tuple(str(item) for item in category_plan.get("discovery_axes", []))
         actual_axes = tuple(axis_run.axis.value for axis_run in run.axis_runs)
         if len(actual_axes) != len(set(actual_axes)) or set(actual_axes) != set(expected_axes):
@@ -641,7 +686,10 @@ class ManualExecutionBackend:
         if not isinstance(category_plan, dict):
             raise ModelError(f"R4 task input is missing its CategoryAuditPlan: {task.task_id}")
         run = CategoryRun.from_dict(run_value)
-        self._validate_category_run_plan(run, category_plan, task.task_id)
+        self._validate_category_run_plan(
+            run, category_plan, task.task_id,
+            allowed_hypothesis_ids=task_input.get("allowed_hypothesis_ids"),
+        )
 
     def _validate_category_run_bundle(
         self, task: TaskSpec, output: Mapping[str, Any],
@@ -657,6 +705,7 @@ class ManualExecutionBackend:
         if not isinstance(items, list) or not isinstance(runs_value, list):
             raise ModelError(f"R4 bundle requires category_items and category_runs arrays: {task.task_id}")
         expected = {}
+        allowed_hypothesis_ids = {}
         for item in items:
             if not isinstance(item, dict) or not isinstance(item.get("category_plan"), dict):
                 raise ModelError(f"R4 bundle input has malformed category item: {task.task_id}")
@@ -665,6 +714,7 @@ class ManualExecutionBackend:
             if not plan_id or plan_id in expected:
                 raise ModelError(f"R4 bundle input has duplicate or missing plan IDs: {task.task_id}")
             expected[plan_id] = category_plan
+            allowed_hypothesis_ids[plan_id] = item.get("allowed_hypothesis_ids")
         if set(expected) != set(task.bundle_item_ids):
             raise ModelError(f"R4 bundle member IDs mismatch: {task.task_id}")
         if set(task.work_unit_ids) != {
@@ -684,7 +734,10 @@ class ManualExecutionBackend:
             category_plan = expected.get(run.category_plan_id)
             if category_plan is None:
                 raise ModelError(f"CategoryRun is outside bundle scope: {run.category_run_id}")
-            self._validate_category_run_plan(run, category_plan, task.task_id)
+            self._validate_category_run_plan(
+                run, category_plan, task.task_id,
+                allowed_hypothesis_ids=allowed_hypothesis_ids[run.category_plan_id],
+            )
         if actual != set(expected):
             missing = sorted(set(expected) - actual)
             extra = sorted(actual - set(expected))
@@ -825,6 +878,29 @@ class ManualExecutionBackend:
                 f"extra={len(extra)} (first {extra[:10]}), duplicates={duplicated}; "
                 "resubmit one review for every supplied boundary edge"
             )
+        surfaces = output.get("surfaces")
+        if not isinstance(surfaces, list):
+            raise ModelError(f"R1 surfaces must be an array: {task.task_id}")
+        source_paths = set(_expand_agent_work_unit_files(self._task_work_unit(task)))
+        workflow = BatchWorkflow(self.manager, task.campaign_id, task.batch_id)
+        line_count_cache: dict[str, tuple[int, frozenset[int]]] = {}
+        for value in surfaces:
+            try:
+                surface = Surface.from_dict(value)
+            except (KeyError, TypeError, ValueError) as error:
+                raise ModelError(f"invalid R1 surface: {task.task_id}: {error}") from error
+            if surface.entry_path not in source_paths:
+                raise ModelError(f"surface entry path is outside Work Unit: {surface.surface_id}")
+            anchors = [
+                reference for reference in surface.evidence_refs
+                if reference.startswith(f"LOC-{surface.entry_path}:")
+            ]
+            if not anchors:
+                raise ModelError(f"surface requires a source anchor for its entry path: {surface.surface_id}")
+            for reference in anchors:
+                workflow._validate_source_location(
+                    reference, source_paths, line_count_cache=line_count_cache,
+                )
 
     def _validate_verdict_output(
         self, task: TaskSpec, output: Mapping[str, Any],
@@ -1719,9 +1795,17 @@ class DiscoveryCoordinator:
                 "language_adapters": self._language_adapter_context(work_units[work_unit_id]),
                 "knowledge_context": knowledge_context,
                 "mechanism_cards": mechanism_cards,
+                "allowed_hypothesis_ids": [
+                    str(item["hypothesis_id"])
+                    for item in hypotheses_by_work_unit.get(work_unit_id, [])
+                    if str(item["mechanism"]["family"]) == str(category_plan["family"])
+                ],
                 "analysis_contract": (
                     "Execute every planned discovery axis and mechanism variant. Record "
-                    "evidence for positive and zero-finding outcomes; do not omit an axis."
+                    "evidence for positive and zero-finding outcomes; do not omit an axis. "
+                    "hypothesis_ids may reference only allowed_hypothesis_ids; use [] when "
+                    "none apply. Never invent IDs for late candidates; report them as "
+                    "unresolved risks for explicit follow-up."
                 ),
                 "output_contract": {
                     "schema_version": "1.0",
@@ -1824,7 +1908,7 @@ class DiscoveryCoordinator:
             for category_plan in family_plans:
                 candidate = [*current, category_plan]
                 candidate_payload = self._r4_bundle_input(
-                    family, candidate, work_units,
+                    family, candidate, work_units, hypotheses_by_work_unit,
                 )
                 candidate_bytes = len(json.dumps(
                     candidate_payload, ensure_ascii=False, sort_keys=True,
@@ -1840,7 +1924,7 @@ class DiscoveryCoordinator:
                     current = candidate
                 if len(current) == 1:
                     single_size = len(json.dumps(
-                        self._r4_bundle_input(family, current, work_units),
+                        self._r4_bundle_input(family, current, work_units, hypotheses_by_work_unit),
                         ensure_ascii=False, sort_keys=True, separators=(",", ":"),
                     ).encode("utf-8"))
                     if single_size > max_task_input_bytes:
@@ -1882,7 +1966,7 @@ class DiscoveryCoordinator:
         for family, group in groups:
             category_plan_ids = tuple(str(item["category_plan_id"]) for item in group)
             unit_ids = tuple(dict.fromkeys(str(item["work_unit_id"]) for item in group))
-            task_input = self._r4_bundle_input(family, group, work_units)
+            task_input = self._r4_bundle_input(family, group, work_units, hypotheses_by_work_unit)
             input_ref = self._put_json(task_input)
             budgets: dict[str, int] = {}
             for category_plan in group:
@@ -1910,6 +1994,7 @@ class DiscoveryCoordinator:
         family: str,
         category_plans: Sequence[Mapping[str, Any]],
         work_units: Mapping[str, Mapping[str, Any]],
+        hypotheses_by_work_unit: Mapping[str, Sequence[Mapping[str, Any]]],
     ) -> dict[str, Any]:
         items = []
         for category_plan in category_plans:
@@ -1927,6 +2012,11 @@ class DiscoveryCoordinator:
                 "mechanism_cards": [
                     self.knowledge_catalog.cards[card_id] for card_id in card_ids
                 ],
+                "allowed_hypothesis_ids": [
+                    str(item["hypothesis_id"])
+                    for item in hypotheses_by_work_unit.get(str(work_unit["work_unit_id"]), [])
+                    if str(item["mechanism"]["family"]) == family
+                ],
             })
         return {
             "schema_version": "1.0",
@@ -1937,7 +2027,10 @@ class DiscoveryCoordinator:
             "analysis_contract": (
                 "Review each category_item independently within its Work Unit. Do not "
                 "transfer evidence or conclusions across Work Units. Return exactly one "
-                "CategoryRun for every listed category_plan_id; preserve each Work Unit ID."
+                "CategoryRun for every listed category_plan_id; preserve each Work Unit ID. "
+                "Each run's hypothesis_ids must come from that category_item's "
+                "allowed_hypothesis_ids; use [] when none apply. Never invent IDs for "
+                "late candidates; report them as unresolved risks for explicit follow-up."
             ),
             "output_contract": {
                 "schema_version": "1.0",
@@ -2063,10 +2156,31 @@ class DiscoveryCoordinator:
                 "verdict": verdict,
                 "language_adapters": self._language_adapter_context(work_unit),
                 "harness_recipes": [asdict(recipe) for recipe in harness_recipes],
+                "registered_harness_executions": [
+                    {"execution_artifact_id": event.payload_ref, **dict(event.payload)}
+                    for event in self.workflow.manager.store.list_events(
+                        self.workflow.campaign_id, event_type="HARNESS_EXECUTION_COMPLETED",
+                    )
+                    if event.payload.get("hypothesis_id") == hypothesis_id
+                    and event.payload.get("snapshot_id") == self.workflow.campaign.snapshot_id
+                ],
                 "analysis_contract": (
                     "Decide whether an experiment is required. Empirical confirmation "
-                    "requires a real-target or equivalence-proven confirmed experiment; "
-                    "otherwise preserve the supported non-empirical disposition."
+                    "requires a real-target or equivalence-proven confirmed experiment "
+                    "backed by a host-registered harness-run for this hypothesis and snapshot. "
+                    "Worker-local execution alone is not registered evidence. Propose the "
+                    "command and limits to the host; the host must execute harness-run and "
+                    "supply its execution/stdout/stderr artifact refs before an empirical "
+                    "assessment is collected or amended. Never invent these refs. Otherwise "
+                    "preserve the supported non-empirical disposition or report the blocker. "
+                    "Use NOT_FEASIBLE only when an experiment is required but cannot be run "
+                    "because of a documented environment/tooling/authorization constraint; "
+                    "set experiment_required=true, experiment_id=null, and cite blocker "
+                    "evidence. Do not use it for a run that started; an inconclusive attempt "
+                    "uses NEEDS_REVIEW with its experiment. NOT_FEASIBLE is unresolved, not "
+                    "evidence of safety, confirmation, or refutation. "
+                    "Use JSON null for experiment_id when there is no experiment; never an "
+                    "empty string. A non-null ID must match experiments in this task output."
                 ),
                 "output_contract": {
                     "schema_version": "1.0",
@@ -2107,32 +2221,9 @@ class DiscoveryCoordinator:
         for view in views:
             hypothesis_id = expected[view.task.task_id]
             output = self._read_output(view)
-            experiment_values = output.get("experiments", [])
-            assessment_value = output.get("assessment")
-            if not isinstance(experiment_values, list) or not isinstance(
-                assessment_value, dict
-            ):
-                raise ModelError(f"R5 task output is malformed: {view.task.task_id}")
-            task_experiments = [
-                Experiment.from_dict(item) for item in experiment_values
-            ]
-            assessment = R5Assessment.from_dict(assessment_value)
-            if assessment.hypothesis_id != hypothesis_id or any(
-                experiment.hypothesis_id != hypothesis_id
-                for experiment in task_experiments
-            ):
-                raise ModelError(f"R5 task scope mismatch: {view.task.task_id}")
-            task_experiment_ids = {
-                experiment.experiment_id for experiment in task_experiments
-            }
-            if (
-                assessment.experiment_id is not None
-                and assessment.experiment_id not in task_experiment_ids
-            ):
-                raise ModelError(
-                    f"R5 assessment references an experiment outside its task: "
-                    f"{assessment.experiment_id}"
-                )
+            task_experiments, assessment = ManualExecutionBackend._parse_r5_output(
+                output, view.task.task_id, hypothesis_id,
+            )
             experiments.extend(task_experiments)
             assessments.append(assessment)
         return self.workflow.record_r5(experiments, assessments)
@@ -2156,10 +2247,18 @@ class DiscoveryCoordinator:
             "operation": "collect_batch_closure_evidence",
             "snapshot_id": self.workflow.campaign.snapshot_id,
             "batch_id": self.workflow.batch_id,
+            "evidence_contract": {
+                "source": "canonical_stage_artifacts",
+                "source_inventory_required": False,
+            },
             "analysis_contract": (
                 "Report observed constraints, unreviewed scope, residual risks, and "
                 "reusable lessons. Do not report gate outcomes or budget usage; the "
-                "coordinator derives those from canonical events."
+                "coordinator derives those from canonical events. This is a Batch closure "
+                "task, not source discovery: use the supplied canonical stage artifacts. "
+                "There is intentionally no Work Unit file inventory; do not invent LOC "
+                "anchors or treat that absence as missing audit coverage. Report only "
+                "scope gaps supported by the stage evidence."
             ),
             "output_contract": {
                 "schema_version": "1.0",

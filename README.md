@@ -109,9 +109,12 @@ env -u PYTHONPATH python3 -m pytest tests -q
 PYTHONPATH=src python3 -m reachable_audit compatibility-scan
 ```
 
-The compatibility scan checks runtime imports and generic residue patterns. Project-
-specific residue tokens can be supplied by the evaluation authority; they are not baked
-into the generic runtime.
+The compatibility scan checks legacy imports/formats and generic residue patterns in
+runtime Python source, the main skill prompt, and runtime-eligible knowledge. It reports
+the actual file counts; development/history documents and test fixtures are not runtime
+knowledge. Project-specific tokens come from the evaluation authority, not a built-in
+list of past targets. A passing scan is bounded pattern evidence, not semantic proof
+that no historical bias or project-specific guidance remains.
 
 ## Project Documents
 
@@ -124,9 +127,10 @@ into the generic runtime.
 - [Release acceptance plan](docs/design/ACCEPTANCE_PLAN_VNEXT.md)
 - [Repair roadmap](docs/design/REPAIR_ROADMAP_VNEXT.md)
 - [ISO/IEC/IEEE 12207 lifecycle self-assessment](docs/design/LIFECYCLE_CONFORMANCE_VNEXT.md)
+- [Quality reassessment and remaining acceptance gaps](docs/design/QUALITY_REASSESSMENT_VNEXT.md)
 
 The lifecycle document is a preliminary engineering self-assessment, not an ISO/IEC/IEEE
-12207 conformity claim or certification. ISO/IEC/IEEE 12207:2017 was withdrawn and
-replaced by the 2026 edition; vNext has not been assessed clause-by-clause against the
-2026 text. Google internal engineering requirements were not supplied and have not been
-assessed.
+12207 conformity claim or certification. Formal assessment requires an authorized,
+controlled edition, organizational tailoring, and clause-level evidence; these were not
+supplied. This assessment does not establish edition publication/withdrawal status.
+Google internal engineering requirements were not supplied and have not been assessed.

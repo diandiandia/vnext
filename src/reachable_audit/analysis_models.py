@@ -104,6 +104,7 @@ class R5Disposition(StrEnum):
     EMPIRICALLY_CONFIRMED = "EMPIRICALLY_CONFIRMED"
     REFUTED = "REFUTED"
     NEEDS_REVIEW = "NEEDS_REVIEW"
+    NOT_FEASIBLE = "NOT_FEASIBLE"
 
 
 class SkillIssueKind(StrEnum):
@@ -712,7 +713,12 @@ class R5Assessment:
         )
         if not assessment.evidence_refs or not assessment.rationale:
             raise ModelError("R5 assessment requires evidence refs and rationale")
-        if assessment.experiment_required and assessment.experiment_id is None:
+        if assessment.disposition is R5Disposition.NOT_FEASIBLE:
+            if not assessment.experiment_required or assessment.experiment_id is not None:
+                raise ModelError(
+                    "NOT_FEASIBLE requires a required experiment and a null experiment_id"
+                )
+        elif assessment.experiment_required and assessment.experiment_id is None:
             raise ModelError("required R5 experiment is missing")
         return assessment
 

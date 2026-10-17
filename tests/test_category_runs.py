@@ -169,8 +169,11 @@ def test_r4_rejects_missing_discovery_axis(tmp_path: Path) -> None:
         manager.close()
 
 
-def test_r4_category_plan_runs_as_durable_task(tmp_path: Path) -> None:
-    manager, workflow, plan = _ready_for_r4(tmp_path)
+@pytest.mark.parametrize("static_hypothesis", [False, True])
+def test_r4_category_plan_runs_as_durable_task(
+    tmp_path: Path, static_hypothesis: bool,
+) -> None:
+    manager, workflow, plan = _ready_for_r4(tmp_path, static_hypothesis=static_hypothesis)
     try:
         catalog = KnowledgeCatalog.load(default_knowledge_root())
         state_card = next(
@@ -203,8 +206,19 @@ def test_r4_category_plan_runs_as_durable_task(tmp_path: Path) -> None:
         assert task_input["mechanism_cards"][0]["mechanism_id"] == state_card["mechanism_id"]
         assert task_input["knowledge_context"]["issue_entries"]
         assert task_input["knowledge_context"]["knowledge_version"] == "portfolio-2026-09-v1"
+        assert bool(task_input["allowed_hypothesis_ids"]) is static_hypothesis
         lease = backend.claim("category-auditor")
         assert lease is not None
+        unknown_hypothesis = asdict(run)
+        unknown_hypothesis["hypothesis_ids"] = ["invented-slug"]
+        unknown_ref = manager.artifacts.put_text(json.dumps({
+            "schema_version": "1.0", "category_run": unknown_hypothesis,
+        })).artifact_id
+        with pytest.raises(ModelError, match="allowed_hypothesis_ids"):
+            backend.collect(lease, TaskResult(
+                True, unknown_ref, "invalid hypothesis reference",
+                {"agent_runs": 1, "wall_seconds": 1},
+            ))
         assert category_plan.mechanism_variants
         missing_status = asdict(run)
         missing_status.pop("status")
@@ -327,6 +341,7 @@ def test_r4_bundle_schedules_two_work_units_and_commits_each_plan(tmp_path: Path
             item["mechanism_cards"] == [state_card]
             for item in task_input["category_items"]
         )
+        assert all(item["allowed_hypothesis_ids"] == [] for item in task_input["category_items"])
         lease = backend.claim("bundle-worker")
         assert lease is not None
         output_ref = manager.artifacts.put_text(json.dumps({
@@ -352,6 +367,14 @@ def test_r4_bundle_schedules_two_work_units_and_commits_each_plan(tmp_path: Path
                 finding_ids=(),
             )) for category_plan in category_plans],
         })).artifact_id
+        invalid_bundle = json.loads(manager.artifacts.get_bytes(output_ref))
+        invalid_bundle["category_runs"][0]["hypothesis_ids"] = ["invented-slug"]
+        invalid_ref = manager.artifacts.put_text(json.dumps(invalid_bundle)).artifact_id
+        with pytest.raises(ModelError, match="allowed_hypothesis_ids"):
+            backend.collect(lease, TaskResult(
+                True, invalid_ref, "invalid bundled hypothesis reference",
+                {"agent_runs": 1, "wall_seconds": 1},
+            ))
         backend.collect(lease, TaskResult(
             True, output_ref, "bundled R4 review complete",
             {"agent_runs": 1, "wall_seconds": 2},

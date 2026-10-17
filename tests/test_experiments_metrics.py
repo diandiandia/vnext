@@ -27,12 +27,27 @@ from reachable_audit.execution import (
     ManualExecutionBackend,
     TaskResult,
 )
+from reachable_audit.experiments.harness_catalog import HarnessCatalog
 from reachable_audit.models import ModelError
 from reachable_audit.experiments.runner import run_harness
 from test_category_runs import _card, _ready_for_r4
 from test_refutation import _reachable_workflow
 from reachable_audit.knowledge import create_category_audit_plans
 from conftest import execution_configuration_fixture
+
+
+def test_harness_catalog_scopes_optional_sanitizers_by_family() -> None:
+    catalog = HarnessCatalog()
+    for language in ("c", "cpp", "rust"):
+        for family in ("INJECTION", "AUTHN", "MEMORY-SAFETY", "NUMERIC"):
+            recipe = catalog.recipes((language,), family)[0]
+            sanitizer_advised = any(
+                "sanitizer" in prerequisite.lower() or "miri" in prerequisite.lower()
+                for prerequisite in recipe.prerequisites
+            )
+            assert sanitizer_advised is (family in {"MEMORY-SAFETY", "NUMERIC"})
+            if sanitizer_advised:
+                assert any("optional" in item.lower() for item in recipe.prerequisites)
 
 
 def _ready_for_r5(
@@ -130,6 +145,14 @@ def test_clean_r5_and_transmission_metrics_are_non_gating(tmp_path: Path) -> Non
     manager, workflow = _ready_for_r5(tmp_path)
     try:
         workflow.record_r5([], [])
+        coordinator = DiscoveryCoordinator(
+            workflow, ManualExecutionBackend(manager, workflow.campaign_id),
+        )
+        closure_task = coordinator.schedule_r6()
+        closure_input = json.loads(manager.artifacts.get_bytes(closure_task.task.input_refs[0]))
+        assert closure_input["evidence_contract"] == {
+            "source": "canonical_stage_artifacts", "source_inventory_required": False,
+        }
         metrics = workflow.build_transmission_metrics()
         assert metrics["axis_runs"] == {
             axis.value: 1 for axis in DiscoveryAxis
@@ -155,7 +178,12 @@ def test_clean_r5_and_transmission_metrics_are_non_gating(tmp_path: Path) -> Non
         manager.close()
 
 
-def test_r5_assessment_runs_as_durable_task(tmp_path: Path) -> None:
+@pytest.mark.parametrize("invalid_experiment_id", ["", " ", "EXP-other"])
+@pytest.mark.parametrize("legacy_collected", [False, True])
+def test_r5_assessment_runs_as_durable_task(
+    tmp_path: Path, invalid_experiment_id: str, legacy_collected: bool,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     manager, workflow = _reachable_workflow(tmp_path)
     try:
         workflow.record_refutation(Refutation(
@@ -202,23 +230,52 @@ def test_r5_assessment_runs_as_durable_task(tmp_path: Path) -> None:
         assert task_input["harness_recipes"]
         assert all(recipe["family"] == "STATE" for recipe in task_input["harness_recipes"])
         assert task_input["language_adapters"]
+        assert task_input["registered_harness_executions"] == []
+        assert "host-registered harness-run" in task_input["analysis_contract"]
+        assert "NOT_FEASIBLE only when an experiment is required" in task_input["analysis_contract"]
+        assert "not evidence of safety, confirmation, or refutation" in task_input["analysis_contract"]
+        assert "JSON null" in task_input["analysis_contract"]
         lease = backend.claim("experiment-reviewer")
         assert lease is not None
-        output_ref = manager.artifacts.put_text(json.dumps({
+        output = {
             "schema_version": "1.0",
             "experiments": [],
             "assessment": {
                 "hypothesis_id": "HYP-state",
                 "experiment_required": False,
-                "experiment_id": None,
+                "experiment_id": invalid_experiment_id,
                 "disposition": "STATIC_VERDICT_RETAINED",
                 "evidence_refs": ["EVID-r3"],
                 "rationale": "static edge evidence is sufficient for this stage",
             },
-        })).artifact_id
-        backend.collect(lease, TaskResult(
-            True, output_ref, "assessed", {"agent_runs": 1, "wall_seconds": 1}, execution_configuration_fixture()
-        ))
+        }
+        invalid_ref = manager.artifacts.put_text(json.dumps(output)).artifact_id
+        with pytest.raises(ModelError, match="experiment"):
+            backend.collect(lease, TaskResult(
+                True, invalid_ref, "invalid experiment reference",
+                {"agent_runs": 1, "wall_seconds": 1}, execution_configuration_fixture(),
+            ))
+        assert backend.poll(lease.task.task_id).status.value == "LEASED"
+        output["assessment"]["experiment_id"] = None
+        output_ref = manager.artifacts.put_text(json.dumps(output)).artifact_id
+        if legacy_collected:
+            with monkeypatch.context() as legacy:
+                legacy.setattr(backend, "_validate_task_output", lambda *_args: None)
+                backend.collect(lease, TaskResult(
+                    True, invalid_ref, "legacy successful collection",
+                    {"agent_runs": 1, "wall_seconds": 1}, execution_configuration_fixture(),
+                ))
+            with pytest.raises(ModelError, match="experiment"):
+                coordinator.commit_r5()
+            backend.amend_completed_output(
+                lease.task.task_id, output_ref, reason="correct legacy experiment reference",
+                evidence_refs=(invalid_ref,),
+            )
+            assert json.loads(manager.artifacts.get_bytes(invalid_ref))["assessment"]["experiment_id"] == invalid_experiment_id
+        else:
+            backend.collect(lease, TaskResult(
+                True, output_ref, "assessed", {"agent_runs": 1, "wall_seconds": 1}, execution_configuration_fixture()
+            ))
         coordinator.commit_r5()
         events = manager.store.list_events("CMP-refute")
         assert sum(event.event_type == "R5_COMPLETED" for event in events) == 1

@@ -44,7 +44,7 @@ class HarnessCatalog:
                 language=language,
                 family=family,
                 method=method,
-                prerequisites=_prerequisites(language),
+                prerequisites=_prerequisites(language, family),
                 isolation="Campaign-registered temporary directory and process group",
                 fidelity="real_target preferred; otherwise label equivalent or mechanism",
                 cleanup="record exit status, terminate registered process group, remove registered temp directory",
@@ -54,11 +54,21 @@ class HarnessCatalog:
         )
 
 
-def _prerequisites(language: str) -> tuple[str, ...]:
+def _prerequisites(language: str, family: str) -> tuple[str, ...]:
+    sanitizer_families = {"MEMORY-SAFETY", "NUMERIC"}
+    if language == "c":
+        base = ("cc or clang",)
+        return base + (("optional memory/undefined-behavior sanitizer where supported",)
+                       if family in sanitizer_families else ())
+    if language == "cpp":
+        base = ("c++ or clang++",)
+        return base + (("optional memory/undefined-behavior sanitizer where supported",)
+                       if family in sanitizer_families else ())
+    if language == "rust":
+        base = ("rustc/cargo",)
+        return base + (("optional sanitizer or Miri where supported",)
+                       if family in sanitizer_families else ())
     return {
-        "c": ("cc or clang", "ASan/UBSan where supported"),
-        "cpp": ("c++ or clang++", "ASan/UBSan where supported"),
-        "rust": ("rustc/cargo", "sanitizer or Miri where supported"),
         "go": ("go", "-race for concurrency probes"),
         "java": ("JDK", "project test runner"),
         "kotlin": ("JDK and Kotlin compiler",),

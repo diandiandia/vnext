@@ -20,6 +20,8 @@ python3 -m reachable_audit --help
 Record the commit and any worktree changes before testing. The local handoff also
 records the exact source commit outside this checkout in
 `/root/vnext-debug-info.json`. That file is machine-local and is not a test result.
+It pins the original handoff build. If HEAD or the worktree differs, record that
+difference rather than treating the old JSON as an attestation of the changed build.
 An installed copy under a host's skills directory is not automatically synchronized.
 In a new terminal, restore PYTHONPATH to this checkout before running commands.
 
@@ -31,7 +33,8 @@ git diff --check
 PYTHONPATH=src python3 -m reachable_audit compatibility-scan
 ```
 
-The repair baseline is 200 passing tests and one skipped external held-out test.
+The original repair baseline at beaef3b is 200 passing tests and one skipped external
+held-out test. Later regressions change the expected count; record the current result.
 The skip is expected without the protected external bundle; do not invent that
 bundle or set held-out labels on synthetic fixtures to remove the skip.
 
@@ -42,6 +45,7 @@ python3 -m pytest tests/test_evaluation.py tests/test_cli.py -o addopts='' -q
 python3 -m pytest tests/test_execution.py tests/test_category_runs.py -o addopts='' -q
 python3 -m pytest tests/test_campaign_closure.py tests/test_handoffs.py -o addopts='' -q
 python3 -m pytest tests/test_planning.py tests/test_hotspots.py tests/test_snapshot_drift.py -o addopts='' -q
+python3 -m pytest tests/test_experiments_metrics.py -o addopts='' -q
 ```
 
 ## 3. Choose a Small Real Debug Target
@@ -98,7 +102,7 @@ configuration where available. Unknown usage is unknown, never zero.
 
 | Check | Expected behavior |
 |---|---|
-| Release safety | RG1-RG11 can pass as implemented_subset_status=PASS; unavailable RG12-RG15 keep status=BLOCKED and eligible_for_promotion=false. |
+| Release safety | RG1-RG11/RG13-RG15 can pass as implemented_subset_status=PASS; unavailable RG12 keeps status=BLOCKED and eligible_for_promotion=false. RG13's signer attestation is not independent proof of host isolation; RG15 mechanics do not prove real scale acceptance. |
 | Real-card R4 bundle | After normal R3.5/category planning, task-schedule-r4 with --bundle-work-units 2 works with applicable nonempty card seeds and preserves each plan/WU result. |
 | Per-axis R2 correction | Each of the six suffixed operations permits evidenced pre-commit correction; post-commit rewriting is rejected. |
 | Interrupted work | Release/expiry/retry preserves attempt history; stale leases cannot finalize a newer attempt; missing attempt usage marks costs incomplete. |
@@ -143,3 +147,75 @@ Automatic committed-stage reopening, complete dependency invalidation, rich inte
 proofs, all-language hotspot coverage, and real held-out/scale qualification remain
 incomplete. The current mixed-language late-candidate test is synthetic and exercises
 explicit follow-up recovery, not autonomous rediscovery or release certification.
+
+## 7. Real-run Feedback and Retest
+
+The local QuickJS report at `/root/xnext_debug_run/REPORT.md` tested beaef3b. It
+completed one of five Batches using a direct R5 recovery path. Under a strict
+task-only criterion, that original run remains FAIL; do not revise the archived
+report or treat direct recovery as proof that task-commit-r5 worked.
+
+Report-driven repairs initially passed 209 regressions with one external skip. The
+subsequent [quality reassessment](design/QUALITY_REASSESSMENT_VNEXT.md), including
+source/prompt residue-scan regressions, passed 212 with the same external skip.
+The subsequent [retest3 report](../../xnext_debug_run/retest3/REPORT.md) exercised the
+repair protocol in a declared follow-up Campaign. It is not a clean-room discovery or
+release-quality evaluation; the archived report and ledger are the run record.
+The family-scoped optional-sanitizer recipe, `NOT_FEASIBLE` state, and RG13-RG15
+evaluator changes in the current worktree were made after retest3 and are covered by
+local regression tests, not by that Campaign. The current tree uses
+task-policy-10/release-policy-5 and passes 233 tests with one external held-out skip;
+retest3 recorded the preceding policy digest and 212-test suite. Real Campaign
+validation of NOT_FEASIBLE, clean-room provenance, and RG14 screening artifacts remains
+outstanding.
+
+| Report item | Retest3 result | Remaining acceptance |
+|---|---|---|
+| D1 | Live blank and malformed R5 outputs were rejected at collect; leases survived, corrected null outputs and task-only R5/R6 commits succeeded, and post-commit amendments were rejected. | Out-of-task experiment ID remains regression-only; it was not injected live. |
+| D2 | On AArch64, 2 GiB `RLIMIT_AS` prevented ASan shadow reservation and 64 TiB allowed startup. | **Physical-memory containment was not verified:** `memory.max` and `memory.high` were `max`; a 64 TiB address-space limit is not a RAM cap. Configure and verify an approved VM/container memory limit before running memory-intensive harnesses. |
+| D3 | Worker correctly kept its proposed experiment `NEEDS_REVIEW` because no registered execution was supplied. | **Accept path not tested:** host `harness-run`, same-hypothesis/current-snapshot artifact binding, pre-commit amendment and empirical task commit need a dedicated run. |
+| D4 | Injected invented R4 hypothesis ID was rejected; the same lease accepted output restricted to supplied IDs. | No remaining D4 behavior gap identified in this run; broader real quality remains unmeasured. |
+| D5 | Injected blank-line R1 anchor was rejected; same-lease valid output was accepted. | Path ownership and line-range errors were regression-tested, not injected live. |
+| D6 | R6 consumed canonical stage artifacts without invented inventory anchors; pre-commit amendment and task-only commit succeeded. | Content quality and complete scope discovery were not independently evaluated. |
+
+Overall result: **PASS for exercised task-only repair mechanics; D3 host-registration
+acceptance and D2 physical-memory containment remain open.** This is not a pass of every
+§7 positive acceptance criterion: the D3 empirical-upgrade path was not triggered, and
+the host had no cgroup memory cap. The report's measured D2 mapping result must not be
+read as a memory-safety boundary.
+
+Evidence reconciliation: `retest.log` records `EMPIRICAL none`, and retest3 REPORT
+§7/§12 says host registration and binding were not triggered. The LEDGER paragraph
+that says worker-only evidence “must be rejected” and then describes `harness-run`,
+amendment, and commit is therefore a planned acceptance recipe, not an observed event.
+Do not count it as D3 execution evidence. REPORT §6's final claim that the address-space
+limit was the “effective control” also overstates the observation: with cgroup memory
+limits unset, the ASan mapping probe says nothing about a physical-memory cap.
+
+The host driver carried forward attempt-1 spend and reserved estimated usage before
+dispatch. Measured cumulative token and task-wall totals stayed below its declared
+caps. This is host-side admission control, not provider-enforced interruption: an
+individual call may exceed its estimate before the next dispatch check. Findings-agent
+wall time was reserved but excluded from the declared task-wall metric.
+
+Use a new isolated debug Campaign or a controlled pre-R5 replay state. The original
+Batch already committed R5/R6: post-commit task-amend must remain rejected there.
+If reusing historical target evidence, declare a follow-up and its history sources;
+never label such a run independent fresh discovery.
+
+For a complete §7 acceptance, require all of the following:
+
+- No direct R5 import, manual store rewrite, fabricated artifact, or bypassed validator.
+- Invalid R5 output stays leased, corrected JSON null is accepted, and task-only R5/R6 commits succeed.
+- R4 output uses only its supplied IDs; R1 anchor errors do not become successful tasks.
+- Empirical upgrade uses same-hypothesis/current-snapshot registered host evidence.
+- Attempt usage, scope limitations, and all recovery actions remain visible in the report.
+- The external driver enforces the declared budget before dispatch/provider calls and reserves for in-flight tasks. A passing BG8 or complete accounting alone does not prove compliance with a separately declared hard cap.
+
+Retest3 completed 65 tasks in a two-Work-Unit follow-up Batch: 47 controlled replays
+and 18 fresh tasks. It declared the prior Campaign as its history source and used an
+adapter to re-home 20 batch-scoped refuter IDs; it is therefore not independent fresh
+discovery. Cross-Batch Handoff, interruption, abort, source drift, and late-candidate
+checks remain unit/regression coverage, not real-run fault injection. Independent
+quality/recall evaluation and scale certification remain separate work. Sampled
+finding review does not establish whole-run false-positive rate or security impact.

@@ -137,6 +137,99 @@ def test_r6_allows_static_only_verdict_with_explicit_review_disposition(
         manager.close()
 
 
+def test_not_feasible_r5_is_required_unresolved_and_never_confirms(
+    tmp_path: Path,
+) -> None:
+    manager, workflow = _ready_for_r5(tmp_path, static_hypothesis=True)
+    try:
+        assessment = R5Assessment(
+            hypothesis_id="HYP-static",
+            experiment_required=True,
+            experiment_id=None,
+            disposition=R5Disposition.NOT_FEASIBLE,
+            evidence_refs=("EVID-missing-toolchain",),
+            rationale="the required target runtime is unavailable in this environment",
+        )
+        workflow.record_r5([], [assessment])
+
+        with pytest.raises(ModelError, match="empirical R5 assessment"):
+            workflow.record_finding(Finding(
+                finding_id="FND-not-feasible",
+                root_cause_key="not-feasible-is-not-confirmation",
+                mechanism=Mechanism("STATE", "static-state-transition"),
+                hypothesis_ids=("HYP-static",),
+                affected_component_ids=(
+                    workflow.batch.manifest["work_units"][0]["component_id"],
+                ),
+                severity=FindingSeverity.MEDIUM,
+                evidence_grade=EvidenceGrade.EMPIRICALLY_CONFIRMED,
+                status=FindingStatus.CONFIRMED,
+                evidence_refs=("EVID-missing-toolchain",),
+                title="infeasible experiment is not empirical confirmation",
+            ))
+
+        report = workflow.close_r6(BatchClosure(
+            budget_used={"agent_runs": 1},
+            constraints_observed=("target runtime unavailable",),
+            unreviewed_scope=(),
+            residual_risks=("required experiment was not feasible",),
+            lessons=(),
+        ))
+        assert report["gates"]["BG2"]["pass"] is True
+        assert report["gates"]["BG3"]["pass"] is True
+        assert report["needs_review_hypothesis_ids"] == ["HYP-static"]
+        assert report["not_feasible_experiment_hypothesis_ids"] == ["HYP-static"]
+        assert report["static_only_r5_dispositions"]["HYP-static"] == "NOT_FEASIBLE"
+    finally:
+        manager.close()
+
+
+@pytest.mark.parametrize(
+    "changes",
+    (
+        {"experiment_required": False},
+        {"experiment_id": "EXP-attempted"},
+    ),
+)
+def test_not_feasible_r5_requires_required_null_experiment(
+    changes: dict[str, object],
+) -> None:
+    value: dict[str, object] = {
+        "hypothesis_id": "HYP-not-feasible",
+        "experiment_required": True,
+        "experiment_id": None,
+        "disposition": "NOT_FEASIBLE",
+        "evidence_refs": ["EVID-blocker"],
+        "rationale": "documented host constraint prevented execution",
+    }
+    value.update(changes)
+    with pytest.raises(ModelError, match="NOT_FEASIBLE requires"):
+        R5Assessment.from_dict(value)
+
+def test_not_feasible_r5_cannot_hide_an_attempted_experiment(
+    tmp_path: Path,
+) -> None:
+    manager, workflow = _ready_for_r5(tmp_path, static_hypothesis=True)
+    try:
+        attempted = Experiment(
+            "EXP-inconclusive", "HYP-static", ExperimentFidelity.REAL_TARGET,
+            ExperimentResult.INCONCLUSIVE, "target", ("CMD-attempted",),
+            ("OBS-attempted",), (), (), "the attempt produced no conclusion",
+        )
+        assessment = R5Assessment(
+            hypothesis_id="HYP-static",
+            experiment_required=True,
+            experiment_id=None,
+            disposition=R5Disposition.NOT_FEASIBLE,
+            evidence_refs=("EVID-host-limit",),
+            rationale="claimed unavailable after the experiment had already run",
+        )
+        with pytest.raises(ModelError, match="cannot accompany an attempted experiment"):
+            workflow.record_r5([attempted], [assessment])
+    finally:
+        manager.close()
+
+
 @pytest.mark.parametrize(
     "disposition",
     (R5Disposition.EMPIRICALLY_CONFIRMED, R5Disposition.REFUTED),

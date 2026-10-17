@@ -91,7 +91,55 @@ def _manifest() -> dict[str, object]:
         }],
         "runtime_deproject_scan": {"passed": True, "evidence_refs": ["ART-scan"]},
         "compatibility_scan": {"passed": True, "evidence_refs": ["ART-compat"]},
+        "scale_acceptance": {
+            "fixture": {
+                "handoff_count": 30_000,
+                "event_count": 10_000,
+                "indexed_queries": True,
+                "bulk_resolution": True,
+                "per_edge_reconciliation": True,
+                "atomic_failure_behavior": True,
+                "oldest_first_task_order": True,
+                "bounded_zero_target_cost": True,
+                "evidence_refs": ["ART-scale-fixture"],
+            },
+            "large_campaigns": [{
+                "project_id": "project-mixed",
+                "evidence_refs": ["METRICS-project-mixed-vnext"],
+            }],
+        },
     }
+    input_artifact_contents: dict[str, dict[str, object]] = {}
+    clean_room_provenance = []
+    for run in runs:
+        if run["engine"] != "vnext":
+            continue
+        project_id = str(run["project_id"])
+        campaign_id = f"campaign-{project_id}"
+        r1_input_ref = f"INPUT-{project_id}-R1"
+        r2_input_ref = f"INPUT-{project_id}-R2"
+        input_artifact_contents[r1_input_ref] = {
+            "operation": "discover_surfaces",
+            "snapshot_id": run["snapshot_id"],
+        }
+        input_artifact_contents[r2_input_ref] = {
+            "operation": "generate_hypotheses",
+            "snapshot_id": run["snapshot_id"],
+        }
+        clean_room_provenance.append({
+            "project_id": project_id,
+            "campaign_id": campaign_id,
+            "audit_mode": "fresh",
+            "history_source_campaign_ids": [],
+            "r1_r2_input_refs": [r1_input_ref, r2_input_ref],
+            "prior_target_artifacts_excluded": True,
+            "regression_backlog_excluded": True,
+            "verified_by": "trusted-evaluator",
+            "evidence_refs": [
+                run["measurement_artifact_ref"], r1_input_ref, r2_input_ref,
+            ],
+        })
+    manifest["clean_room_provenance"] = clean_room_provenance
     refs = set()
 
     def collect(node: object) -> None:
@@ -109,11 +157,16 @@ def _manifest() -> dict[str, object]:
         run["measurement_artifact_ref"]: run for run in manifest["runs"]
     }
     def artifact_content(ref: str) -> dict[str, object]:
+        if ref in input_artifact_contents:
+            return input_artifact_contents[ref]
         run = run_by_metric_ref.get(ref)
         if run is None:
             return {"artifact_ref": ref, "fixture": "test-only"}
         return {
-            "project_id": run["project_id"],
+            "campaign_id": f"campaign-{run['project_id']}",
+            "snapshot_id": run["snapshot_id"],
+            "audit_mode": "fresh",
+            "history_source_campaign_ids": [],
             "engine": run["engine"],
             "repository_size_bytes": run["repository_size_bytes"],
             "scope_digest": run["scope_digest"],
@@ -123,6 +176,30 @@ def _manifest() -> dict[str, object]:
             "interruption_recovered": run["interruption_recovered"],
             "handoff_count": run["handoff_count"],
             "reconciled_handoff_count": run["reconciled_handoff_count"],
+            "screening_coverage": {
+                "screened_work_unit_ids": [],
+                "screened_work_unit_count": 0,
+                "total_work_unit_count": 4,
+                "screened_fraction": 0.0,
+                "max_screening_fraction": 0.25,
+                "ceiling_status": "WITHIN_CEILING",
+                "release_eligible": True,
+            },
+            "campaign_id": f"campaign-{run['project_id']}",
+            "audit_mode": "fresh",
+            "history_source_campaign_ids": [],
+            "execution_measurements": {
+                "tasks": [
+                    {
+                        "operation": "discover_surfaces",
+                        "input_artifact_refs": [f"INPUT-{run['project_id']}-R1"],
+                    },
+                    {
+                        "operation": "generate_hypotheses",
+                        "input_artifact_refs": [f"INPUT-{run['project_id']}-R2"],
+                    },
+                ] if run["engine"] == "vnext" else [],
+            },
         }
 
     manifest["evidence_artifacts"] = {
@@ -145,17 +222,141 @@ def _resign(manifest: dict[str, object]) -> dict[str, object]:
     )
 
 
+def _rewrite_measurement_artifact(
+    manifest: dict[str, object], project_id: str, **changes: object,
+) -> None:
+    run = next(
+        item for item in manifest["runs"]
+        if item["project_id"] == project_id and item["engine"] == "vnext"
+    )
+    record = manifest["evidence_artifacts"][run["measurement_artifact_ref"]]
+    record["content"].update(changes)
+    record["sha256"] = hashlib.sha256(json.dumps(
+        record["content"], ensure_ascii=False, sort_keys=True, separators=(",", ":"),
+    ).encode("utf-8")).hexdigest()
+
+
 def test_release_blocks_when_required_gates_are_unimplemented() -> None:
     report = evaluate_release(_manifest(), signing_key=_TEST_SIGNING_KEY)
     assert report["status"] == "BLOCKED"
     assert report["eligible_for_promotion"] is False
     assert report["implemented_subset_status"] == "PASS"
-    assert report["unimplemented_gates"] == ["RG12", "RG13", "RG14", "RG15"]
+    assert report["unimplemented_gates"] == ["RG12"]
     assert report["failed_gates"] == report["unimplemented_gates"]
     assert set(report["gates"]) == {f"RG{index}" for index in range(1, 16)}
-    assert report["policy"]["release_policy_version"] == "vnext-release-policy-1"
+    assert report["policy"]["release_policy_version"] == "vnext-release-policy-5"
     assert report["gates"]["RG6"]["pass"] is True
+    assert report["gates"]["RG14"]["pass"] is True
+    assert report["gates"]["RG15"]["pass"] is True
+    assert report["gates"]["RG13"]["pass"] is True
     assert report["gates"]["RG11"]["detail"]["required_language_issue_cells"] == 150
+
+
+@pytest.mark.parametrize(
+    ("coverage", "detail_key"),
+    (
+        (None, "missing_screening_evidence"),
+        ({
+            "screened_work_unit_ids": ["WU-1", "WU-2"],
+            "screened_work_unit_count": 2,
+            "total_work_unit_count": 4,
+            "screened_fraction": 0.5,
+            "max_screening_fraction": 0.25,
+            "ceiling_status": "EXCEEDED",
+            "release_eligible": False,
+        }, "over_ceiling_projects"),
+        ({
+            "screened_work_unit_ids": ["WU-1"],
+            "screened_work_unit_count": 1,
+            "total_work_unit_count": 4,
+            "screened_fraction": 0.1,
+            "max_screening_fraction": 0.25,
+            "ceiling_status": "WITHIN_CEILING",
+            "release_eligible": True,
+        }, "invalid_screening_projects"),
+        ({
+            "screened_work_unit_ids": [],
+            "screened_work_unit_count": 0,
+            "total_work_unit_count": 4,
+            "screened_fraction": 0.0,
+            "max_screening_fraction": 0.25,
+            "ceiling_status": "WITHIN_CEILING",
+            "release_eligible": True,
+            "human_override": True,
+        }, "overridden_projects"),
+    ),
+)
+def test_rg14_requires_consistent_digest_backed_screening_evidence(
+    coverage: dict[str, object] | None, detail_key: str,
+) -> None:
+    manifest = _manifest()
+    if coverage is None:
+        _rewrite_measurement_artifact(
+            manifest, "project-native", screening_coverage=None,
+        )
+    else:
+        _rewrite_measurement_artifact(
+            manifest, "project-native", screening_coverage=coverage,
+        )
+    report = evaluate_release(_resign(manifest), signing_key=_TEST_SIGNING_KEY)
+    assert report["gates"]["RG14"]["pass"] is False
+    assert "project-native" in report["gates"]["RG14"]["detail"][detail_key]
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    ("missing", "follow-up", "history", "prior-data", "backlog", "input-refs"),
+)
+def test_rg13_requires_consistent_signed_fresh_campaign_provenance(
+    mutation: str,
+) -> None:
+    manifest = _manifest()
+    provenance = next(
+        item for item in manifest["clean_room_provenance"]
+        if item["project_id"] == "project-native"
+    )
+    if mutation == "missing":
+        manifest["clean_room_provenance"].remove(provenance)
+    elif mutation == "follow-up":
+        provenance["audit_mode"] = "follow-up"
+    elif mutation == "history":
+        provenance["history_source_campaign_ids"] = ["prior-campaign"]
+    elif mutation == "prior-data":
+        provenance["prior_target_artifacts_excluded"] = False
+    elif mutation == "backlog":
+        provenance["regression_backlog_excluded"] = False
+    else:
+        provenance["r1_r2_input_refs"] = provenance["r1_r2_input_refs"][:1]
+    report = evaluate_release(_resign(manifest), signing_key=_TEST_SIGNING_KEY)
+    assert report["gates"]["RG13"]["pass"] is False
+    issue_key = "missing_projects" if mutation == "missing" else "invalid_projects"
+    assert "project-native" in report["gates"]["RG13"]["detail"][issue_key]
+
+
+@pytest.mark.parametrize(
+    ("mutation", "detail_key"),
+    (
+        ("missing", "missing_fixture"),
+        ("handoffs", "invalid_fixture"),
+        ("atomicity", "invalid_fixture"),
+        ("large-campaign", "missing_large_campaign"),
+    ),
+)
+def test_rg15_requires_scale_fixture_and_recovered_large_campaign(
+    mutation: str, detail_key: str,
+) -> None:
+    manifest = _manifest()
+    if mutation == "missing":
+        manifest.pop("scale_acceptance")
+    elif mutation == "handoffs":
+        manifest["scale_acceptance"]["fixture"]["handoff_count"] = 29_999
+    elif mutation == "atomicity":
+        manifest["scale_acceptance"]["fixture"]["atomic_failure_behavior"] = False
+    else:
+        manifest["scale_acceptance"]["large_campaigns"] = []
+    report = evaluate_release(_resign(manifest), signing_key=_TEST_SIGNING_KEY)
+    assert report["gates"]["RG15"]["pass"] is False
+    assert report["gates"]["RG15"]["detail"][detail_key]
 
 def test_rg8_rejects_manifest_claim_when_runtime_scan_finds_residue(
     monkeypatch: pytest.MonkeyPatch,

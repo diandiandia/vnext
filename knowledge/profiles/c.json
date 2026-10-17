@@ -23,12 +23,11 @@
         "长度字段驱动的 memcpy/索引"
       ],
       "language_pitfalls": [
-        "长度字段极值 + 截断矩阵实证是声称类强制 (parser_fuzz 模板) | 有符号下溢语义保留/边界指针语义在 stub 复刻时必须逐字保留 | 序列化/反序列化读取器的尺寸计算必须 size_t 且逐项溢出检查; 计数 ≤ 剩余输入/单元素最小占用——int 算术回绕 = 小分配大写入"
+        "对于依赖输入长度处理的结论，条件允许时检查边界与截断输入并记录测试限制；保留有符号下溢、边界指针、size_t 转换与逐项溢出语义，并比较元素计数、剩余输入和单元素最小尺寸。"
       ],
       "counterevidence": [
         "A guard dominates the sensitive operation for every relevant path.",
-        "The effective principal cannot control the source or the impact is not security relevant.",
-        "长度字段极值 + 截断矩阵实证是声称类强制 (parser_fuzz 模板) | 有符号下溢语义保留/边界指针语义在 stub 复刻时必须逐字保留 | 序列化/反序列化读取器的尺寸计算必须 size_t 且逐项溢出检查; 计数 ≤ 剩余输入/单元素最小占用——int 算术回绕 = 小分配大写入"
+        "The effective principal cannot control the source or the impact is not security relevant."
       ],
       "verification_steps": [
         "Trace the relevant source cue to the 长度字段驱动的 memcpy/索引 operation.",

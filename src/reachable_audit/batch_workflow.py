@@ -848,6 +848,21 @@ class BatchWorkflow:
                 if assessment.experiment_id
                 else None
             )
+            if assessment.disposition is R5Disposition.NOT_FEASIBLE:
+                if not assessment.experiment_required or assessment.experiment_id is not None:
+                    raise ModelError(
+                        "NOT_FEASIBLE requires a required experiment and no experiment ID"
+                    )
+                if any(
+                    item.hypothesis_id == assessment.hypothesis_id
+                    for item in experiments
+                ):
+                    raise ModelError(
+                        "NOT_FEASIBLE cannot accompany an attempted experiment; "
+                        "use NEEDS_REVIEW for an inconclusive run"
+                    )
+            elif assessment.experiment_required and experiment is None:
+                raise ModelError("required R5 experiment is missing")
             if assessment.experiment_id and experiment is None:
                 raise ModelError(
                     f"R5 assessment references unknown experiment: {assessment.experiment_id}"
@@ -1064,6 +1079,7 @@ class BatchWorkflow:
             or r5_by_hypothesis[hypothesis_id]["disposition"] not in {
                 R5Disposition.STATIC_VERDICT_RETAINED.value,
                 R5Disposition.NEEDS_REVIEW.value,
+                R5Disposition.NOT_FEASIBLE.value,
                 R5Disposition.EMPIRICALLY_CONFIRMED.value,
                 R5Disposition.REFUTED.value,
             }
@@ -1090,6 +1106,7 @@ class BatchWorkflow:
                 R5Disposition.EMPIRICALLY_CONFIRMED.value,
                 R5Disposition.REFUTED.value,
                 R5Disposition.NEEDS_REVIEW.value,
+                R5Disposition.NOT_FEASIBLE.value,
             }
         ]
         gates["BG3"] = {
@@ -1190,8 +1207,14 @@ class BatchWorkflow:
                 if item["disposition"] in {
                     R5Disposition.NEEDS_REVIEW.value,
                     R5Disposition.STATIC_VERDICT_RETAINED.value,
+                    R5Disposition.NOT_FEASIBLE.value,
                 }
             ],
+            "not_feasible_experiment_hypothesis_ids": sorted(
+                item["hypothesis_id"]
+                for item in r5["assessments"]
+                if item["disposition"] == R5Disposition.NOT_FEASIBLE.value
+            ),
             "static_only_retained_as_review": sorted(
                 weak_reachable
                 & {

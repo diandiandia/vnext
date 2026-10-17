@@ -1,4 +1,4 @@
-"""Runtime scan for forbidden v2/v3 compatibility imports and queue formats."""
+"""Runtime-surface legacy compatibility and bounded project-residue checks."""
 
 from __future__ import annotations
 
@@ -21,6 +21,7 @@ _FORBIDDEN_RUNTIME_STRINGS = (
 _RESIDUE_PATTERNS = (
     ("cve_identifier", re.compile(r"CVE-\d{4}-\d{4,}", re.IGNORECASE)),
     ("vcs_reference_url", re.compile(r"https?://[^\s\"']+/(?:commit|pull|issues)/[^\s\"']+", re.IGNORECASE)),
+    ("private_host_path", re.compile(r"(?<![\w.])/(?:root|srv|home/[^/\s\"'<>]+|Users/[^/\s\"'<>]+)(?=/|[\s\"'<>]|$)(?:/[^\s\"'<>]*)?")),
 )
 
 
@@ -58,7 +59,6 @@ def scan_runtime_compatibility(root: str | Path, forbidden_tokens: Sequence[str]
     base = Path(root).resolve()
     findings: list[CompatibilityFinding] = []
     source_root = base / "src"
-    knowledge_root = base / "knowledge"
     for path in sorted(source_root.rglob("*.py")) if source_root.exists() else []:
         try:
             text = path.read_text(encoding="utf-8")
@@ -90,17 +90,8 @@ def scan_runtime_compatibility(root: str | Path, forbidden_tokens: Sequence[str]
                             relative, node.lineno, "forbidden_legacy_format", token
                         ))
 
-    if knowledge_root.exists():
-        for path in sorted(knowledge_root.rglob("*.json")):
-            try:
-                text = path.read_text(encoding="utf-8")
-            except (OSError, UnicodeError) as error:
-                findings.append(CompatibilityFinding(
-                    path.relative_to(base).as_posix(), 0,
-                    "runtime_knowledge_read_error", str(error),
-                ))
-                continue
-            findings.extend(_residue_findings(path.relative_to(base).as_posix(), text, forbidden_tokens))
+    residue_report = scan_runtime_deproject(base, forbidden_tokens)
+    findings.extend(CompatibilityFinding(**item) for item in residue_report["findings"])
 
     findings.sort(key=lambda item: (item.path, item.line, item.rule, item.value))
     return {
@@ -108,13 +99,14 @@ def scan_runtime_compatibility(root: str | Path, forbidden_tokens: Sequence[str]
         "runtime_root": str(base),
         "passed": not findings,
         "findings": [asdict(item) for item in findings],
-        "scanned_python_files": len(list(source_root.rglob("*.py"))) if source_root.exists() else 0,
-        "scanned_knowledge_files": len(list(knowledge_root.rglob("*.json"))) if knowledge_root.exists() else 0,
+        "scanned_python_files": residue_report["scanned_python_files"],
+        "scanned_knowledge_files": residue_report["scanned_knowledge_files"],
+        "scanned_prompt_files": residue_report["scanned_prompt_files"],
     }
 
 
 def scan_runtime_deproject(root: str | Path, forbidden_tokens: Sequence[str] = ()) -> dict[str, Any]:
-    """Scan runtime-eligible knowledge for project-specific residue (generic patterns plus operator-supplied tokens)."""
+    """Scan runtime source, the main prompt, and eligible knowledge for bounded residue."""
     base = Path(root).resolve()
     knowledge_root = base / "knowledge"
     runtime_roots = (
@@ -124,21 +116,24 @@ def scan_runtime_deproject(root: str | Path, forbidden_tokens: Sequence[str] = (
         knowledge_root / "provenance.json",
     )
     findings: list[CompatibilityFinding] = []
-    scanned = 0
     paths = []
     for candidate in runtime_roots:
         if candidate.is_file():
             paths.append(candidate)
         elif candidate.is_dir():
             paths.extend(candidate.rglob("*.json"))
+    knowledge_count = len(paths)
+    source_paths = list((base / "src").rglob("*.py"))
+    prompt_paths = [base / "SKILL.md"] if (base / "SKILL.md").is_file() else []
+    paths.extend(source_paths)
+    paths.extend(prompt_paths)
     for path in sorted(paths):
-        scanned += 1
         try:
             text = path.read_text(encoding="utf-8")
         except (OSError, UnicodeError) as error:
             findings.append(CompatibilityFinding(
                 path.relative_to(base).as_posix(), 0,
-                "runtime_knowledge_read_error", str(error),
+                "runtime_residue_read_error", str(error),
             ))
             continue
         findings.extend(_residue_findings(path.relative_to(base).as_posix(), text, forbidden_tokens))
@@ -147,5 +142,7 @@ def scan_runtime_deproject(root: str | Path, forbidden_tokens: Sequence[str] = (
         "schema_version": "1.0",
         "passed": not findings,
         "findings": [asdict(item) for item in findings],
-        "scanned_knowledge_files": scanned,
+        "scanned_knowledge_files": knowledge_count,
+        "scanned_python_files": len(source_paths),
+        "scanned_prompt_files": len(prompt_paths),
     }

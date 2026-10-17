@@ -1,7 +1,7 @@
 # Reachable Audit vNext System Design
 
 Status: as-implemented architecture baseline, reviewed 2026-10-17 against commit
-`9a97cba` plus the working-tree contract repairs. This describes the managed runtime, not guarantees about external Agent
+`beaef3b` plus the working-tree contract repairs. This describes the managed runtime, not guarantees about external Agent
 hosts or demonstrated audit capability. Roadmap items are not current contracts;
 documenting a known defect does not resolve it.
 
@@ -77,7 +77,7 @@ immutable artifacts/events. Campaign status, coverage, verdicts, and reports are
 from validated records. Agent prose alone is not evidence.
 
 Corrections are limited. R6 projections and skill reviews support append-only revisions.
-Successfully collected R1, per-axis/compact R2, R3, and R4 task outputs may be amended before
+Successfully collected R1, per-axis/compact R2, R3, R4, R5, and R6 task outputs may be amended before
 their stage commits, retaining prior/replacement artifacts, reason, actor, and evidence.
 General post-commit verdict amendment and dependent-stage recomputation are absent;
 idempotent stage submission is not a general correction path.
@@ -190,7 +190,7 @@ The existing R0-R6 semantics remain the workflow vocabulary, with one canonical 
 | R3 | Verify reachability and vulnerability mechanism | Call/dataflow evidence, counterevidence, and provisional verdict |
 | R3.5 | Independent refutation and adjudication | Reviewer evidence and explicit disposition |
 | R4 | Execute applicable security-category reviews against planned Work Units and hypotheses | CategoryRun records; zero findings is valid if review is evidenced |
-| R5 | Record assessments and managed experiments | Fidelity-bound artifacts; STATIC_VERDICT_RETAINED, EMPIRICALLY_CONFIRMED, REFUTED, or NEEDS_REVIEW assessments; no NOT_FEASIBLE state |
+| R5 | Record assessments and managed experiments | Fidelity-bound artifacts; STATIC_VERDICT_RETAINED, EMPIRICALLY_CONFIRMED, REFUTED, NEEDS_REVIEW, or NOT_FEASIBLE assessments |
 | R6 | Close the Batch and reconcile scope, evidence, and handoffs | Derived report and unresolved-risk statement |
 
 Campaign closure is separate from Batch closure. No Batch completion may be reported as
@@ -232,10 +232,12 @@ R1/R2 task context. A hotspot is a review lead, never a vulnerability verdict. E
 provider reports scanned paths, unsupported paths, rule IDs, and known blind spots;
 no match or no registered provider must never be presented as evidence of safety.
 Provider coverage and candidate quality are evaluated separately from Agent verdicts.
-Required-but-infeasible experiments have no dedicated NOT_FEASIBLE state. An authorized
-out-of-band observation registration contract is also absent. NEEDS_REVIEW can retain
-uncertainty; a reference string alone cannot satisfy managed-run empirical confirmation
-requirements. The missing states remain roadmap work.
+NOT_FEASIBLE is valid only when an experiment is required, no attempt was run, the
+experiment ID is null, and blocker evidence/rationale are supplied. An attempted but
+inconclusive experiment remains NEEDS_REVIEW with its experiment artifact. NOT_FEASIBLE
+is reported as unresolved and cannot confirm safety, vulnerability, or refutation. An
+authorized out-of-band observation registration contract remains absent; a reference
+string alone cannot satisfy managed-run empirical confirmation requirements.
 
 ## 7. Security Knowledge Model
 
@@ -355,17 +357,23 @@ The current vNext repository provides Campaign/Batch state, events and artifacts
 planning, durable tasks, generic discovery records, Handoffs, drift handling, experiment
 records, and a shadow evaluator. It now also ships 15 language profiles, 150 training
 Mechanism Cards, task-context injection, 15 source-language adapters, 14 build adapters,
-R5 recipes/probes, and signed RG1-RG11 evaluation logic. These are implementation
+R5 recipes/probes, and signed RG1-RG11/RG13-RG15 evaluation logic. These are implementation
 capabilities, not evidence that language recall, automatic cross-language discovery,
 or 20GB+ operation has passed real acceptance.
 
-RG12-RG15 are specified promotion gates, not implemented evaluator checks: hotspot
-provider conformance, clean-room provenance, screening-ceiling enforcement, and the
-30k-Handoff/10k-event scale fixture must not be reported as certified until the signed
-evaluator validates their evidence.
+RG12 provider conformance remains unavailable and fails closed. RG13 validates signed
+clean-room provenance fields and digest-linked R1/R2 task inputs, but does not
+independently observe host prompt/session contents. RG14 validates digest-backed
+screening counts/fraction against the Campaign-frozen ceiling and rejects overrides;
+it cannot prove host-observed reading coverage. RG15 validates digest-backed fixture
+declarations and qualifying large-run evidence; evaluator mechanics do not constitute
+real scale acceptance. These checks do not certify real provider quality or actual
+clean-room isolation.
 
-Release policy now fails closed: RG12-RG15 appear as NOT_IMPLEMENTED failed gates.
-Passing RG1-RG11 sets implemented_subset_status=PASS but leaves status=BLOCKED and
+Release policy now fails closed: RG12 appears as NOT_IMPLEMENTED. RG15 has an
+implemented evidence-validation gate, but promotion remains blocked until qualifying
+scale fixture and real Campaign evidence are supplied.
+Passing RG1-RG11/RG13-RG15 sets implemented_subset_status=PASS but leaves status=BLOCKED and
 eligible_for_promotion=false. No signed extra field waives an unavailable check.
 
 Remaining implementation gaps include recognition of arbitrary unknown-language

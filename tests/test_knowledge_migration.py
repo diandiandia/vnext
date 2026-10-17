@@ -5,7 +5,7 @@ import sys
 
 import pytest
 
-from reachable_audit.knowledge_catalog import KnowledgeCatalog
+from reachable_audit.knowledge_catalog import KnowledgeCatalog, default_knowledge_root
 from reachable_audit.models import ModelError
 
 
@@ -121,11 +121,17 @@ def test_migration_builds_complete_reviewed_catalog_without_project_tokens(
     _run_migration(source, output, publish=True)
     catalog = KnowledgeCatalog.load(output)
     report = json.loads((output / "migration-report.json").read_text(encoding="utf-8"))
+    published_runtime = json.dumps({
+        "profiles": catalog.profiles,
+        "cards": catalog.cards,
+        "provenance": catalog.provenance,
+    })
 
     assert len(catalog.languages) == 15
     assert sum(len(profile["entries"]) for profile in catalog.profiles.values()) == 150
     assert len(catalog.cards) == 150
     assert report["languages"]["c"]["excluded_for_project_tokens"] == ["SRC-c-10"]
+    assert "QuickJS project-specific sample" not in published_runtime
     assert all(
         len({cwe for issue in profile["entries"] for cwe in issue["weakness_refs"]}) == 10
         for profile in catalog.profiles.values()
@@ -185,6 +191,14 @@ def test_migration_builds_complete_reviewed_catalog_without_project_tokens(
     _run_migration(source, output, publish=True, replace=True)
     assert not stale_card.exists()
     KnowledgeCatalog.load(output)
+
+
+def test_runtime_task_context_omits_legacy_template_directives() -> None:
+    catalog = KnowledgeCatalog.load(default_knowledge_root())
+    context = catalog.task_context(("c",), families=("MEMORY-SAFETY",))
+    serialized = json.dumps(context.to_dict(), ensure_ascii=False)
+    assert "parser_fuzz" not in serialized
+    assert "stub 复刻" not in serialized
 
 
 def test_draft_migration_is_rejected_by_runtime_catalog(tmp_path: Path) -> None:

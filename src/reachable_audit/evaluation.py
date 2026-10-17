@@ -6,6 +6,7 @@ from dataclasses import dataclass
 import hashlib
 import hmac
 import json
+import math
 import os
 from pathlib import Path
 import tempfile
@@ -543,6 +544,181 @@ def evaluate_release(
             "issue_cell_metrics": issue_cell_metrics,
         },
     }
+    clean_room_detail = _clean_room_provenance_detail(
+        real_vnext_runs,
+        value.get("clean_room_provenance"),
+        value["evidence_artifacts"],
+    )
+    gates["RG13"] = {
+        "pass": bool(real_vnext_runs)
+        and not any(clean_room_detail[key] for key in (
+            "missing_projects", "duplicate_projects",
+            "unexpected_projects", "invalid_projects",
+        )),
+        "detail": clean_room_detail,
+    }
+    clean_room_detail = _clean_room_provenance_detail(
+        real_vnext_runs,
+        value.get("clean_room_provenance"),
+        value["evidence_artifacts"],
+    )
+    gates["RG13"] = {
+        "pass": bool(real_vnext_runs)
+        and not any(clean_room_detail[key] for key in (
+            "missing_projects", "duplicate_projects",
+            "unexpected_projects", "invalid_projects",
+        )),
+        "detail": clean_room_detail,
+    }
+    missing_screening_evidence = []
+    invalid_screening_projects = []
+    over_ceiling_projects = []
+    overridden_projects = []
+    for run in real_vnext_runs:
+        record = value["evidence_artifacts"].get(run.measurement_artifact_ref)
+        content = record.get("content") if isinstance(record, dict) else None
+        coverage = content.get("screening_coverage") if isinstance(content, dict) else None
+        if not isinstance(coverage, dict):
+            missing_screening_evidence.append(run.project_id)
+            continue
+        required_screening_fields = {
+            "screened_work_unit_ids", "screened_work_unit_count",
+            "total_work_unit_count", "screened_fraction",
+            "max_screening_fraction", "ceiling_status", "release_eligible",
+        }
+        if (
+            not required_screening_fields.issubset(coverage)
+            or set(coverage) - required_screening_fields - {"human_override"}
+        ):
+            invalid_screening_projects.append(run.project_id)
+            continue
+        screened_ids = coverage["screened_work_unit_ids"]
+        screened_count = coverage["screened_work_unit_count"]
+        total_count = coverage["total_work_unit_count"]
+        reported_fraction = coverage["screened_fraction"]
+        ceiling = coverage["max_screening_fraction"]
+        override = coverage.get("human_override", False)
+        if (
+            not isinstance(screened_ids, list)
+            or any(not isinstance(item, str) or not item for item in screened_ids)
+            or len(screened_ids) != len(set(screened_ids))
+            or type(screened_count) is not int
+            or type(total_count) is not int
+            or total_count <= 0
+            or screened_count < 0
+            or screened_count > total_count
+            or len(screened_ids) != screened_count
+            or isinstance(reported_fraction, bool)
+            or not isinstance(reported_fraction, (int, float))
+            or not math.isfinite(reported_fraction)
+            or isinstance(ceiling, bool)
+            or not isinstance(ceiling, (int, float))
+            or not math.isfinite(ceiling)
+            or not 0 <= ceiling <= 1
+            or type(override) is not bool
+        ):
+            invalid_screening_projects.append(run.project_id)
+            continue
+        measured_fraction = screened_count / total_count
+        within_ceiling = measured_fraction <= ceiling
+        expected_status = "WITHIN_CEILING" if within_ceiling else "EXCEEDED"
+        if (
+            not math.isclose(reported_fraction, measured_fraction, rel_tol=1e-9, abs_tol=1e-9)
+            or coverage["ceiling_status"] != expected_status
+            or coverage["release_eligible"] is not within_ceiling
+        ):
+            invalid_screening_projects.append(run.project_id)
+        if not within_ceiling:
+            over_ceiling_projects.append(run.project_id)
+        if override:
+            overridden_projects.append(run.project_id)
+    gates["RG14"] = {
+        "pass": bool(real_vnext_runs)
+        and not missing_screening_evidence
+        and not invalid_screening_projects
+        and not over_ceiling_projects
+        and not overridden_projects,
+        "detail": {
+            "missing_screening_evidence": missing_screening_evidence,
+            "invalid_screening_projects": invalid_screening_projects,
+            "over_ceiling_projects": over_ceiling_projects,
+            "overridden_projects": overridden_projects,
+        },
+    }
+    scale_acceptance = value.get("scale_acceptance")
+    fixture = scale_acceptance.get("fixture") if isinstance(scale_acceptance, dict) else None
+    missing_fixture = not isinstance(fixture, dict)
+    invalid_fixture = False
+    if isinstance(fixture, dict):
+        fixture_flags = (
+            "indexed_queries", "bulk_resolution", "per_edge_reconciliation",
+            "atomic_failure_behavior", "oldest_first_task_order",
+            "bounded_zero_target_cost",
+        )
+        handoff_count = fixture.get("handoff_count")
+        event_count = fixture.get("event_count")
+        fixture_refs = fixture.get("evidence_refs")
+        invalid_fixture = (
+            set(fixture) != {*fixture_flags, "handoff_count", "event_count", "evidence_refs"}
+            or type(handoff_count) is not int
+            or handoff_count < 30_000
+            or type(event_count) is not int
+            or event_count < 10_000
+            or any(fixture.get(flag) is not True for flag in fixture_flags)
+            or not isinstance(fixture_refs, list)
+            or not fixture_refs
+            or any(reference not in verified_evidence_refs for reference in fixture_refs)
+        )
+    large_campaign_records = (
+        scale_acceptance.get("large_campaigns", [])
+        if isinstance(scale_acceptance, dict) else []
+    )
+    real_runs_by_project = {run.project_id: run for run in real_vnext_runs}
+    qualifying_large_projects = []
+    invalid_large_campaigns = []
+    seen_large_projects = set()
+    if not isinstance(large_campaign_records, list):
+        large_campaign_records = []
+        invalid_large_campaigns.append("<invalid-large-campaign-list>")
+    for item in large_campaign_records:
+        if not isinstance(item, dict):
+            invalid_large_campaigns.append("<invalid-large-campaign-record>")
+            continue
+        project_id = str(item.get("project_id", ""))
+        refs = item.get("evidence_refs")
+        if not project_id or project_id in seen_large_projects:
+            invalid_large_campaigns.append(project_id or "<missing-project-id>")
+            continue
+        seen_large_projects.add(project_id)
+        run = real_runs_by_project.get(project_id)
+        if (
+            run is None
+            or run.repository_size_bytes < policy.large_repository_bytes
+            or not run.campaign_complete
+            or not run.interruption_recovered
+            or run.handoff_count != run.reconciled_handoff_count
+            or not isinstance(refs, list)
+            or not refs
+            or any(reference not in verified_evidence_refs for reference in refs)
+            or run.measurement_artifact_ref not in refs
+            or not set(refs).issubset(run.evidence_refs)
+        ):
+            invalid_large_campaigns.append(project_id)
+        else:
+            qualifying_large_projects.append(project_id)
+    gates["RG15"] = {
+        "pass": not missing_fixture
+        and not invalid_fixture
+        and bool(qualifying_large_projects)
+        and not invalid_large_campaigns,
+        "detail": {
+            "missing_fixture": missing_fixture,
+            "invalid_fixture": invalid_fixture,
+            "missing_large_campaign": not bool(qualifying_large_projects),
+            "qualifying_large_projects": sorted(qualifying_large_projects),
+            "invalid_large_campaigns": sorted(invalid_large_campaigns),
+        },
+    }
     subset_passed = all(gates[gate_id]["pass"] for gate_id in IMPLEMENTED_RELEASE_GATES)
     unimplemented_gates = [gate_id for gate_id in REQUIRED_RELEASE_GATES if gate_id not in gates]
     for gate_id in unimplemented_gates:
@@ -676,6 +852,131 @@ def _validate_run_measurement_artifacts(
         if any(content.get(key) != value for key, value in expected.items()):
             invalid.append(f"{run.project_id}:{run.engine}:measurement-mismatch")
     return sorted(invalid)
+
+
+def _clean_room_provenance_detail(
+    runs: Sequence[ShadowRun],
+    attestations: Any,
+    registry: Mapping[str, Any],
+) -> dict[str, Any]:
+    expected_projects = {run.project_id for run in runs}
+    if not isinstance(attestations, list):
+        attestations = []
+    by_project: dict[str, Mapping[str, Any]] = {}
+    duplicate_projects: set[str] = set()
+    invalid_projects: set[str] = set()
+    for item in attestations:
+        if not isinstance(item, Mapping):
+            invalid_projects.add("<invalid-attestation>")
+            continue
+        project_id = str(item.get("project_id", ""))
+        if not project_id:
+            invalid_projects.add("<missing-project-id>")
+        elif project_id in by_project:
+            duplicate_projects.add(project_id)
+        else:
+            by_project[project_id] = item
+    missing_projects = expected_projects - set(by_project)
+    unexpected_projects = set(by_project) - expected_projects
+    verified_input_artifacts: set[str] = set()
+    for run in runs:
+        attestation = by_project.get(run.project_id)
+        if attestation is None:
+            continue
+        report_record = registry.get(run.measurement_artifact_ref)
+        report = report_record.get("content") if isinstance(report_record, dict) else None
+        if not isinstance(report, dict):
+            invalid_projects.add(run.project_id)
+            continue
+        report_campaign_id = report.get("campaign_id")
+        measurement = report.get("execution_measurements")
+        tasks = measurement.get("tasks") if isinstance(measurement, dict) else None
+        if (
+            not isinstance(report_campaign_id, str)
+            or not report_campaign_id
+            or report.get("snapshot_id") != run.snapshot_id
+            or report.get("audit_mode") != "fresh"
+            or report.get("history_source_campaign_ids") != []
+            or not isinstance(tasks, list)
+        ):
+            invalid_projects.add(run.project_id)
+            continue
+        task_input_refs: set[str] = set()
+        primary_input_operations: dict[str, set[str]] = {}
+        saw_r1 = False
+        saw_r2 = False
+        for task in tasks:
+            if not isinstance(task, dict):
+                continue
+            operation = str(task.get("operation", ""))
+            is_r1 = operation == "discover_surfaces"
+            is_r2 = (
+                operation == "generate_hypotheses"
+                or operation.startswith("generate_hypotheses:")
+            )
+            if not is_r1 and not is_r2:
+                continue
+            saw_r1 = saw_r1 or is_r1
+            saw_r2 = saw_r2 or is_r2
+            refs = task.get("input_artifact_refs")
+            if not isinstance(refs, list) or not refs or any(
+                not isinstance(reference, str) or not reference for reference in refs
+            ):
+                invalid_projects.add(run.project_id)
+                continue
+            task_input_refs.update(refs)
+            primary_input_operations.setdefault(refs[0], set()).add(operation)
+        supplied_refs_value = attestation.get("r1_r2_input_refs")
+        supplied_refs = (
+            set(supplied_refs_value)
+            if isinstance(supplied_refs_value, list)
+            and all(isinstance(item, str) and item for item in supplied_refs_value)
+            else set()
+        )
+        attestation_evidence_value = attestation.get("evidence_refs")
+        attestation_evidence = (
+            set(attestation_evidence_value)
+            if isinstance(attestation_evidence_value, list)
+            and all(isinstance(item, str) and item for item in attestation_evidence_value)
+            else set()
+        )
+        if (
+            not saw_r1
+            or not saw_r2
+            or supplied_refs != task_input_refs
+            or not isinstance(supplied_refs_value, list)
+            or len(supplied_refs_value) != len(supplied_refs)
+            or report_campaign_id != attestation.get("campaign_id")
+            or attestation.get("audit_mode") != "fresh"
+            or attestation.get("history_source_campaign_ids") != []
+            or attestation.get("prior_target_artifacts_excluded") is not True
+            or attestation.get("regression_backlog_excluded") is not True
+            or not isinstance(attestation.get("verified_by"), str)
+            or not attestation.get("verified_by", "").strip()
+            or run.measurement_artifact_ref not in attestation_evidence
+            or not task_input_refs.issubset(attestation_evidence)
+        ):
+            invalid_projects.add(run.project_id)
+        for reference, operations in primary_input_operations.items():
+            artifact_record = registry.get(reference)
+            content = artifact_record.get("content") if isinstance(artifact_record, dict) else None
+            if (
+                not isinstance(content, dict)
+                or content.get("operation") not in operations
+                or content.get("snapshot_id") != run.snapshot_id
+                or content.get("audit_mode", "fresh") != "fresh"
+                or content.get("history_source_campaign_ids", []) != []
+            ):
+                invalid_projects.add(run.project_id)
+            else:
+                verified_input_artifacts.add(reference)
+    return {
+        "missing_projects": sorted(missing_projects),
+        "duplicate_projects": sorted(duplicate_projects),
+        "unexpected_projects": sorted(unexpected_projects),
+        "invalid_projects": sorted(invalid_projects),
+        "verified_primary_input_artifacts": len(verified_input_artifacts),
+    }
 
 
 def _wilson_interval(successes: int, trials: int, z: float = 1.96) -> tuple[float, float] | None:

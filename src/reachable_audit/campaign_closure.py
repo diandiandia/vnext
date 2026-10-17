@@ -406,6 +406,7 @@ class CampaignCloser:
                     "work_unit_ids", [task_spec.get("work_unit_id", "unknown")]
                 ),
                 "bundle_item_ids": task_spec.get("bundle_item_ids", []),
+                "input_artifact_refs": list(task_spec.get("input_refs", [])),
                 "budget": task_spec.get("budget", {}),
                 "configuration": event.payload.get("configuration", {}),
                 "measurements": event.payload.get("measurements", {}),
@@ -518,6 +519,7 @@ class CampaignCloser:
                 R5Disposition.EMPIRICALLY_CONFIRMED.value,
                 R5Disposition.REFUTED.value,
                 R5Disposition.NEEDS_REVIEW.value,
+                R5Disposition.NOT_FEASIBLE.value,
             }
         ]
         gates["CG7"] = {
@@ -655,6 +657,11 @@ class CampaignCloser:
                 for axis in sorted({item["axis"] for item in discovery_axis_runs})
             },
             "findings": merged_findings,
+            "not_feasible_experiment_hypothesis_ids": sorted(
+                item["hypothesis_id"]
+                for item in r5_assessments
+                if item["disposition"] == R5Disposition.NOT_FEASIBLE.value
+            ),
             "boundary_reviews": boundary_reviews,
             "batches": [
                 {"batch_id": batch_id, "status": batches[batch_id].status.value}
@@ -870,6 +877,21 @@ class CampaignCloser:
         lines.extend(
             f"- {name}: {count}" for name, count in coverage.items()
         )
+        not_feasible_experiments = report.get(
+            "not_feasible_experiment_hypothesis_ids", []
+        )
+        if not_feasible_experiments:
+            lines.extend([
+                "",
+                "### Required Experiments Not Feasible",
+                "",
+                "These hypotheses remain unresolved; infeasibility is not evidence "
+                "of safety, confirmation, or refutation.",
+                *(
+                    f"- `{hypothesis_id}`"
+                    for hypothesis_id in not_feasible_experiments
+                ),
+            ])
         if execution:
             totals = execution.get("totals", {})
             lines.extend([

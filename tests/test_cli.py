@@ -4,7 +4,7 @@ import sys
 
 from reachable_audit.cli import main
 from reachable_audit.campaign import CampaignManager
-from reachable_audit.compatibility import scan_runtime_deproject
+from reachable_audit.compatibility import scan_runtime_compatibility, scan_runtime_deproject
 from reachable_audit.execution import ManualExecutionBackend, TaskResult, TaskSpec, TaskStatus
 from dataclasses import replace
 from test_evaluation import _manifest
@@ -79,6 +79,36 @@ def test_runtime_deproject_scan_rejects_generic_residue_patterns(tmp_path: Path)
     assert {item["value"] for item in report["findings"]} == {
         "cve_identifier", "vcs_reference_url",
     }
+
+
+def test_runtime_residue_scan_covers_source_and_main_prompt(tmp_path: Path) -> None:
+    for relative, text in {
+        "src/sample.py": "TARGET = 'Acme-Widget'\n",
+        "SKILL.md": "Use the Acme-Widget target configuration.\n",
+        "docs/history.md": "Acme-Widget is historical evidence.\n",
+        "tests/fixture.py": "PROJECT = 'Acme-Widget'\n",
+    }.items():
+        path = tmp_path / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+    for scanner in (scan_runtime_compatibility, scan_runtime_deproject):
+        report = scanner(tmp_path, ["acme-widget"])
+        assert report["passed"] is False
+        assert {item["path"] for item in report["findings"]} == {"src/sample.py", "SKILL.md"}
+        assert report["scanned_python_files"] == 1
+        assert report["scanned_prompt_files"] == 1
+
+
+def test_runtime_residue_scan_rejects_private_host_paths(tmp_path: Path) -> None:
+    (tmp_path / "SKILL.md").write_text("Run /home/operator/private-target/tool.\n", encoding="utf-8")
+    report = scan_runtime_compatibility(tmp_path)
+    assert report["passed"] is False
+    assert report["findings"][0]["value"] == "private_host_path"
+
+
+def test_runtime_residue_scan_does_not_confuse_relative_certificate_names(tmp_path: Path) -> None:
+    (tmp_path / "SKILL.md").write_text("Review root.crt/root.key provenance.\n", encoding="utf-8")
+    assert scan_runtime_compatibility(tmp_path)["passed"] is True
 
 
 def test_cli_managed_harness_run_records_output_artifacts(

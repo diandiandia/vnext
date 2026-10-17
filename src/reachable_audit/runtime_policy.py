@@ -9,13 +9,18 @@ from typing import Any
 
 TASK_OUTPUT_MAX_BYTES = 4 * 1024 * 1024
 TASK_OUTPUT_TARGET_BYTES = 1024 * 1024
-RELEASE_POLICY_VERSION = "vnext-release-policy-1"
+RELEASE_POLICY_VERSION = "vnext-release-policy-5"
 REQUIRED_RELEASE_GATES = tuple(f"RG{index}" for index in range(1, 16))
-IMPLEMENTED_RELEASE_GATES = tuple(f"RG{index}" for index in range(1, 12))
+IMPLEMENTED_RELEASE_GATES = (
+    *tuple(f"RG{index}" for index in range(1, 12)),
+    "RG13",
+    "RG14",
+    "RG15",
+)
 
 
 _POLICY: dict[str, Any] = {
-    "policy_version": "vnext-task-policy-7",
+    "policy_version": "vnext-task-policy-10",
     "task_collection": {
         "shell_execution_by_scheduler": False,
         "required_measurements": ["agent_runs", "wall_seconds"],
@@ -38,6 +43,14 @@ _POLICY: dict[str, Any] = {
         "released_exhausted_lease_retry": "explicit_bounded_operator_authorization",
         "attempt_usage": "all_claimed_attempts_with_unreported_attempts_incomplete",
         "hotspot_source_identity": "parsed_bytes_match_r0_digest",
+        "r5_experiment_reference_validation": "collect_and_commit_null_or_task_local_id",
+        "r5_not_feasible": "required_blocker_evidence_null_experiment_id_needs_review_no_attempted_run",
+        "late_stage_amendment": "r5_r6_before_stage_commit_with_immutable_prior_output",
+        "r5_empirical_contract": "host_registered_harness_for_same_hypothesis_and_snapshot",
+        "experiment_recipe_prerequisites": "optional_tooling_scoped_to_memory_safety_and_numeric_families",
+        "r6_evidence_context": "canonical_stage_artifacts_not_work_unit_source_inventory",
+        "r4_hypothesis_references": "task_input_work_unit_and_family_allowlist_at_collect",
+        "r1_surface_anchors": "collect_entry_path_and_nonblank_source_line",
     },
     "harness_limits": {
         "max_timeout_seconds": 300,

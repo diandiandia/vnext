@@ -1,8 +1,9 @@
 # Reachable Audit vNext Release Acceptance Plan
 
 Status: current evaluator behavior and external promotion policy, reviewed 2026-10-17
-against commit `9a97cba` plus working-tree repairs. RG1-RG11 are implemented;
-RG12-RG15 remain unavailable checks and are reported as failed NOT_IMPLEMENTED gates.
+against commit `beaef3b` plus working-tree repairs. RG1-RG11 and RG13-RG15 have
+evaluator checks; RG12 remains unavailable and is reported as a failed
+NOT_IMPLEMENTED gates.
 Implemented-subset success never grants promotion. Passing unit tests does not certify
 capability; no real full portfolio/20GB+ run is recorded.
 
@@ -41,16 +42,21 @@ v3/vNext runs must use equal scope and host execution-configuration digests.
 
 The Campaign report records an optional init-frozen `max_screening_fraction` and
 axis-derived screening/substantive Work Unit counts. Missing/exceeded ceilings mark the
-report not release-eligible but do not alone block closure. Current `shadow-evaluate`
-does not validate this policy, counts, or a human override, even if extra signed fields
-are supplied. RG14 requires future enforcement and authority evidence; it is not passed.
+report not release-eligible but do not alone block closure. RG14 validates the digest-
+verified measurement artifact's screened/total counts, recomputes the fraction against
+the frozen ceiling, checks status consistency, and blocks any human override. It does
+not prove that declared counts equal host-observed reading activity; that remains a
+host/evidence qualification responsibility.
 
 Every clean-room capability run must record `audit_mode: fresh` and an empty
 `history_source_campaign_ids` list. The trusted signer must verify that prior target
 Campaign reports, findings, scope decisions, lessons, and skill-regression backlog were
 not supplied to R1/R2 discovery. Follow-up runs may measure regression behavior but do
-not qualify as held-out clean-room capability evidence. The evaluator does not yet
-validate this provenance contract; RG13 below remains a promotion blocker.
+not qualify as held-out clean-room capability evidence. RG13 validates a signed
+provenance record against the Campaign measurement artifact, including fresh mode,
+empty history sources, and R1/R2 task-input artifact refs. This checks signer
+attestations and digest links, not actual host prompt/session contents or absence of
+covertly supplied history; independent host-isolation evidence remains required.
 
 Every claimed attempt is included in the attempt-cost view. Released, expired,
 cancelled, or still-active claims without terminal usage make that view incomplete;
@@ -89,16 +95,16 @@ VNA_EVALUATION_HMAC_KEY=<evaluation-authority-secret> \
 PYTHONPATH=src python3 -m pytest tests/test_heldout_release_acceptance.py -q
 ```
 
-Without the manifest the test skips. With a bundle, this entry asserts that RG1-RG11
-pass while release remains BLOCKED for unimplemented RG12-RG15. It is not complete
+Without the manifest the test skips. With a bundle, this entry asserts that implemented
+gates pass while release remains BLOCKED for unimplemented RG12. It is not complete
 release authorization, even if a reviewer verifies the source Campaign records.
 
 ## 3. Release Gates
 
 The versioned policy and complete required set live in runtime_policy.py. RG1-RG11
-below describe implemented checks over signed records and digest-verified artifacts.
+and RG13-RG15 below describe implemented checks over signed records and digest-verified artifacts.
 Real-world held-out status/adjudication are trusted-signer attestations, not independently
-verified answer-store facts. RG12-RG15 explicitly fail until their checks are implemented.
+verified answer-store facts. RG12 explicitly fails until its check is implemented.
 
 | Gate | Requirement |
 |---|---|
@@ -110,7 +116,7 @@ verified answer-store facts. RG12-RG15 explicitly fail until their checks are im
 | RG6 | Exactly the 15 approved languages are certified; missing, duplicate, extra, or failed languages block release. |
 | RG7 | The worst family, language, and language/issue recall delta stays within policy; per-language and per-cell confidence intervals are reported. |
 | RG8 | Runtime knowledge passes provenance and deprojecting scans, including evaluator-supplied `forbidden_residue_tokens` from the signed manifest. |
-| RG9 | Runtime, CLI, schemas, and docs pass the no-v2/v3-runtime-compatibility scan. |
+| RG9 | Runtime AST import/legacy-format checks and source/main-prompt/eligible-knowledge residue scans pass. Full documentation consistency and semantic neutrality remain separate review obligations. |
 | RG10 | Real vNext run records attest evidence_traceable=true. Artifact reference/digest validation is a separate mandatory evaluator preflight, not a semantic proof of traceability. |
 | RG11 | All 150 language/issue cells meet the frozen sample floor and at least one real held-out mixed-language Campaign has fully reconciled boundary cases. |
 | RG12 | Every enabled hotspot provider passes positive, negative, alias, and malformed-source conformance fixtures; held-out evaluation reports candidate coverage/precision separately from Agent finding recall. Missing providers and unsupported paths are explicit, never counted as clean coverage. |
@@ -126,10 +132,10 @@ release gate.
 
 External policy authorizes promotion only after all RG1-RG15 pass and an independent
 reviewer confirms the real evidence bundle. The evaluator now fails closed for missing
-checks: implemented_subset_status=PASS describes RG1-RG11 only, status remains BLOCKED,
-and eligible_for_promotion=false while RG12-RG15 are unavailable. Extra signed fields
+checks: implemented_subset_status=PASS describes RG1-RG11/RG13-RG15, status remains BLOCKED,
+and eligible_for_promotion=false while RG12 is unavailable. Extra signed fields
 do not waive checks. The sample floor is at least three cases per language/issue cell.
 
-Promotion remains blocked until RG12-RG15 are implemented and evidenced, in addition to
+Promotion remains blocked until RG12 is implemented and RG15 evidence is supplied, in addition to
 the real held-out/mixed-language/large-repository evidence. Until then, treat evaluator
 success as subset-check success only. vNext remains experimental; v3 remains production.

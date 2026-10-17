@@ -1,6 +1,6 @@
 # Reachable Audit vNext Software Design
 
-Status: as-implemented software baseline, reviewed 2026-10-17 against commit `9a97cba`
+Status: as-implemented software baseline, reviewed 2026-10-17 against commit `beaef3b`
 plus the working-tree contract repairs.
 This supersedes the target package/schema descriptions in the previous revision.
 Missing capabilities and known defects below are not supported contracts.
@@ -90,7 +90,7 @@ src/reachable_audit/
     harness_catalog.py         harness metadata, applicability, and fidelity
     environment.py             toolchain/runtime probes
     runner.py                  managed bounded harness execution
-  evaluation.py               signed manifests, metrics, and RG1-RG11 gates
+  evaluation.py               signed manifests, metrics, and RG1-RG11/RG13-RG15 gates
   resource_cleanup.py         existing Campaign-owned resource cleanup
 knowledge/
   portfolio.json               approved 15-language certification portfolio
@@ -228,7 +228,7 @@ batch in one transaction; homogeneous structural dispositions may share a proven
 artifact only when each edge maps to an explicit entry in that artifact.
 
 R6 reports and skill reviews support append-only revisions. Collected R1, per-axis/compact R2,
-R3, and individual/bundled R4 task outputs can be amended before their stage commits;
+R3, individual/bundled R4, R5, and R6 task outputs can be amended before their stage commits;
 events retain prior/replacement refs, reason, actor, and resolvable artifact evidence.
 Readers select the amended task output. Post-commit amendments are rejected; general
 downstream invalidation/recomputation is absent.
@@ -268,13 +268,22 @@ that coverage is complete: use the exact scalar `reviewed_scope: "ALL_SOURCE_FIL
 omit `reviewed_paths`, or provide `reviewed_paths` equal to the Work Unit `source_files`.
 Partial coverage and `excluded_paths` are rejected. R1 `boundary_reviews` must cover
 every supplied edge exactly once, with matching Work Unit ID, valid disposition, non-empty
-evidence references, and rationale; source-anchor validity is checked at stage commit.
+evidence references, and rationale. Surface entry-path anchors are checked for Work Unit
+membership, valid line range, and nonblank source at collection; stage commit retains
+its own scope and evidence checks. These are structural checks, not observed reading
+coverage or proof that an anchor supports its claim.
 R2 hypothesis and axis records are parsed at collection so malformed nested objects fail
 as `ModelError` while still leased. Hypothesis IDs use the deterministic
 `HYP-<work_unit_id>-<origin_axis>-<positive ordinal>` namespace, preventing collisions
 between R2 Work Unit/axis tasks. Individual and bundled R4 CategoryRuns are checked at
 collection against their plan identity, axis coverage, and verbatim mechanism-variant
 coverage; missing fields return actionable `ModelError`s rather than raw `KeyError`s.
+R4 inputs supply a Work Unit/family-scoped hypothesis-ID allowlist, enforced at collect.
+R5 collection and commit share experiment structure, hypothesis scope, and task-local
+reference checks. An absent experiment ID is JSON null; invalid output remains leased
+for correction. Legacy successful output can be amended before R5 commit. Empirical
+fidelity and registered harness evidence are additionally validated at stage commit.
+R6 closure uses canonical stage artifacts rather than a source-discovery inventory.
 A rejection reports counts and the first ten missing or extra edge IDs and leaves the
 task leased. Agent-facing task inputs are compacted
 without changing the canonical Work Unit: files are grouped by directory
@@ -292,10 +301,10 @@ An optional plan cost profile supplies measured per-operation task cost, currenc
 low/expected/high hypotheses per Work Unit, expected reachable fraction, and optional R4
 bundle width. Forecasts report fixed and hypothesis-dependent task counts, cost scenarios,
 and per-Batch ranges; the profile is caller-owned and is not inferred from a repository or
-historical Campaign. Forecasts assume compact R2, not six separate axis tasks. Known
-aggregation defect: Campaign scenarios count R6 once and can group R4 across Batches;
-per-Batch estimates count/group independently. Totals need not reconcile, and fixed R4
-"upper bound" values are affected. These are not reliable budgets.
+historical Campaign. Forecasts assume compact R2, not six separate axis tasks.
+Campaign counts, hypothesis rounding, R4 groups, one R6 per Batch, and rounded costs
+sum the per-Batch scenarios; no R4 group crosses a Batch boundary. These are advisory
+estimates based on caller assumptions, not enforced budgets or measured savings.
 R4 `CategoryAuditPlan` task bundling is opt-in and groups plans only
 within the same mechanism family. A bundle retains each original `work_unit_id` and
 `category_plan_id`, returns one `CategoryRun` per plan, and validates exact member coverage
@@ -535,7 +544,9 @@ not implemented.
 
 R3, R3.5, and R5 validate their implemented evidence models, not universal strict schemas.
 R5's HarnessCatalog generates recipes with recipe ID, language, family, method,
-prerequisites, isolation, fidelity guidance, and cleanup guidance. Recipes have no
+prerequisites, isolation, fidelity guidance, and cleanup guidance. Optional sanitizer
+tooling is suggested only for memory-safety/numeric families in languages with supported
+tools; it is not a prerequisite for unrelated experiment classes. Recipes have no
 separate release-version, setup, input-class, or expected-observation fields. Managed
 execution produces an experiment artifact, not a card-authored claim of confirmation.
 
@@ -580,8 +591,11 @@ external container or VM.
 - **R5:** the experiment artifact records target reference, fidelity, prerequisites,
   exact commands or actions, observations, relevant artifacts, cleanup result, and final
   assessment. Dispositions are STATIC_VERDICT_RETAINED, EMPIRICALLY_CONFIRMED, REFUTED,
-  and NEEDS_REVIEW. NOT_FEASIBLE is absent; unavailable experiments must not be
-  described as empirical confirmation.
+  NEEDS_REVIEW, and NOT_FEASIBLE. NOT_FEASIBLE requires a required experiment, no
+  attempted run, a null experiment ID, and blocker evidence/rationale. It remains
+  unresolved and never establishes confirmation/refutation; an inconclusive attempted
+  run uses NEEDS_REVIEW with its experiment artifact. Out-of-band evidence registration
+  remains unimplemented.
   A harness run without `hypothesis_id` is standalone and is ineligible for an R5
   empirical upgrade. No authorized external-observation registration contract exists.
   Failed setup is not a negative security result. Strong unsupported claims
@@ -638,9 +652,14 @@ remains authoritative.
 
 ## 7. Runtime and Offline Migration Boundaries
 
-Managed discovery inputs include approved profiles/cards, scheduler-authored contracts,
-adapter context, and generated harness recipes. Offline migration is a separate tool.
-The catalog does not load:
+Managed discovery task context includes approved profile entries/cards,
+scheduler-authored contracts, adapter context, and generated harness recipes. The
+catalog also loads source-digest provenance metadata for validation, but that metadata
+is not serialized into Agent task context. Repository-controlled files and tool output
+are untrusted evidence; SKILL instructs Agents not to obey embedded directions that
+change audit scope, evidence rules, or host permissions. This is prompt-level guidance,
+not a runtime-enforced sandbox; the host remains responsible for tool permissions and
+resource limits. Offline migration is a separate tool. Task context does not include:
 
 - v3 queue files, old schema aliases, version-specific test artifacts, and install-time
   compatibility code;
@@ -691,8 +710,10 @@ projects while preserving the 150 language-issue strata. Minimum sample counts a
 promotion thresholds are frozen in policy before running the benchmark; they are not
 chosen after observing results.
 
-Implemented checks are RG1-RG11. RG12-RG15 (provider quality, clean-room provenance,
-screening policy, and scale acceptance) are reported as failed NOT_IMPLEMENTED gates.
+Implemented evaluator checks are RG1-RG11 and RG13-RG15. RG12 (provider conformance)
+remains a failed NOT_IMPLEMENTED gate. RG13 checks signed provenance and task-input
+artifact links, not actual host prompt/session isolation; RG14 cannot prove host-observed
+reading activity; RG15 checks signed fixture/run evidence, not actual scale performance.
 The versioned policy in runtime_policy.py owns the full required set. Passing the
 implemented subset sets implemented_subset_status=PASS, not release eligibility;
 status remains BLOCKED. Extra signed fields cannot enable or waive missing checks.
@@ -700,8 +721,9 @@ status remains BLOCKED. Extra signed fields cannot enable or waive missing check
 ## 9. Acceptance and Test Design
 
 The lists below are test objectives, not a claim of complete implementation. Synthetic
-fixtures cover selected mechanics; domain parsing is not universally strict, real
-capability evidence is absent, and RG12-RG15 are not evaluator checks.
+fixtures cover selected mechanics; domain parsing is not universally strict and real
+capability evidence is absent. RG12 is not an evaluator check. RG13-RG15 have
+evaluator checks but still lack independent host-observation or scale qualification.
 
 ### 9.1 Unit Tests
 

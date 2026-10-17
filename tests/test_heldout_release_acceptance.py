@@ -28,4 +28,4 @@ def test_external_heldout_bundle_passes_implemented_checks() -> None:
     assert report["implemented_subset_status"] == "PASS", report["gates"]
     assert report["status"] == "BLOCKED"
     assert report["eligible_for_promotion"] is False
-    assert report["unimplemented_gates"] == ["RG12", "RG13", "RG14", "RG15"]
+    assert report["unimplemented_gates"] == ["RG12"]

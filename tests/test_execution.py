@@ -93,7 +93,7 @@ def test_manual_backend_leases_once_and_collects_idempotently(tmp_path: Path) ->
 
 
 def test_collected_r1_output_can_be_amended_before_stage_commit(
-    tmp_path: Path,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     manager, workflow, plan = _workflow(tmp_path, "CMP-r1-amend")
     try:
@@ -118,10 +118,12 @@ def test_collected_r1_output_can_be_amended_before_stage_commit(
             }],
             "boundary_reviews": [],
         })).artifact_id
-        backend.collect(lease, TaskResult(
-            True, original_ref, "stray surface path",
-            {"agent_runs": 1, "wall_seconds": 1},
-        ))
+        with monkeypatch.context() as legacy:
+            legacy.setattr(backend, "_validate_task_output", lambda *_args: None)
+            backend.collect(lease, TaskResult(
+                True, original_ref, "legacy stray surface path",
+                {"agent_runs": 1, "wall_seconds": 1},
+            ))
         with pytest.raises(ModelError, match="outside Work Unit"):
             coordinator.commit_r1()
 
@@ -161,6 +163,44 @@ def test_collected_r1_output_can_be_amended_before_stage_commit(
         manager.close()
 
 
+def test_r1_blank_anchor_is_rejected_before_collection(tmp_path: Path) -> None:
+    manager, workflow, plan = _workflow(
+        tmp_path, "CMP-r1-blank-anchor", source="\ndef handle(value):\n    return value\n",
+    )
+    try:
+        workflow.run_r0()
+        backend = ManualExecutionBackend(manager, workflow.campaign_id)
+        coordinator = DiscoveryCoordinator(workflow, backend)
+        task = coordinator.schedule_r1()[0].task
+        lease = backend.claim("surface-reviewer", task_id_filter=task.task_id)
+        assert lease is not None
+        unit = plan.work_units[0]
+        output = {
+            "schema_version": "1.0", "reviewed_scope": "ALL_SOURCE_FILES",
+            "boundary_reviews": [], "surfaces": [{
+                "surface_id": "SURF-handler", "work_unit_id": unit.work_unit_id,
+                "component_id": unit.component_id, "kind": "function_entry",
+                "entry_path": "app.py", "entry_symbol": "handle", "principal": "remote",
+                "evidence_refs": ["LOC-app.py:1"],
+            }],
+        }
+        invalid_ref = manager.artifacts.put_text(json.dumps(output)).artifact_id
+        with pytest.raises(ModelError, match="blank line"):
+            backend.collect(lease, TaskResult(
+                True, invalid_ref, "blank anchor", {"agent_runs": 1, "wall_seconds": 1},
+            ))
+        assert backend.poll(task.task_id).status is TaskStatus.LEASED
+        output["surfaces"][0]["evidence_refs"] = ["LOC-app.py:2"]
+        corrected_ref = manager.artifacts.put_text(json.dumps(output)).artifact_id
+        backend.collect(lease, TaskResult(
+            True, corrected_ref, "corrected anchor", {"agent_runs": 1, "wall_seconds": 1},
+        ))
+        coordinator.commit_r1()
+        assert workflow._stage_event("R1_COMPLETED") is not None
+    finally:
+        manager.close()
+
+
 @pytest.mark.parametrize("axis", list(DiscoveryAxis))
 def test_per_axis_r2_output_can_be_amended(tmp_path: Path, axis: DiscoveryAxis) -> None:
     manager, workflow, plan = _workflow(tmp_path, "CMP-axis-amend")
@@ -196,6 +236,63 @@ def test_per_axis_r2_output_can_be_amended(tmp_path: Path, axis: DiscoveryAxis) 
         )
         assert amended.output_ref == replacement_ref
         assert amended.status is TaskStatus.SUCCEEDED
+    finally:
+        manager.close()
+
+
+@pytest.mark.parametrize("operation,required_output,stage,output", [
+    ("assess_experiment", "r5-assessment/v1", "R5_COMPLETED", {
+        "schema_version": "1.0", "experiments": [],
+        "assessment": {
+            "hypothesis_id": "HYP-1", "experiment_required": False,
+            "experiment_id": None, "disposition": "STATIC_VERDICT_RETAINED",
+            "evidence_refs": ["EVID-static"], "rationale": "static review",
+        },
+    }),
+    ("collect_batch_closure_evidence", "batch-closure-evidence/v1", "R6_COMPLETED", {
+        "schema_version": "1.0", "closure": {
+            "constraints_observed": [], "unreviewed_scope": [],
+            "residual_risks": [], "lessons": [],
+        },
+    }),
+])
+def test_late_stage_output_can_be_amended_before_stage_commit(
+    tmp_path: Path, operation: str, required_output: str, stage: str, output: dict,
+) -> None:
+    manager, task = _setup(tmp_path)
+    try:
+        input_ref = manager.artifacts.put_text(json.dumps({
+            "hypothesis": {"hypothesis_id": "HYP-1"},
+        })).artifact_id
+        task = replace(task, operation=operation, required_output=required_output,
+                       input_refs=(input_ref,))
+        backend = ManualExecutionBackend(manager, task.campaign_id)
+        backend.submit(task)
+        lease = backend.claim("reviewer")
+        assert lease is not None
+        original_ref = manager.artifacts.put_text(json.dumps(output)).artifact_id
+        backend.collect(lease, TaskResult(
+            True, original_ref, "initial review", {"agent_runs": 1, "wall_seconds": 1},
+        ))
+        replacement = {**output, "correction_note": "evidenced operator correction"}
+        replacement_ref = manager.artifacts.put_text(json.dumps(replacement)).artifact_id
+        amended = backend.amend_completed_output(
+            task.task_id, replacement_ref, reason="corrected review",
+            evidence_refs=(original_ref,),
+        )
+        assert amended.output_ref == replacement_ref
+        assert json.loads(manager.artifacts.get_bytes(original_ref)) == output
+        manager.store.append_event(
+            campaign_id=task.campaign_id, batch_id=task.batch_id,
+            entity_type="batch", entity_id=task.batch_id, event_type=stage,
+            idempotency_key=f"fixture:{stage}", actor="test", payload={},
+            payload_ref=replacement_ref,
+        )
+        with pytest.raises(ModelError, match="after its stage has committed"):
+            backend.amend_completed_output(
+                task.task_id, original_ref, reason="post-commit correction",
+                evidence_refs=(replacement_ref,),
+            )
     finally:
         manager.close()
 

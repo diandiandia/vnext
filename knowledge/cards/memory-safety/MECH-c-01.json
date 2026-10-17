@@ -16,8 +16,7 @@
   ],
   "counterevidence": [
     "A guard dominates the sensitive operation for every relevant path.",
-    "The effective principal cannot control the source or the impact is not security relevant.",
-    "长度字段极值 + 截断矩阵实证是声称类强制 (parser_fuzz 模板) | 有符号下溢语义保留/边界指针语义在 stub 复刻时必须逐字保留 | 序列化/反序列化读取器的尺寸计算必须 size_t 且逐项溢出检查; 计数 ≤ 剩余输入/单元素最小占用——int 算术回绕 = 小分配大写入"
+    "The effective principal cannot control the source or the impact is not security relevant."
   ],
   "language_applicability": [
     "c"

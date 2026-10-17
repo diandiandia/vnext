@@ -12,6 +12,8 @@ from reachable_audit.analysis_models import (
     BatchClosure,
     CampaignClosure,
     HandoffResolution,
+    R5Assessment,
+    R5Disposition,
     ScopeDisposition,
     ScopeDispositionKind,
     SkillIssue,
@@ -32,10 +34,11 @@ from test_experiments_metrics import _ready_for_r5
 
 def _closable_campaign(
     tmp_path: Path, *, surface_without_hypothesis: bool = False,
-    screening_work_unit: bool = False,
+    screening_work_unit: bool = False, not_feasible: bool = False,
 ):  # type: ignore[no-untyped-def]
     manager, workflow = _ready_for_r5(
         tmp_path,
+        static_hypothesis=not_feasible,
         surface_without_hypothesis=surface_without_hypothesis,
         screening_work_unit=screening_work_unit,
     )
@@ -43,7 +46,17 @@ def _closable_campaign(
     manager.record_component_graph(
         campaign_id="CMP-r4", graph=build_component_graph(tmp_path, inventory)
     )
-    workflow.record_r5([], [])
+    if not_feasible:
+        workflow.record_r5([], [R5Assessment(
+            hypothesis_id="HYP-static",
+            experiment_required=True,
+            experiment_id=None,
+            disposition=R5Disposition.NOT_FEASIBLE,
+            evidence_refs=("EVID-environment-blocker",),
+            rationale="the required target runtime is unavailable",
+        )])
+    else:
+        workflow.record_r5([], [])
     workflow.build_transmission_metrics()
     workflow.close_r6(BatchClosure(
         budget_used={"agent_runs": 2, "minutes": 5},
@@ -62,6 +75,40 @@ def test_campaign_closure_passes_ten_gates_and_writes_reports(tmp_path: Path) ->
         lessons_path = tmp_path / ".audit_vnext" / "campaigns" / "CMP-r4" / "lessons.md"
         lessons_path.parent.mkdir(parents=True, exist_ok=True)
         lessons_path.write_text("# Operator notes\n\nKeep this note.\n", encoding="utf-8")
+        input_ref = manager.artifacts.put_text(json.dumps({
+            "operation": "discover_surfaces",
+            "snapshot_id": "fixture:r4",
+        })).artifact_id
+        task_spec_ref = manager.artifacts.put_text(json.dumps({
+            "task_id": "TASK-report-inputs",
+            "operation": "discover_surfaces",
+            "batch_id": plan.batches[0].batch_id,
+            "work_unit_id": plan.work_units[0].work_unit_id,
+            "input_refs": [input_ref],
+            "budget": {"agent_runs": 1},
+        })).artifact_id
+        output_ref = manager.artifacts.put_text("{}").artifact_id
+        manager.store.append_event(
+            campaign_id="CMP-r4", batch_id=plan.batches[0].batch_id,
+            entity_type="execution_task", entity_id="TASK-report-inputs",
+            event_type="TASK_SUBMITTED", idempotency_key="submit-report-inputs",
+            actor="test", payload={}, payload_ref=task_spec_ref,
+        )
+        manager.store.append_event(
+            campaign_id="CMP-r4", batch_id=plan.batches[0].batch_id,
+            entity_type="execution_task", entity_id="TASK-report-inputs",
+            event_type="TASK_COMPLETED", idempotency_key="complete-report-inputs",
+            actor="test",
+            payload={
+                "measurements": {"agent_runs": 1, "wall_seconds": 1},
+                "configuration": {
+                    "model_id": "test-model",
+                    "runtime_version": "test-runtime",
+                    "host_tool_policy_digest": "sha256:" + "a" * 64,
+                },
+            },
+            payload_ref=output_ref,
+        )
         report = CampaignCloser(manager, "CMP-r4", plan).close(CampaignClosure(
             architecture_overview="A single Python state component with no external boundary.",
             unreviewed_scope=(),
@@ -77,6 +124,9 @@ def test_campaign_closure_passes_ten_gates_and_writes_reports(tmp_path: Path) ->
         assert set(report["gates"]) == {f"CG{index}" for index in range(1, 11)}
         assert all(gate["pass"] for gate in report["gates"].values())
         assert report["knowledge_published"] is False
+        task_measurements = report["execution_measurements"]["tasks"]
+        assert task_measurements
+        assert all(item["input_artifact_refs"] for item in task_measurements)
         assert manager.store.get_campaign("CMP-r4").status is CampaignStatus.COMPLETE
         report_dir = tmp_path / ".audit_vnext" / "campaigns" / "CMP-r4" / "report"
         assert (report_dir / "report.json").exists()
@@ -96,6 +146,28 @@ def test_campaign_closure_passes_ten_gates_and_writes_reports(tmp_path: Path) ->
             tmp_path / ".audit_vnext" / "campaigns" / "CMP-r4" / "skill-issues.md"
         ).read_text(encoding="utf-8")
         assert "no skill issues were reported" in issues
+    finally:
+        manager.close()
+
+
+def test_campaign_report_preserves_not_feasible_r5_as_unresolved(tmp_path: Path) -> None:
+    manager, plan = _closable_campaign(tmp_path, not_feasible=True)
+    try:
+        report = CampaignCloser(manager, "CMP-r4", plan).close(CampaignClosure(
+            architecture_overview="A static-only result with an unavailable runtime.",
+            unreviewed_scope=(),
+            residual_risks=("required experiment could not run",),
+            limitations=("target runtime unavailable",),
+            lessons=(),
+            knowledge_nominations=(),
+            skill_issues=(),
+        ))
+        assert report["not_feasible_experiment_hypothesis_ids"] == ["HYP-static"]
+        assert report["gates"]["CG7"]["pass"] is True
+        markdown = CampaignCloser._markdown(report)
+        assert "Required Experiments Not Feasible" in markdown
+        assert "not evidence of safety, confirmation, or refutation" in markdown
+        assert "`HYP-static`" in markdown
     finally:
         manager.close()
 
