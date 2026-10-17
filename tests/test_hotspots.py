@@ -1,6 +1,21 @@
 from pathlib import Path
 
+import hashlib
+import pytest
+
 from reachable_audit.discovery.hotspots import scan_work_unit_hotspots
+from reachable_audit.models import ModelError
+
+
+def test_hotspot_provider_checks_the_bytes_it_parses(tmp_path: Path) -> None:
+    original = b"print('original')\n"
+    source = tmp_path / "app.py"
+    source.write_bytes(original)
+    expected = {"app.py": hashlib.sha256(original).hexdigest()}
+    assert scan_work_unit_hotspots(tmp_path, ["app.py"], expected_digests=expected)["candidate_count"] == 0
+    source.write_text("import os\nos.system('changed')\n", encoding="utf-8")
+    with pytest.raises(ModelError, match="snapshot drift"):
+        scan_work_unit_hotspots(tmp_path, ["app.py"], expected_digests=expected)
 
 
 def test_python_hotspots_are_source_anchored_and_resolve_import_aliases(

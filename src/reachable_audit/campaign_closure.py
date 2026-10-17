@@ -450,8 +450,26 @@ class CampaignCloser:
             event for event in execution_task_events
             if event.event_type in {"TASK_COMPLETED", "TASK_FAILED"}
         ]
+        latest_claims = {}
+        finalized_claim_ids = set()
+        for event in execution_task_events:
+            if event.event_type == "TASK_CLAIMED":
+                latest_claims[event.entity_id] = event
+            elif event.event_type in {"TASK_COMPLETED", "TASK_FAILED"}:
+                claim = latest_claims.get(event.entity_id)
+                if claim is not None:
+                    finalized_claim_ids.add(claim.event_id)
+        unreported_claims = [
+            event for event in execution_task_events
+            if event.event_type == "TASK_CLAIMED" and event.event_id not in finalized_claim_ids
+        ]
         attempt_usage_by_operation: dict[str, dict[str, int]] = {}
-        missing_usage_attempts = []
+        missing_usage_attempts = [{
+            "task_id": event.entity_id,
+            "event_id": event.event_id,
+            "event_type": event.event_type,
+            "reason": "claimed attempt has no completed or failed usage record",
+        } for event in unreported_claims]
         for event in terminal_attempts:
             task_spec = task_specs.get(event.entity_id, {})
             measurements = event.payload.get("measurements", {})
@@ -671,6 +689,11 @@ class CampaignCloser:
             ],
             "skill_review_artifact_id": skill_review_artifact_id,
             "knowledge_published": False,
+            "knowledge_binding": next((
+                {"knowledge_version": event.payload["knowledge_version"],
+                 "catalog_artifact_id": event.payload_ref}
+                for event in events if event.event_type == "KNOWLEDGE_BOUND"
+            ), None),
             "gates": gates,
             "capability_metrics": metrics,
             "execution_measurements": {
@@ -688,8 +711,8 @@ class CampaignCloser:
                     "cache_hit_ratio": cache_hit_ratio,
                 },
                 "attempt_usage": {
-                    "attempt_count": len(terminal_attempts),
-                    "attempts_reporting_usage": len(terminal_attempts) - len(missing_usage_attempts),
+                    "attempt_count": len(terminal_attempts) + len(unreported_claims),
+                    "attempts_reporting_usage": len(terminal_attempts) + len(unreported_claims) - len(missing_usage_attempts),
                     "attempts_missing_usage": len(missing_usage_attempts),
                     "usage_complete": not missing_usage_attempts,
                     "totals": attempt_usage_totals,

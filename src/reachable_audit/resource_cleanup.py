@@ -197,10 +197,11 @@ def _cancel_unfinished_tasks(
     }
     now = dt.datetime.now(dt.UTC).isoformat()
     for task_id, values in task_events.items():
-        if any(
-            event.event_type in {"TASK_COMPLETED", "TASK_FAILED", "TASK_CANCELLED"}
-            for event in values
-        ):
+        state_events = [event for event in values if event.event_type in {
+            "TASK_CLAIMED", "TASK_LEASE_RELEASED", "TASK_COMPLETED",
+            "TASK_FAILED", "TASK_RETRY_AUTHORIZED", "TASK_CANCELLED",
+        }]
+        if state_events and state_events[-1].event_type in {"TASK_COMPLETED", "TASK_CANCELLED"}:
             continue
         manager.store.cancel_task(
             campaign_id=campaign_id,

@@ -158,13 +158,14 @@ def forecast_plan_cost(plan: AuditPlan, profile: Mapping[str, Any]) -> dict[str,
         "run_category_audit_plan_upper_bound": sum(
             len(unit.category_families) for unit in plan.work_units
         ),
-        "run_category_audit_task_upper_bound": _r4_task_count(plan.work_units, bundle_size),
+        "run_category_audit_task_upper_bound": sum(
+            _r4_task_count(units, bundle_size) for units in units_by_batch.values()
+        ),
         "collect_batch_closure_evidence": len(plan.batches),
         "omitted_empty_components": len(plan.omitted_empty_component_ids),
     }
     scenarios = {}
     for label, hypothesis_rate in hypothesis_rates.items():
-        counts = task_counts(plan.work_units, hypothesis_rate, include_r6=True)
         per_batch = {}
         for batch_id, units in units_by_batch.items():
             batch_counts = task_counts(units, hypothesis_rate, include_r6=True)
@@ -176,14 +177,19 @@ def forecast_plan_cost(plan: AuditPlan, profile: Mapping[str, Any]) -> dict[str,
                     batch_counts[op] * float(rates[op]) for op in operations
                 ), 4),
             }
+        counts = {
+            operation: sum(
+                batch["estimated_task_counts"][operation] for batch in per_batch.values()
+            ) for operation in operations
+        }
         scenarios[label] = {
             "hypotheses_per_work_unit": hypothesis_rate,
-            "estimated_hypotheses": math.ceil(total_units * hypothesis_rate),
+            "estimated_hypotheses": sum(batch["estimated_hypotheses"] for batch in per_batch.values()),
             "reachable_fraction": float(reachable_fraction),
             "estimated_task_counts": counts,
             "estimated_total_tasks": sum(counts.values()),
             "estimated_cost": round(sum(
-                counts[op] * float(rates[op]) for op in operations
+                batch["estimated_cost"] for batch in per_batch.values()
             ), 4),
             "per_batch": per_batch,
         }
@@ -218,12 +224,16 @@ def create_audit_plan(
         raise ModelError("at least one category family is required")
     if not axes:
         raise ModelError("at least one discovery axis is required")
+    if set(axes) != set(DEFAULT_DISCOVERY_AXES):
+        raise ModelError("only all-six discovery-axis plans are currently supported")
     if min(max_source_files_per_work_unit, max_source_files_per_batch, max_work_units_per_batch) <= 0:
         raise ModelError("planner limits must be positive")
     if max_source_files_per_work_unit > max_source_files_per_batch:
         raise ModelError("work unit file limit cannot exceed batch file limit")
 
     known_components = {component.component_id for component in inventory.components}
+    if not known_components:
+        raise ModelError("inventory must retain a root component for an empty repository")
     source_owner_by_path = {
         source_file.path: source_file.component_id for source_file in inventory.source_files
     }

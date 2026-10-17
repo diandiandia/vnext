@@ -14,6 +14,11 @@ from typing import Any, Mapping, Sequence
 from .models import ModelError
 from .knowledge_catalog import KnowledgeCatalog, default_knowledge_root
 from .compatibility import scan_runtime_compatibility, scan_runtime_deproject
+from .runtime_policy import (
+    IMPLEMENTED_RELEASE_GATES,
+    RELEASE_POLICY_VERSION,
+    REQUIRED_RELEASE_GATES,
+)
 
 
 _PROJECT_CLASSES = {"native", "managed", "dynamic", "mixed", "jit"}
@@ -217,6 +222,8 @@ class AcceptancePolicy:
             or policy.minimum_issue_samples <= 0
         ):
             raise ModelError("acceptance policy thresholds must be non-negative")
+        if policy.minimum_issue_samples < 3:
+            raise ModelError("acceptance policy requires at least three samples per issue cell")
         return policy
 
 
@@ -442,11 +449,17 @@ def evaluate_release(
     gates["RG6"] = {
         "pass": len(certified_language_ids) == len(required_languages)
         and set(certified_language_ids) == required_languages
+        and len(languages) == len(required_languages)
+        and {item.language for item in languages} == required_languages
         and not failed_languages,
         "detail": {
             "required_languages": sorted(required_languages),
             "missing_languages": sorted(required_languages - {item.language for item in certified_languages}),
-            "unexpected_languages": sorted({item.language for item in certified_languages} - required_languages),
+            "unexpected_languages": sorted({item.language for item in languages} - required_languages),
+            "duplicate_languages": sorted({
+                item.language for item in languages
+                if sum(other.language == item.language for other in languages) > 1
+            }),
             "failed_certified_languages": failed_languages,
         },
     }
@@ -530,14 +543,25 @@ def evaluate_release(
             "issue_cell_metrics": issue_cell_metrics,
         },
     }
-    failed_gates = [gate_id for gate_id, gate in gates.items() if not gate["pass"]]
+    subset_passed = all(gates[gate_id]["pass"] for gate_id in IMPLEMENTED_RELEASE_GATES)
+    unimplemented_gates = [gate_id for gate_id in REQUIRED_RELEASE_GATES if gate_id not in gates]
+    for gate_id in unimplemented_gates:
+        gates[gate_id] = {
+            "pass": False,
+            "detail": {"status": "NOT_IMPLEMENTED", "reason": "required release check is unavailable"},
+        }
+    failed_gates = [gate_id for gate_id in REQUIRED_RELEASE_GATES if not gates[gate_id]["pass"]]
     return {
         "schema_version": "1.0",
         "status": "ACCEPTED" if not failed_gates else "BLOCKED",
         "eligible_for_promotion": not failed_gates,
+        "implemented_subset_status": "PASS" if subset_passed else "BLOCKED",
+        "unimplemented_gates": unimplemented_gates,
         "failed_gates": failed_gates,
         "gates": gates,
         "policy": {
+            "release_policy_version": RELEASE_POLICY_VERSION,
+            "required_gates": list(REQUIRED_RELEASE_GATES),
             "minimum_improved_families": policy.minimum_improved_families,
             "maximum_noise_ratio_increase": policy.maximum_noise_ratio_increase,
             "maximum_worst_group_recall_drop": policy.maximum_worst_group_recall_drop,

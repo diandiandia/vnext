@@ -25,6 +25,7 @@ from reachable_audit.execution import (
     TaskStatus,
 )
 from reachable_audit.models import ModelError
+from reachable_audit.knowledge_catalog import KnowledgeCatalog, default_knowledge_root
 from reachable_audit.store import ConflictError
 from reachable_audit.runtime_policy import TASK_OUTPUT_MAX_BYTES, execution_policy_digest
 from conftest import axis_runs_from_evidence
@@ -156,6 +157,118 @@ def test_collected_r1_output_can_be_amended_before_stage_commit(
         )
         assert len(amendments) == 1
         assert amendments[0].payload["prior_output_ref"] == original_ref
+    finally:
+        manager.close()
+
+
+@pytest.mark.parametrize("axis", list(DiscoveryAxis))
+def test_per_axis_r2_output_can_be_amended(tmp_path: Path, axis: DiscoveryAxis) -> None:
+    manager, workflow, plan = _workflow(tmp_path, "CMP-axis-amend")
+    try:
+        workflow.run_r0()
+        workflow.record_r1([])
+        backend = ManualExecutionBackend(manager, workflow.campaign_id)
+        coordinator = DiscoveryCoordinator(workflow, backend)
+        task = next(
+            view.task for view in coordinator.schedule_r2()
+            if view.task.operation == f"generate_hypotheses:{axis.value}"
+        )
+        lease = backend.claim("axis-worker", task_id_filter=task.task_id)
+        assert lease is not None
+        output = {
+            "schema_version": "1.0",
+            "reviewed_paths": list(plan.work_units[0].source_files),
+            "axis_run": {
+                "axis": axis.value, "applicability": "APPLICABLE",
+                "evidence_refs": ["LOC-app.py:1"], "rationale": "initial review",
+            },
+            "hypotheses": [],
+        }
+        original_ref = manager.artifacts.put_text(json.dumps(output)).artifact_id
+        backend.collect(lease, TaskResult(
+            True, original_ref, "axis reviewed", {"agent_runs": 1, "wall_seconds": 1},
+        ))
+        output["axis_run"]["rationale"] = "corrected review rationale"
+        replacement_ref = manager.artifacts.put_text(json.dumps(output)).artifact_id
+        amended = backend.amend_completed_output(
+            task.task_id, replacement_ref,
+            reason="corrected rationale", evidence_refs=(original_ref,),
+        )
+        assert amended.output_ref == replacement_ref
+        assert amended.status is TaskStatus.SUCCEEDED
+    finally:
+        manager.close()
+
+
+def test_campaign_binds_knowledge_content_not_only_its_version(tmp_path: Path) -> None:
+    manager, workflow, _plan = _workflow(tmp_path, "CMP-knowledge-bound")
+    try:
+        backend = ManualExecutionBackend(manager, workflow.campaign_id)
+        catalog = KnowledgeCatalog.load(default_knowledge_root())
+        coordinator = DiscoveryCoordinator(workflow, backend, catalog)
+        DiscoveryCoordinator(workflow, backend, KnowledgeCatalog.load(default_knowledge_root()))
+        card_id = next(iter(catalog.cards))
+        original_title = catalog.cards[card_id]["title"]
+        catalog.cards[card_id]["title"] = "changed after coordinator creation"
+        assert coordinator.knowledge_catalog.cards[card_id]["title"] == original_title
+        with pytest.raises(ModelError, match="knowledge content changed"):
+            DiscoveryCoordinator(workflow, backend, catalog)
+        bindings = manager.store.list_events(workflow.campaign_id, event_type="KNOWLEDGE_BOUND")
+        assert len(bindings) == 1
+        stored = json.loads(manager.artifacts.get_bytes(bindings[0].payload_ref))
+        assert stored["cards"][card_id]["title"] == original_title
+    finally:
+        manager.close()
+
+
+def test_hotspot_scheduling_rejects_and_records_post_r0_source_drift(tmp_path: Path) -> None:
+    manager, workflow, _plan = _workflow(tmp_path, "CMP-hotspot-drift")
+    try:
+        workflow.run_r0()
+        backend = ManualExecutionBackend(manager, workflow.campaign_id)
+        coordinator = DiscoveryCoordinator(workflow, backend)
+        (tmp_path / "app.py").write_text("import os\nos.system('changed')\n", encoding="utf-8")
+        with pytest.raises(ModelError, match="snapshot drift"):
+            coordinator.schedule_r1()
+        events = manager.store.list_events(workflow.campaign_id)
+        assert any(event.event_type == "SNAPSHOT_DRIFT" for event in events)
+        assert any(event.event_type == "WORK_UNIT_INVALIDATED" for event in events)
+        assert not any(event.event_type == "TASK_SUBMITTED" for event in events)
+    finally:
+        manager.close()
+
+
+@pytest.mark.parametrize("state", ["failed", "leased", "released"])
+def test_abort_cancels_retryable_tasks_and_preserves_host_notes(
+    tmp_path: Path, state: str,
+) -> None:
+    manager, task = _setup(tmp_path)
+    try:
+        backend = ManualExecutionBackend(manager, task.campaign_id)
+        backend.submit(task)
+        first = backend.claim("first-worker")
+        assert first is not None
+        backend.collect(first, TaskResult(
+            False, None, "transient setup failure", {"agent_runs": 0, "wall_seconds": 0},
+        ))
+        if state != "failed":
+            second = backend.claim("retry-worker")
+            assert second is not None and second.attempt == 2
+            if state == "released":
+                backend.release(second, reason="interrupted retry")
+        notes = manager.state_dir / "campaigns" / task.campaign_id / "skill-issues.md"
+        notes.parent.mkdir(parents=True, exist_ok=True)
+        host_content = "# Host notes\nKeep this exact content.\n"
+        notes.write_text(host_content, encoding="utf-8")
+        report = manager.abort_campaign(
+            task.campaign_id, reason="operator abandoned run", skill_issues=(),
+        )
+        assert backend.poll(task.task_id).status is TaskStatus.CANCELLED
+        assert task.task_id in report["resource_cleanup"]["cancelled_task_ids"]
+        assert backend.claim("late-worker") is None
+        assert notes.read_text(encoding="utf-8").startswith(host_content)
+        manager.record_skill_review(task.campaign_id, ())
+        assert notes.read_text(encoding="utf-8").count("vnext-skill-issues:") == 1
     finally:
         manager.close()
 

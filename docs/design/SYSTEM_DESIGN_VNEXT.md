@@ -1,14 +1,17 @@
 # Reachable Audit vNext System Design
 
-Status: target architecture for review. This document describes intended behavior; it
-does not claim that every capability is implemented or certified today.
+Status: as-implemented architecture baseline, reviewed 2026-10-17 against commit
+`9a97cba` plus the working-tree contract repairs. This describes the managed runtime, not guarantees about external Agent
+hosts or demonstrated audit capability. Roadmap items are not current contracts;
+documenting a known defect does not resolve it.
 
 ## 1. Purpose
 
-vNext is a reachable-vulnerability audit system for large, mixed-language repositories.
-It must combine a resumable audit workflow with security knowledge that gives Agents
-specific, testable discovery directions. The system is successful only when it produces
-traceable findings and demonstrates balanced discovery capability on held-out evidence.
+vNext is an experimental reachable-vulnerability audit workflow for mixed-language
+repositories. It combines resumable Campaign/Batch execution with approved security
+knowledge supplied to Agent tasks. Scope and evidence-reference validation do not prove
+that Agent reasoning is true or that discovery capability is balanced. Capability claims
+require external held-out evidence.
 
 The language objective is capability across the approved portfolio of 15 programming
 languages: C, C++, C#, Go, Java, Rust, Python, JavaScript, TypeScript, Kotlin, Scala,
@@ -19,6 +22,10 @@ the runtime portfolio. Existing v3 language lists are migration evidence, not an
 implicit authority for selecting or removing a language.
 
 ## 2. Goals and Non-Goals
+
+The following are roadmap and external acceptance goals, not implemented guarantees.
+The shipped 15-language roster and ten issue entries per language are versioned catalog
+policy, not proof of certification or an architectural optimum.
 
 | ID | Goal | Evidence of completion |
 |---|---|---|
@@ -69,17 +76,19 @@ Source anchors, tool outputs, experiments, human decisions, and Agent submission
 immutable artifacts/events. Campaign status, coverage, verdicts, and reports are derived
 from validated records. Agent prose alone is not evidence.
 
-Corrections to accepted verdicts, task outputs, stage reports, or skill reviews use
-append-only amendment events referencing the prior artifact digest, replacement artifact,
-reason, actor, and supporting evidence. The prior artifact is retained; derived views
-select the latest valid revision. An idempotency key cannot make a substantive decision
-immutable when the workflow provides no supported correction path.
+Corrections are limited. R6 projections and skill reviews support append-only revisions.
+Successfully collected R1, per-axis/compact R2, R3, and R4 task outputs may be amended before
+their stage commits, retaining prior/replacement artifacts, reason, actor, and evidence.
+General post-commit verdict amendment and dependent-stage recomputation are absent;
+idempotent stage submission is not a general correction path.
 
 ### 3.5 Runtime knowledge and evaluation answers are isolated
 
-Runtime prompts may consume approved training knowledge only. Held-out cases, expected
-findings, and private scoring details are unavailable to the discovery runtime. Any
-knowledge promotion requires provenance review and regression evaluation.
+The catalog loader admits reviewed training knowledge and rejects held-out or deprecated
+cards. Held-out answers are not shipped with the runtime. External hosts must isolate
+their files and prompts; the runtime cannot prove that an Agent has not received answers
+or prior target context. Semantic knowledge review is an operator assertion, not a
+mechanically verified publication guarantee.
 
 ### 3.6 Campaign history is explicit and isolated
 
@@ -91,10 +100,12 @@ they do not automatically become R1/R2 seeds. Skill-regression backlog is a sepa
 tool-QA channel and is not vulnerability-discovery knowledge. Migrated Campaigns without
 this metadata are `legacy`, never silently treated as fresh.
 
-Every unreviewed scope item is paired with an `EXCLUDED` or `DEFERRED` disposition,
+Every declared unreviewed scope item at closure is paired with an `EXCLUDED` or `DEFERRED` disposition,
 current snapshot, evidence, rationale, and approver. A historical scope decision may
 inform a follow-up, but cannot substitute for current evidence and approval. Closure
-reports distinguish passed gates from declared unreviewed scope.
+reports distinguish passed gates from declared unreviewed scope. These controls apply
+to managed Campaign/state inputs; host prompts/sessions are outside runtime enforcement
+and clean-room provenance is not evaluator-checked.
 
 ## 4. System Context
 
@@ -135,16 +146,14 @@ A Campaign represents one frozen repository snapshot. Its inventory may contain 
 languages and build ecosystems. Components and Work Units retain file-level language
 ownership; language sets are summaries, not replacements for file-level ownership.
 
-The plan covers:
-
-- every supported source file, or an explicit excluded/deferred scope entry;
-- each path's role and scope disposition: included, excluded with a reason, or deferred
-   with an owner/follow-up; exclusions remain in inventory and are visible in reports;
-- every recognized build unit and its parser status;
-- each component-to-component edge and its evidence;
-- cross-language boundaries such as FFI, RPC, IPC, serialization, shared storage, and
-  generated interfaces;
-- an owner and reviewer for every boundary requiring work across Work Units or Batches.
+The plan assigns every inventoried source file to exactly one Work Unit and Batch.
+Source recognition uses supported/known-unsupported extensions plus source-like
+heuristics; arbitrary unknown-language syntax is not reliably detected. Path-level
+roles and included/excluded/deferred plan entries are not modeled. Components without
+source, manifests, or boundary obligations may be omitted; one Work Unit remains for an
+otherwise empty plan. Build parsing records diagnostics. Supplied graph edges retain
+evidence and cross-Batch Handoff ownership. Automatic candidates primarily come from
+supported build dependencies and imports, not complete FFI/RPC/IPC discovery.
 
 Build dependencies are useful boundary evidence but are not a complete call graph.
 Language/build adapters may propose edges; Agents or reviewers must confirm security
@@ -153,16 +162,17 @@ build manifest. Handoffs support an evidence-backed `NOT_SECURITY_BOUNDARY` disp
 separate from `NEEDS_REVIEW`; unresolved boundaries remain open and block any finding
 whose proof depends on them, while unrelated work may continue.
 
-Scope exclusions do not delete source inventory. The Plan records excluded path(s), file
-role, reason, approving actor, and snapshot; closure reports excluded/deferred counts and
-requires explicit acknowledgement for security-relevant or fuzzing code.
+Closure-level declared unreviewed scope retains snapshot, evidence, rationale, approver,
+and EXCLUDED/DEFERRED disposition. It does not remove inventoried files or change plan
+ownership and is not a path-by-path exclusion or review ledger.
 
-R1 screening and substantive security analysis are distinct coverage states. A path or
-Work Unit classified as screening-only is not counted as inspected merely because its
-axes are marked `NOT_APPLICABLE`. Each such disposition needs scoped evidence and a
-reason. Campaign policy fixes a risk-weighted screening ceiling before discovery;
-exceeding it requires an explicit human override and remains visible as a limitation.
-An override cannot satisfy held-out substantive-coverage or release-certification gates.
+Closure classifies a Work Unit as screening-only when all planned axes are
+NOT_APPLICABLE and it has no hypotheses; any APPLICABLE axis contributes to the
+substantive Work Unit count. These are axis-derived counts, not path-level review
+altitude or risk-weighted inspection evidence. An optional init-frozen screening ceiling
+produces report status and release eligibility. Missing/exceeded ceilings do not by
+themselves block Campaign closure; authenticated overrides and evaluator enforcement
+are absent.
 
 One Campaign can complete mixed-language analysis when all required component and
 boundary work is closed. This is distinct from certifying the system for all 15 languages,
@@ -174,13 +184,13 @@ The existing R0-R6 semantics remain the workflow vocabulary, with one canonical 
 
 | Stage | Responsibility | Required output |
 |---|---|---|
-| R0 | Freeze snapshot, scope, tools, and constraints | Signed Campaign/Batch baseline and explicit blockers |
-| R1 | Map external surfaces, principals, components, and boundaries | Source-anchored inventory, scope roles/exclusions, and boundary records |
+| R0 | Compare scoped source digests with the Campaign baseline | Content-addressed digest receipt; no baseline signature |
+| R1 | Record surfaces, principals, components, and supplied-boundary reviews | Source-anchored Surface and BoundaryReview records; no per-Surface disposition or path-role ledger |
 | R2 | Generate and screen hypotheses using multiple discovery axes and approved knowledge | Falsifiable hypotheses with axis, language, mechanism, and seed provenance |
 | R3 | Verify reachability and vulnerability mechanism | Call/dataflow evidence, counterevidence, and provisional verdict |
 | R3.5 | Independent refutation and adjudication | Reviewer evidence and explicit disposition |
 | R4 | Execute applicable security-category reviews against planned Work Units and hypotheses | CategoryRun records; zero findings is valid if review is evidenced |
-| R5 | Run a justified experiment where behavior requires it | Reproducible experiment artifact and fidelity level, or evidenced NEEDS_REVIEW/NOT_FEASIBLE disposition |
+| R5 | Record assessments and managed experiments | Fidelity-bound artifacts; STATIC_VERDICT_RETAINED, EMPIRICALLY_CONFIRMED, REFUTED, or NEEDS_REVIEW assessments; no NOT_FEASIBLE state |
 | R6 | Close the Batch and reconcile scope, evidence, and handoffs | Derived report and unresolved-risk statement |
 
 Campaign closure is separate from Batch closure. No Batch completion may be reported as
@@ -195,31 +205,37 @@ linked findings separately. A category review with no linked findings is not evi
 that no issue exists beyond the hypotheses in scope; preserve any new candidate as an
 explicit unresolved risk or route it through the hypothesis workflow.
 
-Every R1 Surface receives a review disposition independent of whether it produces a
-Hypothesis. A reviewed Surface may yield a hypothesis, an evidenced clean result, or a
-deferred/unreviewed disposition. Campaign coverage counts dispositions, not only Surface
-IDs copied into Hypothesis records. An accepted R3 verdict may be revised only through an
-append-only, evidence-backed amendment; prior verdict artifacts remain immutable and
-derived views select the latest valid revision.
+For late candidates, the currently supported recovery is an explicitly declared
+follow-up Campaign with new hypothesis/verification/refutation records. Preserve the
+original unresolved risk and history; this is not automatic reopening of committed
+stages. The synthetic mixed-language Handoff fixture exercises that limited recovery.
 
-Discovery axes are complementary prompts, not six mandatory full-repository passes.
-The Planner selects axes by scope and risk; every omitted axis requires an applicability
-reason. The axes are surface, mechanism, state/lifecycle, fix variant, boundary, and
-differential behavior.
+R1 Surfaces do not store independent review dispositions. CG3 reconciles Surface
+identity/ownership, Work Unit surface-axis review, planned axis coverage, known Surface
+references, and hypothesis/verdict identity. A Surface without a hypothesis is allowed
+and reported, but individual clean/deferred review cannot be reconstructed from these
+records. General accepted-R3 verdict amendment is not implemented.
 
-Coverage summaries distinguish screened, inspected, excluded, and deferred paths and
-Work Units by risk tier and axis. `NOT_APPLICABLE` is a scoped decision, not a safety
-result; screening-only scope never contributes to substantive inspection recall.
+R2 schedules all six axes, either separately or in one compact task per Work Unit:
+surface, mechanism, state/lifecycle, fix variant, boundary, and differential behavior.
+AxisRun records require applicability, rationale, and evidence. Planning rejects axis
+subsets because they are not supported end to end. All-six execution remains policy,
+not a proven optimum for recall or cost.
+Six axes do not establish six independent line-by-line passes.
+
+Coverage summarizes axis-derived Work Unit counts, source ownership, and closure scope
+decisions, not screened/inspected/deferred paths by risk tier. NOT_APPLICABLE is a scoped
+decision, not a safety result; these counts are not held-out inspection recall.
 
 Registered language hotspot providers may add source-anchored candidate locations to
 R1/R2 task context. A hotspot is a review lead, never a vulnerability verdict. Each
 provider reports scanned paths, unsupported paths, rule IDs, and known blind spots;
 no match or no registered provider must never be presented as evidence of safety.
 Provider coverage and candidate quality are evaluated separately from Agent verdicts.
-An experiment-required R5 claim that cannot be run is recorded as `NOT_FEASIBLE` with
-reason/evidence instead of silently lowering `experiment_required`. Authorized out-of-
-band observations require provenance and reviewer attestation; a reference string alone
-cannot upgrade a claim to real-target empirical confirmation.
+Required-but-infeasible experiments have no dedicated NOT_FEASIBLE state. An authorized
+out-of-band observation registration contract is also absent. NEEDS_REVIEW can retain
+uncertainty; a reference string alone cannot satisfy managed-run empirical confirmation
+requirements. The missing states remain roadmap work.
 
 ## 7. Security Knowledge Model
 
@@ -229,13 +245,17 @@ The runtime knowledge plane has two linked layers:
    language in the approved 15-language portfolio. Each entry has a stable issue ID,
    rank, applicable mechanism/card IDs, CWE references where meaningful, source/sink
    cues, language-specific pitfalls, counterevidence, and verification guidance.
-2. **Mechanism Card:** a reusable, potentially cross-language description of a root
-   cause, its preconditions, dangerous transitions, sink semantics, counterevidence,
-   and a falsifiable verification recipe.
+2. **Mechanism Card:** a validated training record with root-cause guidance,
+   preconditions, transitions, sink semantics, counterevidence, and a verification recipe.
+   Shipped cards are language-specific and substantially templated; the reusable
+   cross-language variant model remains unimplemented.
 
-Issue rank is a discovery-priority signal, not a severity verdict or a claim that other
-weaknesses are out of scope. Shared mechanisms may support multiple language profiles;
-language-specific semantics remain in adapters or profile supplements.
+Issue rank is a discovery-priority signal, not severity or permission to ignore other
+weaknesses. Task assembly filters by family/language, selects ranked entries round-robin
+across languages, and records omitted entries under an entry-count, not token, budget.
+Cross-language reuse with explicit variants remains a roadmap goal. The first managed
+coordinator binds the complete catalog content/version to the Campaign; later loads
+must match its content-addressed snapshot, even when a version string is unchanged.
 
 Every knowledge item carries provenance and one of these evidence states:
 
@@ -250,12 +270,16 @@ These states must not be collapsed into a single “verified” flag. Project na
 paths, private APIs, and expected held-out answers stay out of runtime knowledge. A
 provenance manifest may retain restricted source references outside prompt payloads.
 
-Historical knowledge is mined selectively. An offline, one-way extraction may read old
-assets, but vNext runtime never imports old queue formats, schemas, version fields, or
-project-specific examples. Each extracted item is reviewed for portability, current
-validity, redundancy, and a real consumer before publication.
+Offline one-way extraction may read old assets, but the runtime does not import old
+queue formats or schemas. Extraction emits reviewable records; publication review is
+an operator assertion. Semantic quality, redundancy, and a real consumer are not all
+mechanically verified before publication.
 
 ## 8. Language Capability and Mixed-Language Evaluation
+
+The following are external acceptance objectives, not measured capability. The evaluator
+checks signed attestations and artifact digests; its trusted signer is responsible for
+adjudication and held-out provenance. It is not an independent protected-answer service.
 
 Language certification is independent of repository composition. The release portfolio
 must certify every one of the 15 approved languages using representative held-out
@@ -287,9 +311,14 @@ to runtime agents.
 
 Campaign/Batch planning is the mechanism for large repositories, not a claim of proven
 20GB support. Work Units are stable ownership scopes; Batches are resumable execution
-transactions. The planner accounts for source volume, components, languages, build
-targets, surfaces, boundaries, and empirical-test cost. Rebalancing is an explicit plan
-amendment that preserves completed evidence.
+transactions. Partitioning uses source-file and Work Unit limits within component
+ownership, retaining language and supplied-boundary metadata. It does not optimize by
+surfaces, token volume, or experiment cost. Plan amendments are explicit records.
+Optional caller-profile forecasts assume compact R2 and sum per-Batch scenarios,
+including per-Batch rounding and one R6 task per Batch. R4 never bundles across Batches.
+Measured-rate and hypothesis assumptions remain unvalidated; forecasts are advisory,
+not enforced budgets. Released, expired, cancelled, or active claims without terminal
+usage records make the separate attempt-cost view incomplete.
 
 Cross-Batch Handoffs have one owner, evidence-backed resolution, and a mechanically
 integrated chain. Open handoffs block dependent findings and Campaign closure. Snapshot
@@ -301,12 +330,12 @@ resource use, interruption/recovery, scope coverage, and final evidence reconcil
 
 ## 10. Knowledge and Release Governance
 
-Knowledge changes and engine changes are evaluated separately. A card/profile release
-must include schema validation, provenance validation, language applicability tests,
-positive and counterexample fixtures, and a held-out leakage scan. A card that has no
-consumer, unclear evidence, or untestable instructions is not published.
+Catalog loading validates structure, references, review state, partition, and evidence
+state. Compatibility/deproject scans exist. Per-card semantic review and positive/
+counterexample quality evidence are not universally enforced; those remain promotion
+goals, not current publication guarantees.
 
-Promotion requires all of the following:
+External promotion policy requires all of the following, beyond the current evaluator:
 
 1. All 15 approved languages meet their predeclared certification gates.
 2. Mixed-language boundary evaluation passes its declared coverage and evidence gates.
@@ -334,6 +363,10 @@ RG12-RG15 are specified promotion gates, not implemented evaluator checks: hotsp
 provider conformance, clean-room provenance, screening-ceiling enforcement, and the
 30k-Handoff/10k-event scale fixture must not be reported as certified until the signed
 evaluator validates their evidence.
+
+Release policy now fails closed: RG12-RG15 appear as NOT_IMPLEMENTED failed gates.
+Passing RG1-RG11 sets implemented_subset_status=PASS but leaves status=BLOCKED and
+eligible_for_promotion=false. No signed extra field waives an unavailable check.
 
 Remaining implementation gaps include recognition of arbitrary unknown-language
 syntax, compiler-wide call-graph resolution, broader automatic FFI/RPC/IPC and

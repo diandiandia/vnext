@@ -288,10 +288,14 @@ class CampaignManager:
                 f"- Status: `{issue.status.value}`",
                 "",
             ))
-        self._atomic_text(
-            self.state_dir / "campaigns" / campaign_id / "skill-issues.md",
-            "\n".join(lines),
-        )
+        section = "\n".join(lines).rstrip()
+        digest = hashlib.sha256(section.encode("utf-8")).hexdigest()
+        marker = f"<!-- vnext-skill-issues:sha256:{digest} -->"
+        path = self.state_dir / "campaigns" / campaign_id / "skill-issues.md"
+        existing = path.read_text(encoding="utf-8") if path.is_file() else ""
+        if marker not in existing:
+            separator = "\n\n" if existing and not existing.endswith("\n\n") else ""
+            self._atomic_text(path, f"{existing}{separator}{marker}\n{section}\n")
 
     def load_skill_regression_backlog(
         self, source_campaign_ids: tuple[str, ...] | None = None

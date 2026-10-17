@@ -1,6 +1,6 @@
 # vNext Repair Roadmap
 
-Status: ordered implementation plan, reviewed 2026-10-16. This roadmap separates local engineering fixes from claims requiring external evaluation evidence. A completed code milestone does not imply improved vulnerability recall until its acceptance criteria are measured.
+Status: ordered implementation plan, reviewed 2026-10-17 against commit `9a97cba`. System/software design and requirements now document current contracts; this roadmap retains missing targets and defects. A completed code milestone does not imply improved vulnerability recall until acceptance criteria are measured.
 
 ## Baseline
 
@@ -8,9 +8,25 @@ The current implementation has a durable Campaign/Batch workflow, source/build i
 
 ## Ordered Work
 
+### Core Contract Repair Sequence
+
+1. **Implemented in this repair:** versioned fail-closed release authorization,
+	content-bound Campaign knowledge, parsed hotspot-byte checks, per-claim cost
+	completeness, retry-aware abort, safe note revisions, structural Handoff joins,
+	executable per-Batch forecasts, all-six plan validation, and empty-root fallback.
+2. **Bounded integration verified:** a synthetic Python/C Handoff with real source
+	anchors records a late R4 candidate as unresolved risk; an explicitly declared
+	follow-up Campaign re-verifies it without rewriting original verdict history.
+	This is neither automatic stage reopening nor real vulnerability-discovery proof.
+3. **Still required:** complete input dependency/invalidation contracts, revision-aware
+	candidate reopening, distinct ownership/review/evidence metrics, and interface/
+	principal/data-mapping proof records. Software design section 1.1 is the target.
+4. **External acceptance remains blocked:** RG12-RG15 implementation/evidence,
+	held-out discovery quality, matched cost studies, and representative scale/recovery.
+
 | Order | Work item | State | Exit criteria |
 |---|---|---|---|
-| 0 | Keep requirements, design, and acceptance plan aligned with measured implementation status. | In progress | SYSR/SWDR IDs are unique; every normative discovery requirement has a design reference, explicit implementation status, and testable acceptance condition. |
+| 0 | Keep requirements, design, and acceptance plan aligned with measured implementation status. | Current baseline revised; ongoing maintenance | Retain SYSR/SWDR IDs and bounded contracts; verify references, JSON examples, current behavior, and explicit target/defect distinctions. Documentation changes do not close implementation defects. |
 | 1 | Make a clean checkout run tests without environment-specific `PYTHONPATH`. | Done | `env -u PYTHONPATH python3 -m pytest tests` passes from the repository root; pytest loads `src` from `pyproject.toml`. |
 | 2 | Implement and evaluate the first Python AST hotspot-provider slice. | Pilot implemented; capability evaluation pending | Frozen Work Unit input; stable rule IDs; LOC anchors to the frozen snapshot; candidate report retained in the content-addressed R1/R2 task input; positive, negative/lookalike, alias, malformed-source, and unsupported-language fixtures; explicit coverage limitations; bounded, advisory-only integration. Still requires a real-project candidate-quality/cost pilot before enabling recall claims. |
 | 3 | Measure and improve Agent workflow ergonomics. | Not started | One supported command path drives routine schedule/claim/collect/commit work; compare operator/Agent calls, wall time, and task-context size against the current manual path without weakening evidence gates. |
@@ -18,8 +34,8 @@ The current implementation has a durable Campaign/Batch workflow, source/build i
 | 5 | Add reusable cross-language mechanism variants and durable source archives. | Not started | Shared cards are used only when semantics match; language differences are explicit; provenance basis is digest-verifiable and linked to an access-controlled source archive/reviewer decision. |
 | 6 | Close remaining evidence-contract and trust gaps. | Not started | Typed evidence references resolve to source/artifact records across stages; worker independence is attested by the execution host or explicitly remains uncertified. |
 | 7 | Run real paired capability and scale evaluation. | Blocked on external evidence | Frozen held-out samples for all 150 cells, at least one mixed-language Campaign, comparable v3/vNext budgets, independent adjudication, and a real 20GB+ recovery run. Promotion only on signed acceptance. |
-| 8 | Control task fan-out without changing audit scope: caller-profiled plan forecasts, safe omission of obligation-free empty components, and opt-in same-family R4 bundles. | Implemented; savings/quality effect unvalidated | Compare matched campaigns on total cost, coverage, retry rate, and independently reviewed effective findings; keep default R4 scheduling unbundled until the pilot supports enabling it. |
-| 9 | Close confirmed retry-state, task-ID, R4 schema/coverage, and token-accounting defects from the FR1 ledger. | Code and focused regressions implemented; full evaluation pending | Exhausted released claims recover only through bounded authorization; R2 IDs are task-scoped; R4 status/axes/variants fail at collect with actionable errors; closure reports failed-attempt usage and marks missing telemetry incomplete. Historical account aggregates cannot reconstruct missing per-task usage. |
+| 8 | Control task fan-out without changing audit scope: forecasts, safe empty-component omission, and opt-in same-family R4 bundles. | Mechanics repaired and regression-tested; savings unvalidated | Multi-Batch counts and rounded costs reconcile; real applicable cards work in R4 bundles; completely empty repositories retain one Work Unit. Forecasts assume compact R2. Compare matched cost/quality runs; default R4 stays unbundled. |
+| 9 | Close confirmed retry-state, task-ID, R4 schema/coverage, and token-accounting defects from Campaign evidence. | Code and focused regressions implemented; full evaluation pending | Exhausted released claims recover only through bounded authorization; R2 IDs are task-scoped; R4 status/axes/variants fail at collect with actionable errors; closure reports failed-attempt usage and marks missing telemetry incomplete. Historical account aggregates cannot reconstruct missing per-task usage. |
 
 ## Campaign-Scale Defect Register
 
@@ -29,10 +45,19 @@ document. Preserve the original evidence only in the access-controlled Campaign 
 
 | Priority | Generic issue class | Current state and next action |
 |---|---|---|
+| P0 | Evaluator success incorrectly implies full promotion eligibility. | **Repaired and tested:** required RG12-RG15 fail as NOT_IMPLEMENTED; RG1-RG11 subset success cannot authorize promotion. Missing checks and real evidence still block release. |
+| P1 | Planner axis subsets disagree with R2 and closure. | **Repaired and tested:** planning rejects unsupported subsets; all-six execution is the current supported contract. Adaptive selection remains target work. |
+| P1 | Pre-commit amendment dispatch rejects per-axis R2 operations. | **Repaired and tested:** all six suffixed operations map to R2 pre-commit amendment; post-commit recomputation remains absent. |
+| P1 | Multi-Batch forecasts do not reconcile. | **Repaired and tested:** Campaign counts, hypothesis rounding, R4 boundaries, R6 tasks, and rounded costs aggregate per Batch. Rates and savings still lack real calibration. |
+| P1 | Real applicable catalog cards crash R4 bundling. | **Repaired and tested:** serialize raw card mappings directly; the existing bundle fixture now selects an applicable Python card and asserts nonempty card seeds. |
+| P1 | Abort leaves a retry active; issue exports overwrite host notes. | **Repaired and tested:** cleanup uses latest task state; failed, released, and leased retries cancel; digest-marked issue revisions preserve host content and are idempotent. |
+| P1 | Unjoined Handoff chains and post-R0 hotspot source changes are accepted. | **Repaired at structural/managed-input scope:** mismatched joins are rejected before integration; R1/R2 recheck R0 and providers verify parsed bytes. Semantic interface proof and host-wide isolation remain absent. |
+| P1 | Released/expired/cancelled attempts disappear from cost completeness. | **Repaired and tested:** every unfinalized claim makes attempt usage incomplete, including active claims. Actual unreported tokens cannot be reconstructed. |
+| P2 | Empty repositories lose all planned work; footprint counts symlink bytes. | **Repaired and tested:** retain one root Work Unit; footprint counts only regular files and excludes runtime state. |
 | P0 | Static-only reachability, Surface coverage, and scope accounting can block closure. | **Partially fixed:** BG2 accepts explicit R5 dispositions; CG3 counts Work Unit axis review independently of Hypothesis links; closure records evidence-backed exclusions/deferments. General R3 amendment and path-level plan scope dispositions remain open; affected Campaigns require replay. |
 | P0 | Prior Campaign decisions can silently narrow a nominally fresh audit. | **Partially fixed:** fresh is the default, prior skill issues are omitted from its baseline and backlog query, follow-up sources are explicit, and unreviewed scope requires current-snapshot evidence/approval. Host-authored prompt isolation, path-level plan dispositions, and evaluator enforcement of clean-room provenance remain open. |
 | P1 | Findings can be recorded after an R6 projection, leaving reports stale. | **Code fixed, campaign replay pending:** R6 supports append-only revisions and Campaign closure uses the latest projection per Batch. Re-run R6 for affected completed Batches, then rerun Campaign gates. |
-| P1 | Shared queues can lease incompatible tasks; failed/released tasks and collected outputs need correction paths. | **Partially fixed:** operation/task/batch-filtered claims, batch-scoped listing, retry hints, release/retry, and append-only R1/R2/R3 task-output amendments before stage commit are implemented. Post-commit amendments, downstream invalidation, delegated-work budgets, and host-attested worker identity remain open. |
+| P1 | Shared queues can lease incompatible tasks; failed/released tasks and collected outputs need correction paths. | **Partially fixed:** filtered claims/listing, retry hints, release/retry, and pre-commit R1/per-axis/compact-R2/R3/R4 amendments exist. Post-commit amendments, downstream invalidation, delegated budgets, and authenticated workers remain open. |
 | P1 | Repeated source-anchor validation and whole-Campaign event materialization dominate large runs; screening creates avoidable R4 tasks. | **Code fixed for identified paths; scale proof pending:** R1/R3 stage calls cache line indexes; collect uses a snapshot-bound evidence-path index; task and Batch event reads are indexed; zero-target stages short-circuit; fully NOT_APPLICABLE R4 plans create persisted coverage without worker tasks. Validate against 1k-file and 10k-event/30k-Handoff budgets. |
 | P1 | A real R5 confirmation can be blocked by the earlier static-only R3.5 disposition. | **Code fixed and regression-tested:** a CONFIRMED finding accepts either a REACHABLE R3.5 adjudication or a current R5 empirical confirmation for every hypothesis. Other static-only findings remain unconfirmed. |
 | P1 | Valid schema/generator evidence outside the source inventory can abort R3 collection. | **Code fixed and regression-tested:** supporting evidence may cite existing in-repository LOC anchors; call-chain LOC anchors remain restricted to included source/build files, and blank-line anchors are rejected. |

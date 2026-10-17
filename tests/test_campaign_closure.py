@@ -1,4 +1,5 @@
 import json
+import datetime as dt
 import os
 from pathlib import Path
 import signal
@@ -604,6 +605,52 @@ def test_campaign_report_exports_scope_and_execution_measurements(tmp_path: Path
         assert measurements["vnext_policy_digest"].startswith("sha256:")
         assert report["repository_size_bytes"] > 0
         assert report["scope_digest"] == plan.inventory_digest
+    finally:
+        manager.close()
+
+
+@pytest.mark.parametrize("state", ["released", "expired", "cancelled", "active"])
+def test_attempt_accounting_never_counts_unreported_claims_as_free(
+    tmp_path: Path, state: str,
+) -> None:
+    manager, plan = _closable_campaign(tmp_path)
+    try:
+        now = dt.datetime(2026, 10, 17, tzinfo=dt.UTC)
+        backend = ManualExecutionBackend(manager, "CMP-r4", clock=lambda: now)
+        input_ref = manager.artifacts.put_text("{}").artifact_id
+        task = TaskSpec(
+            "TASK-interrupted", "CMP-r4", plan.batches[0].batch_id,
+            plan.work_units[0].work_unit_id, "measurement-fixture", (input_ref,), "fixture/v1", {},
+        )
+        backend.submit(task)
+        first = backend.claim("interrupted-worker", lease_seconds=1)
+        assert first is not None
+        if state == "released":
+            backend.release(first, reason="interrupted with unreported usage")
+        elif state == "cancelled":
+            backend.cancel(task.task_id, reason="operator cancelled worker")
+        elif state == "expired":
+            now += dt.timedelta(seconds=2)
+        if state in {"released", "expired"}:
+            second = backend.claim("replacement-worker")
+            assert second is not None and second.attempt == 2
+            output_ref = manager.artifacts.put_text("completed").artifact_id
+            backend.collect(second, TaskResult(
+                True, output_ref, "retry completed",
+                {"agent_runs": 1, "wall_seconds": 1, "input_tokens": 2,
+                 "cache_read_tokens": 0, "output_tokens": 1},
+                execution_configuration_fixture(),
+            ))
+        report = CampaignCloser(manager, "CMP-r4", plan).close(CampaignClosure(
+            architecture_overview="Interrupted task accounting fixture.",
+            unreviewed_scope=(), residual_risks=(), limitations=(), lessons=(),
+            knowledge_nominations=(), skill_issues=(),
+        ))
+        usage = report["execution_measurements"]["attempt_usage"]
+        assert usage["usage_complete"] is False
+        assert usage["attempts_missing_usage"] == 1
+        assert usage["missing_attempts"][0]["event_type"] == "TASK_CLAIMED"
+        assert usage["attempt_count"] == (2 if state in {"released", "expired"} else 1)
     finally:
         manager.close()
 

@@ -496,6 +496,10 @@ class ManualExecutionBackend:
             "run_category_audit": "R4_COMPLETED",
             "run_category_audit_bundle": "R4_COMPLETED",
         }
+        stage_by_operation.update({
+            f"generate_hypotheses:{axis.value}": "R2_COMPLETED"
+            for axis in DiscoveryAxis
+        })
         committed_stage = stage_by_operation.get(view.task.operation)
         if committed_stage is None:
             raise ModelError(
@@ -972,8 +976,33 @@ class DiscoveryCoordinator:
             raise ModelError("workflow and execution backend belong to different Campaigns")
         self.workflow = workflow
         self.backend = backend
-        self.knowledge_catalog = knowledge_catalog or KnowledgeCatalog.load(
+        catalog = knowledge_catalog or KnowledgeCatalog.load(
             default_knowledge_root()
+        )
+        catalog_input = json.loads(json.dumps({
+            "version": catalog.version,
+            "languages": catalog.languages,
+            "profiles": catalog.profiles,
+            "cards": catalog.cards,
+            "provenance": catalog.provenance,
+        }))
+        self.knowledge_catalog = KnowledgeCatalog(**catalog_input)
+        artifact_id = self._put_json({"schema_version": "1.0", **catalog_input})
+        bindings = self.workflow.manager.store.list_events(
+            self.workflow.campaign_id,
+            entity_type="knowledge_binding",
+            entity_id=self.workflow.campaign_id,
+            event_type="KNOWLEDGE_BOUND",
+        )
+        if bindings and bindings[-1].payload_ref != artifact_id:
+            raise ModelError("Campaign knowledge content changed; use a new Campaign")
+        self.workflow.manager.store.append_event(
+            campaign_id=self.workflow.campaign_id, batch_id=None,
+            entity_type="knowledge_binding", entity_id=self.workflow.campaign_id,
+            event_type="KNOWLEDGE_BOUND",
+            idempotency_key=f"knowledge-bind:{self.workflow.campaign_id}",
+            actor="tool", payload={"knowledge_version": catalog.version},
+            payload_ref=artifact_id,
         )
 
     @staticmethod
@@ -1016,6 +1045,7 @@ class DiscoveryCoordinator:
 
     def schedule_r1(self) -> tuple[TaskView, ...]:
         self._require_stage("R0_COMPLETED")
+        self.workflow.run_r0()
         views = []
         for work_unit in self._work_units():
             boundary_edges = self._boundary_edges_for_work_unit(work_unit)
@@ -1087,6 +1117,7 @@ class DiscoveryCoordinator:
 
     def schedule_r2(self) -> tuple[TaskView, ...]:
         r1_event = self._require_stage("R1_COMPLETED")
+        self.workflow.run_r0()
         if r1_event.payload_ref is None:
             raise ModelError("R1 stage is missing its artifact")
         r1 = json.loads(self.workflow.manager.artifacts.get_bytes(r1_event.payload_ref))
@@ -1143,6 +1174,7 @@ class DiscoveryCoordinator:
     def schedule_r2_compact(self) -> tuple[TaskView, ...]:
         """Schedule one consolidated six-axis task per Work Unit."""
         r1_event = self._require_stage("R1_COMPLETED")
+        self.workflow.run_r0()
         if r1_event.payload_ref is None:
             raise ModelError("R1 stage is missing its artifact")
         r1 = json.loads(self.workflow.manager.artifacts.get_bytes(r1_event.payload_ref))
@@ -1893,7 +1925,7 @@ class DiscoveryCoordinator:
                     max_entries=10,
                 ).to_dict(),
                 "mechanism_cards": [
-                    asdict(self.knowledge_catalog.cards[card_id]) for card_id in card_ids
+                    self.knowledge_catalog.cards[card_id] for card_id in card_ids
                 ],
             })
         return {
@@ -2332,9 +2364,16 @@ class DiscoveryCoordinator:
             )
 
     def _hotspot_context(self, work_unit: Mapping[str, Any]) -> dict[str, Any]:
-        return compact_hotspot_report(scan_work_unit_hotspots(
-            self.workflow.manager.target_root, work_unit.get("source_files", []),
-        ))
+        receipt_event = self._require_stage("R0_COMPLETED")
+        receipt = json.loads(self.workflow.manager.artifacts.get_bytes(receipt_event.payload_ref))
+        try:
+            return compact_hotspot_report(scan_work_unit_hotspots(
+                self.workflow.manager.target_root, work_unit.get("source_files", []),
+                expected_digests=receipt["file_digests"],
+            ))
+        except ModelError:
+            self.workflow.run_r0()
+            raise
 
     def _task_id(self, operation: str, *parts: str) -> str:
         source = ":".join((

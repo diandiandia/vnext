@@ -145,11 +145,15 @@ def _resign(manifest: dict[str, object]) -> dict[str, object]:
     )
 
 
-def test_release_acceptance_requires_all_ten_gates() -> None:
+def test_release_blocks_when_required_gates_are_unimplemented() -> None:
     report = evaluate_release(_manifest(), signing_key=_TEST_SIGNING_KEY)
-    assert report["status"] == "ACCEPTED"
-    assert report["eligible_for_promotion"] is True
-    assert set(report["gates"]) == {f"RG{index}" for index in range(1, 12)}
+    assert report["status"] == "BLOCKED"
+    assert report["eligible_for_promotion"] is False
+    assert report["implemented_subset_status"] == "PASS"
+    assert report["unimplemented_gates"] == ["RG12", "RG13", "RG14", "RG15"]
+    assert report["failed_gates"] == report["unimplemented_gates"]
+    assert set(report["gates"]) == {f"RG{index}" for index in range(1, 16)}
+    assert report["policy"]["release_policy_version"] == "vnext-release-policy-1"
     assert report["gates"]["RG6"]["pass"] is True
     assert report["gates"]["RG11"]["detail"]["required_language_issue_cells"] == 150
 
@@ -255,6 +259,25 @@ def test_release_requires_every_language_issue_stratum() -> None:
 
     assert report["gates"]["RG11"]["pass"] is False
     assert len(report["gates"]["RG11"]["detail"]["missing_cells"]) == 1
+
+
+@pytest.mark.parametrize("duplicate", [False, True])
+def test_release_rejects_extra_uncertified_language_records(duplicate: bool) -> None:
+    manifest = _manifest()
+    extra = dict(manifest["languages"][0])
+    extra["certified"] = False
+    if not duplicate:
+        extra["language"] = "not-in-approved-roster"
+    manifest["languages"].append(extra)
+    report = evaluate_release(_resign(manifest), signing_key=_TEST_SIGNING_KEY)
+    assert report["gates"]["RG6"]["pass"] is False
+
+
+def test_release_policy_cannot_lower_the_issue_sample_floor() -> None:
+    manifest = _manifest()
+    manifest["policy"]["minimum_issue_samples"] = 1
+    with pytest.raises(ModelError, match="at least three"):
+        evaluate_release(_resign(manifest), signing_key=_TEST_SIGNING_KEY)
 
 
 def test_release_blocks_issue_strata_below_frozen_sample_floor() -> None:

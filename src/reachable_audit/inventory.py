@@ -7,6 +7,7 @@ import hashlib
 import os
 from pathlib import Path, PurePosixPath
 import re
+import stat
 
 from .adapters.languages import detect_language
 from .plan_models import Component, ProjectInventory, SourceFile
@@ -66,7 +67,9 @@ def _worktree_size_bytes(root: Path) -> int:
         for filename in files:
             path = Path(directory) / filename
             try:
-                total += path.stat(follow_symlinks=False).st_size
+                metadata = path.stat(follow_symlinks=False)
+                if stat.S_ISREG(metadata.st_mode):
+                    total += metadata.st_size
             except OSError:
                 continue
     return total
@@ -134,7 +137,7 @@ def build_inventory(target_root: str | Path, snapshot_id: str) -> ProjectInvento
         owner_root = next(root for root in ordered_roots if _contains(root, source_path))
         owned_files[owner_root].append((source_path, language, language_status))
 
-    represented_roots = set(owned_files) | set(manifests_by_root)
+    represented_roots = (set(owned_files) | set(manifests_by_root)) or {"."}
     components = []
     source_files = []
     for component_root in sorted(represented_roots):

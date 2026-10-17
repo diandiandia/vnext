@@ -9,10 +9,13 @@ from typing import Any
 
 TASK_OUTPUT_MAX_BYTES = 4 * 1024 * 1024
 TASK_OUTPUT_TARGET_BYTES = 1024 * 1024
+RELEASE_POLICY_VERSION = "vnext-release-policy-1"
+REQUIRED_RELEASE_GATES = tuple(f"RG{index}" for index in range(1, 16))
+IMPLEMENTED_RELEASE_GATES = tuple(f"RG{index}" for index in range(1, 12))
 
 
 _POLICY: dict[str, Any] = {
-    "policy_version": "vnext-task-policy-6",
+    "policy_version": "vnext-task-policy-7",
     "task_collection": {
         "shell_execution_by_scheduler": False,
         "required_measurements": ["agent_runs", "wall_seconds"],
@@ -33,7 +36,8 @@ _POLICY: dict[str, Any] = {
         "r2_hypothesis_id": "HYP-work_unit_id-origin_axis-positive_ordinal",
         "r4_category_run_validation": "collect_plan_scope_axes_and_verbatim_variants",
         "released_exhausted_lease_retry": "explicit_bounded_operator_authorization",
-        "attempt_usage": "completed_and_failed_terminal_attempts",
+        "attempt_usage": "all_claimed_attempts_with_unreported_attempts_incomplete",
+        "hotspot_source_identity": "parsed_bytes_match_r0_digest",
     },
     "harness_limits": {
         "max_timeout_seconds": 300,

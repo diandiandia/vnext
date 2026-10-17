@@ -299,11 +299,12 @@ def test_r4_bundle_schedules_two_work_units_and_commits_each_plan(tmp_path: Path
         state_card = next(
             card for card in catalog.cards.values()
             if card["family"] == "STATE"
-            and all("python" in work_unit.languages for work_unit in plan.work_units)
+            and "python" in card["language_applicability"]
         )
         category_plans = create_category_audit_plans(
             plan.work_units, [MechanismCard.from_dict(state_card)], budget={},
         )
+        assert all(item.seed_card_ids for item in category_plans)
         workflow.record_category_audit_plan(category_plans)
         backend = ManualExecutionBackend(manager, workflow.campaign_id)
         coordinator = DiscoveryCoordinator(workflow, backend, catalog)
@@ -322,6 +323,10 @@ def test_r4_bundle_schedules_two_work_units_and_commits_each_plan(tmp_path: Path
         }
         task_input = json.loads(manager.artifacts.get_bytes(tasks[0].task.input_refs[0]))
         assert len(task_input["category_items"]) == 2
+        assert all(
+            item["mechanism_cards"] == [state_card]
+            for item in task_input["category_items"]
+        )
         lease = backend.claim("bundle-worker")
         assert lease is not None
         output_ref = manager.artifacts.put_text(json.dumps({

@@ -5,7 +5,9 @@ from __future__ import annotations
 import ast
 import hashlib
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
+
+from ..models import ModelError
 
 
 _PYTHON_RULES = {
@@ -124,6 +126,7 @@ def scan_work_unit_hotspots(
     source_files: list[str] | tuple[str, ...],
     *,
     max_candidates: int = _MAX_CANDIDATES,
+    expected_digests: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     """Scan supported Python files and report bounded candidate locations and coverage."""
     if max_candidates < 1:
@@ -142,7 +145,10 @@ def scan_work_unit_hotspots(
             parse_errors.append({"path": relative_path, "error": "path escapes project root"})
             continue
         try:
-            source = path.read_text(encoding="utf-8")
+            source_bytes = path.read_bytes()
+            if expected_digests is not None and hashlib.sha256(source_bytes).hexdigest() != expected_digests.get(relative_path):
+                raise ModelError(f"snapshot drift detected while scanning hotspot source: {relative_path}")
+            source = source_bytes.decode("utf-8")
             tree = ast.parse(source, filename=relative_path)
         except (OSError, UnicodeError, SyntaxError) as error:
             parse_errors.append({

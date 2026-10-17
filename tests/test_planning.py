@@ -1,6 +1,8 @@
 from dataclasses import replace
 from pathlib import Path
 
+import pytest
+
 from reachable_audit.campaign import CampaignManager
 from reachable_audit.inventory import build_inventory
 from reachable_audit.models import ModelError
@@ -53,6 +55,41 @@ def test_inventory_uses_root_component_when_no_build_manifest_exists(tmp_path: P
     assert inventory.components[0].root == "."
     assert inventory.components[0].build_manifests == ()
     assert inventory.source_files[0].component_id == inventory.components[0].component_id
+
+
+def test_empty_repository_retains_one_planned_work_unit(tmp_path: Path) -> None:
+    inventory = build_inventory(tmp_path, "fixture:empty-root")
+    plan = create_audit_plan(
+        campaign_id="CMP-empty-root", inventory=inventory, category_families=["STATE"],
+    )
+    assert len(inventory.components) == 1
+    assert inventory.components[0].root == "."
+    assert len(plan.work_units) == len(plan.batches) == 1
+    assert plan.work_units[0].source_files == ()
+    assert plan.omitted_empty_component_ids == ()
+    with pytest.raises(ModelError, match="root component"):
+        create_audit_plan(
+            campaign_id="CMP-invalid-empty", inventory=replace(inventory, components=()),
+            category_families=["STATE"],
+        )
+
+
+def test_worktree_footprint_excludes_symlinks_and_runtime_state(tmp_path: Path) -> None:
+    (tmp_path / "payload.txt").write_text("abc", encoding="utf-8")
+    (tmp_path / "shortcut").symlink_to("payload.txt")
+    (tmp_path / "dangling").symlink_to("missing")
+    (tmp_path / ".audit_vnext").mkdir()
+    (tmp_path / ".audit_vnext" / "state").write_bytes(b"runtime data")
+    assert build_inventory(tmp_path, "fixture:footprint").repository_size_bytes == 3
+
+
+@pytest.mark.parametrize("axes", [("surface",), ("surface", "unknown")])
+def test_planner_rejects_unsupported_axis_subsets(tmp_path: Path, axes: tuple[str, ...]) -> None:
+    with pytest.raises(ModelError, match="all-six"):
+        create_audit_plan(
+            campaign_id="CMP-axes", inventory=build_inventory(tmp_path, "fixture:axes"),
+            category_families=["STATE"], discovery_axes=axes,
+        )
 
 
 def test_manifest_only_component_has_a_unique_planned_owner(tmp_path: Path) -> None:
@@ -322,3 +359,35 @@ def test_task_fanout_forecast_models_r4_bundling_as_an_explicit_scenario(
     assert forecast["scenarios"]["expected"]["estimated_task_counts"][
         "run_category_audit_bundle"
     ] == 1
+
+
+@pytest.mark.parametrize("rate", [1.0, 0.00013])
+def test_multibatch_forecast_never_bundles_across_batches(tmp_path: Path, rate: float) -> None:
+    _write(tmp_path / "a.py", "print('a')\n")
+    _write(tmp_path / "b.py", "print('b')\n")
+    plan = create_audit_plan(
+        campaign_id="CMP-multibatch-cost", inventory=build_inventory(tmp_path, "fixture:cost"),
+        category_families=["STATE"], max_source_files_per_work_unit=1,
+        max_source_files_per_batch=1, max_work_units_per_batch=1,
+    )
+    operations = (
+        "discover_surfaces", "generate_hypotheses_compact", "run_category_audit_bundle",
+        "verify_reachability", "refute_reachability", "adjudicate_refutations",
+        "assess_experiment", "collect_batch_closure_evidence",
+    )
+    forecast = forecast_plan_cost(plan, {
+        "profile_id": "fixture-multibatch", "currency": "TEST",
+        "assumptions": {
+            "hypotheses_per_work_unit": {"low": 0, "expected": 0.5, "high": 1},
+            "reachable_fraction": 0.5, "r4_bundle_work_units_per_task": 2,
+        },
+        "cost_per_task": {operation: rate for operation in operations},
+    })
+    assert forecast["fixed_task_counts"]["run_category_audit_task_upper_bound"] == 2
+    assert forecast["scenarios"]["low"]["estimated_total_tasks"] == 8
+    for scenario in forecast["scenarios"].values():
+        batches = list(scenario["per_batch"].values())
+        assert scenario["estimated_cost"] == sum(batch["estimated_cost"] for batch in batches)
+        assert scenario["estimated_hypotheses"] == sum(batch["estimated_hypotheses"] for batch in batches)
+        for operation, count in scenario["estimated_task_counts"].items():
+            assert count == sum(batch["estimated_task_counts"][operation] for batch in batches)

@@ -9,7 +9,7 @@ import pytest
 from reachable_audit.evaluation import evaluate_release
 
 
-def test_external_heldout_release_bundle_is_accepted() -> None:
+def test_external_heldout_bundle_passes_implemented_checks() -> None:
     manifest_value = os.environ.get("VNA_HELDOUT_SIGNED_MANIFEST")
     signing_key = os.environ.get("VNA_EVALUATION_HMAC_KEY")
     if not manifest_value:
@@ -25,5 +25,7 @@ def test_external_heldout_release_bundle_is_accepted() -> None:
 
     report = evaluate_release(manifest, signing_key=signing_key.encode("utf-8"))
 
-    assert report["status"] == "ACCEPTED", report["gates"]
-    assert report["eligible_for_promotion"] is True
+    assert report["implemented_subset_status"] == "PASS", report["gates"]
+    assert report["status"] == "BLOCKED"
+    assert report["eligible_for_promotion"] is False
+    assert report["unimplemented_gates"] == ["RG12", "RG13", "RG14", "RG15"]

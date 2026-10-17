@@ -113,8 +113,9 @@ class HandoffResolver:
             )
         prefix = list(known_chain_prefix)
         suffix = list(resolution["chain_suffix"])
-        if prefix[-1] == suffix[0]:
-            suffix = suffix[1:]
+        if not suffix or prefix[-1] != suffix[0]:
+            raise ModelError("Handoff chain suffix must join the supplied prefix")
+        suffix = suffix[1:]
         value = {
             "schema_version": "1.0",
             "handoff_id": handoff_id,
