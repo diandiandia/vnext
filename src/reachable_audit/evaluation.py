@@ -15,6 +15,7 @@ from typing import Any, Mapping, Sequence
 from .models import ModelError
 from .knowledge_catalog import KnowledgeCatalog, default_knowledge_root
 from .compatibility import scan_runtime_compatibility, scan_runtime_deproject
+from .discovery.hotspots import enabled_hotspot_provider_ids
 from .runtime_policy import (
     IMPLEMENTED_RELEASE_GATES,
     RELEASE_POLICY_VERSION,
@@ -544,18 +545,103 @@ def evaluate_release(
             "issue_cell_metrics": issue_cell_metrics,
         },
     }
-    clean_room_detail = _clean_room_provenance_detail(
-        real_vnext_runs,
-        value.get("clean_room_provenance"),
-        value["evidence_artifacts"],
-    )
-    gates["RG13"] = {
-        "pass": bool(real_vnext_runs)
-        and not any(clean_room_detail[key] for key in (
-            "missing_projects", "duplicate_projects",
-            "unexpected_projects", "invalid_projects",
-        )),
-        "detail": clean_room_detail,
+    enabled_provider_ids = set(enabled_hotspot_provider_ids())
+    provider_records = value.get("hotspot_provider_acceptance")
+    if not isinstance(provider_records, list):
+        provider_records = []
+    provider_by_id: dict[str, Mapping[str, Any]] = {}
+    duplicate_providers: set[str] = set()
+    invalid_providers: set[str] = set()
+    unexpected_providers: set[str] = set()
+    provider_metrics: dict[str, dict[str, Any]] = {}
+    required_record_fields = {
+        "provider_id", "enabled", "fixture_results", "held_out", "evidence_refs",
+    }
+    required_fixtures = {"positive", "negative", "alias", "malformed_source"}
+    required_heldout_fields = {
+        "sample_count", "expected_candidate_sites", "candidate_covered_sites",
+        "candidate_count", "reviewed_candidate_count", "true_positive_candidates",
+        "held_out", "synthetic",
+    }
+    for record in provider_records:
+        if not isinstance(record, Mapping):
+            invalid_providers.add("<invalid-provider-record>")
+            continue
+        provider_id = str(record.get("provider_id", ""))
+        if not provider_id:
+            invalid_providers.add("<missing-provider-id>")
+            continue
+        if provider_id in provider_by_id:
+            duplicate_providers.add(provider_id)
+            continue
+        provider_by_id[provider_id] = record
+        if provider_id not in enabled_provider_ids:
+            unexpected_providers.add(provider_id)
+    missing_providers = enabled_provider_ids - set(provider_by_id)
+    for provider_id in enabled_provider_ids & set(provider_by_id):
+        record = provider_by_id[provider_id]
+        fixture_results = record.get("fixture_results")
+        held_out = record.get("held_out")
+        evidence_refs = record.get("evidence_refs")
+        if (
+            set(record) != required_record_fields
+            or record.get("enabled") is not True
+            or not isinstance(fixture_results, Mapping)
+            or set(fixture_results) != required_fixtures
+            or any(fixture_results.get(name) is not True for name in required_fixtures)
+            or not isinstance(held_out, Mapping)
+            or set(held_out) != required_heldout_fields
+            or held_out.get("held_out") is not True
+            or held_out.get("synthetic") is not False
+            or not isinstance(evidence_refs, list)
+            or not evidence_refs
+            or any(reference not in verified_evidence_refs for reference in evidence_refs)
+        ):
+            invalid_providers.add(provider_id)
+            continue
+        sample_count = held_out["sample_count"]
+        expected_sites = held_out["expected_candidate_sites"]
+        covered_sites = held_out["candidate_covered_sites"]
+        candidate_count = held_out["candidate_count"]
+        reviewed_count = held_out["reviewed_candidate_count"]
+        true_positive_count = held_out["true_positive_candidates"]
+        counts = (sample_count, expected_sites, covered_sites, candidate_count,
+                  reviewed_count, true_positive_count)
+        if (
+            any(type(amount) is not int or amount < 0 for amount in counts)
+            or sample_count < 1
+            or expected_sites < 1
+            or covered_sites > expected_sites
+            or reviewed_count > candidate_count
+            or true_positive_count > reviewed_count
+        ):
+            invalid_providers.add(provider_id)
+            continue
+        provider_metrics[provider_id] = {
+            "sample_count": sample_count,
+            "candidate_coverage": covered_sites / expected_sites,
+            "candidate_precision": (
+                true_positive_count / reviewed_count if reviewed_count else None
+            ),
+            "candidate_count": candidate_count,
+            "reviewed_candidate_count": reviewed_count,
+            "true_positive_candidates": true_positive_count,
+            "evidence_refs": list(evidence_refs),
+        }
+    gates["RG12"] = {
+        "pass": bool(enabled_provider_ids)
+        and not missing_providers
+        and not duplicate_providers
+        and not unexpected_providers
+        and not invalid_providers,
+        "detail": {
+            "enabled_provider_ids": sorted(enabled_provider_ids),
+            "missing_providers": sorted(missing_providers),
+            "duplicate_providers": sorted(duplicate_providers),
+            "unexpected_providers": sorted(unexpected_providers),
+            "invalid_providers": sorted(invalid_providers),
+            "provider_metrics": provider_metrics,
+        },
     }
     clean_room_detail = _clean_room_provenance_detail(
         real_vnext_runs,

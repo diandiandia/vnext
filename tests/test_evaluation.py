@@ -91,6 +91,27 @@ def _manifest() -> dict[str, object]:
         }],
         "runtime_deproject_scan": {"passed": True, "evidence_refs": ["ART-scan"]},
         "compatibility_scan": {"passed": True, "evidence_refs": ["ART-compat"]},
+        "hotspot_provider_acceptance": [{
+            "provider_id": "python-ast-hotspots-v1",
+            "enabled": True,
+            "fixture_results": {
+                "positive": True,
+                "negative": True,
+                "alias": True,
+                "malformed_source": True,
+            },
+            "held_out": {
+                "sample_count": 10,
+                "expected_candidate_sites": 10,
+                "candidate_covered_sites": 8,
+                "candidate_count": 12,
+                "reviewed_candidate_count": 10,
+                "true_positive_candidates": 7,
+                "held_out": True,
+                "synthetic": False,
+            },
+            "evidence_refs": ["ART-hotspot-python"],
+        }],
         "scale_acceptance": {
             "fixture": {
                 "handoff_count": 30_000,
@@ -236,20 +257,46 @@ def _rewrite_measurement_artifact(
     ).encode("utf-8")).hexdigest()
 
 
-def test_release_blocks_when_required_gates_are_unimplemented() -> None:
+def test_release_accepts_when_all_implemented_gate_evidence_is_valid() -> None:
     report = evaluate_release(_manifest(), signing_key=_TEST_SIGNING_KEY)
-    assert report["status"] == "BLOCKED"
-    assert report["eligible_for_promotion"] is False
+    assert report["status"] == "ACCEPTED"
+    assert report["eligible_for_promotion"] is True
     assert report["implemented_subset_status"] == "PASS"
-    assert report["unimplemented_gates"] == ["RG12"]
-    assert report["failed_gates"] == report["unimplemented_gates"]
+    assert report["unimplemented_gates"] == []
+    assert report["failed_gates"] == []
     assert set(report["gates"]) == {f"RG{index}" for index in range(1, 16)}
-    assert report["policy"]["release_policy_version"] == "vnext-release-policy-5"
+    assert report["policy"]["release_policy_version"] == "vnext-release-policy-6"
     assert report["gates"]["RG6"]["pass"] is True
+    assert report["gates"]["RG12"]["pass"] is True
+    provider_metric = report["gates"]["RG12"]["detail"]["provider_metrics"]["python-ast-hotspots-v1"]
+    assert provider_metric["candidate_coverage"] == 0.8
+    assert provider_metric["candidate_precision"] == 0.7
     assert report["gates"]["RG14"]["pass"] is True
     assert report["gates"]["RG15"]["pass"] is True
     assert report["gates"]["RG13"]["pass"] is True
     assert report["gates"]["RG11"]["detail"]["required_language_issue_cells"] == 150
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    ("missing", "positive", "negative", "alias", "malformed", "not-held-out", "bad-counts"),
+)
+def test_rg12_requires_provider_conformance_and_heldout_metrics(mutation: str) -> None:
+    manifest = _manifest()
+    provider = manifest["hotspot_provider_acceptance"][0]
+    if mutation == "missing":
+        manifest["hotspot_provider_acceptance"] = []
+    elif mutation in {"positive", "negative", "alias", "malformed"}:
+        key = "malformed_source" if mutation == "malformed" else mutation
+        provider["fixture_results"][key] = False
+    elif mutation == "not-held-out":
+        provider["held_out"]["synthetic"] = True
+    else:
+        provider["held_out"]["true_positive_candidates"] = 11
+    report = evaluate_release(_resign(manifest), signing_key=_TEST_SIGNING_KEY)
+    assert report["gates"]["RG12"]["pass"] is False
+    detail = report["gates"]["RG12"]["detail"]
+    assert detail["missing_providers"] or detail["invalid_providers"]
 
 
 @pytest.mark.parametrize(

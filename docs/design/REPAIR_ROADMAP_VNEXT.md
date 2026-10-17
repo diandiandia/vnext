@@ -21,7 +21,7 @@ The current implementation has a durable Campaign/Batch workflow, source/build i
 3. **Still required:** complete input dependency/invalidation contracts, revision-aware
 	candidate reopening, distinct ownership/review/evidence metrics, and interface/
 	principal/data-mapping proof records. Software design section 1.1 is the target.
-4. **External acceptance remains blocked:** RG12 implementation/evidence, RG13 real
+4. **External acceptance remains blocked:** RG12 real provider-quality evidence, RG13 real
 	host-isolation evidence, and RG15 independent fixture/large-Campaign evidence,
 	held-out discovery quality, matched cost studies, and representative scale/recovery.
 
@@ -46,7 +46,7 @@ document. Preserve the original evidence only in the access-controlled Campaign 
 
 | Priority | Generic issue class | Current state and next action |
 |---|---|---|
-| P0 | Evaluator success incorrectly implies full promotion eligibility. | **Repaired and tested:** RG12 fails as NOT_IMPLEMENTED; RG13 validates signed provenance structure but not host truth; RG15 validates evidence structure but not performance truth. RG1-RG11/RG13-RG15 subset success cannot authorize promotion. Missing implementation and real evidence still block release. |
+| P0 | Evaluator success incorrectly implies full promotion eligibility. | **Repaired and tested:** all RG1-RG15 evaluator checks are implemented; they cannot authorize promotion without signed evidence and independent review. RG13 validates provenance structure but not host truth; RG15 validates evidence structure but not performance truth. |
 | P1 | Planner axis subsets disagree with R2 and closure. | **Repaired and tested:** planning rejects unsupported subsets; all-six execution is the current supported contract. Adaptive selection remains target work. |
 | P1 | Pre-commit amendment dispatch rejects per-axis R2 operations. | **Repaired and tested:** all six suffixed operations map to R2 pre-commit amendment; post-commit recomputation remains absent. |
 | P1 | Multi-Batch forecasts do not reconcile. | **Repaired and tested:** Campaign counts, hypothesis rounding, R4 boundaries, R6 tasks, and rounded costs aggregate per Batch. Rates and savings still lack real calibration. |

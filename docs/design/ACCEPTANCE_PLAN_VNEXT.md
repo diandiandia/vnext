@@ -1,9 +1,9 @@
 # Reachable Audit vNext Release Acceptance Plan
 
 Status: current evaluator behavior and external promotion policy, reviewed 2026-10-17
-against commit `beaef3b` plus working-tree repairs. RG1-RG11 and RG13-RG15 have
-evaluator checks; RG12 remains unavailable and is reported as a failed
-NOT_IMPLEMENTED gates.
+against commit `beaef3b` plus working-tree repairs. RG1-RG15 have evaluator checks.
+Passing the checks still depends on signed, digest-verified evidence and independent
+acceptance; implementation does not imply capability certification.
 Implemented-subset success never grants promotion. Passing unit tests does not certify
 capability; no real full portfolio/20GB+ run is recorded.
 
@@ -101,10 +101,10 @@ release authorization, even if a reviewer verifies the source Campaign records.
 
 ## 3. Release Gates
 
-The versioned policy and complete required set live in runtime_policy.py. RG1-RG11
-and RG13-RG15 below describe implemented checks over signed records and digest-verified artifacts.
+The versioned policy and complete required set live in runtime_policy.py. RG1-RG15
+describe implemented checks over signed records and digest-verified artifacts.
 Real-world held-out status/adjudication are trusted-signer attestations, not independently
-verified answer-store facts. RG12 explicitly fails until its check is implemented.
+verified answer-store facts. No gate independently proves the truth of signer assertions.
 
 | Gate | Requirement |
 |---|---|
@@ -132,10 +132,11 @@ release gate.
 
 External policy authorizes promotion only after all RG1-RG15 pass and an independent
 reviewer confirms the real evidence bundle. The evaluator now fails closed for missing
-checks: implemented_subset_status=PASS describes RG1-RG11/RG13-RG15, status remains BLOCKED,
-and eligible_for_promotion=false while RG12 is unavailable. Extra signed fields
+checks: implemented_subset_status=PASS describes successful RG1-RG15 checks; status is
+BLOCKED and eligible_for_promotion=false whenever a required gate fails. Extra signed fields
 do not waive checks. The sample floor is at least three cases per language/issue cell.
 
-Promotion remains blocked until RG12 is implemented and RG15 evidence is supplied, in addition to
-the real held-out/mixed-language/large-repository evidence. Until then, treat evaluator
-success as subset-check success only. vNext remains experimental; v3 remains production.
+Promotion remains blocked until all RG1-RG15 evidence passes, an independent reviewer
+confirms the real evidence bundle, and the required real held-out/mixed-language/scale
+acceptance is supplied. Signed gate success alone is not independent certification.
+vNext remains experimental; v3 remains production.

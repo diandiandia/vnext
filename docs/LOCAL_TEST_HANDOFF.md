@@ -102,7 +102,7 @@ configuration where available. Unknown usage is unknown, never zero.
 
 | Check | Expected behavior |
 |---|---|
-| Release safety | RG1-RG11/RG13-RG15 can pass as implemented_subset_status=PASS; unavailable RG12 keeps status=BLOCKED and eligible_for_promotion=false. RG13's signer attestation is not independent proof of host isolation; RG15 mechanics do not prove real scale acceptance. |
+| Release safety | RG1-RG15 can pass as implemented_subset_status=PASS when signed evidence is complete; actual capability and independent acceptance are still required. RG12 provider-quality evidence, RG13 host-isolation truth, and RG15 real scale evidence remain open. |
 | Real-card R4 bundle | After normal R3.5/category planning, task-schedule-r4 with --bundle-work-units 2 works with applicable nonempty card seeds and preserves each plan/WU result. |
 | Per-axis R2 correction | Each of the six suffixed operations permits evidenced pre-commit correction; post-commit rewriting is rejected. |
 | Interrupted work | Release/expiry/retry preserves attempt history; stale leases cannot finalize a newer attempt; missing attempt usage marks costs incomplete. |
@@ -164,7 +164,7 @@ release-quality evaluation; the archived report and ledger are the run record.
 The family-scoped optional-sanitizer recipe, `NOT_FEASIBLE` state, and RG13-RG15
 evaluator changes in the current worktree were made after retest3 and are covered by
 local regression tests, not by that Campaign. The current tree uses
-task-policy-10/release-policy-5 and passes 233 tests with one external held-out skip;
+task-policy-10/release-policy-6 and passes 240 tests with one external held-out skip;
 retest3 recorded the preceding policy digest and 212-test suite. Real Campaign
 validation of NOT_FEASIBLE, clean-room provenance, and RG14 screening artifacts remains
 outstanding.

@@ -153,7 +153,7 @@ unaltered.
 
 ## 7. Verification and Exit Criteria
 
-- Current full regression after R5 infeasibility-state, RG13 provenance, RG14 screening, and RG15 scale-gate implementation: **233 passed, 1 skipped**; the
+- Current full regression after R5 infeasibility-state and RG12-RG15 evaluator-gate implementation: **240 passed, 1 skipped**; the
   skip requires a protected external held-out bundle. No real discovery or scale
   qualification is inferred from that suite.
 - Compatibility/residue scan: PASS on 48 Python, 167 knowledge and one prompt file,
@@ -202,16 +202,16 @@ Neither label alone is a confirmed exploitable vulnerability.
 | P0 | Software Design §1.1 #4; SWDR-032/033/040; SYSR-030/031/038 | Ownership and declared review/axis coverage are represented, but agent self-report is not host-observed reading. Per-path roles, independent per-Surface clean/deferred/unreviewed dispositions, review altitude, and an enforced screening ceiling are absent. | Add separately derived ownership/review/evidence ledgers; decide and test path/Surface dispositions and ceiling enforcement. Do not equate `reviewed_scope` with observed reads. |
 | P0 | Software Design §1.1 #5; SWDR-010/013; SYSR-016/017 | Typed supplied boundaries and structural Handoff-chain joins exist. Automatic FFI/RPC/IPC/serialization boundary completeness and principal/interface/data-mapping proofs do not. | Model interface direction, principal/premises, source/target, and argument/data mapping; test unresolved interfaces block dependent findings. Measure missing-edge discovery separately. |
 | P1 | SWDR-035/036; SYSR-033/034 | Bounded retries, managed-run evidence, and an evidence-backed `NOT_FEASIBLE` unresolved state exist. Authenticated worker/reviewer identity, delegated budgets, and authorized external-observation registration do not. | Implement identity/budget authority contracts and independently attest external observations; keep NOT_FEASIBLE non-confirming and non-refuting. |
-| P1 | SWDR-031; SYSR-029; RG12 | The only implemented hotspot provider is Python AST. Other portfolio languages lack provider conformance and held-out quality evidence. | Add language providers incrementally with positive, negative, alias, malformed-source, unsupported-path and held-out quality tests; never interpret zero matches as safety. |
+| P1 | SWDR-031; SYSR-029; RG12 | RG12 gate logic exists; the only enabled provider is Python AST. Other portfolio languages have no provider, and current signed fixture metrics do not establish real provider quality. | Add language providers incrementally with positive, negative, alias, malformed-source, unsupported-path and real held-out quality evidence; never interpret zero matches as safety. |
 | P1 | Software Design §3; SWDR-041 | Selected task-collection validators check scope, anchors and shapes, but several domain parsers still ignore unknown fields or can raise raw exceptions; stage-level checks may still fail after collect. | Audit each public parser/CLI boundary, normalize malformed input to actionable errors, define strictness/versioning policy, and preserve same-lease repair behavior. |
 | P1 | SWDR-039; SYSR-037; RG13 | RG13 validates signed fresh/history declarations and links R1/R2 task-input artifacts to the Campaign report. Actual host prompt/session isolation and independent proof that the signer saw all supplied context remain external. | Exercise the gate with real host-generated manifests; adversarially verify prior target/QA data cannot enter fresh prompts, and retain independent host attestation. |
 | P1 | RG14; SWDR-040; SYSR-038 | The evaluator validates digest-backed counts/fraction, status consistency, and rejects overrides. It cannot prove host-observed reads; Campaign closure remains non-blocking and no authenticated override mechanism exists. | Qualify trusted report generation/host observation; preserve signed override rejection and verify with real campaigns. |
 | P1 | RG15; SWDR-042; SYSR-040 | Evaluator logic validates a digest-backed 30k-Handoff/10k-event fixture declaration and cross-checks a qualifying real-run record; only synthetic signed fixture evidence exists, and no representative large Campaign has qualified the behavior. | Run the actual stress fixture and real large Campaign; independently verify performance/atomicity and interruption/recovery, then qualify 20GB+ operation. |
 | P2 | SWDR-003/005/028; SYSR-003/009 | The approved 15×10 portfolio is structurally complete, but cards are templated and semantic review/counterexample coverage, cross-language variants, and selection/rank quality are not mechanically demonstrated. | Keep Top15×Top10 as the declared product objective; improve selection only from reviewed semantic evidence and paired held-out quality/cost data, not project-specific branches or counts alone. |
 
-RG12 remains unavailable and fails closed. RG13's checked provenance is signer-attested,
-not independently observed host isolation; RG15 evaluator mechanics do not constitute
-scale acceptance. In addition, retest3 did not exercise
+RG12 gate logic exists, but real provider-quality evidence is not supplied. RG13's
+checked provenance is signer-attested, not independently observed host isolation; RG15
+evaluator mechanics do not constitute scale acceptance. In addition, retest3 did not exercise
 the D3 host-registration acceptance path; the tested host had no cgroup memory cap, so
 the ASan address-map result is not physical-memory containment. The earlier QuickJS
 single-Batch run remains strict task-only FAIL and is not repaired retroactively.

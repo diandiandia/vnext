@@ -345,9 +345,9 @@ def test_cli_writes_shadow_evaluation_report(
         "shadow-evaluate", "--input", str(input_path), "--output", str(output_path),
     ]) == 0
     report = json.loads(capsys.readouterr().out)  # type: ignore[attr-defined]
-    assert report["status"] == "BLOCKED"
+    assert report["status"] == "ACCEPTED"
     assert report["implemented_subset_status"] == "PASS"
-    assert report["eligible_for_promotion"] is False
+    assert report["eligible_for_promotion"] is True
     assert json.loads(output_path.read_text(encoding="utf-8")) == report
 
 

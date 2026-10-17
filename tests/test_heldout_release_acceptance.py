@@ -26,6 +26,6 @@ def test_external_heldout_bundle_passes_implemented_checks() -> None:
     report = evaluate_release(manifest, signing_key=signing_key.encode("utf-8"))
 
     assert report["implemented_subset_status"] == "PASS", report["gates"]
-    assert report["status"] == "BLOCKED"
-    assert report["eligible_for_promotion"] is False
-    assert report["unimplemented_gates"] == ["RG12"]
+    assert report["status"] == "ACCEPTED", report["gates"]
+    assert report["eligible_for_promotion"] is True
+    assert report["unimplemented_gates"] == []

@@ -38,6 +38,11 @@ _PYTHON_RULES = {
 }
 _SQL_METHODS = {"execute", "executemany", "executescript"}
 _MAX_CANDIDATES = 200
+PYTHON_HOTSPOT_PROVIDER_ID = "python-ast-hotspots-v1"
+
+
+def enabled_hotspot_provider_ids() -> tuple[str, ...]:
+    return (PYTHON_HOTSPOT_PROVIDER_ID,)
 
 
 def _import_aliases(tree: ast.Module) -> dict[str, str]:
@@ -164,7 +169,7 @@ def scan_work_unit_hotspots(
     return {
         "schema_version": "1.0",
         "provider_status": "available" if python_paths else "provider_unavailable",
-        "provider_id": "python-ast-hotspots-v1",
+        "provider_id": PYTHON_HOTSPOT_PROVIDER_ID,
         "scanned_paths": python_paths,
         "unsupported_paths": unsupported_paths,
         "parse_errors": parse_errors,

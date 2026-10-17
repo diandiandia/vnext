@@ -9,14 +9,9 @@ from typing import Any
 
 TASK_OUTPUT_MAX_BYTES = 4 * 1024 * 1024
 TASK_OUTPUT_TARGET_BYTES = 1024 * 1024
-RELEASE_POLICY_VERSION = "vnext-release-policy-5"
+RELEASE_POLICY_VERSION = "vnext-release-policy-6"
 REQUIRED_RELEASE_GATES = tuple(f"RG{index}" for index in range(1, 16))
-IMPLEMENTED_RELEASE_GATES = (
-    *tuple(f"RG{index}" for index in range(1, 12)),
-    "RG13",
-    "RG14",
-    "RG15",
-)
+IMPLEMENTED_RELEASE_GATES = tuple(f"RG{index}" for index in range(1, 16))
 
 
 _POLICY: dict[str, Any] = {

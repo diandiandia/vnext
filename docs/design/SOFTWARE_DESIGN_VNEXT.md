@@ -90,7 +90,7 @@ src/reachable_audit/
     harness_catalog.py         harness metadata, applicability, and fidelity
     environment.py             toolchain/runtime probes
     runner.py                  managed bounded harness execution
-  evaluation.py               signed manifests, metrics, and RG1-RG11/RG13-RG15 gates
+  evaluation.py               signed manifests, metrics, and RG1-RG15 gates
   resource_cleanup.py         existing Campaign-owned resource cleanup
 knowledge/
   portfolio.json               approved 15-language certification portfolio
@@ -710,10 +710,11 @@ projects while preserving the 150 language-issue strata. Minimum sample counts a
 promotion thresholds are frozen in policy before running the benchmark; they are not
 chosen after observing results.
 
-Implemented evaluator checks are RG1-RG11 and RG13-RG15. RG12 (provider conformance)
-remains a failed NOT_IMPLEMENTED gate. RG13 checks signed provenance and task-input
-artifact links, not actual host prompt/session isolation; RG14 cannot prove host-observed
-reading activity; RG15 checks signed fixture/run evidence, not actual scale performance.
+Implemented evaluator checks are RG1-RG15. RG12 checks provider conformance evidence,
+but the runtime currently has one provider and no independent real candidate-quality
+acceptance. RG13 checks signed provenance and task-input artifact links, not actual host
+prompt/session isolation; RG14 cannot prove host-observed reading activity; RG15 checks
+signed fixture/run evidence, not actual scale performance.
 The versioned policy in runtime_policy.py owns the full required set. Passing the
 implemented subset sets implemented_subset_status=PASS, not release eligibility;
 status remains BLOCKED. Extra signed fields cannot enable or waive missing checks.
@@ -722,8 +723,8 @@ status remains BLOCKED. Extra signed fields cannot enable or waive missing check
 
 The lists below are test objectives, not a claim of complete implementation. Synthetic
 fixtures cover selected mechanics; domain parsing is not universally strict and real
-capability evidence is absent. RG12 is not an evaluator check. RG13-RG15 have
-evaluator checks but still lack independent host-observation or scale qualification.
+capability evidence is absent. RG1-RG15 have evaluator checks but still lack independent
+provider-quality, host-observation, and scale qualification.
 
 ### 9.1 Unit Tests
 

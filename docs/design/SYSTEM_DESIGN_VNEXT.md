@@ -357,23 +357,23 @@ The current vNext repository provides Campaign/Batch state, events and artifacts
 planning, durable tasks, generic discovery records, Handoffs, drift handling, experiment
 records, and a shadow evaluator. It now also ships 15 language profiles, 150 training
 Mechanism Cards, task-context injection, 15 source-language adapters, 14 build adapters,
-R5 recipes/probes, and signed RG1-RG11/RG13-RG15 evaluation logic. These are implementation
+R5 recipes/probes, and signed RG1-RG15 evaluation logic. These are implementation
 capabilities, not evidence that language recall, automatic cross-language discovery,
 or 20GB+ operation has passed real acceptance.
 
-RG12 provider conformance remains unavailable and fails closed. RG13 validates signed
-clean-room provenance fields and digest-linked R1/R2 task inputs, but does not
-independently observe host prompt/session contents. RG14 validates digest-backed
-screening counts/fraction against the Campaign-frozen ceiling and rejects overrides;
-it cannot prove host-observed reading coverage. RG15 validates digest-backed fixture
-declarations and qualifying large-run evidence; evaluator mechanics do not constitute
-real scale acceptance. These checks do not certify real provider quality or actual
-clean-room isolation.
+RG12 checks provider conformance evidence, but the current runtime has one provider and
+no independent real precision/coverage acceptance. RG13 validates signed clean-room
+provenance fields and digest-linked R1/R2 task inputs, but does not independently
+observe host prompt/session contents. RG14 validates digest-backed screening counts/
+fraction against the Campaign-frozen ceiling and rejects overrides; it cannot prove
+host-observed reading coverage. RG15 validates digest-backed fixture declarations and
+qualifying large-run evidence; evaluator mechanics do not constitute real scale
+acceptance. These checks do not certify provider quality or actual clean-room isolation.
 
-Release policy now fails closed: RG12 appears as NOT_IMPLEMENTED. RG15 has an
-implemented evidence-validation gate, but promotion remains blocked until qualifying
+Release policy checks RG1-RG15 and remains fail closed on any missing or failed evidence.
+RG15's evaluator gate is implemented, but promotion remains blocked until qualifying
 scale fixture and real Campaign evidence are supplied.
-Passing RG1-RG11/RG13-RG15 sets implemented_subset_status=PASS but leaves status=BLOCKED and
+Passing RG1-RG15 sets implemented_subset_status=PASS but leaves status=BLOCKED and
 eligible_for_promotion=false. No signed extra field waives an unavailable check.
 
 Remaining implementation gaps include recognition of arbitrary unknown-language
