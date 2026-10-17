@@ -230,8 +230,11 @@ artifact only when each edge maps to an explicit entry in that artifact.
 R6 reports and skill reviews support append-only revisions. Collected R1, per-axis/compact R2,
 R3, individual/bundled R4, R5, and R6 task outputs can be amended before their stage commits;
 events retain prior/replacement refs, reason, actor, and resolvable artifact evidence.
-Readers select the amended task output. Post-commit amendments are rejected; general
-downstream invalidation/recomputation is absent.
+Readers select the amended task output. Other post-commit amendments are rejected;
+general R1-R5 post-commit amendments and downstream invalidation/recomputation are absent.
+Terminal R6 task output may be amended while the Campaign is open; R6 must be recommitted
+and Campaign closure rejects a pending amendment until that newer projection exists.
+Campaign-complete amendments are rejected.
 
 All six `generate_hypotheses:<axis>` operations support pre-commit correction.
 Failed-commit recovery remains limited to implemented operations/stages, not universal.

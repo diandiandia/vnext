@@ -375,8 +375,12 @@ correct the result JSON and resubmit it with the same task/worker before the lea
 expires, or use `task-release` with a reason. Use `task-list --batch-id` to inspect a
 partial batch. If a successful task output must be corrected after collection but before
 its R1/R2/R3/R4/R5/R6 stage commits, use `task-amend` with a replacement output, reason, and
-content-addressed evidence refs. The prior output remains immutable. Amendments after
-stage commit are rejected until downstream stage invalidation/recomputation is available.
+content-addressed evidence refs. The prior output remains immutable. R1-R5 amendments
+after stage commit are rejected until downstream invalidation/recomputation is available.
+Terminal R6 output may be amended after its Batch projection while the Campaign is not
+`COMPLETE`; run `task-commit-r6` again and then `campaign-close` to rebuild projections.
+Campaign closure rejects an amended R6 task until a newer R6 projection exists, and
+amendments are rejected after Campaign completion.
 
 `shadow-evaluate` requires a valid HMAC-signed manifest and
 `VNA_EVALUATION_HMAC_KEY`; the key must be held only by the independent evaluation

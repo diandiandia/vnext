@@ -132,6 +132,26 @@ class CampaignCloser:
 
     def close(self, closure: CampaignClosure) -> dict[str, Any]:
         events = self.manager.store.list_events(self.campaign_id)
+        pending_r6_amendments: dict[str, int] = {}
+        for event in events:
+            if event.batch_id is None:
+                continue
+            if (
+                event.event_type == "TASK_OUTPUT_AMENDED"
+                and event.payload.get("stage") == "R6_COMPLETED"
+            ):
+                pending_r6_amendments[event.batch_id] = event.sequence
+            elif (
+                event.event_type == "R6_COMPLETED"
+                and event.batch_id in pending_r6_amendments
+                and event.sequence > pending_r6_amendments[event.batch_id]
+            ):
+                del pending_r6_amendments[event.batch_id]
+        if pending_r6_amendments:
+            raise ModelError(
+                "Campaign closure requires R6 task amendments to be recommitted for "
+                f"Batches: {sorted(pending_r6_amendments)}"
+            )
         event_by_batch: dict[str, list[Any]] = {}
         for event in events:
             if event.batch_id:

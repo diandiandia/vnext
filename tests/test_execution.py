@@ -293,11 +293,18 @@ def test_late_stage_output_can_be_amended_before_stage_commit(
             idempotency_key=f"fixture:{stage}", actor="test", payload={},
             payload_ref=replacement_ref,
         )
-        with pytest.raises(ModelError, match="after its stage has committed"):
-            backend.amend_completed_output(
-                task.task_id, original_ref, reason="post-commit correction",
+        if stage == "R6_COMPLETED":
+            amended_after_commit = backend.amend_completed_output(
+                task.task_id, original_ref, reason="terminal R6 correction",
                 evidence_refs=(replacement_ref,),
             )
+            assert amended_after_commit.output_ref == original_ref
+        else:
+            with pytest.raises(ModelError, match="after its stage has committed"):
+                backend.amend_completed_output(
+                    task.task_id, original_ref, reason="post-commit correction",
+                    evidence_refs=(replacement_ref,),
+                )
     finally:
         manager.close()
 

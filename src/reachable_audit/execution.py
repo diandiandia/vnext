@@ -37,7 +37,7 @@ from .discovery.hotspots import compact_hotspot_report, scan_work_unit_hotspots
 from .adapters.languages import LANGUAGE_ADAPTERS
 from .knowledge_catalog import KnowledgeCatalog, default_knowledge_root
 from .experiments.harness_catalog import DEFAULT_HARNESS_CATALOG
-from .models import ModelError
+from .models import CampaignStatus, ModelError
 from .runtime_policy import (
     TASK_OUTPUT_MAX_BYTES, TASK_OUTPUT_TARGET_BYTES, execution_policy_digest,
 )
@@ -485,6 +485,9 @@ class ManualExecutionBackend:
         view = self.poll(task_id)
         if view.status is not TaskStatus.SUCCEEDED or view.output_ref is None:
             raise ModelError("only a successfully collected task output can be amended")
+        campaign = self.manager.store.get_campaign(self.campaign_id)
+        if campaign.status is CampaignStatus.COMPLETE:
+            raise ModelError("task output cannot be amended after Campaign closure")
         if replacement_output_ref == view.output_ref:
             raise ModelError("task output amendment must replace the current artifact")
         if not reason.strip() or not actor.strip() or not evidence_refs:
@@ -508,11 +511,12 @@ class ManualExecutionBackend:
             raise ModelError(
                 f"task output amendment is not supported for operation: {view.task.operation}"
             )
-        if self.manager.store.list_batch_events(
+        stage_committed = bool(self.manager.store.list_batch_events(
             self.campaign_id,
             view.task.batch_id,
             event_type=committed_stage,
-        ):
+        ))
+        if stage_committed and committed_stage != "R6_COMPLETED":
             raise ModelError(
                 "task output cannot be amended after its stage has committed; "
                 "downstream stage amendment is required"

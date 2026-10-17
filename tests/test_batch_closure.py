@@ -24,7 +24,7 @@ from reachable_audit.execution import (
     ManualExecutionBackend,
     TaskResult,
 )
-from reachable_audit.models import BatchStatus, ModelError
+from reachable_audit.models import BatchStatus, CampaignStatus, ModelError
 from test_experiments_metrics import _ready_for_r5
 from reachable_audit.experiments.runner import run_harness
 from conftest import execution_configuration_fixture
@@ -447,5 +447,79 @@ def test_r6_closure_evidence_runs_as_durable_task(tmp_path: Path) -> None:
             "wall_seconds": 3,
             "task_count": 1,
         }
+    finally:
+        manager.close()
+
+
+def test_committed_r6_amendment_appends_projection_while_campaign_open(
+    tmp_path: Path,
+) -> None:
+    manager, workflow = _ready_for_r5(tmp_path)
+    try:
+        workflow.record_r5([], [])
+        backend = ManualExecutionBackend(manager, workflow.campaign_id)
+        coordinator = DiscoveryCoordinator(workflow, backend)
+        task = coordinator.schedule_r6().task
+        r1_artifact = json.loads(manager.artifacts.get_bytes(task.input_refs[1]))
+        dispositions = [
+            {
+                "surface_id": surface["surface_id"],
+                "state": SurfaceReviewState.UNREVIEWED.value,
+                "evidence_refs": [],
+                "rationale": "no review state was established",
+            }
+            for surface in r1_artifact["surfaces"]
+        ]
+        output = {
+            "schema_version": "1.0",
+            "closure": {
+                "constraints_observed": [],
+                "unreviewed_scope": [],
+                "residual_risks": [],
+                "lessons": ["initial closure"],
+                "surface_dispositions": dispositions,
+            },
+        }
+        lease = backend.claim("closure-reviewer")
+        assert lease is not None
+        original_ref = manager.artifacts.put_text(json.dumps(output)).artifact_id
+        backend.collect(lease, TaskResult(
+            True, original_ref, "initial closure", {"agent_runs": 1, "wall_seconds": 1},
+            execution_configuration_fixture(),
+        ))
+        first_report = coordinator.commit_r6()
+
+        replacement = {
+            **output,
+            "closure": {**output["closure"], "lessons": ["amended closure"]},
+        }
+        replacement_ref = manager.artifacts.put_text(json.dumps(replacement)).artifact_id
+        backend.amend_completed_output(
+            task.task_id, replacement_ref, reason="corrected closure lesson",
+            evidence_refs=(original_ref, replacement_ref),
+        )
+        second_report = coordinator.commit_r6()
+
+        assert first_report["closure"]["lessons"] == ("initial closure",)
+        assert second_report["closure"]["lessons"] == ("amended closure",)
+        r6_events = manager.store.list_batch_events(
+            workflow.campaign_id, workflow.batch_id, event_type="R6_COMPLETED",
+        )
+        assert len(r6_events) == 2
+        assert r6_events[-1].payload_ref == second_report["artifact_id"]
+
+        campaign = manager.store.get_campaign(workflow.campaign_id)
+        if campaign.status is CampaignStatus.RUNNING:
+            manager.store.transition_campaign(
+                workflow.campaign_id, CampaignStatus.INTEGRATING,
+            )
+        manager.store.transition_campaign(
+            workflow.campaign_id, CampaignStatus.COMPLETE,
+        )
+        with pytest.raises(ModelError, match="after Campaign closure"):
+            backend.amend_completed_output(
+                task.task_id, original_ref, reason="late correction",
+                evidence_refs=(replacement_ref,),
+            )
     finally:
         manager.close()

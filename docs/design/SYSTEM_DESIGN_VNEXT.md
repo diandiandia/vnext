@@ -79,7 +79,10 @@ from validated records. Agent prose alone is not evidence.
 Corrections are limited. R6 projections and skill reviews support append-only revisions.
 Successfully collected R1, per-axis/compact R2, R3, R4, R5, and R6 task outputs may be amended before
 their stage commits, retaining prior/replacement artifacts, reason, actor, and evidence.
-General post-commit verdict amendment and dependent-stage recomputation are absent;
+Terminal R6 task output may also be amended after Batch commit while the Campaign is not
+COMPLETE; the R6 projection must be recommitted, and Campaign closure rejects a pending
+R6 amendment until a newer projection exists. R1-R5 post-commit amendment, general
+dependent-stage recomputation, and amendments after Campaign completion remain absent;
 idempotent stage submission is not a general correction path.
 
 ### 3.5 Runtime knowledge and evaluation answers are isolated

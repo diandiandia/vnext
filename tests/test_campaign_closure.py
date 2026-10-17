@@ -21,7 +21,13 @@ from reachable_audit.analysis_models import (
     SkillIssueStatus,
 )
 from reachable_audit.campaign_closure import CampaignCloser
-from reachable_audit.execution import ManualExecutionBackend, TaskResult, TaskSpec, TaskStatus
+from reachable_audit.execution import (
+    DiscoveryCoordinator,
+    ManualExecutionBackend,
+    TaskResult,
+    TaskSpec,
+    TaskStatus,
+)
 from conftest import execution_configuration_fixture
 from reachable_audit.graph import build_component_graph
 from reachable_audit.models import CampaignAuditMode, CampaignStatus, ModelError
@@ -402,6 +408,77 @@ def test_campaign_closure_uses_latest_r6_report_revision(tmp_path: Path) -> None
 
         assert report["gates"]["CG9"]["pass"] is True
         assert report["findings"] == []
+    finally:
+        manager.close()
+
+
+def test_campaign_closure_waits_for_amended_r6_task_projection(tmp_path: Path) -> None:
+    manager, workflow = _ready_for_r5(tmp_path)
+    try:
+        inventory = manager.load_inventory("CMP-r4")
+        manager.record_component_graph(
+            campaign_id="CMP-r4", graph=build_component_graph(tmp_path, inventory)
+        )
+        workflow.record_r5([], [])
+        workflow.build_transmission_metrics()
+        workflow.close_r6(BatchClosure(
+            budget_used={"agent_runs": 1}, constraints_observed=(),
+            unreviewed_scope=(), residual_risks=(), lessons=("initial close",),
+        ))
+        plan = manager.load_audit_plan(
+            "CMP-r4", str(workflow.batch.manifest["plan_id"])
+        )
+        backend = ManualExecutionBackend(manager, "CMP-r4")
+        coordinator = DiscoveryCoordinator(workflow, backend)
+        task = coordinator.schedule_r6().task
+        r1_artifact = json.loads(manager.artifacts.get_bytes(task.input_refs[1]))
+        output = {
+            "schema_version": "1.0",
+            "closure": {
+                "constraints_observed": [],
+                "unreviewed_scope": [],
+                "residual_risks": [],
+                "lessons": ["durable close"],
+                "surface_dispositions": [{
+                    "surface_id": surface["surface_id"],
+                    "state": "UNREVIEWED",
+                    "evidence_refs": [],
+                    "rationale": "no review state was established",
+                } for surface in r1_artifact["surfaces"]],
+            },
+        }
+        lease = backend.claim("closure-reviewer")
+        assert lease is not None
+        original_ref = manager.artifacts.put_text(json.dumps(output)).artifact_id
+        backend.collect(lease, TaskResult(
+            True, original_ref, "durable close",
+            {"agent_runs": 1, "wall_seconds": 1}, execution_configuration_fixture(),
+        ))
+        coordinator.commit_r6()
+        amended_output = {
+            **output,
+            "closure": {**output["closure"], "lessons": ["corrected close"]},
+        }
+        amended_ref = manager.artifacts.put_text(
+            json.dumps(amended_output)
+        ).artifact_id
+        backend.amend_completed_output(
+            task.task_id, amended_ref, reason="corrected closure evidence",
+            evidence_refs=(original_ref, amended_ref),
+        )
+        closer = CampaignCloser(manager, "CMP-r4", plan)
+        closure = CampaignClosure(
+            architecture_overview="One reviewed component.",
+            unreviewed_scope=(), residual_risks=(), limitations=(),
+            lessons=("close latest R6 projection",), knowledge_nominations=(),
+            skill_issues=(),
+        )
+        with pytest.raises(ModelError, match="R6 task amendments to be recommitted"):
+            closer.close(closure)
+
+        coordinator.commit_r6()
+        report = closer.close(closure)
+        assert report["gates"]["CG1"]["pass"] is True
     finally:
         manager.close()
 
