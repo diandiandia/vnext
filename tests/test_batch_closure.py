@@ -16,6 +16,8 @@ from reachable_audit.analysis_models import (
     Mechanism,
     R5Assessment,
     R5Disposition,
+    SurfaceReviewDisposition,
+    SurfaceReviewState,
 )
 from reachable_audit.execution import (
     DiscoveryCoordinator,
@@ -105,6 +107,62 @@ def test_r6_closes_clean_batch_with_all_eight_gates(tmp_path: Path) -> None:
         assert manager.store.get_batch(
             "CMP-r4", workflow.batch_id
         ).status is BatchStatus.COMPLETE
+    finally:
+        manager.close()
+
+
+def test_r6_defaults_missing_surface_dispositions_to_unreviewed(tmp_path: Path) -> None:
+    manager, workflow = _ready_for_r5(tmp_path, surface_without_hypothesis=True)
+    try:
+        r1_event = workflow._stage_event("R1_COMPLETED")
+        surfaces = workflow._read_artifact(r1_event.payload_ref)["surfaces"]
+        assert surfaces
+        workflow.record_r5([], [])
+        report = workflow.close_r6(BatchClosure(
+            budget_used={"agent_runs": 1},
+            constraints_observed=(),
+            unreviewed_scope=(),
+            residual_risks=(),
+            lessons=(),
+        ))
+        assert {
+            item["state"] for item in report["surface_review_dispositions"]
+        } == {SurfaceReviewState.UNREVIEWED.value}
+        assert {
+            item["surface_id"] for item in report["surface_review_dispositions"]
+        } == {item["surface_id"] for item in surfaces}
+    finally:
+        manager.close()
+
+
+def test_r6_preserves_explicit_surface_review_disposition(tmp_path: Path) -> None:
+    manager, workflow = _ready_for_r5(tmp_path, surface_without_hypothesis=True)
+    try:
+        r1_event = workflow._stage_event("R1_COMPLETED")
+        surface = workflow._read_artifact(r1_event.payload_ref)["surfaces"][0]
+        workflow.record_r5([], [])
+        report = workflow.close_r6(BatchClosure(
+            budget_used={"agent_runs": 1},
+            constraints_observed=(),
+            unreviewed_scope=(),
+            residual_risks=(),
+            lessons=(),
+            surface_dispositions=(SurfaceReviewDisposition(
+                surface_id=surface["surface_id"],
+                state=SurfaceReviewState.REVIEWED,
+                evidence_refs=tuple(surface["evidence_refs"]),
+                rationale="review status asserted from the stage evidence",
+            ),),
+        ))
+        dispositions = {
+            item["surface_id"]: item["state"]
+            for item in report["surface_review_dispositions"]
+        }
+        assert dispositions[surface["surface_id"]] == SurfaceReviewState.REVIEWED.value
+        assert sum(
+            state == SurfaceReviewState.UNREVIEWED.value
+            for state in dispositions.values()
+        ) == len(report["surface_review_dispositions"]) - 1
     finally:
         manager.close()
 
@@ -355,6 +413,8 @@ def test_r6_closure_evidence_runs_as_durable_task(tmp_path: Path) -> None:
         backend = ManualExecutionBackend(manager, "CMP-r4")
         coordinator = DiscoveryCoordinator(workflow, backend)
         coordinator.schedule_r6()
+        r1_event = workflow._stage_event("R1_COMPLETED")
+        r1_artifact = workflow._read_artifact(r1_event.payload_ref)
         lease = backend.claim("closure-reviewer")
         assert lease is not None
         output_ref = manager.artifacts.put_text(json.dumps({
@@ -364,6 +424,15 @@ def test_r6_closure_evidence_runs_as_durable_task(tmp_path: Path) -> None:
                 "unreviewed_scope": [],
                 "residual_risks": ["deployment not exercised"],
                 "lessons": ["record zero-result category coverage"],
+                "surface_dispositions": [
+                    {
+                        "surface_id": surface["surface_id"],
+                        "state": "UNREVIEWED",
+                        "evidence_refs": [],
+                        "rationale": "fixture does not claim observed Surface review",
+                    }
+                    for surface in r1_artifact["surfaces"]
+                ],
             },
         })).artifact_id
         backend.collect(lease, TaskResult(

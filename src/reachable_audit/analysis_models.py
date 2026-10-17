@@ -122,6 +122,13 @@ class ScopeDispositionKind(StrEnum):
     DEFERRED = "DEFERRED"
 
 
+class SurfaceReviewState(StrEnum):
+    REVIEWED = "REVIEWED"
+    DEFERRED = "DEFERRED"
+    NOT_APPLICABLE = "NOT_APPLICABLE"
+    UNREVIEWED = "UNREVIEWED"
+
+
 class FindingSeverity(StrEnum):
     CRITICAL = "CRITICAL"
     HIGH = "HIGH"
@@ -770,12 +777,40 @@ class Finding:
 
 
 @dataclass(frozen=True)
+class SurfaceReviewDisposition:
+    surface_id: str
+    state: SurfaceReviewState
+    evidence_refs: tuple[str, ...]
+    rationale: str
+
+    @classmethod
+    def from_dict(cls, value: Mapping[str, Any]) -> "SurfaceReviewDisposition":
+        if not isinstance(value, Mapping):
+            raise ModelError("Surface review disposition must be an object")
+        disposition = cls(
+            surface_id=str(value["surface_id"]),
+            state=SurfaceReviewState(str(value["state"])),
+            evidence_refs=tuple(str(item) for item in value.get("evidence_refs", [])),
+            rationale=str(value["rationale"]),
+        )
+        if not disposition.surface_id or not disposition.rationale.strip():
+            raise ModelError("Surface review disposition requires ID and rationale")
+        if (
+            disposition.state is not SurfaceReviewState.UNREVIEWED
+            and not disposition.evidence_refs
+        ):
+            raise ModelError("reviewed/deferred Surface disposition requires evidence refs")
+        return disposition
+
+
+@dataclass(frozen=True)
 class BatchClosure:
     budget_used: Mapping[str, int]
     constraints_observed: tuple[str, ...]
     unreviewed_scope: tuple[str, ...]
     residual_risks: tuple[str, ...]
     lessons: tuple[str, ...]
+    surface_dispositions: tuple[SurfaceReviewDisposition, ...] = ()
 
     @classmethod
     def from_dict(cls, value: Mapping[str, Any]) -> "BatchClosure":
@@ -794,6 +829,10 @@ class BatchClosure:
                 str(item) for item in value.get("residual_risks", [])
             ),
             lessons=tuple(str(item) for item in value.get("lessons", [])),
+            surface_dispositions=tuple(
+                SurfaceReviewDisposition.from_dict(item)
+                for item in value.get("surface_dispositions", [])
+            ),
         )
         if any(amount < 0 for amount in closure.budget_used.values()):
             raise ModelError("Batch budget usage cannot be negative")

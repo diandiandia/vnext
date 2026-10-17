@@ -20,6 +20,8 @@ from reachable_audit.analysis_models import (
     Refutation,
     R5Assessment,
     R5Disposition,
+    SurfaceReviewDisposition,
+    SurfaceReviewState,
     VerdictKind,
 )
 from reachable_audit.execution import (
@@ -153,6 +155,16 @@ def test_clean_r5_and_transmission_metrics_are_non_gating(tmp_path: Path) -> Non
         assert closure_input["evidence_contract"] == {
             "source": "canonical_stage_artifacts", "source_inventory_required": False,
         }
+        assert closure_input["output_contract"]["closure"]["surface_dispositions"] == (
+            "array<SurfaceReviewDisposition>"
+        )
+        assert "exactly one surface_dispositions entry for every R1 Surface ID" in (
+            closure_input["analysis_contract"]
+        )
+        assert "collector rejects missing, extra, or duplicate Surface IDs" in (
+            closure_input["analysis_contract"]
+        )
+        assert "not host-observed file reading" in closure_input["analysis_contract"]
         metrics = workflow.build_transmission_metrics()
         assert metrics["axis_runs"] == {
             axis.value: 1 for axis in DiscoveryAxis
@@ -174,6 +186,55 @@ def test_clean_r5_and_transmission_metrics_are_non_gating(tmp_path: Path) -> Non
         metrics = workflow.build_transmission_metrics()
         assert metrics["finding_count"] == 1
         assert metrics["r4_linked_finding_count"] == 0
+    finally:
+        manager.close()
+
+
+def test_r6_collect_requires_one_surface_disposition_per_r1_surface(
+    tmp_path: Path,
+) -> None:
+    manager, workflow = _ready_for_r5(
+        tmp_path, surface_without_hypothesis=True,
+    )
+    try:
+        workflow.record_r5([], [])
+        backend = ManualExecutionBackend(manager, workflow.campaign_id)
+        coordinator = DiscoveryCoordinator(workflow, backend)
+        task = coordinator.schedule_r6().task
+        r1_artifact = json.loads(manager.artifacts.get_bytes(task.input_refs[1]))
+        surface_ids = [item["surface_id"] for item in r1_artifact["surfaces"]]
+        assert surface_ids
+        lease = backend.claim("r6-reviewer")
+        assert lease is not None
+
+        def submit(dispositions: list[dict[str, object]]) -> None:
+            output = {
+                "schema_version": "1.0",
+                "closure": {
+                    "constraints_observed": [],
+                    "unreviewed_scope": [],
+                    "residual_risks": [],
+                    "lessons": [],
+                    "surface_dispositions": dispositions,
+                },
+            }
+            output_ref = manager.artifacts.put_text(json.dumps(output)).artifact_id
+            backend.collect(lease, TaskResult(
+                True, output_ref, "R6 closure review",
+                {"agent_runs": 1, "wall_seconds": 1},
+                execution_configuration_fixture(),
+            ))
+
+        with pytest.raises(ModelError, match="exactly cover R1 Surfaces"):
+            submit([])
+        assert backend.poll(task.task_id).status.value == "LEASED"
+        submit([{
+            "surface_id": surface_id,
+            "state": SurfaceReviewState.UNREVIEWED.value,
+            "evidence_refs": [],
+            "rationale": "R6 worker could not establish a review disposition",
+        } for surface_id in surface_ids])
+        assert backend.poll(task.task_id).status.value == "SUCCEEDED"
     finally:
         manager.close()
 

@@ -32,6 +32,8 @@ from .analysis_models import (
     R5Disposition,
     RevivalReview,
     Surface,
+    SurfaceReviewDisposition,
+    SurfaceReviewState,
     VerdictKind,
     VerdictSubmission,
 )
@@ -1064,6 +1066,42 @@ class BatchWorkflow:
             if stage_events["R5_COMPLETED"]
             else {"assessments": []}
         )
+        r1_artifact = (
+            self._read_artifact(stage_events["R1_COMPLETED"].payload_ref)
+            if stage_events["R1_COMPLETED"]
+            else {"surfaces": []}
+        )
+        surfaces_by_id = {
+            str(item["surface_id"]): item for item in r1_artifact["surfaces"]
+        }
+        supplied_surface_dispositions = {
+            item.surface_id: item for item in closure.surface_dispositions
+        }
+        if len(supplied_surface_dispositions) != len(closure.surface_dispositions):
+            raise ModelError("R6 contains duplicate Surface review dispositions")
+        unknown_surface_ids = set(supplied_surface_dispositions) - set(surfaces_by_id)
+        if unknown_surface_ids:
+            raise ModelError(
+                f"R6 dispositions reference unknown Surfaces: {sorted(unknown_surface_ids)}"
+            )
+        surface_review_dispositions = [
+            asdict(supplied_surface_dispositions.get(
+                surface_id,
+                SurfaceReviewDisposition(
+                    surface_id=surface_id,
+                    state=SurfaceReviewState.UNREVIEWED,
+                    evidence_refs=(),
+                    rationale="No per-Surface disposition was supplied at Batch closure.",
+                ),
+            ))
+            for surface_id in sorted(surfaces_by_id)
+        ]
+        surface_review_disposition_counts = {
+            state.value: sum(
+                item["state"] == state.value for item in surface_review_dispositions
+            )
+            for state in SurfaceReviewState
+        }
         r5_by_hypothesis = {
             str(item["hypothesis_id"]): item for item in r5["assessments"]
         }
@@ -1201,6 +1239,8 @@ class BatchWorkflow:
                 item["category_run_id"] for item in r4["category_runs"]
             ],
             "findings": findings,
+            "surface_review_dispositions": surface_review_dispositions,
+            "surface_review_disposition_counts": surface_review_disposition_counts,
             "needs_review_hypothesis_ids": [
                 item["hypothesis_id"]
                 for item in r5["assessments"]

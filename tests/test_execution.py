@@ -253,6 +253,7 @@ def test_per_axis_r2_output_can_be_amended(tmp_path: Path, axis: DiscoveryAxis) 
         "schema_version": "1.0", "closure": {
             "constraints_observed": [], "unreviewed_scope": [],
             "residual_risks": [], "lessons": [],
+            "surface_dispositions": [],
         },
     }),
 ])
@@ -264,8 +265,12 @@ def test_late_stage_output_can_be_amended_before_stage_commit(
         input_ref = manager.artifacts.put_text(json.dumps({
             "hypothesis": {"hypothesis_id": "HYP-1"},
         })).artifact_id
+        input_refs = (input_ref,)
+        if required_output == "batch-closure-evidence/v1":
+            r1_ref = manager.artifacts.put_text(json.dumps({"surfaces": []})).artifact_id
+            input_refs = (input_ref, r1_ref)
         task = replace(task, operation=operation, required_output=required_output,
-                       input_refs=(input_ref,))
+                       input_refs=input_refs)
         backend = ManualExecutionBackend(manager, task.campaign_id)
         backend.submit(task)
         lease = backend.claim("reviewer")

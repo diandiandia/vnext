@@ -28,6 +28,7 @@ from .analysis_models import (
     Refutation,
     RevivalReview,
     Surface,
+    SurfaceReviewDisposition,
     VerdictSubmission,
 )
 from .batch_workflow import BatchWorkflow
@@ -597,6 +598,36 @@ class ManualExecutionBackend:
             except (OSError, ValueError, KeyError, IndexError, TypeError) as error:
                 raise ModelError(f"invalid R5 task input: {task.task_id}") from error
             self._parse_r5_output(output, task.task_id, hypothesis_id)
+        if task.required_output == "batch-closure-evidence/v1":
+            closure = output.get("closure")
+            if not isinstance(closure, dict):
+                raise ModelError(f"R6 task output requires closure evidence: {task.task_id}")
+            dispositions_value = closure.get("surface_dispositions")
+            if not isinstance(dispositions_value, list):
+                raise ModelError("R6 closure surface_dispositions must be an array")
+            dispositions = [
+                SurfaceReviewDisposition.from_dict(item)
+                for item in dispositions_value
+            ]
+            actual_surface_ids = [item.surface_id for item in dispositions]
+            if len(actual_surface_ids) != len(set(actual_surface_ids)):
+                raise ModelError("R6 closure contains duplicate Surface dispositions")
+            try:
+                r1_artifact = json.loads(
+                    self.manager.artifacts.get_bytes(task.input_refs[1])
+                )
+                expected_surface_ids = {
+                    str(item["surface_id"]) for item in r1_artifact["surfaces"]
+                }
+            except (OSError, ValueError, KeyError, IndexError, TypeError) as error:
+                raise ModelError(f"R6 task is missing its canonical R1 artifact: {task.task_id}") from error
+            if set(actual_surface_ids) != expected_surface_ids:
+                missing = sorted(expected_surface_ids - set(actual_surface_ids))
+                extra = sorted(set(actual_surface_ids) - expected_surface_ids)
+                raise ModelError(
+                    f"R6 Surface dispositions must exactly cover R1 Surfaces: "
+                    f"missing={missing[:10]}, extra={extra[:10]}"
+                )
         return output
 
     @staticmethod
@@ -2258,7 +2289,14 @@ class DiscoveryCoordinator:
                 "task, not source discovery: use the supplied canonical stage artifacts. "
                 "There is intentionally no Work Unit file inventory; do not invent LOC "
                 "anchors or treat that absence as missing audit coverage. Report only "
-                "scope gaps supported by the stage evidence."
+                "scope gaps supported by the stage evidence. For each Surface in the R1 "
+                "artifact, report exactly one surface_dispositions entry for every R1 "
+                "Surface ID, with state REVIEWED, DEFERRED, NOT_APPLICABLE, or "
+                "UNREVIEWED, plus a rationale. The collector rejects missing, extra, or "
+                "duplicate Surface IDs. Use UNREVIEWED when a disposition cannot be "
+                "supported; all other states require evidence refs. Do not imply that an "
+                "omitted entry was reviewed. This is an Agent declaration, not "
+                "host-observed file reading or proof that a Surface is safe."
             ),
             "output_contract": {
                 "schema_version": "1.0",
@@ -2267,6 +2305,7 @@ class DiscoveryCoordinator:
                     "unreviewed_scope": "array<string>",
                     "residual_risks": "array<string>",
                     "lessons": "array<string>",
+                    "surface_dispositions": "array<SurfaceReviewDisposition>"
                 },
             },
         })

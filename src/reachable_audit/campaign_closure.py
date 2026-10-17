@@ -238,6 +238,14 @@ class CampaignCloser:
                 elif event.event_type == "TRANSMISSION_METRICS_RECORDED":
                     metrics.append(artifact)
         batch_reports = list(batch_reports_by_id.values())
+        surface_review_dispositions = [
+            {"batch_id": batch_id, **item}
+            for batch_id, batch_report in sorted(batch_reports_by_id.items())
+            for item in batch_report.get("surface_review_dispositions", [])
+        ]
+        surface_review_state_counts = _counts(
+            item["state"] for item in surface_review_dispositions
+        )
         surface_ids = [item["surface_id"] for item in surfaces]
         analyzed_surface_ids = {
             surface_id
@@ -618,6 +626,7 @@ class CampaignCloser:
                 "build_units": len(graph.build_units),
                 "work_units": len(self.plan.work_units),
                 "surfaces": len(surfaces),
+                "surface_review_dispositions": len(surface_review_dispositions),
                 "boundary_reviews": len(boundary_reviews),
                 "unresolved_boundary_reviews": sum(
                     item["disposition"] == "unresolved" for item in boundary_reviews
@@ -657,6 +666,8 @@ class CampaignCloser:
                 for axis in sorted({item["axis"] for item in discovery_axis_runs})
             },
             "findings": merged_findings,
+            "surface_review_dispositions": surface_review_dispositions,
+            "surface_review_state_counts": surface_review_state_counts,
             "not_feasible_experiment_hypothesis_ids": sorted(
                 item["hypothesis_id"]
                 for item in r5_assessments

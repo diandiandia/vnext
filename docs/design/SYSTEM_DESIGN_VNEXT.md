@@ -185,7 +185,7 @@ The existing R0-R6 semantics remain the workflow vocabulary, with one canonical 
 | Stage | Responsibility | Required output |
 |---|---|---|
 | R0 | Compare scoped source digests with the Campaign baseline | Content-addressed digest receipt; no baseline signature |
-| R1 | Record surfaces, principals, components, and supplied-boundary reviews | Source-anchored Surface and BoundaryReview records; no per-Surface disposition or path-role ledger |
+| R1 | Record surfaces, principals, components, and supplied-boundary reviews | Source-anchored Surface and BoundaryReview records; final per-Surface states are recorded by R6, while path-role ledger remains absent |
 | R2 | Generate and screen hypotheses using multiple discovery axes and approved knowledge | Falsifiable hypotheses with axis, language, mechanism, and seed provenance |
 | R3 | Verify reachability and vulnerability mechanism | Call/dataflow evidence, counterevidence, and provisional verdict |
 | R3.5 | Independent refutation and adjudication | Reviewer evidence and explicit disposition |
@@ -210,11 +210,14 @@ follow-up Campaign with new hypothesis/verification/refutation records. Preserve
 original unresolved risk and history; this is not automatic reopening of committed
 stages. The synthetic mixed-language Handoff fixture exercises that limited recovery.
 
-R1 Surfaces do not store independent review dispositions. CG3 reconciles Surface
-identity/ownership, Work Unit surface-axis review, planned axis coverage, known Surface
-references, and hypothesis/verdict identity. A Surface without a hypothesis is allowed
-and reported, but individual clean/deferred review cannot be reconstructed from these
-records. General accepted-R3 verdict amendment is not implemented.
+R1 Surface records do not store final review dispositions. Durable R6 task output
+requires exactly one agent-reported `REVIEWED`, `DEFERRED`, `NOT_APPLICABLE`, or
+`UNREVIEWED` state for every R1 Surface and rejects missing, extra, or duplicate IDs.
+In-process `BatchClosure` projection materializes absent records as `UNREVIEWED`, never
+as reviewed. This is not host-observed reading evidence or proof that a Surface is safe. CG3 still
+reconciles Surface identity/ownership, Work Unit axis review, planned axis coverage,
+references, and hypothesis/verdict identity. A Surface without a hypothesis remains
+allowed; path roles/exclusions and general accepted-R3 verdict amendment remain absent.
 
 R2 schedules all six axes, either separately or in one compact task per Work Unit:
 surface, mechanism, state/lifecycle, fix variant, boundary, and differential behavior.

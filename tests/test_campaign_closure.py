@@ -212,6 +212,10 @@ def test_campaign_closure_accepts_reviewed_surface_without_hypothesis(
         assert report["gates"]["CG3"]["pass"] is True
         assert report["gates"]["CG3"]["detail"]["surface_count"] == 1
         assert report["gates"]["CG3"]["detail"]["surfaces_without_hypothesis"]
+        assert report["surface_review_state_counts"] == {"UNREVIEWED": 1}
+        assert report["surface_review_dispositions"][0]["surface_id"] == (
+            report["gates"]["CG3"]["detail"]["surfaces_without_hypothesis"][0]
+        )
     finally:
         manager.close()
 

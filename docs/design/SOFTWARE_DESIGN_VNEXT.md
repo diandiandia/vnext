@@ -563,10 +563,14 @@ external container or VM.
   the Batch and records impact. The receipt is content-addressed, not signed.
 - **R1:** Surfaces have principal, owner, source path, and valid evidence anchors.
   Supplied boundaries require confirmed/rejected/unresolved reviews. Independent
-  per-Surface clean/deferred dispositions and path roles are not stored.
+  dispositions are not part of R1; durable R6 output requires exactly one
+  agent-reported disposition per R1 Surface and rejects missing, extra, or duplicate
+  IDs. In-process `BatchClosure` projection defaults absent records to UNREVIEWED.
+  Neither representation proves host-observed reading. Path roles are not stored.
 - **R2:** every hypothesis names a valid Work Unit, origin axis, seed evidence, applicable
   mechanism family, and known Surface references. It does not require every Surface to be
-  copied into a Hypothesis. CG3 uses Work Unit/axis coverage, not Surface dispositions.
+  copied into a Hypothesis. CG3 uses Work Unit/axis coverage, not Surface dispositions;
+  the R6 ledger is an explicit Agent declaration, not observed reading evidence.
   Zero-hypothesis results retain axis evidence; the runtime does not verify which
   individual knowledge entries the Agent examined.
 - **R3:** REACHABLE requires a non-empty, ordered call/dataflow chain with source evidence

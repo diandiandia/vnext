@@ -392,8 +392,13 @@ for that Work Unit and family. A CategoryRun may reference only those IDs; use a
 array when none apply. New late candidates must remain unresolved follow-up risks,
 not invented IDs. R6 is a Batch closure task over canonical stage artifacts, not a
 source-discovery task: do not require an absent Work Unit inventory or invent LOC anchors.
-Host wrappers must follow these operation-specific contracts instead of applying source
-discovery instructions to every task.
+For every R1 Surface ID, R6 output must contain exactly one `surface_dispositions`
+entry. Use `REVIEWED`, `DEFERRED`, `NOT_APPLICABLE`, or `UNREVIEWED`; include a
+rationale and evidence refs for every state except `UNREVIEWED`. Missing, extra, or
+duplicate IDs are rejected. Use `UNREVIEWED` when a stronger disposition is unsupported.
+These are Agent declarations, not host-observed file-reading evidence or proof that a
+Surface is safe. Host wrappers must follow these operation-specific contracts instead
+of applying source-discovery instructions to every task.
 
 `shadow-evaluate` never promotes vNext or retires v3. It only reports whether supplied
 evidence satisfies the release gates. Synthetic runs cannot satisfy held-out,
