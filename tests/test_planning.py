@@ -176,6 +176,55 @@ def test_validate_plan_rejects_duplicate_work_unit_and_batch_ids(
         validate_plan(duplicate_batch, inventory)
 
 
+def test_validate_plan_checks_work_unit_analysis_metadata(tmp_path: Path) -> None:
+    target = tmp_path / "work-unit-metadata"
+    target.mkdir()
+    _fixture_monorepo(target)
+    inventory = build_inventory(target, "fixture:work-unit-metadata")
+    plan = create_audit_plan(
+        campaign_id="CMP-work-unit-metadata",
+        inventory=inventory,
+        category_families=["STATE", "PARSING"],
+    )
+
+    with pytest.raises(ModelError, match="all-six discovery-axis"):
+        validate_plan(replace(plan, discovery_axes=("surface",)), inventory)
+
+    first_unit = plan.work_units[0]
+    changed_unit_axes = replace(
+        plan,
+        work_units=tuple(
+            replace(unit, discovery_axes=("surface",))
+            if unit.work_unit_id == first_unit.work_unit_id else unit
+            for unit in plan.work_units
+        ),
+    )
+    with pytest.raises(ModelError, match="Work Unit discovery axes do not match"):
+        validate_plan(changed_unit_axes, inventory)
+
+    changed_languages = replace(
+        plan,
+        work_units=tuple(
+            replace(unit, languages=("c",))
+            if unit.work_unit_id == first_unit.work_unit_id else unit
+            for unit in plan.work_units
+        ),
+    )
+    with pytest.raises(ModelError, match="Work Unit languages do not match"):
+        validate_plan(changed_languages, inventory)
+
+    changed_categories = replace(
+        plan,
+        work_units=tuple(
+            replace(unit, category_families=("INJECTION",))
+            if unit.work_unit_id == first_unit.work_unit_id else unit
+            for unit in plan.work_units
+        ),
+    )
+    with pytest.raises(ModelError, match="Work Unit category families do not match"):
+        validate_plan(changed_categories, inventory)
+
+
 def test_validate_plan_checks_batch_source_file_count(tmp_path: Path) -> None:
     target = tmp_path / "batch-source-count"
     target.mkdir()

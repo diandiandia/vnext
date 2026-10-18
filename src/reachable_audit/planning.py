@@ -517,9 +517,25 @@ def validate_plan(plan: AuditPlan, inventory: ProjectInventory) -> None:
         raise ModelError("plan snapshot does not match inventory")
     if plan.inventory_digest != inventory_digest(inventory):
         raise ModelError("plan inventory digest does not match inventory")
+    if (
+        not plan.category_families
+        or plan.category_families != tuple(sorted({
+            item.strip().upper() for item in plan.category_families if item.strip()
+        }))
+    ):
+        raise ModelError("plan category families must be non-empty, unique, and normalized")
+    if (
+        len(plan.discovery_axes) != len(DEFAULT_DISCOVERY_AXES)
+        or len(set(plan.discovery_axes)) != len(plan.discovery_axes)
+        or set(plan.discovery_axes) != set(DEFAULT_DISCOVERY_AXES)
+    ):
+        raise ModelError("only all-six discovery-axis plans are supported")
     components = {component.component_id: component for component in inventory.components}
     source_owner_by_path = {
         source.path: source.component_id for source in inventory.source_files
+    }
+    source_language_by_path = {
+        source.path: source.language for source in inventory.source_files
     }
     _validate_boundary_edge_endpoints(
         plan.boundary_edges, set(components), source_owner_by_path,
@@ -587,6 +603,14 @@ def validate_plan(plan: AuditPlan, inventory: ProjectInventory) -> None:
     for unit in plan.work_units:
         if unit.component_id not in components:
             raise ModelError(f"Work Unit references an unknown component: {unit.work_unit_id}")
+        if unit.category_families != plan.category_families:
+            raise ModelError(
+                f"Work Unit category families do not match the Plan: {unit.work_unit_id}"
+            )
+        if unit.discovery_axes != plan.discovery_axes:
+            raise ModelError(
+                f"Work Unit discovery axes do not match the Plan: {unit.work_unit_id}"
+            )
         wrong_owner_paths = [
             path for path in unit.source_files
             if source_owner_by_path.get(path) != unit.component_id
@@ -594,6 +618,13 @@ def validate_plan(plan: AuditPlan, inventory: ProjectInventory) -> None:
         if wrong_owner_paths:
             raise ModelError(
                 f"Work Unit source paths are not owned by its component: {sorted(wrong_owner_paths)}"
+            )
+        expected_languages = tuple(sorted({
+            source_language_by_path[path] for path in unit.source_files
+        }))
+        if unit.languages != expected_languages:
+            raise ModelError(
+                f"Work Unit languages do not match its source files: {unit.work_unit_id}"
             )
     known_work_units = {unit.work_unit_id for unit in plan.work_units}
     planned_work_units = [unit for batch in plan.batches for unit in batch.work_unit_ids]
