@@ -399,6 +399,14 @@ class CampaignCloser:
                             path_review_claim_errors.append(
                                 f"invalid path risk tier: {work_unit_id}/{path}"
                             )
+                        elif (
+                            risk_tier == PathRiskTier.LOW.value
+                            and altitude != ReviewAltitude.INSPECTED.value
+                        ):
+                            path_review_claim_errors.append(
+                                f"LOW path risk tier requires INSPECTED review altitude: "
+                                f"{work_unit_id}/{path}"
+                            )
                         elif key in seen_path_review_claims:
                             path_review_claim_errors.append(
                                 f"duplicate path review claim: {work_unit_id}/{path}"

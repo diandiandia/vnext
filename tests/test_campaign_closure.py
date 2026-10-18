@@ -709,6 +709,48 @@ def test_campaign_report_separates_agent_path_review_claims(tmp_path: Path) -> N
         manager.close()
 
 
+def test_campaign_closure_rejects_low_tier_without_inspected_altitude(
+    tmp_path: Path,
+) -> None:
+    manager, plan = _closable_campaign(tmp_path)
+    try:
+        work_unit = plan.work_units[0]
+        path = work_unit.source_files[0]
+        invalid_claim_ref = manager.artifacts.put_text(json.dumps({
+            "schema_version": "1.0",
+            "surfaces": [],
+            "boundary_reviews": [],
+            "path_review_claims": [{
+                "work_unit_id": work_unit.work_unit_id,
+                "path": path,
+                "claim": "AGENT_DECLARED_REVIEWED",
+                "altitude": "SCREENED",
+                "risk_tier": "LOW",
+            }],
+        })).artifact_id
+        batch_id = plan.batches[0].batch_id
+        manager.store.append_event(
+            campaign_id="CMP-r4",
+            batch_id=batch_id,
+            entity_type="batch_stage",
+            entity_id=batch_id,
+            event_type="R1_COMPLETED",
+            idempotency_key="test-invalid-low-tier-altitude",
+            actor="test",
+            payload={},
+            payload_ref=invalid_claim_ref,
+        )
+
+        with pytest.raises(ModelError, match="Campaign gates failed: CG2"):
+            CampaignCloser(manager, "CMP-r4", plan).close(CampaignClosure(
+                architecture_overview="One component with an invalid legacy R1 claim.",
+                unreviewed_scope=(), residual_risks=(), limitations=(),
+                lessons=(), knowledge_nominations=(), skill_issues=(),
+            ))
+    finally:
+        manager.close()
+
+
 def test_campaign_closure_rejects_blank_closure_statements(tmp_path: Path) -> None:
     manager, plan = _closable_campaign(tmp_path)
     try:
