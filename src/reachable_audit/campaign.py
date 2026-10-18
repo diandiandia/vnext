@@ -797,17 +797,29 @@ class CampaignManager:
 
     def load_audit_plan(self, campaign_id: str, plan_id: str) -> AuditPlan:
         campaign = self.store.get_campaign(campaign_id)
+        events = self.store.list_events(
+            campaign_id,
+            entity_type="plan",
+            entity_id=plan_id,
+            event_type="PLAN_RECORDED",
+        )
+        if not events or events[-1].payload_ref is None:
+            raise ValueError(f"Campaign plan is missing: {plan_id}")
+        value = json.loads(self.artifacts.get_bytes(events[-1].payload_ref))
+        if not isinstance(value, dict):
+            raise ValueError("Campaign plan artifact must be a JSON object")
+        plan = AuditPlan.from_dict(value)
+        if plan.plan_id != plan_id or plan.campaign_id != campaign_id or plan.snapshot_id != campaign.snapshot_id:
+            raise ValueError("recorded plan does not match the Campaign")
+        validate_plan(plan, self.load_inventory(campaign_id))
         path = (
             self.state_dir / "campaigns" / campaign_id / "plans" / f"{plan_id}.json"
         )
-        if not path.exists():
-            raise ValueError(f"Campaign plan is missing: {plan_id}")
-        value = json.loads(path.read_text(encoding="utf-8"))
-        if not isinstance(value, dict):
-            raise ValueError("Campaign plan must be a JSON object")
-        plan = AuditPlan.from_dict(value)
-        if plan.campaign_id != campaign_id or plan.snapshot_id != campaign.snapshot_id:
-            raise ValueError("stored plan does not match the Campaign")
+        exported = json.dumps(
+            value, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        )
+        if not path.exists() or path.read_text(encoding="utf-8") != exported:
+            self._atomic_json(path, value)
         return plan
 
     def load_snapshot_baseline(self, campaign_id: str) -> Mapping[str, Any]:

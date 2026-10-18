@@ -872,6 +872,37 @@ def test_load_component_graph_repairs_tampered_export_from_durable_artifact(
         )
 
 
+def test_load_audit_plan_repairs_tampered_export_from_durable_artifact(
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "plan-export"
+    target.mkdir()
+    _write(target / "app.py", "VALUE = 1\n")
+    inventory = build_inventory(target, "fixture:plan-export")
+    plan = create_audit_plan(
+        campaign_id="CMP-plan-export",
+        inventory=inventory,
+        category_families=["STATE"],
+    )
+    with CampaignManager(target) as manager:
+        manager.create_campaign(
+            campaign_id="CMP-plan-export", snapshot_id=inventory.snapshot_id,
+        )
+        manager.record_inventory(campaign_id="CMP-plan-export", inventory=inventory)
+        manager.record_plan(campaign_id="CMP-plan-export", plan=plan, inventory=inventory)
+        export_path = (
+            manager.state_dir / "campaigns" / "CMP-plan-export" / "plans" / f"{plan.plan_id}.json"
+        )
+        tampered = asdict(plan)
+        tampered["category_families"] = ["FORGED"]
+        export_path.write_text(json.dumps(tampered), encoding="utf-8")
+
+        assert manager.load_audit_plan("CMP-plan-export", plan.plan_id) == plan
+        assert json.loads(export_path.read_text(encoding="utf-8")) == json.loads(
+            json.dumps(asdict(plan))
+        )
+
+
 def test_boundary_source_path_must_belong_to_source_component(tmp_path: Path) -> None:
     target = tmp_path / "monorepo"
     target.mkdir()

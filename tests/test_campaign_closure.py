@@ -567,7 +567,7 @@ def test_campaign_closure_rejects_plan_object_different_from_recorded_artifact(
         manager.close()
 
 
-def test_campaign_closure_rejects_plan_file_different_from_recorded_artifact(
+def test_campaign_closure_repairs_plan_file_from_recorded_artifact(
     tmp_path: Path,
 ) -> None:
     manager, plan = _closable_campaign(tmp_path)
@@ -580,12 +580,13 @@ def test_campaign_closure_rejects_plan_file_different_from_recorded_artifact(
         plan_value["category_families"] = ["FORGED"]
         plan_path.write_text(json.dumps(plan_value), encoding="utf-8")
 
-        with pytest.raises(ModelError, match="file differs from latest Plan artifact"):
-            CampaignCloser(manager, "CMP-r4", plan).close(CampaignClosure(
-                architecture_overview="Mutated durable Plan file must not close the Campaign.",
-                unreviewed_scope=(), residual_risks=(), limitations=(),
-                lessons=(), knowledge_nominations=(), skill_issues=(),
-            ))
+        CampaignCloser(manager, "CMP-r4", plan).close(CampaignClosure(
+            architecture_overview="Closure uses the event-backed Plan and repairs its export.",
+            unreviewed_scope=(), residual_risks=(), limitations=(),
+            lessons=(), knowledge_nominations=(), skill_issues=(),
+        ))
+        repaired = json.loads(plan_path.read_text(encoding="utf-8"))
+        assert repaired["category_families"] == list(plan.category_families)
     finally:
         manager.close()
 
