@@ -372,8 +372,26 @@ def test_plan_splits_oversized_boundary_reviews_across_endpoint_work_units(
             for edge in plan.boundary_edges
         ),
     )
-    with pytest.raises(ModelError, match="not in its target component"):
+    with pytest.raises(ModelError, match="not its target review Work Unit"):
         validate_plan(broken_owner, inventory)
+
+    target_units = [
+        unit for unit in plan.work_units
+        if unit.component_id == target_component and unit.boundary_edge_ids
+    ]
+    assert len(target_units) > 1
+    other_target_unit = target_units[0]
+    target_edge_id = target_units[1].boundary_edge_ids[0]
+    same_component_wrong_owner = replace(
+        plan,
+        boundary_edges=tuple(
+            replace(edge, owner_work_unit_id=other_target_unit.work_unit_id)
+            if edge.edge_id == target_edge_id else edge
+            for edge in plan.boundary_edges
+        ),
+    )
+    with pytest.raises(ModelError, match="not its target review Work Unit"):
+        validate_plan(same_component_wrong_owner, inventory)
 
 
 @pytest.mark.parametrize(

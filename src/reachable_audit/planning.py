@@ -619,9 +619,15 @@ def validate_plan(plan: AuditPlan, inventory: ProjectInventory) -> None:
         if edge.owner_work_unit_id not in known_work_units:
             raise ModelError(f"boundary edge has no owning Work Unit: {edge.edge_id}")
         owner = work_units_by_id[edge.owner_work_unit_id]
-        if owner.component_id != edge.target_component_id:
+        target_review_unit = edge_review_units[
+            (edge.target_component_id, edge.edge_id)
+        ]
+        if (
+            owner.component_id != edge.target_component_id
+            or owner.work_unit_id != target_review_unit.work_unit_id
+        ):
             raise ModelError(
-                f"boundary edge owner is not in its target component: {edge.edge_id}"
+                f"boundary edge owner is not its target review Work Unit: {edge.edge_id}"
             )
     handoff_by_edge = {handoff.edge_id: handoff for handoff in plan.handoffs}
     if len(handoff_by_edge) != len(plan.handoffs):
