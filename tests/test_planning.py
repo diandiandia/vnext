@@ -794,6 +794,20 @@ def test_campaign_inventory_is_write_once_after_initial_record(tmp_path: Path) -
         original_baseline = manager.load_snapshot_baseline(
             "CMP-inventory-write-once",
         )
+        baseline_path = (
+            manager.state_dir / "campaigns" / "CMP-inventory-write-once"
+            / "snapshot-baseline.json"
+        )
+        forged_baseline = dict(original_baseline)
+        forged_baseline["files"] = {"app.py": "sha256:forged"}
+        baseline_path.write_text(json.dumps(forged_baseline), encoding="utf-8")
+        assert manager.load_snapshot_baseline(
+            "CMP-inventory-write-once",
+        ) == original_baseline
+        assert json.loads(baseline_path.read_text(encoding="utf-8")) == json.loads(
+            json.dumps(original_baseline)
+        )
+
         (target / "app.py").write_text("VALUE = 2\n", encoding="utf-8")
 
         with pytest.raises(ValueError, match="snapshot baseline is write-once"):

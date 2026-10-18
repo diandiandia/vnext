@@ -824,17 +824,32 @@ class CampaignManager:
 
     def load_snapshot_baseline(self, campaign_id: str) -> Mapping[str, Any]:
         campaign = self.store.get_campaign(campaign_id)
+        events = self.store.list_events(
+            campaign_id,
+            entity_type="snapshot_baseline",
+            entity_id=campaign_id,
+            event_type="SNAPSHOT_BASELINE_RECORDED",
+        )
+        if not events or events[-1].payload_ref is None:
+            raise ValueError("Campaign snapshot baseline is missing; record inventory first")
+        value = json.loads(self.artifacts.get_bytes(events[-1].payload_ref))
+        if (
+            not isinstance(value, dict)
+            or value.get("snapshot_id") != campaign.snapshot_id
+            or not isinstance(value.get("files"), dict)
+        ):
+            raise ValueError("recorded snapshot baseline does not match the Campaign")
         path = (
             self.state_dir
             / "campaigns"
             / campaign_id
             / "snapshot-baseline.json"
         )
-        if not path.exists():
-            raise ValueError("Campaign snapshot baseline is missing; record inventory first")
-        value = json.loads(path.read_text(encoding="utf-8"))
-        if not isinstance(value, dict) or value.get("snapshot_id") != campaign.snapshot_id:
-            raise ValueError("stored snapshot baseline does not match the Campaign")
+        exported = json.dumps(
+            value, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        )
+        if not path.exists() or path.read_text(encoding="utf-8") != exported:
+            self._atomic_json(path, value)
         return value
 
     def write_campaign_report_exports(
