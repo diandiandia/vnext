@@ -797,17 +797,18 @@ class BatchWorkflow:
                 raise ModelError(
                     f"R4 screening result is not backed by R2 dispositions: {run.category_run_id}"
                 )
-        artifact_id = self._put_json({
+        value = {
             "schema_version": "1.0",
             "category_runs": [asdict(run) for run in runs],
-        })
-        existing = self._events(event_type="R4_SCREENING_COVERAGE_RECORDED")
-        if existing:
-            if len(existing) != 1 or existing[0].payload_ref != artifact_id:
-                raise ModelError(
-                    "R4 screening coverage conflicts with its prior projection"
-                )
-            return artifact_id
+        }
+        existing_artifact_id = self._existing_stage_artifact(
+            "R4_SCREENING_COVERAGE_RECORDED",
+            value,
+            conflict_message="R4 screening coverage conflicts with its prior projection",
+        )
+        if existing_artifact_id is not None:
+            return existing_artifact_id
+        artifact_id = self._put_json(value)
         self.manager.store.append_event(
             campaign_id=self.campaign_id,
             batch_id=self.batch_id,
@@ -884,7 +885,7 @@ class BatchWorkflow:
                 raise ModelError(
                     f"CategoryRun references unrecorded findings: {run.category_run_id}"
                 )
-        artifact_id = self._put_json({
+        value = {
             "schema_version": "1.0",
             "category_runs": [asdict(replace(
                 run,
@@ -893,7 +894,11 @@ class BatchWorkflow:
                     for axis_run in run.axis_runs
                 ),
             )) for run in runs],
-        })
+        }
+        existing_artifact_id = self._existing_stage_artifact("R4_COMPLETED", value)
+        if existing_artifact_id is not None:
+            return existing_artifact_id
+        artifact_id = self._put_json(value)
         self.manager.store.append_event(
             campaign_id=self.campaign_id,
             batch_id=self.batch_id,
@@ -1026,6 +1031,9 @@ class BatchWorkflow:
             "experiments": [asdict(item) for item in experiments],
             "assessments": [asdict(item) for item in assessments],
         }
+        existing_artifact_id = self._existing_stage_artifact("R5_COMPLETED", value)
+        if existing_artifact_id is not None:
+            return existing_artifact_id
         artifact_id = self._put_json(value)
         self.manager.store.append_event(
             campaign_id=self.campaign_id,
@@ -1855,11 +1863,19 @@ class BatchWorkflow:
         return events[-1] if events else None
 
     def _existing_stage_artifact(
-        self, event_type: str, value: Any
+        self,
+        event_type: str,
+        value: Any,
+        *,
+        conflict_message: str | None = None,
     ) -> str | None:
-        event = self._stage_event(event_type)
-        if event is None:
+        events = self._events(event_type=event_type)
+        if not events:
             return None
+        message = conflict_message or f"{event_type} already committed with different content"
+        if len(events) != 1:
+            raise ModelError(message)
+        event = events[0]
         if event.payload_ref is None:
             raise ModelError(f"existing {event_type} event has no artifact")
         normalized = json.loads(json.dumps(
@@ -1870,7 +1886,7 @@ class BatchWorkflow:
             default=str,
         ))
         if self._read_artifact(event.payload_ref) != normalized:
-            raise ModelError(f"{event_type} already committed with different content")
+            raise ModelError(message)
         return event.payload_ref
 
     def _require_stage(self, event_type: str) -> EventRecord:

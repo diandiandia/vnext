@@ -1,7 +1,7 @@
 import json
 import hashlib
 import hmac
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from pathlib import Path
 import sys
 
@@ -464,6 +464,41 @@ def test_r6_rejects_missing_r5(tmp_path: Path) -> None:
                 residual_risks=(),
                 lessons=(),
             ))
+    finally:
+        manager.close()
+
+
+def test_r5_exact_retry_reuses_artifact_and_rejects_conflicts_before_write(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manager, workflow = _ready_for_r5(tmp_path, static_hypothesis=True)
+    assessment = R5Assessment(
+        hypothesis_id="HYP-static",
+        experiment_required=False,
+        experiment_id=None,
+        disposition=R5Disposition.NEEDS_REVIEW,
+        evidence_refs=("EVID-review",),
+        rationale="the static-only claim needs manual review",
+    )
+    try:
+        artifact_id = workflow.record_r5([], [assessment])
+        original_put_text = manager.artifacts.put_text
+        writes = []
+
+        def track_artifact_write(value: str) -> object:
+            writes.append(value)
+            return original_put_text(value)
+
+        monkeypatch.setattr(manager.artifacts, "put_text", track_artifact_write)
+        assert workflow.record_r5([], [assessment]) == artifact_id
+        with pytest.raises(ModelError, match="R5_COMPLETED already committed"):
+            workflow.record_r5([], [replace(
+                assessment, rationale="conflicting R5 assessment",
+            )])
+        assert writes == []
+        stage_events = workflow._events(event_type="R5_COMPLETED")
+        assert len(stage_events) == 1
+        assert stage_events[0].payload_ref == artifact_id
     finally:
         manager.close()
 

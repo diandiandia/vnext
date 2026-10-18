@@ -114,7 +114,9 @@ def _card(partition: EvaluationPartition = EvaluationPartition.TRAINING) -> Mech
     )
 
 
-def test_r4_tracks_six_axis_coverage_with_zero_findings(tmp_path: Path) -> None:
+def test_r4_tracks_six_axis_coverage_with_zero_findings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
     manager, workflow, plan = _ready_for_r4(tmp_path)
     try:
         category_plans = create_category_audit_plans(
@@ -128,7 +130,7 @@ def test_r4_tracks_six_axis_coverage_with_zero_findings(tmp_path: Path) -> None:
             evidence_refs=(f"EVID-{axis}",),
             rationale=f"reviewed {axis} axis",
         ) for axis in category_plan.discovery_axes)
-        workflow.record_r4([CategoryRun(
+        category_run = CategoryRun(
             category_run_id="CR-state",
             category_plan_id=category_plan.category_plan_id,
             work_unit_id=category_plan.work_unit_id,
@@ -141,12 +143,28 @@ def test_r4_tracks_six_axis_coverage_with_zero_findings(tmp_path: Path) -> None:
             rationale="all planned mechanisms and axes were reviewed",
             hypothesis_ids=(),
             finding_ids=(),
-        )])
+        )
+        artifact_id = workflow.record_r4([category_run])
+        original_put_text = manager.artifacts.put_text
+        writes = []
+
+        def track_artifact_write(value: str) -> object:
+            writes.append(value)
+            return original_put_text(value)
+
+        monkeypatch.setattr(manager.artifacts, "put_text", track_artifact_write)
+        assert workflow.record_r4([category_run]) == artifact_id
+        with pytest.raises(ModelError, match="R4_COMPLETED already committed"):
+            workflow.record_r4([replace(
+                category_run, rationale="conflicting category run",
+            )])
+        assert writes == []
         r4_event = next(
             event for event in manager.store.list_events("CMP-r4")
             if event.event_type == "R4_COMPLETED"
         )
         assert r4_event.payload["linked_finding_count"] == 0
+        assert r4_event.payload_ref == artifact_id
     finally:
         manager.close()
 
