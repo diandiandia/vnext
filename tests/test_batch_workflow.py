@@ -70,6 +70,77 @@ def test_r1_direct_claim_requires_inspected_altitude_for_low_tier(
         manager.close()
 
 
+def test_r1_exact_retry_recovers_batch_transition_after_commit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manager, workflow, _ = _workflow(tmp_path, "CMP-r1-recovery")
+    try:
+        workflow.run_r0()
+        original_transition = manager.store.transition_batch
+
+        def fail_running_transition(*args: object, **kwargs: object) -> object:
+            target = kwargs.get("target", args[2] if len(args) > 2 else None)
+            if target is BatchStatus.RUNNING:
+                raise RuntimeError("injected Batch transition failure")
+            return original_transition(*args, **kwargs)
+
+        monkeypatch.setattr(manager.store, "transition_batch", fail_running_transition)
+        with pytest.raises(RuntimeError, match="injected Batch transition failure"):
+            workflow.record_r1([])
+        stage_events = workflow._events(event_type="R1_COMPLETED")
+        assert len(stage_events) == 1
+        artifact_id = stage_events[0].payload_ref
+        assert manager.store.get_batch(
+            workflow.campaign_id, workflow.batch_id
+        ).status is BatchStatus.READY
+
+        monkeypatch.setattr(manager.store, "transition_batch", original_transition)
+        assert workflow.record_r1([]) == artifact_id
+        assert manager.store.get_batch(
+            workflow.campaign_id, workflow.batch_id
+        ).status is BatchStatus.RUNNING
+        assert len(workflow._events(event_type="R1_COMPLETED")) == 1
+    finally:
+        manager.close()
+
+
+def test_r1_conflicting_retry_is_rejected_before_artifact_write(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manager, workflow, plan = _workflow(tmp_path, "CMP-r1-conflict")
+    try:
+        workflow.run_r0()
+        artifact_id = workflow.record_r1([])
+        original_put_text = manager.artifacts.put_text
+        writes = []
+
+        def track_artifact_write(value: str) -> object:
+            writes.append(value)
+            return original_put_text(value)
+
+        monkeypatch.setattr(manager.artifacts, "put_text", track_artifact_write)
+        work_unit = plan.work_units[0]
+        changed_surface = Surface(
+            surface_id="SURF-changed",
+            work_unit_id=work_unit.work_unit_id,
+            component_id=work_unit.component_id,
+            kind="function_entry",
+            entry_path="app.py",
+            entry_symbol="handle",
+            principal="remote_unauthenticated",
+            evidence_refs=("LOC-app.py:1",),
+        )
+        with pytest.raises(ModelError, match="R1_COMPLETED already committed"):
+            workflow.record_r1([changed_surface])
+
+        assert writes == []
+        stage_events = workflow._events(event_type="R1_COMPLETED")
+        assert len(stage_events) == 1
+        assert stage_events[0].payload_ref == artifact_id
+    finally:
+        manager.close()
+
+
 def test_r0_r3_slice_records_canonical_verdict_and_partial_report(tmp_path: Path) -> None:
     manager, workflow, plan = _workflow(tmp_path)
     work_unit = plan.work_units[0]

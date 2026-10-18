@@ -293,6 +293,14 @@ class BatchWorkflow:
                 key=lambda item: (item["work_unit_id"], item["path"]),
             ),
         }
+        existing_artifact_id = self._existing_stage_artifact("R1_COMPLETED", value)
+        if existing_artifact_id is not None:
+            batch = self.manager.store.get_batch(self.campaign_id, self.batch_id)
+            if batch.status is BatchStatus.READY:
+                self.manager.store.transition_batch(
+                    self.campaign_id, self.batch_id, BatchStatus.RUNNING
+                )
+            return existing_artifact_id
         artifact_id = self._put_json(value)
         self.manager.store.append_event(
             campaign_id=self.campaign_id,
@@ -1842,6 +1850,25 @@ class BatchWorkflow:
     def _stage_event(self, event_type: str) -> EventRecord | None:
         events = self._events(event_type=event_type)
         return events[-1] if events else None
+
+    def _existing_stage_artifact(
+        self, event_type: str, value: Any
+    ) -> str | None:
+        event = self._stage_event(event_type)
+        if event is None:
+            return None
+        if event.payload_ref is None:
+            raise ModelError(f"existing {event_type} event has no artifact")
+        normalized = json.loads(json.dumps(
+            value,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+            default=str,
+        ))
+        if self._read_artifact(event.payload_ref) != normalized:
+            raise ModelError(f"{event_type} already committed with different content")
+        return event.payload_ref
 
     def _require_stage(self, event_type: str) -> EventRecord:
         event = self._stage_event(event_type)
