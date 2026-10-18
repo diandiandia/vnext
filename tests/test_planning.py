@@ -1,4 +1,5 @@
-from dataclasses import replace
+from dataclasses import asdict, replace
+import json
 from pathlib import Path
 
 import pytest
@@ -812,6 +813,31 @@ def test_campaign_inventory_is_write_once_after_initial_record(tmp_path: Path) -
         assert len(manager.store.list_events(
             "CMP-inventory-write-once", event_type="INVENTORY_RECORDED",
         )) == 1
+
+
+def test_load_inventory_repairs_tampered_export_from_durable_artifact(
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "inventory-export"
+    target.mkdir()
+    _write(target / "app.py", "VALUE = 1\n")
+    inventory = build_inventory(target, "fixture:inventory-export")
+    with CampaignManager(target) as manager:
+        manager.create_campaign(
+            campaign_id="CMP-inventory-export", snapshot_id=inventory.snapshot_id,
+        )
+        manager.record_inventory(campaign_id="CMP-inventory-export", inventory=inventory)
+        export_path = (
+            manager.state_dir / "campaigns" / "CMP-inventory-export" / "inventory.json"
+        )
+        tampered = asdict(inventory)
+        tampered["source_files"][0]["language"] = "rust"
+        export_path.write_text(json.dumps(tampered), encoding="utf-8")
+
+        assert manager.load_inventory("CMP-inventory-export") == inventory
+        assert json.loads(export_path.read_text(encoding="utf-8")) == json.loads(
+            json.dumps(asdict(inventory))
+        )
 
 
 def test_boundary_source_path_must_belong_to_source_component(tmp_path: Path) -> None:

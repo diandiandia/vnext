@@ -749,15 +749,26 @@ class CampaignManager:
 
     def load_inventory(self, campaign_id: str) -> ProjectInventory:
         campaign = self.store.get_campaign(campaign_id)
-        path = self.state_dir / "campaigns" / campaign_id / "inventory.json"
-        if not path.exists():
+        events = self.store.list_events(
+            campaign_id,
+            entity_type="campaign",
+            entity_id=campaign_id,
+            event_type="INVENTORY_RECORDED",
+        )
+        if not events or events[-1].payload_ref is None:
             raise ValueError("Campaign inventory is missing; run the inventory command first")
-        value = json.loads(path.read_text(encoding="utf-8"))
+        value = json.loads(self.artifacts.get_bytes(events[-1].payload_ref))
         if not isinstance(value, dict):
-            raise ValueError("Campaign inventory must be a JSON object")
+            raise ValueError("Campaign inventory artifact must be a JSON object")
         inventory = ProjectInventory.from_dict(value)
         if inventory.snapshot_id != campaign.snapshot_id:
-            raise ValueError("stored inventory does not match the Campaign snapshot")
+            raise ValueError("recorded inventory does not match the Campaign snapshot")
+        path = self.state_dir / "campaigns" / campaign_id / "inventory.json"
+        exported = json.dumps(
+            value, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        )
+        if not path.exists() or path.read_text(encoding="utf-8") != exported:
+            self._atomic_json(path, value)
         return inventory
 
     def load_component_graph(self, campaign_id: str) -> ComponentGraph:
