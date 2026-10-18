@@ -353,6 +353,35 @@ def _handle_plan(arguments: argparse.Namespace) -> int:
     return 0
 
 
+def _handle_amend(arguments: argparse.Namespace) -> int:
+    with CampaignManager(arguments.target, arguments.state_dir) as manager:
+        inventory = manager.load_inventory(arguments.campaign_id)
+        base_plan = manager.load_audit_plan(
+            arguments.campaign_id, arguments.base_plan_id
+        )
+        amended_plan, amendment = amend_plan(
+            base_plan,
+            reason=arguments.reason,
+            max_source_files_per_batch=arguments.max_batch_files,
+            max_work_units_per_batch=arguments.max_batch_work_units,
+        )
+        artifact_id = manager.record_plan_amendment(
+            campaign_id=arguments.campaign_id,
+            base_plan=base_plan,
+            amended_plan=amended_plan,
+            amendment=amendment,
+            inventory=inventory,
+        )
+        _print({
+            "artifact_id": artifact_id,
+            "amendment_id": amendment.amendment_id,
+            "base_plan_id": base_plan.plan_id,
+            "amended_plan_id": amended_plan.plan_id,
+            "batches": len(amended_plan.batches),
+        })
+    return 0
+
+
 def _handle_batch_stage(arguments: argparse.Namespace) -> int:
     with CampaignManager(arguments.target, arguments.state_dir) as manager:
         workflow = BatchWorkflow(manager, arguments.campaign_id, arguments.batch_id)
@@ -1037,32 +1066,7 @@ def main(argv: list[str] | None = None) -> int:
             return _handle_plan(arguments)
 
         if arguments.command == "amend":
-            with CampaignManager(arguments.target, arguments.state_dir) as manager:
-                inventory = manager.load_inventory(arguments.campaign_id)
-                base_plan = manager.load_audit_plan(
-                    arguments.campaign_id, arguments.base_plan_id
-                )
-                amended_plan, amendment = amend_plan(
-                    base_plan,
-                    reason=arguments.reason,
-                    max_source_files_per_batch=arguments.max_batch_files,
-                    max_work_units_per_batch=arguments.max_batch_work_units,
-                )
-                artifact_id = manager.record_plan_amendment(
-                    campaign_id=arguments.campaign_id,
-                    base_plan=base_plan,
-                    amended_plan=amended_plan,
-                    amendment=amendment,
-                    inventory=inventory,
-                )
-                _print({
-                    "artifact_id": artifact_id,
-                    "amendment_id": amendment.amendment_id,
-                    "base_plan_id": base_plan.plan_id,
-                    "amended_plan_id": amended_plan.plan_id,
-                    "batches": len(amended_plan.batches),
-                })
-            return 0
+            return _handle_amend(arguments)
 
         if arguments.command in {"r0", "r1", "r2", "r3", "batch-report"}:
             return _handle_batch_stage(arguments)

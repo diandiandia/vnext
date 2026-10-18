@@ -346,6 +346,15 @@ def test_cli_runs_inventory_graph_plan_in_order(tmp_path: Path, capsys: object) 
     assert plan_output["batch_summaries"][0]["max_estimated_r1_output_floor_bytes"] > 0
     assert plan_output["batch_summaries"][0]["max_boundary_review_count"] == 0
     assert plan_output["cost_forecast"]["scenarios"]["expected"]["estimated_total_tasks"] == 11
+    assert main([
+        "amend", str(target), "CMP-pipeline", plan_output["plan_id"],
+        "--reason", "repack before execution",
+        "--max-batch-files", "1", "--max-batch-work-units", "1",
+    ]) == 0
+    amendment = json.loads(capsys.readouterr().out)  # type: ignore[attr-defined]
+    assert amendment["base_plan_id"] == plan_output["plan_id"]
+    assert amendment["amended_plan_id"] != amendment["base_plan_id"]
+    assert amendment["batches"] == 1
 
 
 def test_cli_plan_accepts_path_dispositions_and_reports_them(
