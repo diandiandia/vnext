@@ -389,6 +389,7 @@ class BatchWorkflow:
         *,
         axis_evidence: Mapping[str, Sequence[str]],
         axis_runs: Sequence[AxisRun],
+        source_task_output_refs: Mapping[str, str] | None = None,
     ) -> str:
         r1_event = self._require_stage("R1_COMPLETED")
         surfaces = {
@@ -472,7 +473,13 @@ class BatchWorkflow:
             ],
             "hypotheses": [asdict(hypothesis) for hypothesis in hypotheses],
         }
-        existing_artifact_id = self._existing_stage_artifact("R2_COMPLETED", value)
+        revision_metadata = self._stage_revision_metadata(
+            "R2", value, source_task_output_refs or {}, ("R1_COMPLETED",)
+        )
+        existing_artifact_id = self._existing_stage_artifact(
+            "R2_COMPLETED", value,
+            expected_revision_id=revision_metadata["revision_id"],
+        )
         if existing_artifact_id is not None:
             return existing_artifact_id
         artifact_id = self._put_json(value)
@@ -482,9 +489,16 @@ class BatchWorkflow:
             entity_type="batch_stage",
             entity_id=self.batch_id,
             event_type="R2_COMPLETED",
-            idempotency_key=f"r2:{self.campaign_id}:{self.batch_id}",
+            idempotency_key=(
+                f"r2:{self.campaign_id}:{self.batch_id}:"
+                f"{revision_metadata['revision_id']}"
+            ),
             actor="agent",
-            payload={"hypothesis_ids": sorted(seen), "axes": sorted(submitted_axes)},
+            payload={
+                "hypothesis_ids": sorted(seen),
+                "axes": sorted(submitted_axes),
+                **revision_metadata,
+            },
             payload_ref=artifact_id,
         )
         return artifact_id
@@ -836,7 +850,12 @@ class BatchWorkflow:
         )
         return artifact_id
 
-    def record_r4(self, runs: Sequence[CategoryRun]) -> str:
+    def record_r4(
+        self,
+        runs: Sequence[CategoryRun],
+        *,
+        source_task_output_refs: Mapping[str, str] | None = None,
+    ) -> str:
         plan_event = self._require_stage("CATEGORY_AUDIT_PLAN_RECORDED")
         plans = {
             item["category_plan_id"]: item
@@ -907,7 +926,20 @@ class BatchWorkflow:
                 ),
             )) for run in runs],
         }
-        existing_artifact_id = self._existing_stage_artifact("R4_COMPLETED", value)
+        revision_metadata = self._stage_revision_metadata(
+            "R4",
+            value,
+            source_task_output_refs or {},
+            (
+                "CATEGORY_AUDIT_PLAN_RECORDED",
+                "R2_COMPLETED",
+                "R3_COMPLETED",
+            ),
+        )
+        existing_artifact_id = self._existing_stage_artifact(
+            "R4_COMPLETED", value,
+            expected_revision_id=revision_metadata["revision_id"],
+        )
         if existing_artifact_id is not None:
             return existing_artifact_id
         artifact_id = self._put_json(value)
@@ -917,13 +949,17 @@ class BatchWorkflow:
             entity_type="batch_stage",
             entity_id=self.batch_id,
             event_type="R4_COMPLETED",
-            idempotency_key=f"r4:{self.campaign_id}:{self.batch_id}",
+            idempotency_key=(
+                f"r4:{self.campaign_id}:{self.batch_id}:"
+                f"{revision_metadata['revision_id']}"
+            ),
             actor="agent",
             payload={
                 "category_run_ids": sorted(run.category_run_id for run in runs),
                 "linked_finding_count": len({
                     finding_id for run in runs for finding_id in run.finding_ids
                 }),
+                **revision_metadata,
             },
             payload_ref=artifact_id,
         )
@@ -933,6 +969,8 @@ class BatchWorkflow:
         self,
         experiments: Sequence[Experiment],
         assessments: Sequence[R5Assessment],
+        *,
+        source_task_output_refs: Mapping[str, str] | None = None,
     ) -> str:
         self._require_stage("R4_COMPLETED")
         verdicts = {
@@ -1043,7 +1081,14 @@ class BatchWorkflow:
             "experiments": [asdict(item) for item in experiments],
             "assessments": [asdict(item) for item in assessments],
         }
-        existing_artifact_id = self._existing_stage_artifact("R5_COMPLETED", value)
+        revision_metadata = self._stage_revision_metadata(
+            "R5", value, source_task_output_refs or {},
+            ("R3_COMPLETED", "R4_COMPLETED"),
+        )
+        existing_artifact_id = self._existing_stage_artifact(
+            "R5_COMPLETED", value,
+            expected_revision_id=revision_metadata["revision_id"],
+        )
         if existing_artifact_id is not None:
             return existing_artifact_id
         artifact_id = self._put_json(value)
@@ -1053,7 +1098,10 @@ class BatchWorkflow:
             entity_type="batch_stage",
             entity_id=self.batch_id,
             event_type="R5_COMPLETED",
-            idempotency_key=f"r5:{self.campaign_id}:{self.batch_id}",
+            idempotency_key=(
+                f"r5:{self.campaign_id}:{self.batch_id}:"
+                f"{revision_metadata['revision_id']}"
+            ),
             actor="agent",
             payload={
                 "experiment_ids": sorted(experiment_by_id),
@@ -1062,6 +1110,7 @@ class BatchWorkflow:
                     for assessment in assessments
                     if assessment.disposition is R5Disposition.EMPIRICALLY_CONFIRMED
                 ),
+                **revision_metadata,
             },
             payload_ref=artifact_id,
         )
@@ -1514,7 +1563,12 @@ class BatchWorkflow:
         )
         return metrics
 
-    def record_r3(self, submissions: Sequence[VerdictSubmission]) -> str:
+    def record_r3(
+        self,
+        submissions: Sequence[VerdictSubmission],
+        *,
+        source_task_output_refs: Mapping[str, str] | None = None,
+    ) -> str:
         r2_event = self._require_stage("R2_COMPLETED")
         hypothesis_ids = {
             item["hypothesis_id"]
@@ -1609,6 +1663,15 @@ class BatchWorkflow:
             "schema_version": "1.0",
             "verdicts": [asdict(verdict) for verdict in verdicts],
         }
+        revision_metadata = self._stage_revision_metadata(
+            "R3", value, source_task_output_refs or {}, ("R2_COMPLETED",)
+        )
+        existing_artifact_id = self._existing_stage_artifact(
+            "R3_COMPLETED", value,
+            expected_revision_id=revision_metadata["revision_id"],
+        )
+        if existing_artifact_id is not None:
+            return existing_artifact_id
         artifact_id = self._put_json(value)
         self.manager.store.append_event(
             campaign_id=self.campaign_id,
@@ -1616,9 +1679,15 @@ class BatchWorkflow:
             entity_type="batch_stage",
             entity_id=self.batch_id,
             event_type="R3_COMPLETED",
-            idempotency_key=f"r3:{self.campaign_id}:{self.batch_id}",
+            idempotency_key=(
+                f"r3:{self.campaign_id}:{self.batch_id}:"
+                f"{revision_metadata['revision_id']}"
+            ),
             actor="tool",
-            payload={"hypothesis_ids": sorted(hypothesis_ids)},
+            payload={
+                "hypothesis_ids": sorted(hypothesis_ids),
+                **revision_metadata,
+            },
             payload_ref=artifact_id,
         )
         return artifact_id

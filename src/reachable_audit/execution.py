@@ -1686,6 +1686,11 @@ class DiscoveryCoordinator:
             hypotheses,
             axis_evidence=axis_evidence,
             axis_runs=axis_runs,
+            source_task_output_refs={
+                view.task.task_id: view.output_ref
+                for view in views
+                if view.output_ref is not None
+            },
         )
 
     def commit_r2(self) -> str:
@@ -1732,7 +1737,14 @@ class DiscoveryCoordinator:
                     )
                 hypotheses.append(hypothesis)
         return self.workflow.record_r2(
-            hypotheses, axis_evidence=axis_evidence, axis_runs=axis_runs
+            hypotheses,
+            axis_evidence=axis_evidence,
+            axis_runs=axis_runs,
+            source_task_output_refs={
+                view.task.task_id: view.output_ref
+                for view in views
+                if view.output_ref is not None
+            },
         )
 
     def schedule_r3(self) -> tuple[TaskView, ...]:
@@ -1791,7 +1803,14 @@ class DiscoveryCoordinator:
                     f"R3 task returned another hypothesis: {submission.hypothesis_id}"
                 )
             submissions.append(submission)
-        return self.workflow.record_r3(submissions)
+        return self.workflow.record_r3(
+            submissions,
+            source_task_output_refs={
+                view.task.task_id: view.output_ref
+                for view in views
+                if view.output_ref is not None
+            },
+        )
 
     def schedule_r35_refutations(self) -> tuple[TaskView, ...]:
         self._require_stage("R3_COMPLETED")
@@ -2456,7 +2475,14 @@ class DiscoveryCoordinator:
             for view in views:
                 output = self._read_output(view)
                 runs.extend(CategoryRun.from_dict(item) for item in output["category_runs"])
-            return self.workflow.record_r4(runs)
+            return self.workflow.record_r4(
+                runs,
+                source_task_output_refs={
+                    view.task.task_id: view.output_ref
+                    for view in views
+                    if view.output_ref is not None
+                },
+            )
         expected = {
             self._task_id("run_category_audit", category_plan_id): category_plan_id
             for category_plan_id in plans
@@ -2481,7 +2507,14 @@ class DiscoveryCoordinator:
             ):
                 raise ModelError(f"R4 task scope mismatch: {run.category_run_id}")
             runs.append(run)
-        return self.workflow.record_r4(runs)
+        return self.workflow.record_r4(
+            runs,
+            source_task_output_refs={
+                view.task.task_id: view.output_ref
+                for view in views
+                if view.output_ref is not None
+            },
+        )
 
     def schedule_r5(self) -> tuple[TaskView, ...]:
         r2_event = self._require_stage("R2_COMPLETED")
@@ -2609,7 +2642,15 @@ class DiscoveryCoordinator:
             )
             experiments.extend(task_experiments)
             assessments.append(assessment)
-        return self.workflow.record_r5(experiments, assessments)
+        return self.workflow.record_r5(
+            experiments,
+            assessments,
+            source_task_output_refs={
+                view.task.task_id: view.output_ref
+                for view in views
+                if view.output_ref is not None
+            },
+        )
 
     def schedule_r6(self) -> TaskView:
         stage_refs = []

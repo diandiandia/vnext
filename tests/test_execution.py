@@ -1294,6 +1294,7 @@ def test_discovery_coordinator_commits_r1_and_six_axis_r2(tmp_path: Path) -> Non
         assert all(item["knowledge_context"]["mechanism_cards"] for item in r2_inputs)
         assert all("SCREENED" in item["analysis_contract"] for item in r2_inputs)
         assert all("review_altitude" in item["output_contract"]["axis_run"] for item in r2_inputs)
+        axis_output_refs = {}
         while (axis_lease := backend.claim("hypothesis-worker")) is not None:
             axis = axis_lease.task.operation.split(":", 1)[1]
             hypotheses = []
@@ -1340,11 +1341,18 @@ def test_discovery_coordinator_commits_r1_and_six_axis_r2(tmp_path: Path) -> Non
                     execution_configuration_fixture(),
                 ),
             )
+            axis_output_refs[axis_lease.task.task_id] = output_ref
         coordinator.commit_r2()
         report_events = manager.store.list_events("CMP-coordinator")
         assert any(event.event_type == "R1_COMPLETED" for event in report_events)
         r2_event = next(event for event in report_events if event.event_type == "R2_COMPLETED")
         r2_artifact = json.loads(manager.artifacts.get_bytes(r2_event.payload_ref))
+        assert r2_event.payload["source_task_output_refs"] == axis_output_refs
+        assert r2_event.payload["upstream_revision_ids"] == {
+            "R1_COMPLETED": workflow._require_stage("R1_COMPLETED").payload[
+                "revision_id"
+            ],
+        }
         assert len(r2_artifact["axis_runs"]) == 6
         assert {
             item["axis"]: item["review_altitude"]
@@ -1493,6 +1501,13 @@ def test_compact_r2_runs_all_axes_in_one_task_per_work_unit(tmp_path: Path) -> N
         r2 = json.loads(manager.artifacts.get_bytes(r2_event.payload_ref))
         assert len(r2["axis_runs"]) == 6
         assert r2["hypotheses"] == []
+        r1_event = workflow._require_stage("R1_COMPLETED")
+        assert r2_event.payload["source_task_output_refs"] == {
+            tasks[0].task.task_id: output_ref,
+        }
+        assert r2_event.payload["upstream_revision_ids"] == {
+            "R1_COMPLETED": r1_event.payload["revision_id"],
+        }
     finally:
         manager.close()
 
@@ -1975,6 +1990,15 @@ def test_discovery_coordinator_schedules_and_commits_r3(
             ))
         coordinator.commit_r3()
         assert workflow.build_r0_r3_report()["verdict_counts"] == {"REACHABLE": 1}
+        r3_event = workflow._require_stage("R3_COMPLETED")
+        r2_event = workflow._require_stage("R2_COMPLETED")
+        assert r3_event.payload["source_task_output_refs"] == {
+            lease.task.task_id: output_ref,
+        }
+        assert r3_event.payload["upstream_revision_ids"] == {
+            "R2_COMPLETED": r2_event.payload["revision_id"],
+        }
+        assert r3_event.payload["revision_id"].startswith("REV-")
     finally:
         manager.close()
 

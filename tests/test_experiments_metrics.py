@@ -356,5 +356,17 @@ def test_r5_assessment_runs_as_durable_task(
         coordinator.commit_r5()
         events = manager.store.list_events("CMP-refute")
         assert sum(event.event_type == "R5_COMPLETED" for event in events) == 1
+        r5_event = next(event for event in events if event.event_type == "R5_COMPLETED")
+        assert r5_event.payload["source_task_output_refs"] == {
+            scheduled[0].task.task_id: output_ref,
+        }
+        assert r5_event.payload["upstream_revision_ids"] == {
+            "R3_COMPLETED": workflow._require_stage("R3_COMPLETED").payload[
+                "revision_id"
+            ],
+            "R4_COMPLETED": workflow._require_stage("R4_COMPLETED").payload[
+                "revision_id"
+            ],
+        }
     finally:
         manager.close()

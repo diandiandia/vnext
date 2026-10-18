@@ -317,6 +317,20 @@ def test_r4_category_plan_runs_as_durable_task(
         assert sum(event.event_type == "R4_COMPLETED" for event in events) == 1
         event = next(item for item in events if item.event_type == "R4_COMPLETED")
         artifact = json.loads(manager.artifacts.get_bytes(event.payload_ref))
+        assert event.payload["source_task_output_refs"] == {
+            scheduled[0].task.task_id: output_ref,
+        }
+        assert event.payload["upstream_revision_ids"] == {
+            "CATEGORY_AUDIT_PLAN_RECORDED": workflow._require_stage(
+                "CATEGORY_AUDIT_PLAN_RECORDED"
+            ).event_id,
+            "R2_COMPLETED": workflow._require_stage("R2_COMPLETED").payload[
+                "revision_id"
+            ],
+            "R3_COMPLETED": workflow._require_stage("R3_COMPLETED").payload[
+                "revision_id"
+            ],
+        }
         assert all(
             axis_run["work_unit_id"] == category_plan.work_unit_id
             for axis_run in artifact["category_runs"][0]["axis_runs"]
@@ -463,6 +477,20 @@ def test_r4_bundle_schedules_two_work_units_and_commits_each_plan(tmp_path: Path
         r4_event = workflow._require_stage("R4_COMPLETED")
         assert r4_event.payload_ref is not None
         r4 = json.loads(manager.artifacts.get_bytes(r4_event.payload_ref))
+        assert r4_event.payload["source_task_output_refs"] == {
+            tasks[0].task.task_id: output_ref,
+        }
+        assert r4_event.payload["upstream_revision_ids"] == {
+            "CATEGORY_AUDIT_PLAN_RECORDED": workflow._require_stage(
+                "CATEGORY_AUDIT_PLAN_RECORDED"
+            ).event_id,
+            "R2_COMPLETED": workflow._require_stage("R2_COMPLETED").payload[
+                "revision_id"
+            ],
+            "R3_COMPLETED": workflow._require_stage("R3_COMPLETED").payload[
+                "revision_id"
+            ],
+        }
         assert {run["category_plan_id"] for run in r4["category_runs"]} == {
             item.category_plan_id for item in category_plans
         }
