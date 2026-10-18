@@ -350,8 +350,9 @@ retired-to-replacement Batch map, and must extend the latest Plan; direct Plan r
 is rejected. Exact durable replays remain idempotent.
 
 Each successful task records positive `agent_runs` and `wall_seconds`; failures may
-report zero when no worker ran. Hosts define and report whether
-`agent_runs` includes delegated sub-agent runs. Workers may claim by operation, Batch,
+report zero when no worker ran. A task with a `delegated_agent_runs` cap requires that
+aggregate measurement; it must stay within the cap and total `agent_runs`. Worker and
+delegate identities remain host/worker-reported, not authenticated. Workers may claim by operation, Batch,
 or task ID and release an unstarted lease. Failed attempts remain visible; after the
 configured retry budget is exhausted, an operator may append a reasoned
 `TASK_RETRY_AUTHORIZED` event for one bounded additional attempt. Success and cancellation

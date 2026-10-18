@@ -48,6 +48,10 @@ while the task remains repairable; R4 reports remain unchanged.
 
 ### 3. Host Identity and Delegated Budgets
 
+Status: **PARTIAL**. Tasks can require and cap an aggregate `delegated_agent_runs`
+measurement bounded by `agent_runs`. Authenticated worker/delegate identities and
+pre-dispatch/provider-side reservations remain open.
+
 Add runtime mechanics for host-attested worker/reviewer identities and explicit delegated
 budget reservations. Runtime claims must bind to a signed or host-verified identity and
 budget envelope; labels alone must never count as authentication. Keep provider hard

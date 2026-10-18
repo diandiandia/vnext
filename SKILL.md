@@ -70,6 +70,9 @@ The host prompt must not restate or override the output schema. Treat the task's
 Every `task-collect` input must include measured `agent_runs` and `wall_seconds`.
 When the host exposes them, also report `input_tokens` (uncached), `cache_read_tokens`,
 and `output_tokens` as integers on every terminal task attempt, including failed attempts.
+When a task declares `delegated_agent_runs` budget, also report that aggregate measurement;
+it must not exceed the task cap or total `agent_runs`. This is reported effort, not
+authenticated delegate identity or a provider-side reservation.
 Campaign reports derive success-only totals and separate attempt-level totals; any missing
 attempt usage makes the attempt cost report incomplete. Missing usage never blocks audit
 collection, but do not claim comparable or complete costs when `usage_complete` is false.
