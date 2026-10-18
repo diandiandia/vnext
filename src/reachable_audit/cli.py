@@ -296,6 +296,44 @@ def _handle_plan(arguments: argparse.Namespace) -> int:
     return 0
 
 
+def _handle_batch_stage(arguments: argparse.Namespace) -> int:
+    with CampaignManager(arguments.target, arguments.state_dir) as manager:
+        workflow = BatchWorkflow(manager, arguments.campaign_id, arguments.batch_id)
+        if arguments.command == "r0":
+            _print({"artifact_id": workflow.run_r0()})
+        elif arguments.command == "batch-report":
+            _print(workflow.build_r0_r3_report())
+        else:
+            value = json.loads(Path(arguments.input).read_text(encoding="utf-8"))
+            if not isinstance(value, dict):
+                raise ValueError("stage input must be a JSON object")
+            if arguments.command == "r1":
+                artifact_id = workflow.record_r1(
+                    [Surface.from_dict(item) for item in value.get("surfaces", [])],
+                    [
+                        BoundaryReview.from_dict(item)
+                        for item in value.get("boundary_reviews", [])
+                    ],
+                )
+            elif arguments.command == "r2":
+                if not isinstance(value.get("axis_runs"), list):
+                    raise ValueError(
+                        "R2 input requires axis_runs for every executed axis"
+                    )
+                artifact_id = workflow.record_r2(
+                    [Hypothesis.from_dict(item) for item in value.get("hypotheses", [])],
+                    axis_evidence=value.get("axis_evidence", {}),
+                    axis_runs=[AxisRun.from_dict(item) for item in value["axis_runs"]],
+                )
+            else:
+                artifact_id = workflow.record_r3([
+                    VerdictSubmission.from_dict(item)
+                    for item in value.get("verdicts", [])
+                ])
+            _print({"artifact_id": artifact_id})
+    return 0
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="reachable-audit")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -835,43 +873,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         if arguments.command in {"r0", "r1", "r2", "r3", "batch-report"}:
-            with CampaignManager(arguments.target, arguments.state_dir) as manager:
-                workflow = BatchWorkflow(
-                    manager, arguments.campaign_id, arguments.batch_id
-                )
-                if arguments.command == "r0":
-                    _print({"artifact_id": workflow.run_r0()})
-                elif arguments.command == "batch-report":
-                    _print(workflow.build_r0_r3_report())
-                else:
-                    value = json.loads(Path(arguments.input).read_text(encoding="utf-8"))
-                    if not isinstance(value, dict):
-                        raise ValueError("stage input must be a JSON object")
-                    if arguments.command == "r1":
-                        artifact_id = workflow.record_r1([
-                            Surface.from_dict(item) for item in value.get("surfaces", [])
-                        ], [
-                            BoundaryReview.from_dict(item)
-                            for item in value.get("boundary_reviews", [])
-                        ])
-                    elif arguments.command == "r2":
-                        if not isinstance(value.get("axis_runs"), list):
-                            raise ValueError("R2 input requires axis_runs for every executed axis")
-                        artifact_id = workflow.record_r2(
-                            [
-                                Hypothesis.from_dict(item)
-                                for item in value.get("hypotheses", [])
-                            ],
-                            axis_evidence=value.get("axis_evidence", {}),
-                            axis_runs=[AxisRun.from_dict(item) for item in value["axis_runs"]],
-                        )
-                    else:
-                        artifact_id = workflow.record_r3([
-                            VerdictSubmission.from_dict(item)
-                            for item in value.get("verdicts", [])
-                        ])
-                    _print({"artifact_id": artifact_id})
-            return 0
+            return _handle_batch_stage(arguments)
 
         if arguments.command in {"handoff-resolve", "handoff-integrate"}:
             value = json.loads(Path(arguments.input).read_text(encoding="utf-8"))
