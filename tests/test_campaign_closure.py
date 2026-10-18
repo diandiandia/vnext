@@ -1,6 +1,7 @@
 import json
 import datetime as dt
 import os
+from dataclasses import replace
 from pathlib import Path
 import signal
 import subprocess
@@ -32,6 +33,7 @@ from conftest import execution_configuration_fixture
 from reachable_audit.graph import build_component_graph
 from reachable_audit.models import CampaignAuditMode, CampaignStatus, ModelError
 from reachable_audit.plan_models import PlanPathDisposition, PlanPathState
+from reachable_audit.planning import create_audit_plan
 from reachable_audit.resource_cleanup import (
     create_campaign_temp_directory,
     register_process_group,
@@ -520,6 +522,70 @@ def test_campaign_report_preserves_excluded_path_scope(tmp_path: Path) -> None:
             manager.state_dir / "campaigns" / "CMP-r4" / "report" / "report.md"
         ).read_text(encoding="utf-8")
         assert "**EXCLUDED** `state.py`" in markdown
+    finally:
+        manager.close()
+
+
+def test_campaign_closure_rejects_stale_plan_after_new_plan_is_recorded(
+    tmp_path: Path,
+) -> None:
+    manager, old_plan = _closable_campaign(tmp_path)
+    try:
+        inventory = manager.load_inventory("CMP-r4")
+        newer_plan = create_audit_plan(
+            campaign_id="CMP-r4",
+            inventory=inventory,
+            category_families=("STATE", "AUTHN"),
+        )
+        manager.record_plan(
+            campaign_id="CMP-r4", plan=newer_plan, inventory=inventory,
+        )
+
+        with pytest.raises(ModelError, match="not the latest recorded Plan"):
+            CampaignCloser(manager, "CMP-r4", old_plan).close(CampaignClosure(
+                architecture_overview="Stale plan must not close the Campaign.",
+                unreviewed_scope=(), residual_risks=(), limitations=(),
+                lessons=(), knowledge_nominations=(), skill_issues=(),
+            ))
+    finally:
+        manager.close()
+
+
+def test_campaign_closure_rejects_plan_object_different_from_recorded_artifact(
+    tmp_path: Path,
+) -> None:
+    manager, plan = _closable_campaign(tmp_path)
+    try:
+        changed_plan = replace(plan, category_families=("FORGED",))
+        with pytest.raises(ModelError, match="differs from latest Plan artifact"):
+            CampaignCloser(manager, "CMP-r4", changed_plan).close(CampaignClosure(
+                architecture_overview="Mutated plan object must not close the Campaign.",
+                unreviewed_scope=(), residual_risks=(), limitations=(),
+                lessons=(), knowledge_nominations=(), skill_issues=(),
+            ))
+    finally:
+        manager.close()
+
+
+def test_campaign_closure_rejects_plan_file_different_from_recorded_artifact(
+    tmp_path: Path,
+) -> None:
+    manager, plan = _closable_campaign(tmp_path)
+    try:
+        plan_path = (
+            manager.state_dir / "campaigns" / "CMP-r4" / "plans"
+            / f"{plan.plan_id}.json"
+        )
+        plan_value = json.loads(plan_path.read_text(encoding="utf-8"))
+        plan_value["category_families"] = ["FORGED"]
+        plan_path.write_text(json.dumps(plan_value), encoding="utf-8")
+
+        with pytest.raises(ModelError, match="file differs from latest Plan artifact"):
+            CampaignCloser(manager, "CMP-r4", plan).close(CampaignClosure(
+                architecture_overview="Mutated durable Plan file must not close the Campaign.",
+                unreviewed_scope=(), residual_risks=(), limitations=(),
+                lessons=(), knowledge_nominations=(), skill_issues=(),
+            ))
     finally:
         manager.close()
 

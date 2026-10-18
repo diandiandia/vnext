@@ -412,7 +412,9 @@ limits its regression baseline to those sources. The `skill-backlog` CLI require
 Campaign ID, returns no prior issues for fresh/legacy mode, and labels results as
 `tool_regression_only`.
 
-Campaign closure requires an explicit `scope_dispositions` array. Every
+Campaign closure requires an explicit `scope_dispositions` array and must use the
+latest durable Plan artifact for the Campaign; stale Plan IDs and caller-mutated Plan
+objects are rejected before gates run. Every
 `unreviewed_scope` string maps to exactly one `EXCLUDED` or `DEFERRED` record with the
 current snapshot ID, approver, rationale, and evidence. Source evidence must resolve to
 a current inventory LOC anchor; artifact evidence must be recorded by the current
@@ -484,7 +486,8 @@ paths remain visible but are not assigned to source-review Work Units. Closure s
 decisions do not change these Plan dispositions. Stable Work Unit identity is derived
 from the frozen snapshot, component identity, shard identity, and included owned paths.
 Any split, merge, or ownership change is a Plan Amendment and preserves references to
-completed evidence.
+completed evidence. Campaign closure is bound to the latest recorded Plan and compares
+the supplied Plan object with its durable artifact before evaluating coverage.
 
 Stable build-dependency edge IDs include the source manifest/build-unit identity, target,
 dependency class, local target/path, and evidence identity. The graph builder rejects

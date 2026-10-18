@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import asdict
 import hashlib
 import json
 from pathlib import Path
@@ -168,6 +169,34 @@ class CampaignCloser:
 
     def close(self, closure: CampaignClosure) -> dict[str, Any]:
         events = self.manager.store.list_events(self.campaign_id)
+        recorded_plans = [
+            event for event in events if event.event_type == "PLAN_RECORDED"
+        ]
+        if not recorded_plans or recorded_plans[-1].entity_id != self.plan.plan_id:
+            raise ModelError(
+                "Campaign closure Plan is not the latest recorded Plan"
+            )
+        plan_event = recorded_plans[-1]
+        if plan_event.payload_ref is None:
+            raise ModelError("latest Campaign Plan event has no durable artifact")
+        try:
+            event_plan = AuditPlan.from_dict(json.loads(
+                self.manager.artifacts.get_bytes(plan_event.payload_ref)
+            ))
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            raise ModelError("latest Campaign Plan artifact is invalid") from error
+        if asdict(event_plan) != asdict(self.plan):
+            raise ModelError("Campaign closure Plan differs from latest Plan artifact")
+        try:
+            stored_plan = self.manager.load_audit_plan(
+                self.campaign_id, self.plan.plan_id
+            )
+        except (OSError, ValueError) as error:
+            raise ModelError("Campaign closure Plan is not durably recorded") from error
+        if asdict(stored_plan) != asdict(self.plan):
+            raise ModelError(
+                "Campaign closure Plan file differs from latest Plan artifact"
+            )
         pending_r6_amendments: dict[str, int] = {}
         for event in events:
             if event.batch_id is None:
