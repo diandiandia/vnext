@@ -765,6 +765,42 @@ def test_record_plan_rejects_caller_inventory_different_from_campaign_artifact(
         )
 
 
+def test_campaign_inventory_is_write_once_after_initial_record(tmp_path: Path) -> None:
+    target = tmp_path / "inventory-write-once"
+    target.mkdir()
+    _write(target / "app.py", "VALUE = 1\n")
+    inventory = build_inventory(target, "fixture:inventory-write-once")
+    component = inventory.components[0]
+    source = inventory.source_files[0]
+    changed_inventory = replace(
+        inventory,
+        components=(replace(component, languages=("rust",)),),
+        source_files=(replace(source, language="rust"),),
+    )
+
+    with CampaignManager(target) as manager:
+        manager.create_campaign(
+            campaign_id="CMP-inventory-write-once",
+            snapshot_id=inventory.snapshot_id,
+        )
+        original_ref = manager.record_inventory(
+            campaign_id="CMP-inventory-write-once", inventory=inventory,
+        )
+        assert manager.record_inventory(
+            campaign_id="CMP-inventory-write-once", inventory=inventory,
+        ) == original_ref
+
+        with pytest.raises(ValueError, match="inventory is write-once"):
+            manager.record_inventory(
+                campaign_id="CMP-inventory-write-once",
+                inventory=changed_inventory,
+            )
+        assert manager.load_inventory("CMP-inventory-write-once") == inventory
+        assert len(manager.store.list_events(
+            "CMP-inventory-write-once", event_type="INVENTORY_RECORDED",
+        )) == 1
+
+
 def test_boundary_source_path_must_belong_to_source_component(tmp_path: Path) -> None:
     target = tmp_path / "monorepo"
     target.mkdir()

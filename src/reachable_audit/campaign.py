@@ -389,6 +389,23 @@ class CampaignManager:
             raise ValueError(
                 f"inventory snapshot does not match Campaign: {inventory.snapshot_id} != {campaign.snapshot_id}"
             )
+        value = asdict(inventory)
+        encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        existing_inventories = self.store.list_events(
+            campaign_id,
+            entity_type="campaign",
+            entity_id=campaign_id,
+            event_type="INVENTORY_RECORDED",
+        )
+        if existing_inventories:
+            existing = existing_inventories[-1]
+            if (
+                existing.payload_ref is None
+                or self.artifacts.get_bytes(existing.payload_ref) != encoded.encode("utf-8")
+            ):
+                raise ValueError(
+                    "Campaign inventory is write-once; changed source scope requires a new Campaign"
+                )
         self.store.record_evidence_paths(
             campaign_id,
             tuple(
@@ -400,8 +417,6 @@ class CampaignManager:
                 for manifest in component.build_manifests
             ),
         )
-        value = asdict(inventory)
-        encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
         artifact = self.artifacts.put_text(encoded)
         self.store.append_event(
             campaign_id=campaign_id,
