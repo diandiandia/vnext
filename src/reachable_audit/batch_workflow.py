@@ -828,10 +828,17 @@ class BatchWorkflow:
             "schema_version": "1.0",
             "category_runs": [asdict(run) for run in runs],
         }
+        revision_metadata = self._stage_revision_metadata(
+            "R4_SCREENING",
+            value,
+            {},
+            ("CATEGORY_AUDIT_PLAN_RECORDED", "R2_COMPLETED"),
+        )
         existing_artifact_id = self._existing_stage_artifact(
             "R4_SCREENING_COVERAGE_RECORDED",
             value,
             conflict_message="R4 screening coverage conflicts with its prior projection",
+            expected_revision_id=revision_metadata["revision_id"],
         )
         if existing_artifact_id is not None:
             return existing_artifact_id
@@ -843,10 +850,14 @@ class BatchWorkflow:
             entity_id=self.batch_id,
             event_type="R4_SCREENING_COVERAGE_RECORDED",
             idempotency_key=(
-                f"r4-screening:{self.campaign_id}:{self.batch_id}:{artifact_id}"
+                f"r4-screening:{self.campaign_id}:{self.batch_id}:"
+                f"{revision_metadata['revision_id']}"
             ),
             actor="tool",
-            payload={"category_plan_ids": sorted(actual_screening)},
+            payload={
+                "category_plan_ids": sorted(actual_screening),
+                **revision_metadata,
+            },
             payload_ref=artifact_id,
         )
         return artifact_id

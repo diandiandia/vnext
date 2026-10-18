@@ -527,6 +527,15 @@ def test_r4_screening_work_unit_needs_no_agent_category_tasks(
         assert screening_event.payload["category_plan_ids"] == [
             category_plan.category_plan_id,
         ]
+        assert screening_event.payload["source_task_output_refs"] == {}
+        assert screening_event.payload["upstream_revision_ids"] == {
+            "CATEGORY_AUDIT_PLAN_RECORDED": workflow._require_stage(
+                "CATEGORY_AUDIT_PLAN_RECORDED"
+            ).event_id,
+            "R2_COMPLETED": workflow._require_stage("R2_COMPLETED").payload[
+                "revision_id"
+            ],
+        }
         screening_runs = [
             CategoryRun.from_dict(item)
             for item in json.loads(

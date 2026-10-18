@@ -40,6 +40,7 @@ from .campaign import CampaignManager
 from .stage_revisions import (
     STAGE_INVALIDATION_DEPENDENTS,
     active_stage_events,
+    invalidated_stage_event_ids,
 )
 from .discovery.hotspots import compact_hotspot_report, scan_work_unit_hotspots
 from .adapters.languages import LANGUAGE_ADAPTERS
@@ -206,6 +207,7 @@ class TaskSpec:
     max_attempts: int = 3
     work_unit_ids: tuple[str, ...] = ()
     bundle_item_ids: tuple[str, ...] = ()
+    stage_revision_ids: Mapping[str, str] = field(default_factory=dict)
 
     @classmethod
     def from_dict(cls, value: Mapping[str, Any]) -> "TaskSpec":
@@ -221,6 +223,10 @@ class TaskSpec:
             max_attempts=int(value.get("max_attempts", 3)),
             work_unit_ids=tuple(str(item) for item in value.get("work_unit_ids", [])),
             bundle_item_ids=tuple(str(item) for item in value.get("bundle_item_ids", [])),
+            stage_revision_ids={
+                str(stage): str(revision_id)
+                for stage, revision_id in value.get("stage_revision_ids", {}).items()
+            },
         )
         if not all((
             task.task_id,
@@ -243,6 +249,8 @@ class TaskSpec:
             raise ModelError("execution task primary Work Unit must be in work_unit_ids")
         if len(task.bundle_item_ids) != len(set(task.bundle_item_ids)):
             raise ModelError("execution task bundle_item_ids must be unique")
+        if any(not stage or not revision_id for stage, revision_id in task.stage_revision_ids.items()):
+            raise ModelError("execution task stage_revision_ids must be non-empty")
         return task
 
 
@@ -1544,6 +1552,8 @@ class DiscoveryCoordinator:
 
     def schedule_r2(self) -> tuple[TaskView, ...]:
         r1_event = self._require_stage("R1_COMPLETED")
+        revision_parts = self._stage_revision_parts("R1_COMPLETED")
+        stage_revision_ids = self._stage_revision_id_map("R1_COMPLETED")
         self.workflow.run_r0()
         if r1_event.payload_ref is None:
             raise ModelError("R1 stage is missing its artifact")
@@ -1591,7 +1601,8 @@ class DiscoveryCoordinator:
                 })
                 views.append(self.backend.submit(TaskSpec(
                     task_id=self._task_id(
-                        "generate_hypotheses", work_unit_id, axis.value
+                        "generate_hypotheses", work_unit_id, axis.value,
+                        *revision_parts,
                     ),
                     campaign_id=self.workflow.campaign_id,
                     batch_id=self.workflow.batch_id,
@@ -1600,12 +1611,15 @@ class DiscoveryCoordinator:
                     input_refs=(input_ref, r1_event.payload_ref),
                     required_output="hypothesis-set/v1",
                     budget={"agent_runs": 1},
+                    stage_revision_ids=stage_revision_ids,
                 )))
         return tuple(views)
 
     def schedule_r2_compact(self) -> tuple[TaskView, ...]:
         """Schedule one consolidated six-axis task per Work Unit."""
         r1_event = self._require_stage("R1_COMPLETED")
+        revision_parts = self._stage_revision_parts("R1_COMPLETED")
+        stage_revision_ids = self._stage_revision_id_map("R1_COMPLETED")
         self.workflow.run_r0()
         if r1_event.payload_ref is None:
             raise ModelError("R1 stage is missing its artifact")
@@ -1654,7 +1668,9 @@ class DiscoveryCoordinator:
                 "required_axes": axes,
             })
             views.append(self.backend.submit(TaskSpec(
-                task_id=self._task_id("generate_hypotheses_compact", work_unit_id),
+                task_id=self._task_id(
+                    "generate_hypotheses_compact", work_unit_id, *revision_parts
+                ),
                 campaign_id=self.workflow.campaign_id,
                 batch_id=self.workflow.batch_id,
                 work_unit_id=work_unit_id,
@@ -1662,13 +1678,17 @@ class DiscoveryCoordinator:
                 input_refs=(input_ref, r1_event.payload_ref),
                 required_output="compact-hypothesis-set/v1",
                 budget={"agent_runs": 1},
+                stage_revision_ids=stage_revision_ids,
             )))
         return tuple(views)
 
     def commit_r2_compact(self) -> str:
+        revision_parts = self._stage_revision_parts("R1_COMPLETED")
         expected = {
             self._task_id(
-                "generate_hypotheses_compact", str(work_unit["work_unit_id"])
+                "generate_hypotheses_compact",
+                str(work_unit["work_unit_id"]),
+                *revision_parts,
             ): work_unit
             for work_unit in self._work_units()
         }
@@ -1726,12 +1746,16 @@ class DiscoveryCoordinator:
         )
 
     def commit_r2(self) -> str:
+        revision_parts = self._stage_revision_parts("R1_COMPLETED")
         expected: dict[str, tuple[Mapping[str, Any], str]] = {}
         for work_unit in self._work_units():
             work_unit_id = str(work_unit["work_unit_id"])
             for axis in DiscoveryAxis:
                 expected[
-                    self._task_id("generate_hypotheses", work_unit_id, axis.value)
+                    self._task_id(
+                        "generate_hypotheses", work_unit_id, axis.value,
+                        *revision_parts,
+                    )
                 ] = (work_unit, axis.value)
         views = self._successful_tasks("generate_hypotheses:", expected, prefix=True)
         hypotheses = []
@@ -1782,6 +1806,8 @@ class DiscoveryCoordinator:
     def schedule_r3(self) -> tuple[TaskView, ...]:
         r1_event = self._require_stage("R1_COMPLETED")
         r2_event = self._require_stage("R2_COMPLETED")
+        revision_parts = self._stage_revision_parts("R2_COMPLETED")
+        stage_revision_ids = self._stage_revision_id_map("R2_COMPLETED")
         if r1_event.payload_ref is None or r2_event.payload_ref is None:
             raise ModelError("R1/R2 stage is missing its artifact")
         r2 = json.loads(self.workflow.manager.artifacts.get_bytes(r2_event.payload_ref))
@@ -1800,7 +1826,9 @@ class DiscoveryCoordinator:
                 },
             })
             views.append(self.backend.submit(TaskSpec(
-                task_id=self._task_id("verify_reachability", hypothesis_id),
+                task_id=self._task_id(
+                    "verify_reachability", hypothesis_id, *revision_parts
+                ),
                 campaign_id=self.workflow.campaign_id,
                 batch_id=self.workflow.batch_id,
                 work_unit_id=str(hypothesis["work_unit_id"]),
@@ -1808,18 +1836,21 @@ class DiscoveryCoordinator:
                 input_refs=(input_ref, r1_event.payload_ref, r2_event.payload_ref),
                 required_output="verdict-submission/v1",
                 budget={"agent_runs": 1},
+                stage_revision_ids=stage_revision_ids,
             )))
         return tuple(views)
 
     def commit_r3(self) -> str:
         r2_event = self._require_stage("R2_COMPLETED")
+        revision_parts = self._stage_revision_parts("R2_COMPLETED")
         if r2_event.payload_ref is None:
             raise ModelError("R2 stage is missing its artifact")
         r2 = json.loads(self.workflow.manager.artifacts.get_bytes(r2_event.payload_ref))
         expected = {
-            self._task_id("verify_reachability", str(item["hypothesis_id"])): str(
-                item["hypothesis_id"]
-            )
+            self._task_id(
+                "verify_reachability", str(item["hypothesis_id"]),
+                *revision_parts,
+            ): str(item["hypothesis_id"])
             for item in r2["hypotheses"]
         }
         views = self._successful_tasks("verify_reachability", expected)
@@ -1845,7 +1876,11 @@ class DiscoveryCoordinator:
         )
 
     def schedule_r35_refutations(self) -> tuple[TaskView, ...]:
-        self._require_stage("R3_COMPLETED")
+        r3_event = self._require_stage("R3_COMPLETED")
+        revision_parts = self._stage_revision_parts("R3_COMPLETED")
+        stage_revision_ids = self._stage_revision_id_map("R3_COMPLETED")
+        if r3_event.payload_ref is None:
+            raise ModelError("R3 stage is missing its artifact")
         views = []
         for hypothesis_id, work_unit_id in self._r35_eligible().items():
             assignments = (
@@ -1869,19 +1904,22 @@ class DiscoveryCoordinator:
                 })
                 views.append(self.backend.submit(TaskSpec(
                     task_id=self._task_id(
-                        "refute_reachability", hypothesis_id, slot
+                        "refute_reachability", hypothesis_id, slot,
+                        *revision_parts,
                     ),
                     campaign_id=self.workflow.campaign_id,
                     batch_id=self.workflow.batch_id,
                     work_unit_id=work_unit_id,
                     operation="refute_reachability",
-                    input_refs=(input_ref,),
+                    input_refs=(input_ref, r3_event.payload_ref),
                     required_output="refutation/v1",
                     budget={"agent_runs": 1},
+                    stage_revision_ids=stage_revision_ids,
                 )))
         return tuple(views)
 
     def commit_r35_refutations(self) -> tuple[str, ...]:
+        revision_parts = self._stage_revision_parts("R3_COMPLETED")
         expected: dict[str, tuple[str, str, frozenset[AttackAngle]]] = {}
         premise_angles = frozenset({
             AttackAngle.PRINCIPAL,
@@ -1896,7 +1934,10 @@ class DiscoveryCoordinator:
             ):
                 refuter_id = f"refuter:{self.workflow.batch_id}:{hypothesis_id}:{slot}"
                 expected[
-                    self._task_id("refute_reachability", hypothesis_id, slot)
+                    self._task_id(
+                        "refute_reachability", hypothesis_id, slot,
+                        *revision_parts,
+                    )
                 ] = (hypothesis_id, refuter_id, angles)
         views = self._successful_tasks("refute_reachability", expected)
         artifact_ids = []
@@ -1932,6 +1973,11 @@ class DiscoveryCoordinator:
         return tuple(artifact_ids)
 
     def schedule_r35_adjudications(self) -> tuple[TaskView, ...]:
+        r3_event = self._require_stage("R3_COMPLETED")
+        revision_parts = self._stage_revision_parts("R3_COMPLETED")
+        stage_revision_ids = self._stage_revision_id_map("R3_COMPLETED")
+        if r3_event.payload_ref is None:
+            raise ModelError("R3 stage is missing its artifact")
         views = []
         for hypothesis_id, work_unit_id in self._r35_eligible().items():
             refutations = self._r35_refutations(hypothesis_id)
@@ -1954,20 +2000,26 @@ class DiscoveryCoordinator:
                 },
             })
             views.append(self.backend.submit(TaskSpec(
-                task_id=self._task_id("adjudicate_refutations", hypothesis_id),
+                task_id=self._task_id(
+                    "adjudicate_refutations", hypothesis_id, *revision_parts
+                ),
                 campaign_id=self.workflow.campaign_id,
                 batch_id=self.workflow.batch_id,
                 work_unit_id=work_unit_id,
                 operation="adjudicate_refutations",
-                input_refs=(input_ref,),
+                input_refs=(input_ref, r3_event.payload_ref),
                 required_output="adjudication/v1",
                 budget={"agent_runs": 1},
+                stage_revision_ids=stage_revision_ids,
             )))
         return tuple(views)
 
     def commit_r35_adjudications(self) -> tuple[str, ...]:
+        revision_parts = self._stage_revision_parts("R3_COMPLETED")
         expected = {
-            self._task_id("adjudicate_refutations", hypothesis_id): hypothesis_id
+            self._task_id(
+                "adjudicate_refutations", hypothesis_id, *revision_parts
+            ): hypothesis_id
             for hypothesis_id in self._r35_eligible()
         }
         views = self._successful_tasks("adjudicate_refutations", expected)
@@ -2000,6 +2052,12 @@ class DiscoveryCoordinator:
     def schedule_r35_revivals(self) -> tuple[TaskView, ...]:
         r2_event = self._require_stage("R2_COMPLETED")
         r3_event = self._require_stage("R3_COMPLETED")
+        revision_parts = self._stage_revision_parts(
+            "R2_COMPLETED", "R3_COMPLETED"
+        )
+        stage_revision_ids = self._stage_revision_id_map(
+            "R2_COMPLETED", "R3_COMPLETED"
+        )
         if r2_event.payload_ref is None or r3_event.payload_ref is None:
             raise ModelError("R2/R3 stage is missing its artifact")
         r2 = json.loads(self.workflow.manager.artifacts.get_bytes(r2_event.payload_ref))
@@ -2046,28 +2104,36 @@ class DiscoveryCoordinator:
                 },
             })
             views.append(self.backend.submit(TaskSpec(
-                task_id=self._task_id("review_unreachable_verdict", hypothesis_id),
+                task_id=self._task_id(
+                    "review_unreachable_verdict", hypothesis_id, *revision_parts
+                ),
                 campaign_id=self.workflow.campaign_id,
                 batch_id=self.workflow.batch_id,
                 work_unit_id=str(hypothesis["work_unit_id"]),
                 operation="review_unreachable_verdict",
-                input_refs=(input_ref,),
+                input_refs=(input_ref, r2_event.payload_ref, r3_event.payload_ref),
                 required_output="revival-review/v1",
                 budget={"agent_runs": 1},
+                stage_revision_ids=stage_revision_ids,
             )))
         return tuple(views)
 
     def commit_r35_revivals(self) -> str:
         selection = self._require_stage("REVIVAL_SAMPLE_SELECTED")
+        revision_parts = self._stage_revision_parts(
+            "R2_COMPLETED", "R3_COMPLETED"
+        )
         if selection.payload_ref is None:
             raise ModelError("R3.5 revival selection is missing its artifact")
         value = json.loads(
             self.workflow.manager.artifacts.get_bytes(selection.payload_ref)
         )
         expected = {
-            self._task_id("review_unreachable_verdict", str(hypothesis_id)): str(
-                hypothesis_id
-            )
+            self._task_id(
+                "review_unreachable_verdict",
+                str(hypothesis_id),
+                *revision_parts,
+            ): str(hypothesis_id)
             for hypothesis_id in value["hypothesis_ids"]
         }
         views = self._successful_tasks("review_unreachable_verdict", expected)
@@ -2095,7 +2161,7 @@ class DiscoveryCoordinator:
         return self.workflow.complete_r35()
 
     def schedule_r4(self) -> tuple[TaskView, ...]:
-        if self.backend.list_tasks(
+        if self._active_task_views(
             operation="run_category_audit_bundle", batch_id=self.workflow.batch_id,
         ):
             raise ModelError(
@@ -2104,6 +2170,12 @@ class DiscoveryCoordinator:
         plan_event = self._require_stage("CATEGORY_AUDIT_PLAN_RECORDED")
         r2_event = self._require_stage("R2_COMPLETED")
         r3_event = self._require_stage("R3_COMPLETED")
+        revision_parts = self._stage_revision_parts(
+            "CATEGORY_AUDIT_PLAN_RECORDED", "R2_COMPLETED", "R3_COMPLETED"
+        )
+        stage_revision_ids = self._stage_revision_id_map(
+            "CATEGORY_AUDIT_PLAN_RECORDED", "R2_COMPLETED", "R3_COMPLETED"
+        )
         if any(event.payload_ref is None for event in (plan_event, r2_event, r3_event)):
             raise ModelError("R4 input stage is missing its artifact")
         value = json.loads(
@@ -2207,7 +2279,9 @@ class DiscoveryCoordinator:
                 },
             })
             views.append(self.backend.submit(TaskSpec(
-                task_id=self._task_id("run_category_audit", category_plan_id),
+                task_id=self._task_id(
+                    "run_category_audit", category_plan_id, *revision_parts
+                ),
                 campaign_id=self.workflow.campaign_id,
                 batch_id=self.workflow.batch_id,
                 work_unit_id=work_unit_id,
@@ -2223,6 +2297,7 @@ class DiscoveryCoordinator:
                     str(name): int(amount)
                     for name, amount in category_plan.get("budget", {}).items()
                 },
+                stage_revision_ids=stage_revision_ids,
             )))
         if screening_runs:
             self.workflow.record_r4_screening_runs(screening_runs)
@@ -2239,6 +2314,12 @@ class DiscoveryCoordinator:
         plan_event = self._require_stage("CATEGORY_AUDIT_PLAN_RECORDED")
         r2_event = self._require_stage("R2_COMPLETED")
         r3_event = self._require_stage("R3_COMPLETED")
+        revision_parts = self._stage_revision_parts(
+            "CATEGORY_AUDIT_PLAN_RECORDED", "R2_COMPLETED", "R3_COMPLETED"
+        )
+        stage_revision_ids = self._stage_revision_id_map(
+            "CATEGORY_AUDIT_PLAN_RECORDED", "R2_COMPLETED", "R3_COMPLETED"
+        )
         if any(event.payload_ref is None for event in (plan_event, r2_event, r3_event)):
             raise ModelError("R4 input stage is missing its artifact")
         value = json.loads(self.workflow.manager.artifacts.get_bytes(plan_event.payload_ref))
@@ -2334,15 +2415,16 @@ class DiscoveryCoordinator:
             self._task_id(
                 "run_category_audit_bundle", family,
                 *(str(item["category_plan_id"]) for item in group),
+                *revision_parts,
             )
             for family, group in groups
         }
-        existing_individual = self.backend.list_tasks(
+        existing_individual = self._active_task_views(
             operation="run_category_audit", batch_id=self.workflow.batch_id,
         )
         if existing_individual:
             raise ModelError("cannot mix individual and bundled R4 tasks in one Batch")
-        existing_bundles = self.backend.list_tasks(
+        existing_bundles = self._active_task_views(
             operation="run_category_audit_bundle", batch_id=self.workflow.batch_id,
         )
         if existing_bundles and {
@@ -2367,7 +2449,10 @@ class DiscoveryCoordinator:
                 for name, amount in category_plan.get("budget", {}).items():
                     budgets[str(name)] = budgets.get(str(name), 0) + int(amount)
             views.append(self.backend.submit(TaskSpec(
-                task_id=self._task_id("run_category_audit_bundle", family, *category_plan_ids),
+                task_id=self._task_id(
+                    "run_category_audit_bundle", family,
+                    *category_plan_ids, *revision_parts,
+                ),
                 campaign_id=self.workflow.campaign_id,
                 batch_id=self.workflow.batch_id,
                 work_unit_id=unit_ids[0],
@@ -2380,6 +2465,7 @@ class DiscoveryCoordinator:
                 ),
                 required_output="category-run-bundle/v1",
                 budget=budgets,
+                stage_revision_ids=stage_revision_ids,
             )))
         return tuple(views)
 
@@ -2449,6 +2535,9 @@ class DiscoveryCoordinator:
 
     def commit_r4(self) -> str:
         plan_event = self._require_stage("CATEGORY_AUDIT_PLAN_RECORDED")
+        revision_parts = self._stage_revision_parts(
+            "CATEGORY_AUDIT_PLAN_RECORDED", "R2_COMPLETED", "R3_COMPLETED"
+        )
         if plan_event.payload_ref is None:
             raise ModelError("CategoryAuditPlan stage is missing its artifact")
         value = json.loads(
@@ -2458,10 +2547,11 @@ class DiscoveryCoordinator:
             str(item["category_plan_id"]): item for item in value["category_plans"]
         }
         screening_event = next((
-            event for event in self.workflow.manager.store.list_batch_events(
-                self.workflow.campaign_id,
-                self.workflow.batch_id,
-                event_type="R4_SCREENING_COVERAGE_RECORDED",
+            event for event in active_stage_events(
+                self.workflow.manager.store.list_batch_events(
+                    self.workflow.campaign_id, self.workflow.batch_id,
+                ),
+                "R4_SCREENING_COVERAGE_RECORDED",
             )
         ), None)
         screening_runs = []
@@ -2477,11 +2567,11 @@ class DiscoveryCoordinator:
             screening_plan_ids = {
                 run.category_plan_id for run in screening_runs
             }
-        bundle_tasks = self.backend.list_tasks(
+        bundle_tasks = self._active_task_views(
             operation="run_category_audit_bundle", batch_id=self.workflow.batch_id,
         )
         if bundle_tasks:
-            individual_tasks = self.backend.list_tasks(
+            individual_tasks = self._active_task_views(
                 operation="run_category_audit", batch_id=self.workflow.batch_id,
             )
             if individual_tasks:
@@ -2516,7 +2606,9 @@ class DiscoveryCoordinator:
                 },
             )
         expected = {
-            self._task_id("run_category_audit", category_plan_id): category_plan_id
+            self._task_id(
+                "run_category_audit", category_plan_id, *revision_parts
+            ): category_plan_id
             for category_plan_id in plans
             if category_plan_id not in screening_plan_ids
         }
@@ -2552,6 +2644,12 @@ class DiscoveryCoordinator:
         r2_event = self._require_stage("R2_COMPLETED")
         r3_event = self._require_stage("R3_COMPLETED")
         r4_event = self._require_stage("R4_COMPLETED")
+        revision_parts = self._stage_revision_parts(
+            "R3_COMPLETED", "R4_COMPLETED"
+        )
+        stage_revision_ids = self._stage_revision_id_map(
+            "R3_COMPLETED", "R4_COMPLETED"
+        )
         if any(event.payload_ref is None for event in (r2_event, r3_event, r4_event)):
             raise ModelError("R5 input stage is missing its artifact")
         r2 = json.loads(self.workflow.manager.artifacts.get_bytes(r2_event.payload_ref))
@@ -2637,7 +2735,9 @@ class DiscoveryCoordinator:
                 },
             })
             views.append(self.backend.submit(TaskSpec(
-                task_id=self._task_id("assess_experiment", hypothesis_id),
+                task_id=self._task_id(
+                    "assess_experiment", hypothesis_id, *revision_parts
+                ),
                 campaign_id=self.workflow.campaign_id,
                 batch_id=self.workflow.batch_id,
                 work_unit_id=str(hypothesis["work_unit_id"]),
@@ -2649,18 +2749,23 @@ class DiscoveryCoordinator:
                 ),
                 required_output="r5-assessment/v1",
                 budget={"agent_runs": 1},
+                stage_revision_ids=stage_revision_ids,
             )))
         return tuple(views)
 
     def commit_r5(self) -> str:
         r3_event = self._require_stage("R3_COMPLETED")
+        revision_parts = self._stage_revision_parts(
+            "R3_COMPLETED", "R4_COMPLETED"
+        )
         if r3_event.payload_ref is None:
             raise ModelError("R3 stage is missing its artifact")
         r3 = json.loads(self.workflow.manager.artifacts.get_bytes(r3_event.payload_ref))
         expected = {
-            self._task_id("assess_experiment", str(item["hypothesis_id"])): str(
-                item["hypothesis_id"]
-            )
+            self._task_id(
+                "assess_experiment", str(item["hypothesis_id"]),
+                *revision_parts,
+            ): str(item["hypothesis_id"])
             for item in r3["verdicts"]
         }
         views = self._successful_tasks("assess_experiment", expected)
@@ -2685,6 +2790,14 @@ class DiscoveryCoordinator:
         )
 
     def schedule_r6(self) -> TaskView:
+        revision_parts = self._stage_revision_parts(
+            "R1_COMPLETED", "R2_COMPLETED", "R3_COMPLETED", "R3_5_COMPLETED",
+            "R4_COMPLETED", "R5_COMPLETED",
+        )
+        stage_revision_ids = self._stage_revision_id_map(
+            "R1_COMPLETED", "R2_COMPLETED", "R3_COMPLETED", "R3_5_COMPLETED",
+            "R4_COMPLETED", "R5_COMPLETED",
+        )
         stage_refs = []
         for event_type in (
             "R1_COMPLETED",
@@ -2735,7 +2848,9 @@ class DiscoveryCoordinator:
             },
         })
         return self.backend.submit(TaskSpec(
-            task_id=self._task_id("collect_batch_closure_evidence"),
+            task_id=self._task_id(
+                "collect_batch_closure_evidence", *revision_parts
+            ),
             campaign_id=self.workflow.campaign_id,
             batch_id=self.workflow.batch_id,
             work_unit_id=self.workflow.batch_id,
@@ -2743,10 +2858,17 @@ class DiscoveryCoordinator:
             input_refs=(input_ref, *stage_refs),
             required_output="batch-closure-evidence/v1",
             budget={"agent_runs": 1},
+            stage_revision_ids=stage_revision_ids,
         ))
 
     def commit_r6(self) -> Mapping[str, Any]:
-        task_id = self._task_id("collect_batch_closure_evidence")
+        revision_parts = self._stage_revision_parts(
+            "R1_COMPLETED", "R2_COMPLETED", "R3_COMPLETED", "R3_5_COMPLETED",
+            "R4_COMPLETED", "R5_COMPLETED",
+        )
+        task_id = self._task_id(
+            "collect_batch_closure_evidence", *revision_parts
+        )
         view = self._successful_tasks(
             "collect_batch_closure_evidence", {task_id: self.workflow.batch_id}
         )[0]
@@ -2840,12 +2962,10 @@ class DiscoveryCoordinator:
             return ()
         if not expected:
             return ()
-        views = tuple(
-            self.backend.list_tasks(
-                operation=None if prefix else operation,
-                operation_prefix=operation if prefix else None,
-                batch_id=self.workflow.batch_id,
-            )
+        views = self._active_task_views(
+            operation=None if prefix else operation,
+            operation_prefix=operation if prefix else None,
+            batch_id=self.workflow.batch_id,
         )
         actual = {view.task.task_id for view in views}
         if actual != set(expected):
@@ -2869,6 +2989,47 @@ class DiscoveryCoordinator:
                 f"execution task output contract mismatch: {sorted(mismatched_outputs)}"
             )
         return views
+
+    def _active_task_views(
+        self,
+        *,
+        operation: str | None = None,
+        operation_prefix: str | None = None,
+        batch_id: str | None = None,
+    ) -> tuple[TaskView, ...]:
+        selected_batch_id = batch_id or self.workflow.batch_id
+        views = self.backend.list_tasks(
+            operation=operation,
+            operation_prefix=operation_prefix,
+            batch_id=selected_batch_id,
+        )
+        events = self.workflow.manager.store.list_batch_events(
+            self.workflow.campaign_id, selected_batch_id,
+        )
+        invalidated_event_ids = invalidated_stage_event_ids(events)
+        invalidated_artifacts = {
+            event.payload_ref
+            for event in events
+            if event.event_id in invalidated_event_ids and event.payload_ref is not None
+        }
+        invalidated_revisions = {
+            (str(event.payload.get("target_stage", "")), str(
+                event.payload.get("target_revision_id", "")
+            ))
+            for event in events
+            if event.event_type == "STAGE_PROJECTION_INVALIDATED"
+        }
+        return tuple(
+            view for view in views
+            if not any(
+                (stage, revision_id) in invalidated_revisions
+                for stage, revision_id in view.task.stage_revision_ids.items()
+            )
+            and (
+                bool(view.task.stage_revision_ids)
+                or not invalidated_artifacts.intersection(view.task.input_refs)
+            )
+        )
 
     def _read_output(self, view: TaskView) -> Mapping[str, Any]:
         if view.output_ref is None:
@@ -2937,6 +3098,23 @@ class DiscoveryCoordinator:
         except ModelError:
             self.workflow.run_r0()
             raise
+
+    def _stage_revision_parts(self, *event_types: str) -> tuple[str, ...]:
+        revisions = self._stage_revision_id_map(*event_types)
+        parts = []
+        for event_type in event_types:
+            parts.extend((
+                event_type,
+                revisions[event_type],
+            ))
+        return tuple(parts)
+
+    def _stage_revision_id_map(self, *event_types: str) -> dict[str, str]:
+        return {
+            event_type: str(event.payload.get("revision_id", event.event_id))
+            for event_type in event_types
+            for event in (self._require_stage(event_type),)
+        }
 
     def _task_id(self, operation: str, *parts: str) -> str:
         source = ":".join((

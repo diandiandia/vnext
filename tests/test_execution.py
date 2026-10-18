@@ -1,5 +1,5 @@
 import datetime as dt
-from dataclasses import replace
+from dataclasses import asdict, replace
 import hashlib
 import hmac
 import json
@@ -59,6 +59,27 @@ def _setup(tmp_path: Path) -> tuple[CampaignManager, TaskSpec]:
         required_output="surface-set/v1",
         budget={"minutes": 10},
     )
+
+
+def test_task_spec_round_trips_stage_revisions_and_reads_legacy_specs() -> None:
+    task = TaskSpec(
+        task_id="TASK-revision-bound",
+        campaign_id="CMP-revision-bound",
+        batch_id="B-revision-bound",
+        work_unit_id="WU-revision-bound",
+        operation="generate_hypotheses_compact",
+        input_refs=("sha256:" + "a" * 64,),
+        required_output="compact-hypothesis-set/v1",
+        budget={"agent_runs": 1},
+        stage_revision_ids={"R1_COMPLETED": "REV-r1-current"},
+    )
+    serialized = asdict(task)
+    assert TaskSpec.from_dict(serialized) == task
+
+    legacy = {key: value for key, value in serialized.items() if key != "stage_revision_ids"}
+    assert TaskSpec.from_dict(legacy).stage_revision_ids == {}
+    with pytest.raises(ModelError, match="stage_revision_ids"):
+        TaskSpec.from_dict({**serialized, "stage_revision_ids": {"R1_COMPLETED": ""}})
 
 
 def test_manual_backend_leases_once_and_collects_idempotently(tmp_path: Path) -> None:
@@ -555,6 +576,8 @@ def test_collected_r1_output_can_be_amended_before_stage_commit(
             }
             for path in plan.work_units[0].source_files
         ]
+        first_r2_tasks = coordinator.schedule_r2_compact()
+        assert len(first_r2_tasks) == 1
         prior_r1_event = workflow._require_stage("R1_COMPLETED")
         post_commit_ref = manager.artifacts.put_text(json.dumps({
             "schema_version": "1.0",
@@ -621,6 +644,12 @@ def test_collected_r1_output_can_be_amended_before_stage_commit(
         assert replacement_r1_event.payload["source_task_output_refs"] == {
             task.task_id: post_commit_ref,
         }
+        replacement_r2_tasks = coordinator.schedule_r2_compact()
+        assert len(replacement_r2_tasks) == 1
+        assert replacement_r2_tasks[0].task.task_id != first_r2_tasks[0].task.task_id
+        assert coordinator._active_task_views(
+            operation="generate_hypotheses_compact",
+        ) == replacement_r2_tasks
         amendments = manager.store.list_events(
             workflow.campaign_id,
             entity_type="execution_task_amendment",
