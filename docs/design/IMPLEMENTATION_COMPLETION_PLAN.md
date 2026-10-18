@@ -10,7 +10,8 @@ they do not substitute for host attestation, held-out campaigns, or release qual
 
 ### 1. Stage Revision, Invalidation, and Recovery
 
-Status: **IN PROGRESS**. R1-R5 projection events carry deterministic revision IDs,
+Status: **LOCAL MECHANICS IMPLEMENTED; ACCEPTANCE IN PROGRESS**. R1-R5 projection
+events carry deterministic revision IDs,
 exact source task-output refs, and upstream revision pins. R1/R2/R4 main/R5 preflight
 exact retries before artifact writes; R3 adjudication and R4 screening retain partial-
 write/exact-retry protection. Post-commit R1-R5 task-output amendments append the
@@ -20,11 +21,10 @@ stale tasks; R3.5 ledgers are revision-aware; Campaign closure blocks unresolved
 invalidations and stale ancestry. Full-Batch Plan Amendment remains the quiescent replay
 path when task evidence cannot be safely reused.
 
-Finish true end-to-end amendment/recommit coverage after each R1-R5 stage, including
-selective descendant replay and preservation of unaffected projections. Extend fault
-injection across every stage commit boundary and verify R3 per-hypothesis and R3.5 ledger
-replay deterministically. Prior artifacts and events remain append-only; closure must
-refuse stale or ancestry-mismatched projections until dependents are recommitted.
+Remaining Phase 1 work is to strengthen the amendment matrix so each stage proves both
+that every descendant is invalidated and every unrelated projection remains active, and
+to fault-inject the final Batch COMPLETE transition after R6 event persistence. Preserve
+append-only history and the existing terminal R6 amendment policy.
 
 Acceptance: fault-injection tests at every write boundary; exact retry is idempotent;
 conflicting retries do not mutate state; full-Batch replay preserves old history and
@@ -116,12 +116,11 @@ are external evidence; local synthetic tests cannot mark these gates complete.
 ## Current Test Gates
 
 The latest full local verification after stage provenance, invalidation, revision-bound
-tasks, R3.5 ledger replay, and closure ancestry is **317 passed, 1 skipped**;
-compatibility-scan passes with no findings (49 Python files, 167 knowledge files, 1
-prompt file). Before closing Phase 1, add end-to-end amendment/recommit coverage after
-each R1-R5 stage, fault-inject every projection commit boundary, prove selective descendant
-replay and unaffected-stage preservation, and retain exact-retry/conflict non-mutation
-checks. The complete suite must pass after those refinements.
+tasks, R3.5 ledger replay, closure ancestry, and commit-boundary recovery tests is
+**319 passed, 1 skipped**; compatibility-scan passes with no findings (49 Python files,
+167 knowledge files, 1 prompt file). Before closing Phase 1, prove unrelated projections
+remain active for each amendment boundary and fault-inject the final R6 Batch COMPLETE
+transition after its event append. The complete suite must pass after those refinements.
 
 Before closing Phase 2, retain old-form compatibility, add compact multi-item round-trip
 and measured byte-reduction tests, verify rejected task output remains repairable, and
