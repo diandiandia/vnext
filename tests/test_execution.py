@@ -70,6 +70,7 @@ def test_manual_backend_leases_once_and_collects_idempotently(tmp_path: Path) ->
         assert backend.claim("worker-b", lease_seconds=60) is None
         output_ref = manager.artifacts.put_text(json.dumps({
             "schema_version": "1.0",
+            "review_altitude": "INSPECTED",
             "reviewed_paths": [],
             "surfaces": [],
             "boundary_reviews": [],
@@ -105,6 +106,7 @@ def test_collected_r1_output_can_be_amended_before_stage_commit(
         assert lease is not None
         original_ref = manager.artifacts.put_text(json.dumps({
             "schema_version": "1.0",
+            "review_altitude": "INSPECTED",
             "reviewed_paths": list(plan.work_units[0].source_files),
             "surfaces": [{
                 "surface_id": "SURF-stray",
@@ -129,6 +131,7 @@ def test_collected_r1_output_can_be_amended_before_stage_commit(
 
         corrected_ref = manager.artifacts.put_text(json.dumps({
             "schema_version": "1.0",
+            "review_altitude": "INSPECTED",
             "reviewed_paths": list(plan.work_units[0].source_files),
             "surfaces": [],
             "boundary_reviews": [],
@@ -151,6 +154,7 @@ def test_collected_r1_output_can_be_amended_before_stage_commit(
                 "work_unit_id": plan.work_units[0].work_unit_id,
                 "path": path,
                 "claim": "AGENT_DECLARED_REVIEWED",
+                "altitude": "INSPECTED",
             }
             for path in plan.work_units[0].source_files
         ]
@@ -182,11 +186,27 @@ def test_r1_blank_anchor_is_rejected_before_collection(tmp_path: Path) -> None:
         backend = ManualExecutionBackend(manager, workflow.campaign_id)
         coordinator = DiscoveryCoordinator(workflow, backend)
         task = coordinator.schedule_r1()[0].task
+        task_input = json.loads(manager.artifacts.get_bytes(task.input_refs[0]))
+        assert "review_altitude" in task_input["output_contract"]
+        assert "SCREENED" in task_input["analysis_contract"]
+        assert "INSPECTED" in task_input["analysis_contract"]
         lease = backend.claim("surface-reviewer", task_id_filter=task.task_id)
         assert lease is not None
         unit = plan.work_units[0]
+        missing_altitude_ref = manager.artifacts.put_text(json.dumps({
+            "schema_version": "1.0",
+            "reviewed_scope": "ALL_SOURCE_FILES",
+            "boundary_reviews": [], "surfaces": [],
+        })).artifact_id
+        with pytest.raises(ModelError, match="review_altitude SCREENED or INSPECTED"):
+            backend.collect(lease, TaskResult(
+                True, missing_altitude_ref, "missing review altitude",
+                {"agent_runs": 1, "wall_seconds": 1},
+            ))
+        assert backend.poll(task.task_id).status is TaskStatus.LEASED
         output = {
-            "schema_version": "1.0", "reviewed_scope": "ALL_SOURCE_FILES",
+            "schema_version": "1.0", "review_altitude": "INSPECTED",
+            "reviewed_scope": "ALL_SOURCE_FILES",
             "boundary_reviews": [], "surfaces": [{
                 "surface_id": "SURF-handler", "work_unit_id": unit.work_unit_id,
                 "component_id": unit.component_id, "kind": "function_entry",
@@ -194,6 +214,15 @@ def test_r1_blank_anchor_is_rejected_before_collection(tmp_path: Path) -> None:
                 "evidence_refs": ["LOC-app.py:1"],
             }],
         }
+        output["review_altitude"] = "DEEP"
+        invalid_altitude_ref = manager.artifacts.put_text(json.dumps(output)).artifact_id
+        with pytest.raises(ModelError, match="review_altitude SCREENED or INSPECTED"):
+            backend.collect(lease, TaskResult(
+                True, invalid_altitude_ref, "invalid review altitude",
+                {"agent_runs": 1, "wall_seconds": 1},
+            ))
+        assert backend.poll(task.task_id).status is TaskStatus.LEASED
+        output["review_altitude"] = "INSPECTED"
         invalid_ref = manager.artifacts.put_text(json.dumps(output)).artifact_id
         with pytest.raises(ModelError, match="blank line"):
             backend.collect(lease, TaskResult(
@@ -499,6 +528,7 @@ def test_collect_rejects_bad_output_before_terminalizing_task(tmp_path: Path) ->
 
         valid_ref = manager.artifacts.put_text(json.dumps({
             "schema_version": "1.0",
+            "review_altitude": "INSPECTED",
             "reviewed_paths": [],
             "surfaces": [],
             "boundary_reviews": [],
@@ -582,6 +612,7 @@ def test_runtime_policy_digest_is_available_without_host_attestation(tmp_path: P
         assert lease is not None
         output_ref = manager.artifacts.put_text(json.dumps({
             "schema_version": "1.0",
+            "review_altitude": "INSPECTED",
             "reviewed_paths": [],
             "surfaces": [],
             "boundary_reviews": [],
@@ -634,7 +665,8 @@ def test_failed_task_can_be_retried_within_attempt_limit(tmp_path: Path) -> None
         assert second is not None
         assert second.attempt == 2
         valid_ref = manager.artifacts.put_text(json.dumps({
-            "schema_version": "1.0", "reviewed_paths": [],
+            "schema_version": "1.0", "review_altitude": "INSPECTED",
+            "reviewed_paths": [],
             "surfaces": [], "boundary_reviews": [],
         })).artifact_id
         result = TaskResult(True, valid_ref, "retry succeeded", {"agent_runs": 1, "wall_seconds": 1})
@@ -664,7 +696,8 @@ def test_exhausted_task_requires_operator_retry_authorization(tmp_path: Path) ->
         assert second is not None
         assert second.attempt == 2
         valid_ref = manager.artifacts.put_text(json.dumps({
-            "schema_version": "1.0", "reviewed_paths": [],
+            "schema_version": "1.0", "review_altitude": "INSPECTED",
+            "reviewed_paths": [],
             "surfaces": [], "boundary_reviews": [],
         })).artifact_id
         assert backend.collect(second, TaskResult(
@@ -741,6 +774,7 @@ def test_collection_rejects_measurements_over_budget(tmp_path: Path) -> None:
         assert lease is not None
         output_ref = manager.artifacts.put_text(json.dumps({
             "schema_version": "1.0",
+            "review_altitude": "INSPECTED",
             "reviewed_paths": [],
             "surfaces": [],
             "boundary_reviews": [],
@@ -780,6 +814,7 @@ def test_discovery_coordinator_commits_r1_and_six_axis_r2(tmp_path: Path) -> Non
         work_unit = plan.work_units[0]
         surface_output = manager.artifacts.put_text(json.dumps({
             "schema_version": "1.0",
+            "review_altitude": "INSPECTED",
             "reviewed_paths": ["app.py"],
             "surfaces": [{
                 "surface_id": "SURF-coordinated",
@@ -945,6 +980,7 @@ def test_compact_r2_runs_all_axes_in_one_task_per_work_unit(tmp_path: Path) -> N
         assert lease is not None
         r1_output = manager.artifacts.put_text(json.dumps({
             "schema_version": "1.0",
+            "review_altitude": "SCREENED",
             "reviewed_paths": ["app.py"],
             "surfaces": [],
             "boundary_reviews": [],
@@ -1067,6 +1103,7 @@ def test_r1_accepts_reviewed_scope_all_and_input_groups_files_by_directory(
             ))
         complete_ref = manager.artifacts.put_text(json.dumps({
             "schema_version": "1.0", "reviewed_scope": "ALL_SOURCE_FILES",
+            "review_altitude": "INSPECTED",
             "surfaces": [], "boundary_reviews": [],
         })).artifact_id
         backend.collect(lease, TaskResult(
@@ -1250,7 +1287,8 @@ def test_collect_rejects_missing_boundary_reviews_with_gap_list(tmp_path: Path) 
         lease = backend.claim("worker")
         assert lease is not None
         partial_ref = manager.artifacts.put_text(json.dumps({
-            "schema_version": "1.0", "reviewed_paths": [], "surfaces": [],
+            "schema_version": "1.0", "review_altitude": "INSPECTED",
+            "reviewed_paths": [], "surfaces": [],
             "boundary_reviews": [{
                 "edge_id": "EDGE-a", "work_unit_id": "WU-1",
                 "disposition": "confirmed", "evidence_refs": [], "rationale": "checked",
@@ -1261,7 +1299,8 @@ def test_collect_rejects_missing_boundary_reviews_with_gap_list(tmp_path: Path) 
                 True, partial_ref, "partial", {"agent_runs": 1, "wall_seconds": 1},
             ))
         evidenced_partial_ref = manager.artifacts.put_text(json.dumps({
-            "schema_version": "1.0", "reviewed_paths": [], "surfaces": [],
+            "schema_version": "1.0", "review_altitude": "INSPECTED",
+            "reviewed_paths": [], "surfaces": [],
             "boundary_reviews": [{
                 "edge_id": "EDGE-a", "work_unit_id": "WU-1",
                 "disposition": "confirmed", "evidence_refs": ["LOC-app.py:1"],
@@ -1274,7 +1313,8 @@ def test_collect_rejects_missing_boundary_reviews_with_gap_list(tmp_path: Path) 
                 {"agent_runs": 1, "wall_seconds": 1},
             ))
         complete_ref = manager.artifacts.put_text(json.dumps({
-            "schema_version": "1.0", "reviewed_paths": [], "surfaces": [],
+            "schema_version": "1.0", "review_altitude": "INSPECTED",
+            "reviewed_paths": [], "surfaces": [],
             "boundary_reviews": [
                 {
                     "edge_id": edge_id, "work_unit_id": "WU-1",

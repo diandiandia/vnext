@@ -238,7 +238,8 @@ def test_cli_amends_successful_uncommitted_task_output(
         lease = backend.claim("worker")
         assert lease is not None
         prior_ref = manager.artifacts.put_text(json.dumps({
-            "schema_version": "1.0", "reviewed_paths": [],
+            "schema_version": "1.0", "review_altitude": "INSPECTED",
+            "reviewed_paths": [],
             "surfaces": [], "boundary_reviews": [],
         })).artifact_id
         backend.collect(lease, TaskResult(
@@ -249,7 +250,8 @@ def test_cli_amends_successful_uncommitted_task_output(
     amend_path = tmp_path / "amendment.json"
     amend_path.write_text(json.dumps({
         "output": {
-                "schema_version": "1.0", "reviewed_scope": "ALL_SOURCE_FILES",
+                "schema_version": "1.0", "review_altitude": "INSPECTED",
+            "reviewed_scope": "ALL_SOURCE_FILES",
             "surfaces": [], "boundary_reviews": [],
         },
             "reason": "replace legacy path echo with the full-scope sentinel",
@@ -459,6 +461,7 @@ def test_cli_drives_a_durable_surface_task(tmp_path: Path, capsys: object) -> No
         },
         "output": {
             "schema_version": "1.0",
+            "review_altitude": "INSPECTED",
             "reviewed_paths": ["main.py"],
             "surfaces": [],
                 "boundary_reviews": [],

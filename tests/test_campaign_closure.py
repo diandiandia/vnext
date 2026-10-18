@@ -617,19 +617,30 @@ def test_campaign_closure_rejects_invalid_path_scope_evidence(tmp_path: Path) ->
 
 
 def test_campaign_report_separates_agent_path_review_claims(tmp_path: Path) -> None:
+    (tmp_path / "other.py").write_text("OTHER = True\n", encoding="utf-8")
     (tmp_path / "state.py").write_text("STATE = {}\n", encoding="utf-8")
     inventory = build_inventory(tmp_path, "fixture:r4")
     plan_seed = create_audit_plan(
         campaign_id="CMP-r4", inventory=inventory, category_families=["STATE"],
     )
     work_unit_id = plan_seed.work_units[0].work_unit_id
-    manager, plan = _closable_campaign(
-        tmp_path,
-        path_review_claims=({
+    scope_claims = (
+        {
             "work_unit_id": work_unit_id,
             "path": "state.py",
             "claim": "AGENT_DECLARED_REVIEWED",
-        },),
+            "altitude": "INSPECTED",
+        },
+        {
+            "work_unit_id": work_unit_id,
+            "path": "other.py",
+            "claim": "AGENT_DECLARED_REVIEWED",
+            "altitude": "SCREENED",
+        },
+    )
+    manager, plan = _closable_campaign(
+        tmp_path,
+        path_review_claims=scope_claims,
     )
     try:
         assert plan.work_units[0].work_unit_id == work_unit_id
@@ -639,17 +650,23 @@ def test_campaign_report_separates_agent_path_review_claims(tmp_path: Path) -> N
             lessons=(), knowledge_nominations=(), skill_issues=(),
         ))
 
-        assert report["coverage"]["agent_declared_reviewed_paths"] == 1
-        assert report["path_review_claims"] == [{
-            "batch_id": plan.batches[0].batch_id,
-            "work_unit_id": work_unit_id,
-            "path": "state.py",
-            "claim": "AGENT_DECLARED_REVIEWED",
-        }]
+        assert report["coverage"]["agent_declared_reviewed_paths"] == 2
+        assert report["coverage"]["agent_declared_path_review_altitudes"] == {
+            "INSPECTED": 1,
+            "SCREENED": 1,
+        }
+        assert report["path_review_altitude_counts"] == {
+            "INSPECTED": 1, "SCREENED": 1,
+        }
+        assert {
+            item["path"]: item["altitude"] for item in report["path_review_claims"]
+        } == {"state.py": "INSPECTED", "other.py": "SCREENED"}
         markdown = (
             manager.state_dir / "campaigns" / "CMP-r4" / "report" / "report.md"
         ).read_text(encoding="utf-8")
         assert "Agent declarations, not host-observed file reads" in markdown
+        assert "INSPECTED 1" in markdown
+        assert "SCREENED 1" in markdown
     finally:
         manager.close()
 

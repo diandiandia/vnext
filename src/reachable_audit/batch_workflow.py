@@ -30,6 +30,7 @@ from .analysis_models import (
     Refutation,
     R5Assessment,
     R5Disposition,
+    ReviewAltitude,
     RevivalReview,
     Surface,
     SurfaceReviewDisposition,
@@ -170,6 +171,7 @@ class BatchWorkflow:
             work_unit_id = str(claim.get("work_unit_id", ""))
             path = str(claim.get("path", ""))
             claim_state = str(claim.get("claim", ""))
+            altitude = str(claim.get("altitude", ""))
             work_unit = work_units.get(work_unit_id)
             if work_unit is None or path not in {
                 str(item) for item in work_unit.get("source_files", [])
@@ -177,6 +179,12 @@ class BatchWorkflow:
                 raise ModelError("R1 path review claim is outside its Work Unit")
             if claim_state != "AGENT_DECLARED_REVIEWED":
                 raise ModelError("R1 path review claim has an invalid state")
+            try:
+                ReviewAltitude(altitude)
+            except ValueError as error:
+                raise ModelError(
+                    "R1 path review claim requires SCREENED or INSPECTED altitude"
+                ) from error
             key = (work_unit_id, path)
             if key in seen_path_review_claims:
                 raise ModelError("R1 contains duplicate path review claims")
@@ -185,6 +193,7 @@ class BatchWorkflow:
                 "work_unit_id": work_unit_id,
                 "path": path,
                 "claim": claim_state,
+                "altitude": altitude,
             })
         line_count_cache: dict[str, tuple[int, frozenset[int]]] = {}
         boundary_edges = {edge.edge_id: edge for edge in plan.boundary_edges}

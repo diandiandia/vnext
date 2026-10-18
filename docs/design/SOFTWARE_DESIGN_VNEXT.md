@@ -556,15 +556,19 @@ against R0 digests. This does not sandbox arbitrary host reads or freeze externa
 
 Each axis output has full Work Unit coverage (`reviewed_paths` or ALL_SOURCE_FILES),
 an evidenced AxisRun, and possibly empty hypotheses. Compact output has one run per
-axis. Review altitude, examined knowledge IDs, and per-path omission dispositions are
-not enforced fields. Partial coverage and `excluded_paths` are rejected. Measurements
-and configuration belong to the task-result envelope.
+axis. Task-coordinated R1 additionally requires per-Work-Unit `review_altitude`
+(`SCREENED` or `INSPECTED`) and persists that Agent declaration on each path claim.
+This is not host-observed inspection. Per-axis altitude, examined knowledge IDs, and
+R2/R4 per-path omission dispositions are not enforced fields. Partial coverage and
+`excluded_paths` are rejected. Measurements and configuration belong to the task-result
+envelope.
 
 Coverage uses axis-derived Work Unit counts: all planned axes NOT_APPLICABLE with no
 hypotheses means screening-only; any APPLICABLE axis contributes to substantive Work
-Units. There is no path/risk-tier inspection ledger. An optional init-frozen screening
-ceiling is reported, not enforced as a closure or evaluator gate; signed overrides are
-not implemented.
+Units. Campaign reports show R1 path-level Agent-declared altitude counts alongside
+Plan scope and ownership counts, but do not aggregate review altitude by risk tier or
+discovery axis. An optional init-frozen screening ceiling is reported, not enforced as
+a closure or evaluator gate; signed overrides are not implemented.
 
 R3, R3.5, and R5 validate their implemented evidence models, not universal strict schemas.
 R5's HarnessCatalog generates recipes with recipe ID, language, family, method,

@@ -129,6 +129,11 @@ class SurfaceReviewState(StrEnum):
     UNREVIEWED = "UNREVIEWED"
 
 
+class ReviewAltitude(StrEnum):
+    SCREENED = "SCREENED"
+    INSPECTED = "INSPECTED"
+
+
 class FindingSeverity(StrEnum):
     CRITICAL = "CRITICAL"
     HIGH = "HIGH"

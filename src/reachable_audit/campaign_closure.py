@@ -11,6 +11,7 @@ from typing import Any, Mapping
 from .analysis_models import (
     CampaignClosure,
     R5Disposition,
+    ReviewAltitude,
     ScopeDispositionKind,
 )
 from .campaign import CampaignManager
@@ -369,6 +370,7 @@ class CampaignCloser:
                         work_unit_id = str(item.get("work_unit_id", ""))
                         path = str(item.get("path", ""))
                         claim = str(item.get("claim", ""))
+                        altitude = str(item.get("altitude", "NOT_RECORDED"))
                         key = (work_unit_id, path)
                         if claim != "AGENT_DECLARED_REVIEWED":
                             path_review_claim_errors.append(
@@ -382,6 +384,12 @@ class CampaignCloser:
                             path_review_claim_errors.append(
                                 f"path review claim is not for an INCLUDED path: {path}"
                             )
+                        elif altitude != "NOT_RECORDED" and altitude not in {
+                            state.value for state in ReviewAltitude
+                        }:
+                            path_review_claim_errors.append(
+                                f"invalid path review altitude: {work_unit_id}/{path}"
+                            )
                         elif key in seen_path_review_claims:
                             path_review_claim_errors.append(
                                 f"duplicate path review claim: {work_unit_id}/{path}"
@@ -393,6 +401,7 @@ class CampaignCloser:
                                 "work_unit_id": work_unit_id,
                                 "path": path,
                                 "claim": claim,
+                                "altitude": altitude,
                             })
                 elif event.event_type == "R2_COMPLETED":
                     hypotheses.extend(artifact["hypotheses"])
@@ -415,6 +424,9 @@ class CampaignCloser:
         ]
         surface_review_state_counts = _counts(
             item["state"] for item in surface_review_dispositions
+        )
+        path_review_altitude_counts = _counts(
+            item["altitude"] for item in path_review_claims
         )
         surface_ids = [item["surface_id"] for item in surfaces]
         analyzed_surface_ids = {
@@ -807,6 +819,7 @@ class CampaignCloser:
                 "agent_declared_reviewed_paths": len({
                     item["path"] for item in path_review_claims
                 }),
+                "agent_declared_path_review_altitudes": path_review_altitude_counts,
                 "surfaces": len(surfaces),
                 "surface_review_dispositions": len(surface_review_dispositions),
                 "boundary_reviews": len(boundary_reviews),
@@ -883,6 +896,7 @@ class CampaignCloser:
                 for item in path_dispositions
             ],
             "path_review_claims": path_review_claims,
+            "path_review_altitude_counts": path_review_altitude_counts,
             "residual_risks": list(closure.residual_risks),
             "limitations": list(closure.limitations),
             "lessons": list(closure.lessons),
@@ -1088,11 +1102,16 @@ class CampaignCloser:
             "### Declared Path Review",
             "",
             "These are Agent declarations, not host-observed file reads or safety proof.",
+            "- Altitudes: " + ", ".join(
+                f"{altitude} {count}"
+                for altitude, count in report.get("path_review_altitude_counts", {}).items()
+            ) if report.get("path_review_altitude_counts") else "- Altitudes: NOT_RECORDED",
         ])
         if report.get("path_review_claims"):
             lines.extend(
                 f"- `{item['path']}` in `{item['batch_id']}` / "
-                f"`{item['work_unit_id']}`: `{item['claim']}`"
+                f"`{item['work_unit_id']}`: `{item['claim']}` "
+                f"(`{item['altitude']}`)"
                 for item in report["path_review_claims"]
             )
         else:

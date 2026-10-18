@@ -231,9 +231,11 @@ subsets because they are not supported end to end. All-six execution remains pol
 not a proven optimum for recall or cost.
 Six axes do not establish six independent line-by-line passes.
 
-Coverage summarizes axis-derived Work Unit counts, source ownership, and closure scope
-decisions, not screened/inspected/deferred paths by risk tier. NOT_APPLICABLE is a scoped
-decision, not a safety result; these counts are not held-out inspection recall.
+Coverage summarizes axis-derived Work Unit counts, Plan path scope, and task-coordinated
+R1 Agent-declared SCREENED/INSPECTED claims. These path-level declarations are not
+host-observed reads and are not yet aggregated by risk tier or discovery axis.
+NOT_APPLICABLE is a scoped decision, not a safety result; these counts are not held-out
+inspection recall.
 
 Registered language hotspot providers may add source-anchored candidate locations to
 R1/R2 task context. A hotspot is a review lead, never a vulnerability verdict. Each

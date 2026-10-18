@@ -26,6 +26,7 @@ from .analysis_models import (
     Hypothesis,
     R5Assessment,
     Refutation,
+    ReviewAltitude,
     RevivalReview,
     Surface,
     SurfaceReviewDisposition,
@@ -588,6 +589,12 @@ class ManualExecutionBackend:
                 task.task_id,
             )
             if task.required_output == "surface-set/v1":
+                try:
+                    ReviewAltitude(str(output["review_altitude"]))
+                except (KeyError, ValueError) as error:
+                    raise ModelError(
+                        f"R1 task requires review_altitude SCREENED or INSPECTED: {task.task_id}"
+                    ) from error
                 self._validate_surface_coverage(task, output)
             else:
                 self._validate_hypothesis_output(task, output)
@@ -1171,12 +1178,17 @@ class DiscoveryCoordinator:
                 "boundary_edges": boundary_edges,
                 "analysis_contract": (
                     _SURFACE_INSTRUCTIONS
+                    + " Declare review_altitude as SCREENED for bounded breadth triage "
+                    "or INSPECTED for targeted source analysis of relevant entry paths "
+                    "and security conditions. This is an Agent declaration, not a "
+                    "host-observed read or proof that the path is safe. "
                     + " Review every supplied boundary edge as confirmed, rejected, or unresolved. "
                     "Return a BoundaryReview for each edge with evidence and rationale."
                 ),
                 "output_contract": {
                     "schema_version": "1.0",
                     "reviewed_scope": _REVIEWED_SCOPE_CONTRACT,
+                    "review_altitude": "SCREENED or INSPECTED, an Agent-declared Work Unit review level",
                     "surfaces": "array<Surface>",
                     "boundary_reviews": (
                         "array<BoundaryReview>, exactly one per supplied edge, with this "
@@ -1218,6 +1230,7 @@ class DiscoveryCoordinator:
                 "work_unit_id": str(work_unit["work_unit_id"]),
                 "path": str(path),
                 "claim": "AGENT_DECLARED_REVIEWED",
+                "altitude": str(value["review_altitude"]),
             } for path in reviewed_paths)
             for item in value.get("surfaces", []):
                 surface = Surface.from_dict(item)
