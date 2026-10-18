@@ -523,7 +523,9 @@ class BatchWorkflow:
 
     def record_refutation(self, refutation: Refutation) -> str:
         self._refutation_target(refutation.hypothesis_id)
-        existing = self._events(
+        r3_event = self._require_stage("R3_COMPLETED")
+        r3_revision_id = str(r3_event.payload.get("revision_id", r3_event.event_id))
+        existing = self._active_events(
             event_type="REFUTATION_SUBMITTED",
             entity_id=refutation.hypothesis_id,
         )
@@ -547,13 +549,17 @@ class BatchWorkflow:
             entity_type="hypothesis",
             entity_id=refutation.hypothesis_id,
             event_type="REFUTATION_SUBMITTED",
-            idempotency_key=f"r35-refute:{self.campaign_id}:{refutation.refutation_id}",
+            idempotency_key=(
+                f"r35-refute:{self.campaign_id}:{r3_revision_id}:"
+                f"{refutation.refutation_id}"
+            ),
             actor="agent",
             payload={
                 "refutation_id": refutation.refutation_id,
                 "refuter_id": refutation.refuter_id,
                 "attack_angle": refutation.attack_angle.value,
                 "verdict": refutation.verdict.value,
+                "source_r3_revision_id": r3_revision_id,
             },
             payload_ref=artifact_id,
         )
@@ -561,7 +567,9 @@ class BatchWorkflow:
 
     def record_adjudication(self, adjudication: Adjudication) -> str:
         _, verifier_verdict = self._refutation_target(adjudication.hypothesis_id)
-        events = self._events(
+        r3_event = self._require_stage("R3_COMPLETED")
+        r3_revision_id = str(r3_event.payload.get("revision_id", r3_event.event_id))
+        events = self._active_events(
             event_type="REFUTATION_SUBMITTED",
             entity_id=adjudication.hypothesis_id,
         )
@@ -597,12 +605,16 @@ class BatchWorkflow:
             entity_type="hypothesis",
             entity_id=adjudication.hypothesis_id,
             event_type="ADJUDICATION_DECIDED",
-            idempotency_key=f"r35-adjudicate:{self.campaign_id}:{adjudication.adjudication_id}",
+            idempotency_key=(
+                f"r35-adjudicate:{self.campaign_id}:{r3_revision_id}:"
+                f"{adjudication.adjudication_id}"
+            ),
             actor=adjudication.actor.value,
             payload={
                 "adjudication_id": adjudication.adjudication_id,
                 "final_verdict": adjudication.final_verdict.value,
                 "refutation_ids": list(adjudication.refutation_ids),
+                "source_r3_revision_id": r3_revision_id,
             },
             payload_ref=artifact_id,
         )
@@ -631,6 +643,8 @@ class BatchWorkflow:
             "rationale": rationale,
             "evidence_refs": list(evidence_refs),
         }
+        r3_event = self._require_stage("R3_COMPLETED")
+        r3_revision_id = str(r3_event.payload.get("revision_id", r3_event.event_id))
         artifact_id = self._put_json(value)
         self.manager.store.append_event(
             campaign_id=self.campaign_id,
@@ -638,9 +652,15 @@ class BatchWorkflow:
             entity_type="batch_stage",
             entity_id=self.batch_id,
             event_type="REVIVAL_SAMPLE_SELECTED",
-            idempotency_key=f"r35-revival-selection:{self.campaign_id}:{self.batch_id}",
+            idempotency_key=(
+                f"r35-revival-selection:{self.campaign_id}:{self.batch_id}:"
+                f"{r3_revision_id}"
+            ),
             actor="agent",
-            payload={"hypothesis_ids": sorted(selected)},
+            payload={
+                "hypothesis_ids": sorted(selected),
+                "source_r3_revision_id": r3_revision_id,
+            },
             payload_ref=artifact_id,
         )
         return artifact_id
@@ -650,6 +670,7 @@ class BatchWorkflow:
         selected = set(self._read_artifact(selection.payload_ref)["hypothesis_ids"])
         if review.hypothesis_id not in selected:
             raise ModelError("revival review hypothesis was not selected")
+        selection_event = self._require_stage("REVIVAL_SAMPLE_SELECTED")
         artifact_id = self._put_json(asdict(review))
         self.manager.store.append_event(
             campaign_id=self.campaign_id,
@@ -657,7 +678,10 @@ class BatchWorkflow:
             entity_type="hypothesis",
             entity_id=review.hypothesis_id,
             event_type="REVIVAL_REVIEWED",
-            idempotency_key=f"r35-revival:{self.campaign_id}:{review.revival_id}",
+            idempotency_key=(
+                f"r35-revival:{self.campaign_id}:{selection_event.event_id}:"
+                f"{review.revival_id}"
+            ),
             actor="agent",
             payload={"revival_id": review.revival_id, "outcome": review.outcome.value},
             payload_ref=artifact_id,
@@ -665,7 +689,7 @@ class BatchWorkflow:
         return artifact_id
 
     def complete_r35(self) -> str:
-        self._require_stage("R3_COMPLETED")
+        r3_event = self._require_stage("R3_COMPLETED")
         verdicts = self._r3_verdicts()
         eligible = {
             item["hypothesis_id"]
@@ -675,7 +699,7 @@ class BatchWorkflow:
         }
         adjudicated = {
             event.entity_id
-            for event in self._events(event_type="ADJUDICATION_DECIDED")
+            for event in self._active_events(event_type="ADJUDICATION_DECIDED")
         }
         if eligible != adjudicated:
             raise ModelError(
@@ -686,7 +710,7 @@ class BatchWorkflow:
         selected = set(self._read_artifact(selection.payload_ref)["hypothesis_ids"])
         reviewed = {
             event.entity_id
-            for event in self._events(event_type="REVIVAL_REVIEWED")
+            for event in self._active_events(event_type="REVIVAL_REVIEWED")
         }
         if selected != reviewed:
             raise ModelError(
@@ -698,6 +722,15 @@ class BatchWorkflow:
             "adjudicated_hypothesis_ids": sorted(adjudicated),
             "revived_hypothesis_ids": sorted(reviewed),
         }
+        revision_metadata = self._stage_revision_metadata(
+            "R3_5", value, {}, ("R3_COMPLETED",)
+        )
+        existing_artifact_id = self._existing_stage_artifact(
+            "R3_5_COMPLETED", value,
+            expected_revision_id=revision_metadata["revision_id"],
+        )
+        if existing_artifact_id is not None:
+            return existing_artifact_id
         artifact_id = self._put_json(value)
         self.manager.store.append_event(
             campaign_id=self.campaign_id,
@@ -705,9 +738,12 @@ class BatchWorkflow:
             entity_type="batch_stage",
             entity_id=self.batch_id,
             event_type="R3_5_COMPLETED",
-            idempotency_key=f"r35:{self.campaign_id}:{self.batch_id}",
+            idempotency_key=(
+                f"r35:{self.campaign_id}:{self.batch_id}:"
+                f"{revision_metadata['revision_id']}"
+            ),
             actor="tool",
-            payload=value,
+            payload={**value, **revision_metadata},
             payload_ref=artifact_id,
         )
         return artifact_id
@@ -1607,8 +1643,14 @@ class BatchWorkflow:
         ordered_submissions = sorted(
             submissions, key=lambda item: item.hypothesis_id,
         )
+        source_output_fingerprint = hashlib.sha256(json.dumps(
+            dict(sorted((source_task_output_refs or {}).items())),
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")).hexdigest()[:24]
         existing_adjudications: dict[str, EventRecord] = {}
-        for event in self._events(event_type="VERDICT_ADJUDICATED"):
+        for event in active_stage_events(self._events(), "VERDICT_ADJUDICATED"):
             if event.entity_id not in hypothesis_ids:
                 raise ModelError(
                     f"R3 has an adjudication outside the R2 hypothesis set: {event.entity_id}"
@@ -1651,7 +1693,8 @@ class BatchWorkflow:
                 event_type="VERDICT_ADJUDICATED",
                 idempotency_key=(
                     f"r3-adjudicate:{self.campaign_id}:{self.batch_id}:"
-                    f"{submission.hypothesis_id}:{submission_digest}"
+                    f"{submission.hypothesis_id}:{submission_digest}:"
+                    f"{source_output_fingerprint}"
                 ),
                 actor="agent",
                 payload=submission_value,
@@ -1845,6 +1888,22 @@ class BatchWorkflow:
             entity_id=entity_id,
         )
 
+    def _active_events(
+        self,
+        *,
+        event_type: str | None = None,
+        event_types: set[str] | frozenset[str] | None = None,
+        entity_type: str | None = None,
+        entity_id: str | None = None,
+    ) -> list[EventRecord]:
+        return [
+            event for event in active_stage_events(self._events())
+            if (event_type is None or event.event_type == event_type)
+            and (event_types is None or event.event_type in event_types)
+            and (entity_type is None or event.entity_type == entity_type)
+            and (entity_id is None or event.entity_id == entity_id)
+        ]
+
     def _r3_verdicts(self) -> list[Mapping[str, Any]]:
         event = self._require_stage("R3_COMPLETED")
         return list(self._read_artifact(event.payload_ref)["verdicts"])
@@ -1862,7 +1921,7 @@ class BatchWorkflow:
             if item["verdict"] == VerdictKind.REACHABLE.value
             and item["evidence_grade"] == EvidenceGrade.EDGE_PROVEN.value
         }
-        events = self._events(event_types={
+        events = self._active_events(event_types={
             "REFUTATION_SUBMITTED",
             "ADJUDICATION_DECIDED",
             "REVIVAL_SAMPLE_SELECTED",

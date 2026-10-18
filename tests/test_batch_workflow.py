@@ -65,7 +65,9 @@ def test_stage_event_filter_keeps_replacement_revision_active() -> None:
         [prior, invalidation, replacement], "R1_COMPLETED"
     ) == [replacement]
     assert STAGE_INVALIDATION_DEPENDENTS["R1_COMPLETED"] == (
-        "R1_COMPLETED", "R2_COMPLETED", "R3_COMPLETED", "R3_5_COMPLETED",
+        "R1_COMPLETED", "R2_COMPLETED", "R3_COMPLETED", "VERDICT_ADJUDICATED",
+        "REFUTATION_SUBMITTED", "ADJUDICATION_DECIDED", "REVIVAL_SAMPLE_SELECTED",
+        "REVIVAL_REVIEWED", "R3_5_COMPLETED",
         "R4_SCREENING_COVERAGE_RECORDED", "R4_COMPLETED", "R5_COMPLETED", "R6_COMPLETED",
         "TRANSMISSION_METRICS_RECORDED",
     )

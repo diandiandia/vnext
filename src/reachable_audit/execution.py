@@ -2907,9 +2907,7 @@ class DiscoveryCoordinator:
     def _r35_refutations(self, hypothesis_id: str) -> list[Mapping[str, Any]]:
         return [
             json.loads(self.workflow.manager.artifacts.get_bytes(event.payload_ref))
-            for event in self.workflow.manager.store.list_batch_events(
-                self.workflow.campaign_id,
-                self.workflow.batch_id,
+            for event in self.workflow._active_events(
                 entity_type="hypothesis",
                 entity_id=hypothesis_id,
                 event_type="REFUTATION_SUBMITTED",

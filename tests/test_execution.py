@@ -8,11 +8,13 @@ from pathlib import Path
 import pytest
 
 from reachable_audit.analysis_models import (
+    AttackAngle,
     DiscoveryAxis,
     EvidenceGrade,
     Hypothesis,
     HypothesisStatus,
     Mechanism,
+    Refutation,
     RevivalOutcome,
     Surface,
     VerdictKind,
@@ -2088,6 +2090,19 @@ def test_discovery_coordinator_schedules_and_commits_r3(
         assert workflow.build_r0_r3_report()["verdict_counts"] == {"REACHABLE": 1}
         r3_event = workflow._require_stage("R3_COMPLETED")
         r2_event = workflow._require_stage("R2_COMPLETED")
+        prior_refutation_ref = workflow.record_refutation(Refutation(
+            refutation_id="REF-r3-revision",
+            hypothesis_id="HYP-r3",
+            refuter_id="refuter-r3-revision",
+            verdict=VerdictKind.REACHABLE,
+            attack_angle=AttackAngle.CALL_CHAIN,
+            evidence_refs=("LOC-app.py:1",),
+            rationale="the edge remains reachable",
+        ))
+        prior_refutation = workflow._active_events(
+            event_type="REFUTATION_SUBMITTED",
+            entity_id="HYP-r3",
+        )[0]
         assert r3_event.payload["source_task_output_refs"] == {
             lease.task.task_id: output_ref,
         }
@@ -2095,6 +2110,51 @@ def test_discovery_coordinator_schedules_and_commits_r3(
             "R2_COMPLETED": r2_event.payload["revision_id"],
         }
         assert r3_event.payload["revision_id"].startswith("REV-")
+        prior_adjudication = workflow._stage_event("VERDICT_ADJUDICATED")
+        assert prior_adjudication is not None
+        replacement_output = {
+            **json.loads(manager.artifacts.get_bytes(output_ref)),
+            "operator_note": "corrected after R3 commit",
+        }
+        replacement_ref = manager.artifacts.put_text(
+            json.dumps(replacement_output)
+        ).artifact_id
+        backend.amend_completed_output(
+            lease.task.task_id,
+            replacement_ref,
+            reason="corrected the committed verifier output",
+            evidence_refs=(output_ref, replacement_ref),
+        )
+        assert workflow._stage_event("R3_COMPLETED") is None
+        assert workflow._stage_event("VERDICT_ADJUDICATED") is None
+        assert workflow._active_events(
+            event_type="REFUTATION_SUBMITTED",
+            entity_id="HYP-r3",
+        ) == []
+
+        coordinator.commit_r3()
+        replacement_r3_event = workflow._require_stage("R3_COMPLETED")
+        assert replacement_r3_event.event_id != r3_event.event_id
+        assert replacement_r3_event.payload["source_task_output_refs"] == {
+            lease.task.task_id: replacement_ref,
+        }
+        adjudication = workflow._stage_event("VERDICT_ADJUDICATED")
+        assert adjudication is not None
+        assert adjudication.event_id != prior_adjudication.event_id
+        assert workflow.record_refutation(Refutation(
+            refutation_id="REF-r3-revision",
+            hypothesis_id="HYP-r3",
+            refuter_id="refuter-r3-revision",
+            verdict=VerdictKind.REACHABLE,
+            attack_angle=AttackAngle.CALL_CHAIN,
+            evidence_refs=("LOC-app.py:1",),
+            rationale="the edge remains reachable",
+        )) == prior_refutation_ref
+        replacement_refutation = workflow._active_events(
+            event_type="REFUTATION_SUBMITTED",
+            entity_id="HYP-r3",
+        )[0]
+        assert replacement_refutation.event_id != prior_refutation.event_id
     finally:
         manager.close()
 
