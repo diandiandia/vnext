@@ -352,6 +352,92 @@ def test_r2_retry_recovers_after_stage_event_append_failure(
         manager.close()
 
 
+def test_r3_retry_recovers_after_partial_adjudication_appends(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manager, workflow, plan = _workflow(tmp_path, "CMP-r3-partial-recovery")
+    work_unit = plan.work_units[0]
+    evidence = {
+        axis: (f"EVID-{axis}",)
+        for axis in (
+            "surface", "mechanism", "state", "fix_variant", "boundary",
+            "differential",
+        )
+    }
+    try:
+        workflow.run_r0()
+        surfaces = [
+            Surface(
+                surface_id=f"SURF-{suffix}",
+                work_unit_id=work_unit.work_unit_id,
+                component_id=work_unit.component_id,
+                kind="function_entry",
+                entry_path="app.py",
+                entry_symbol="handle",
+                principal="remote",
+                evidence_refs=("LOC-app.py:1",),
+            )
+            for suffix in ("one", "two")
+        ]
+        workflow.record_r1(surfaces)
+        hypotheses = [
+            Hypothesis(
+                hypothesis_id=f"HYP-{suffix}",
+                work_unit_id=work_unit.work_unit_id,
+                origin_axis="surface",
+                seed_refs=(f"SURF-{suffix}",),
+                surface_ids=(f"SURF-{suffix}",),
+                mechanism=Mechanism("INJECTION", "guarded-input"),
+                claim="the entry guard blocks the candidate path",
+                status=HypothesisStatus.NEW,
+            )
+            for suffix in ("one", "two")
+        ]
+        workflow.record_r2(
+            hypotheses,
+            axis_evidence=evidence,
+            axis_runs=axis_runs_from_evidence(evidence),
+        )
+        submissions = [
+            VerdictSubmission(
+                hypothesis_id=hypothesis.hypothesis_id,
+                verdict=VerdictKind.UNREACHABLE,
+                evidence_grade=EvidenceGrade.STATIC_ONLY,
+                principal="remote",
+                preconditions=(),
+                call_chain=(),
+                edge_evidence_ids=(),
+                blocking_evidence_ids=("LOC-app.py:1",),
+                experiment_ids=(),
+                rationale="the guard prevents the candidate path",
+            )
+            for hypothesis in hypotheses
+        ]
+        original_append = manager.store._append_event_tx
+        adjudication_appends = 0
+
+        def fail_second_adjudication(**kwargs: object) -> object:
+            nonlocal adjudication_appends
+            if kwargs.get("event_type") == "VERDICT_ADJUDICATED":
+                adjudication_appends += 1
+                if adjudication_appends == 2:
+                    raise RuntimeError("injected second adjudication failure")
+            return original_append(**kwargs)
+
+        monkeypatch.setattr(manager.store, "_append_event_tx", fail_second_adjudication)
+        with pytest.raises(RuntimeError, match="injected second adjudication failure"):
+            workflow.record_r3(submissions)
+        assert workflow._stage_event("R3_COMPLETED") is None
+        assert len(workflow._active_events(event_type="VERDICT_ADJUDICATED")) == 1
+
+        monkeypatch.setattr(manager.store, "_append_event_tx", original_append)
+        workflow.record_r3(submissions)
+        assert len(workflow._active_events(event_type="VERDICT_ADJUDICATED")) == 2
+        assert len(workflow._events(event_type="R3_COMPLETED")) == 1
+    finally:
+        manager.close()
+
+
 def test_r0_r3_slice_records_canonical_verdict_and_partial_report(tmp_path: Path) -> None:
     manager, workflow, plan = _workflow(tmp_path)
     work_unit = plan.work_units[0]
