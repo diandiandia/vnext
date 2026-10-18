@@ -16,7 +16,12 @@ from .artifacts import ArtifactStore
 from .models import BatchRecord, BatchStatus, CampaignAuditMode, CampaignRecord
 from .analysis_models import SkillIssue, SkillIssueStatus
 from .plan_models import AuditPlan, ComponentGraph, PlanAmendment, ProjectInventory
-from .planning import batch_manifest, validate_plan, validate_plan_amendment
+from .planning import (
+    batch_manifest,
+    inventory_digest,
+    validate_plan,
+    validate_plan_amendment,
+)
 from .store import AuditStore
 
 
@@ -470,6 +475,19 @@ class CampaignManager:
             raise ValueError(f"plan Campaign mismatch: {plan.campaign_id} != {campaign_id}")
         if plan.snapshot_id != campaign.snapshot_id:
             raise ValueError(f"plan snapshot mismatch: {plan.snapshot_id} != {campaign.snapshot_id}")
+        inventory_events = self.store.list_events(
+            campaign_id,
+            entity_type="campaign",
+            entity_id=campaign_id,
+            event_type="INVENTORY_RECORDED",
+        )
+        if not inventory_events or inventory_events[-1].payload_ref is None:
+            raise ValueError("Campaign inventory must be recorded before its Plan")
+        recorded_inventory = ProjectInventory.from_dict(json.loads(
+            self.artifacts.get_bytes(inventory_events[-1].payload_ref)
+        ))
+        if inventory_digest(inventory) != inventory_digest(recorded_inventory):
+            raise ValueError("Plan inventory does not match the durable Campaign inventory")
         validate_plan(plan, inventory)
         value = asdict(plan)
         encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))

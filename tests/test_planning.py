@@ -662,6 +662,47 @@ def test_inventory_and_plan_are_persistent_and_idempotent(tmp_path: Path) -> Non
     assert (campaign_dir / "plans" / f"{plan.plan_id}.json").exists()
 
 
+def test_record_plan_rejects_caller_inventory_different_from_campaign_artifact(
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "durable-inventory"
+    target.mkdir()
+    _write(target / "app.py", "VALUE = 1\n")
+    inventory = build_inventory(target, "fixture:durable-inventory")
+    substituted_inventory = replace(
+        inventory,
+        source_files=(replace(inventory.source_files[0], language="rust"),),
+    )
+    plan = create_audit_plan(
+        campaign_id="CMP-durable-inventory",
+        inventory=substituted_inventory,
+        category_families=["STATE"],
+    )
+
+    with CampaignManager(target) as manager:
+        manager.create_campaign(
+            campaign_id="CMP-durable-inventory",
+            snapshot_id=inventory.snapshot_id,
+        )
+        manager.record_inventory(
+            campaign_id="CMP-durable-inventory", inventory=inventory,
+        )
+
+        with pytest.raises(
+            ValueError, match="does not match the durable Campaign inventory",
+        ):
+            manager.record_plan(
+                campaign_id="CMP-durable-inventory",
+                plan=plan,
+                inventory=substituted_inventory,
+            )
+        assert not manager.store.list_events(
+            "CMP-durable-inventory",
+            entity_type="plan",
+            event_type="PLAN_RECORDED",
+        )
+
+
 def test_boundary_source_path_must_belong_to_source_component(tmp_path: Path) -> None:
     target = tmp_path / "monorepo"
     target.mkdir()
