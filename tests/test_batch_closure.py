@@ -281,6 +281,16 @@ def test_signed_external_observation_is_registered_without_r5_upgrade(
         assert observation_event.payload["r5_effect"] == "EVIDENCE_ONLY_NOT_CONFIRMING"
         assert observation_event.payload_ref == observation_ref
 
+        backend = ManualExecutionBackend(manager, workflow.campaign_id)
+        r5_tasks = DiscoveryCoordinator(
+            workflow, backend,
+        ).schedule_r5()
+        assert len(r5_tasks) == 1
+        r5_input = json.loads(
+            manager.artifacts.get_bytes(r5_tasks[0].task.input_refs[0])
+        )
+        assert r5_input["registered_external_observations"][0]["artifact_id"] == observation_ref
+
         workflow.record_r5([], [R5Assessment(
             hypothesis_id="HYP-static",
             experiment_required=False,
@@ -288,6 +298,7 @@ def test_signed_external_observation_is_registered_without_r5_upgrade(
             disposition=R5Disposition.NEEDS_REVIEW,
             evidence_refs=(observation_ref,),
             rationale="external observation is registered but not independently promoted",
+            external_observation_refs=(observation_ref,),
         )])
         r5_event = workflow._require_stage("R5_COMPLETED")
         r5 = json.loads(manager.artifacts.get_bytes(r5_event.payload_ref))

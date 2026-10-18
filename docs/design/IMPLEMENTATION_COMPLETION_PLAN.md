@@ -67,8 +67,9 @@ identity and provider enforcement require a host integration acceptance run.
 Status: **PARTIAL MECHANICS IMPLEMENTED**. `r5-observation-register` verifies a
 host-authority HMAC and binds an observation to Campaign/snapshot/Batch/hypothesis,
 observer/method/time, and Campaign-owned artifact digests. Registration is evidence-only
-and cannot upgrade R5. Authority key custody, observer identity trust, and independent
-accept-path qualification remain external.
+and cannot upgrade R5; R5 task context exposes matching observations and assessments may
+cite them without promotion. Authority key custody, observer identity trust, and
+independent accept-path qualification remain external.
 
 Support authorized external observations without treating a string reference as proof.
 Bind evidence to hypothesis, snapshot, target, observer identity, method, timestamp,

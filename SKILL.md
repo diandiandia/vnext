@@ -410,6 +410,9 @@ PYTHONPATH=<vnext>/src python3 -m reachable_audit shadow-evaluate \
 environment and a signed observation bound to the current Campaign, snapshot, Batch,
 hypothesis, observer, method, timestamp, and Campaign-owned `sha256:` evidence artifacts.
 It records provenance only; it never confirms or refutes an R5 hypothesis.
+R5 tasks expose only registered observations for their hypothesis; assessments may cite
+their IDs in both `external_observation_refs` and `evidence_refs`. Cross-hypothesis or
+cross-Batch references are rejected; cited observations remain non-confirming evidence.
 
 For `handoff-resolve`, an `EDGE_PROVEN` resolution requires `boundary_proof` bound to
 the planned edge: edge/component IDs, interface kind, direction, principal, premises,

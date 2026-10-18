@@ -15,7 +15,7 @@ IMPLEMENTED_RELEASE_GATES = tuple(f"RG{index}" for index in range(1, 16))
 
 
 _POLICY: dict[str, Any] = {
-    "policy_version": "vnext-task-policy-31",
+    "policy_version": "vnext-task-policy-32",
     "task_collection": {
         "shell_execution_by_scheduler": False,
         "required_measurements": ["agent_runs", "wall_seconds"],
@@ -35,7 +35,6 @@ _POLICY: dict[str, Any] = {
         "r4_bundle": "opt-in_same-family_preserve_per_plan_results",
         "r4_bundle_default_work_units": 1,
         "r4_bundle_max_input_bytes": 524288,
-        "r4_bundle_mechanism_cards": "shared_once_at_bundle_scope_seed_ids_remain_item_local",
         "empty_component_planning": "omit_only_without_source_manifest_or_boundary_obligation",
         "r2_hypothesis_id": "HYP-work_unit_id-origin_axis-positive_ordinal",
         "r4_category_run_validation": "collect_plan_scope_axes_and_verbatim_variants",
@@ -47,6 +46,7 @@ _POLICY: dict[str, Any] = {
         "r5_experiment_reference_validation": "collect_and_commit_null_or_task_local_id",
         "r5_not_feasible": "required_blocker_evidence_null_experiment_id_needs_review_no_attempted_run",
         "r5_external_observation": "host_hmac_campaign_snapshot_batch_hypothesis_observer_method_time_campaign_owned_artifacts_evidence_only_non_confirming",
+        "r5_external_observation_refs": "optional_assessment_refs_must_name_registered_same_batch_hypothesis_observation;never_confirms_or_refutes",
         "late_stage_amendment": "r5_r6_precommit_and_terminal_r6_postcommit_before_campaign_close",
         "r5_empirical_contract": "host_registered_harness_for_same_hypothesis_and_snapshot",
         "experiment_recipe_prerequisites": "optional_tooling_scoped_to_memory_safety_and_numeric_families",

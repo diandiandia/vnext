@@ -22,6 +22,7 @@ from .analysis_models import (
     CategoryRunStatus,
     DiscoveryAxis,
     EvidenceGrade,
+    ExternalObservation,
     Experiment,
     ExperimentResult,
     Finding,
@@ -929,12 +930,42 @@ class BatchWorkflow:
             )
             else ()
         )
+        external_observation_events = self.manager.store.list_batch_events(
+            self.campaign_id,
+            self.batch_id,
+            entity_type="external_observation",
+            event_type="OUT_OF_BAND_OBSERVATION_RECORDED",
+        )
+        external_observations_by_ref = {}
+        for event in external_observation_events:
+            if event.payload_ref is None:
+                raise ModelError("external observation event is missing its signed artifact")
+            observation = ExternalObservation.from_dict(
+                self._read_artifact(event.payload_ref)
+            )
+            if (
+                observation.observation_id != event.entity_id
+                or observation.campaign_id != self.campaign_id
+                or observation.batch_id != self.batch_id
+                or observation.snapshot_id != self.campaign.snapshot_id
+            ):
+                raise ModelError("external observation event scope does not match its artifact")
+            external_observations_by_ref[event.payload_ref] = observation
         for experiment in experiments:
             if experiment.hypothesis_id not in verdicts:
                 raise ModelError(
                     f"experiment references unknown hypothesis: {experiment.experiment_id}"
                 )
         for assessment in assessments:
+            for reference in assessment.external_observation_refs:
+                observation = external_observations_by_ref.get(reference)
+                if (
+                    observation is None
+                    or observation.hypothesis_id != assessment.hypothesis_id
+                ):
+                    raise ModelError(
+                        f"R5 external observation is outside assessment scope: {assessment.hypothesis_id}"
+                    )
             experiment = (
                 experiment_by_id.get(assessment.experiment_id)
                 if assessment.experiment_id

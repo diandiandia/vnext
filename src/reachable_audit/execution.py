@@ -2490,6 +2490,25 @@ class DiscoveryCoordinator:
         work_units = {
             str(item["work_unit_id"]): item for item in self._work_units()
         }
+        external_observations_by_hypothesis: dict[str, list[dict[str, Any]]] = {}
+        for event in self.workflow.manager.store.list_batch_events(
+            self.workflow.campaign_id,
+            self.workflow.batch_id,
+            entity_type="external_observation",
+            event_type="OUT_OF_BAND_OBSERVATION_RECORDED",
+        ):
+            if event.payload_ref is None:
+                continue
+            observation = json.loads(
+                self.workflow.manager.artifacts.get_bytes(event.payload_ref)
+            )
+            external_observations_by_hypothesis.setdefault(
+                str(observation["hypothesis_id"]),
+                [],
+            ).append({
+                "artifact_id": event.payload_ref,
+                "observation": observation,
+            })
         views = []
         for verdict in r3["verdicts"]:
             hypothesis_id = str(verdict["hypothesis_id"])
@@ -2515,6 +2534,9 @@ class DiscoveryCoordinator:
                     if event.payload.get("hypothesis_id") == hypothesis_id
                     and event.payload.get("snapshot_id") == self.workflow.campaign.snapshot_id
                 ],
+                "registered_external_observations": external_observations_by_hypothesis.get(
+                    hypothesis_id, []
+                ),
                 "analysis_contract": (
                     "Decide whether an experiment is required. Empirical confirmation "
                     "requires a real-target or equivalence-proven confirmed experiment "
@@ -2522,7 +2544,10 @@ class DiscoveryCoordinator:
                     "Worker-local execution alone is not registered evidence. Propose the "
                     "command and limits to the host; the host must execute harness-run and "
                     "supply its execution/stdout/stderr artifact refs before an empirical "
-                    "assessment is collected or amended. Never invent these refs. Otherwise "
+                    "assessment is collected or amended. External observations are signed "
+                    "provenance leads only; cite their artifact IDs in external_observation_refs "
+                    "and evidence_refs, but they do not confirm/refute an R5 disposition. "
+                    "Never invent these refs. Otherwise "
                     "preserve the supported non-empirical disposition or report the blocker. "
                     "Use NOT_FEASIBLE only when an experiment is required but cannot be run "
                     "because of a documented environment/tooling/authorization constraint; "
@@ -2536,7 +2561,7 @@ class DiscoveryCoordinator:
                 "output_contract": {
                     "schema_version": "1.0",
                     "experiments": "array<Experiment>",
-                    "assessment": "R5Assessment",
+                    "assessment": "R5Assessment; optional external_observation_refs must name registered same-Batch observations",
                 },
             })
             views.append(self.backend.submit(TaskSpec(

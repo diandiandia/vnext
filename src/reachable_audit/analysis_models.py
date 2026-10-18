@@ -899,6 +899,7 @@ class R5Assessment:
     disposition: R5Disposition
     evidence_refs: tuple[str, ...]
     rationale: str
+    external_observation_refs: tuple[str, ...] = ()
 
     @classmethod
     def from_dict(cls, value: Mapping[str, Any]) -> "R5Assessment":
@@ -913,9 +914,16 @@ class R5Assessment:
             disposition=R5Disposition(str(value["disposition"])),
             evidence_refs=tuple(str(item) for item in value.get("evidence_refs", [])),
             rationale=str(value["rationale"]),
+            external_observation_refs=tuple(
+                str(item) for item in value.get("external_observation_refs", [])
+            ),
         )
         if not assessment.evidence_refs or not assessment.rationale:
             raise ModelError("R5 assessment requires evidence refs and rationale")
+        if len(assessment.external_observation_refs) != len(set(assessment.external_observation_refs)):
+            raise ModelError("R5 external_observation_refs must be unique")
+        if not set(assessment.external_observation_refs).issubset(assessment.evidence_refs):
+            raise ModelError("R5 external observation refs must also appear in evidence_refs")
         if assessment.disposition is R5Disposition.NOT_FEASIBLE:
             if not assessment.experiment_required or assessment.experiment_id is not None:
                 raise ModelError(

@@ -308,6 +308,9 @@ observation to Campaign/snapshot/Batch/hypothesis, observer, method, timestamp, 
 Campaign-owned evidence digests. It records evidence-only provenance and does not alter
 R5 disposition or satisfy the managed-harness empirical-upgrade gate. Authority key
 custody and independent observer identity trust remain external.
+R5 tasks expose only observations registered for their hypothesis; assessment references
+are validated against the current Batch and hypothesis. Citing an observation does not
+change the R5 confirmation/refutation rules.
 R6 closure uses canonical stage artifacts rather than a source-discovery inventory.
 A rejection reports counts and the first ten missing or extra edge IDs and leaves the
 task leased. Agent-facing task inputs are compacted
