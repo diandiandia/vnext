@@ -602,6 +602,15 @@ def validate_plan(plan: AuditPlan, inventory: ProjectInventory) -> None:
     if set(planned_work_units) != known_work_units:
         raise ModelError("batch work unit coverage mismatch")
     work_units_by_id = {unit.work_unit_id: unit for unit in plan.work_units}
+    for batch in plan.batches:
+        expected_source_count = sum(
+            len(work_units_by_id[work_unit_id].source_files)
+            for work_unit_id in batch.work_unit_ids
+        )
+        if batch.source_file_count != expected_source_count:
+            raise ModelError(
+                f"Batch source_file_count does not match Work Unit ownership: {batch.batch_id}"
+            )
     edges_by_id = {edge.edge_id: edge for edge in plan.boundary_edges}
     if len(edges_by_id) != len(plan.boundary_edges):
         raise ModelError("plan duplicates boundary edge IDs")

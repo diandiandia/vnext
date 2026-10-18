@@ -176,6 +176,31 @@ def test_validate_plan_rejects_duplicate_work_unit_and_batch_ids(
         validate_plan(duplicate_batch, inventory)
 
 
+def test_validate_plan_checks_batch_source_file_count(tmp_path: Path) -> None:
+    target = tmp_path / "batch-source-count"
+    target.mkdir()
+    _fixture_monorepo(target)
+    inventory = build_inventory(target, "fixture:batch-source-count")
+    plan = create_audit_plan(
+        campaign_id="CMP-batch-source-count",
+        inventory=inventory,
+        category_families=["STATE"],
+        max_source_files_per_work_unit=1,
+        max_work_units_per_batch=1,
+    )
+    batch = plan.batches[0]
+    incorrect_count = replace(
+        plan,
+        batches=(
+            replace(batch, source_file_count=batch.source_file_count + 1),
+            *plan.batches[1:],
+        ),
+    )
+
+    with pytest.raises(ModelError, match="source_file_count does not match"):
+        validate_plan(incorrect_count, inventory)
+
+
 def test_worktree_footprint_excludes_symlinks_and_runtime_state(tmp_path: Path) -> None:
     (tmp_path / "payload.txt").write_text("abc", encoding="utf-8")
     (tmp_path / "shortcut").symlink_to("payload.txt")
