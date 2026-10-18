@@ -92,6 +92,63 @@ def test_event_collection_is_idempotent_and_rejects_conflicts(tmp_path: Path) ->
             )
 
 
+def test_bulk_event_append_rolls_back_earlier_inserts_on_conflict(
+    tmp_path: Path,
+) -> None:
+    with AuditStore(tmp_path / "bulk-rollback.db") as store:
+        store.create_campaign(
+            campaign_id="CMP-bulk-rollback",
+            target_root="/runtime/target",
+            snapshot_id="fixture:bulk-rollback",
+        )
+        store.add_batch(
+            campaign_id="CMP-bulk-rollback",
+            batch_id="B-1",
+            manifest={"work_unit_ids": ["WU-1"]},
+        )
+        store.add_batch(
+            campaign_id="CMP-bulk-rollback",
+            batch_id="B-2",
+            manifest={"work_unit_ids": ["WU-2"]},
+        )
+        store.append_event(
+            campaign_id="CMP-bulk-rollback",
+            batch_id="B-2",
+            entity_type="handoff",
+            entity_id="HO-2",
+            event_type="HANDOFF_RESOLVED",
+            idempotency_key="resolve:HO-2",
+            actor="test",
+            payload={"outcome": "NEEDS_REVIEW"},
+        )
+
+        with pytest.raises(ConflictError, match="idempotency key reused"):
+            store.append_events_batch("CMP-bulk-rollback", [{
+                "batch_id": "B-1",
+                "entity_type": "handoff",
+                "entity_id": "HO-1",
+                "event_type": "HANDOFF_RESOLVED",
+                "idempotency_key": "resolve:HO-1",
+                "actor": "test",
+                "payload": {"outcome": "NEEDS_REVIEW"},
+            }, {
+                "batch_id": "B-2",
+                "entity_type": "handoff",
+                "entity_id": "HO-2",
+                "event_type": "HANDOFF_RESOLVED",
+                "idempotency_key": "resolve:HO-2",
+                "actor": "test",
+                "payload": {"outcome": "EDGE_PROVEN"},
+            }])
+
+        resolved = store.list_events(
+            "CMP-bulk-rollback", event_type="HANDOFF_RESOLVED",
+        )
+        assert [(event.entity_id, event.payload["outcome"]) for event in resolved] == [
+            ("HO-2", "NEEDS_REVIEW"),
+        ]
+
+
 def test_event_queries_filter_by_entity_type_and_batch(tmp_path: Path) -> None:
     with AuditStore(tmp_path / "filtered.db") as store:
         store.create_campaign(
