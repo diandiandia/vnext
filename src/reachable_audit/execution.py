@@ -592,6 +592,45 @@ class ManualExecutionBackend:
         if campaign.status is CampaignStatus.COMPLETE:
             raise ModelError("task output cannot be amended after Campaign closure")
         if replacement_output_ref == view.output_ref:
+            prior_amendments = self.manager.store.list_events(
+                self.campaign_id,
+                entity_type="execution_task_amendment",
+                entity_id=task_id,
+                event_type="TASK_OUTPUT_AMENDED",
+            )
+            matching = next((
+                event for event in reversed(prior_amendments)
+                if event.payload.get("replacement_output_ref") == replacement_output_ref
+            ), None)
+            if matching is not None:
+                expected_payload = {
+                    **dict(matching.payload),
+                    "reason": reason.strip(),
+                    "evidence_refs": list(evidence_refs),
+                }
+                if (
+                    not reason.strip()
+                    or not actor.strip()
+                    or not evidence_refs
+                    or matching.actor != actor
+                    or dict(matching.payload) != expected_payload
+                ):
+                    raise ModelError("task output amendment conflicts with prior amendment")
+                self.manager.store.append_event(
+                    campaign_id=self.campaign_id,
+                    batch_id=view.task.batch_id,
+                    entity_type="execution_task_amendment",
+                    entity_id=task_id,
+                    event_type="TASK_OUTPUT_AMENDED",
+                    idempotency_key=(
+                        f"task-output-amend:{self.campaign_id}:{task_id}:"
+                        f"{matching.payload['prior_output_ref']}:{replacement_output_ref}"
+                    ),
+                    actor=actor,
+                    payload=dict(matching.payload),
+                    payload_ref=replacement_output_ref,
+                )
+                return view
             raise ModelError("task output amendment must replace the current artifact")
         if not reason.strip() or not actor.strip() or not evidence_refs:
             raise ModelError("task output amendment requires actor, reason, and evidence")

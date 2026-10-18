@@ -631,6 +631,19 @@ def test_collected_r1_output_can_be_amended_before_stage_commit(
             evidence_refs=(corrected_ref, post_commit_ref),
         )
         assert amended_after_commit.output_ref == post_commit_ref
+        assert backend.amend_completed_output(
+            task.task_id,
+            post_commit_ref,
+            reason="corrected the committed surface review",
+            evidence_refs=(corrected_ref, post_commit_ref),
+        ) == amended_after_commit
+        with pytest.raises(ModelError, match="conflicts with prior amendment"):
+            backend.amend_completed_output(
+                task.task_id,
+                post_commit_ref,
+                reason="conflicting reason for the same replacement",
+                evidence_refs=(corrected_ref, post_commit_ref),
+            )
         assert workflow._stage_event("R1_COMPLETED") is None
         invalidation = next(
             event for event in manager.store.list_batch_events(
