@@ -2151,6 +2151,20 @@ def test_discovery_coordinator_schedules_and_commits_r3(
                 {"agent_runs": 1, "wall_seconds": 1},
                 execution_configuration_fixture(),
             ))
+        original_append = manager.store._append_event_tx
+
+        def fail_r3_stage_append(**kwargs: object) -> object:
+            if kwargs.get("event_type") == "R3_COMPLETED":
+                raise RuntimeError("injected R3 stage append failure")
+            return original_append(**kwargs)
+
+        with monkeypatch.context() as patch:
+            patch.setattr(manager.store, "_append_event_tx", fail_r3_stage_append)
+            with pytest.raises(RuntimeError, match="injected R3 stage append failure"):
+                coordinator.commit_r3()
+        assert workflow._stage_event("R3_COMPLETED") is None
+        assert workflow._stage_event("VERDICT_ADJUDICATED") is not None
+
         coordinator.commit_r3()
         assert workflow.build_r0_r3_report()["verdict_counts"] == {"REACHABLE": 1}
         r3_event = workflow._require_stage("R3_COMPLETED")
@@ -2224,7 +2238,9 @@ def test_discovery_coordinator_schedules_and_commits_r3(
         manager.close()
 
 
-def test_discovery_coordinator_runs_independent_r35_refutations(tmp_path: Path) -> None:
+def test_discovery_coordinator_runs_independent_r35_refutations(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
     manager, workflow, plan = _workflow(tmp_path, "CMP-r35-tasks")
     try:
         work_unit = plan.work_units[0]
@@ -2297,6 +2313,18 @@ def test_discovery_coordinator_runs_independent_r35_refutations(tmp_path: Path) 
         ))
         coordinator.commit_r35_adjudications()
         assert coordinator.schedule_r35_revivals() == ()
+        original_append = manager.store._append_event_tx
+
+        def fail_r35_stage_append(**kwargs: object) -> object:
+            if kwargs.get("event_type") == "R3_5_COMPLETED":
+                raise RuntimeError("injected R3.5 stage append failure")
+            return original_append(**kwargs)
+
+        with monkeypatch.context() as patch:
+            patch.setattr(manager.store, "_append_event_tx", fail_r35_stage_append)
+            with pytest.raises(RuntimeError, match="injected R3.5 stage append failure"):
+                coordinator.commit_r35_revivals()
+        assert workflow._stage_event("R3_5_COMPLETED") is None
         coordinator.commit_r35_revivals()
         events = manager.store.list_events("CMP-r35-tasks")
         assert sum(event.event_type == "REFUTATION_SUBMITTED" for event in events) == 2

@@ -294,6 +294,51 @@ def test_r2_exact_retry_reuses_artifact_and_rejects_conflicts_before_write(
         manager.close()
 
 
+def test_r2_retry_recovers_after_stage_event_append_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manager, workflow, _ = _workflow(tmp_path, "CMP-r2-append-recovery")
+    evidence = {
+        axis: (f"EVID-{axis}",)
+        for axis in (
+            "surface", "mechanism", "state", "fix_variant", "boundary",
+            "differential",
+        )
+    }
+    try:
+        workflow.run_r0()
+        workflow.record_r1([])
+        original_append = manager.store._append_event_tx
+
+        def fail_r2_append(**kwargs: object) -> object:
+            if kwargs.get("event_type") == "R2_COMPLETED":
+                raise RuntimeError("injected R2 event append failure")
+            return original_append(**kwargs)
+
+        monkeypatch.setattr(manager.store, "_append_event_tx", fail_r2_append)
+        with pytest.raises(RuntimeError, match="injected R2 event append failure"):
+            workflow.record_r2(
+                [], axis_evidence=evidence,
+                axis_runs=axis_runs_from_evidence(evidence),
+            )
+        assert workflow._stage_event("R2_COMPLETED") is None
+
+        monkeypatch.setattr(manager.store, "_append_event_tx", original_append)
+        artifact_id = workflow.record_r2(
+            [], axis_evidence=evidence,
+            axis_runs=axis_runs_from_evidence(evidence),
+        )
+        assert workflow.record_r2(
+            [], axis_evidence=evidence,
+            axis_runs=axis_runs_from_evidence(evidence),
+        ) == artifact_id
+        events = workflow._events(event_type="R2_COMPLETED")
+        assert len(events) == 1
+        assert events[0].payload_ref == artifact_id
+    finally:
+        manager.close()
+
+
 def test_r0_r3_slice_records_canonical_verdict_and_partial_report(tmp_path: Path) -> None:
     manager, workflow, plan = _workflow(tmp_path)
     work_unit = plan.work_units[0]

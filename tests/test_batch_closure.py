@@ -481,6 +481,19 @@ def test_r5_exact_retry_reuses_artifact_and_rejects_conflicts_before_write(
         rationale="the static-only claim needs manual review",
     )
     try:
+        original_append = manager.store._append_event_tx
+
+        def fail_r5_append(**kwargs: object) -> object:
+            if kwargs.get("event_type") == "R5_COMPLETED":
+                raise RuntimeError("injected R5 event append failure")
+            return original_append(**kwargs)
+
+        monkeypatch.setattr(manager.store, "_append_event_tx", fail_r5_append)
+        with pytest.raises(RuntimeError, match="injected R5 event append failure"):
+            workflow.record_r5([], [assessment])
+        assert workflow._stage_event("R5_COMPLETED") is None
+
+        monkeypatch.setattr(manager.store, "_append_event_tx", original_append)
         artifact_id = workflow.record_r5([], [assessment])
         original_put_text = manager.artifacts.put_text
         writes = []

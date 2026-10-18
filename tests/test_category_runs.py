@@ -144,6 +144,19 @@ def test_r4_tracks_six_axis_coverage_with_zero_findings(
             hypothesis_ids=(),
             finding_ids=(),
         )
+        original_append = manager.store._append_event_tx
+
+        def fail_r4_append(**kwargs: object) -> object:
+            if kwargs.get("event_type") == "R4_COMPLETED":
+                raise RuntimeError("injected R4 event append failure")
+            return original_append(**kwargs)
+
+        monkeypatch.setattr(manager.store, "_append_event_tx", fail_r4_append)
+        with pytest.raises(RuntimeError, match="injected R4 event append failure"):
+            workflow.record_r4([category_run])
+        assert workflow._stage_event("R4_COMPLETED") is None
+
+        monkeypatch.setattr(manager.store, "_append_event_tx", original_append)
         artifact_id = workflow.record_r4([category_run])
         original_put_text = manager.artifacts.put_text
         writes = []
@@ -541,7 +554,7 @@ def test_r4_bundle_schedules_two_work_units_and_commits_each_plan(tmp_path: Path
 
 
 def test_r4_screening_work_unit_needs_no_agent_category_tasks(
-    tmp_path: Path,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     manager, workflow, plan = _ready_for_r4(
         tmp_path, screening_work_unit=True
@@ -553,6 +566,21 @@ def test_r4_screening_work_unit_needs_no_agent_category_tasks(
         workflow.record_category_audit_plan([category_plan])
         backend = ManualExecutionBackend(manager, workflow.campaign_id)
         coordinator = DiscoveryCoordinator(workflow, backend)
+
+        original_append = manager.store._append_event_tx
+
+        def fail_screening_append(**kwargs: object) -> object:
+            if kwargs.get("event_type") == "R4_SCREENING_COVERAGE_RECORDED":
+                raise RuntimeError("injected R4 screening event append failure")
+            return original_append(**kwargs)
+
+        with monkeypatch.context() as patch:
+            patch.setattr(manager.store, "_append_event_tx", fail_screening_append)
+            with pytest.raises(
+                RuntimeError, match="injected R4 screening event append failure",
+            ):
+                coordinator.schedule_r4()
+        assert workflow._stage_event("R4_SCREENING_COVERAGE_RECORDED") is None
 
         assert coordinator.schedule_r4() == ()
         screening_event = next(
