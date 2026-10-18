@@ -789,6 +789,19 @@ def test_campaign_inventory_is_write_once_after_initial_record(tmp_path: Path) -
         assert manager.record_inventory(
             campaign_id="CMP-inventory-write-once", inventory=inventory,
         ) == original_ref
+        original_baseline = manager.load_snapshot_baseline(
+            "CMP-inventory-write-once",
+        )
+        (target / "app.py").write_text("VALUE = 2\n", encoding="utf-8")
+
+        with pytest.raises(ValueError, match="snapshot baseline is write-once"):
+            manager.record_inventory(
+                campaign_id="CMP-inventory-write-once", inventory=inventory,
+            )
+        assert manager.load_snapshot_baseline("CMP-inventory-write-once") == original_baseline
+        assert len(manager.store.list_events(
+            "CMP-inventory-write-once", event_type="SNAPSHOT_BASELINE_RECORDED",
+        )) == 1
 
         with pytest.raises(ValueError, match="inventory is write-once"):
             manager.record_inventory(

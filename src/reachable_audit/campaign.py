@@ -391,6 +391,18 @@ class CampaignManager:
             )
         value = asdict(inventory)
         encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        baseline = {
+            "schema_version": "1.0",
+            "snapshot_id": inventory.snapshot_id,
+            "repository_size_bytes": inventory.repository_size_bytes,
+            "files": {
+                source.path: self._file_digest(self.target_root / source.path)
+                for source in inventory.source_files
+            },
+        }
+        baseline_encoded = json.dumps(
+            baseline, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        )
         existing_inventories = self.store.list_events(
             campaign_id,
             entity_type="campaign",
@@ -406,6 +418,26 @@ class CampaignManager:
                 raise ValueError(
                     "Campaign inventory is write-once; changed source scope requires a new Campaign"
                 )
+        existing_baselines = self.store.list_events(
+            campaign_id,
+            entity_type="snapshot_baseline",
+            entity_id=campaign_id,
+            event_type="SNAPSHOT_BASELINE_RECORDED",
+        )
+        if existing_baselines:
+            existing = existing_baselines[-1]
+            if (
+                existing.payload_ref is None
+                or self.artifacts.get_bytes(existing.payload_ref)
+                != baseline_encoded.encode("utf-8")
+            ):
+                raise ValueError(
+                    "Campaign snapshot baseline is write-once; changed source content requires a new Campaign"
+                )
+        elif existing_inventories:
+            raise ValueError(
+                "Campaign inventory exists without a durable snapshot baseline; create a new Campaign"
+            )
         self.store.record_evidence_paths(
             campaign_id,
             tuple(
@@ -428,18 +460,6 @@ class CampaignManager:
             actor="tool",
             payload={"components": len(inventory.components), "source_files": len(inventory.source_files)},
             payload_ref=artifact.artifact_id,
-        )
-        baseline = {
-            "schema_version": "1.0",
-            "snapshot_id": inventory.snapshot_id,
-            "repository_size_bytes": inventory.repository_size_bytes,
-            "files": {
-                source.path: self._file_digest(self.target_root / source.path)
-                for source in inventory.source_files
-            },
-        }
-        baseline_encoded = json.dumps(
-            baseline, ensure_ascii=False, sort_keys=True, separators=(",", ":")
         )
         baseline_artifact = self.artifacts.put_text(baseline_encoded)
         self.store.append_event(
