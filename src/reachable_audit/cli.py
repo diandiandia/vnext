@@ -189,6 +189,113 @@ def _handle_graph(arguments: argparse.Namespace) -> int:
     return 0
 
 
+def _handle_plan(arguments: argparse.Namespace) -> int:
+    boundaries = []
+    if arguments.boundaries:
+        boundary_value = json.loads(Path(arguments.boundaries).read_text(encoding="utf-8"))
+        if not isinstance(boundary_value, list):
+            raise ValueError("boundaries must be a JSON array")
+        boundaries = [BoundaryEdge.from_dict(item) for item in boundary_value]
+    path_dispositions = []
+    if arguments.path_dispositions:
+        path_value = json.loads(
+            Path(arguments.path_dispositions).read_text(encoding="utf-8")
+        )
+        if not isinstance(path_value, list):
+            raise ValueError("path dispositions must be a JSON array")
+        path_dispositions = [
+            PlanPathDisposition.from_dict(item) for item in path_value
+        ]
+    with CampaignManager(arguments.target, arguments.state_dir) as manager:
+        inventory = manager.load_inventory(arguments.campaign_id)
+        graph = manager.load_component_graph(arguments.campaign_id)
+        plan = create_audit_plan(
+            campaign_id=arguments.campaign_id,
+            inventory=inventory,
+            category_families=arguments.categories.split(","),
+            boundary_edges=[*graph.edges, *boundaries],
+            path_dispositions=path_dispositions,
+            max_source_files_per_work_unit=arguments.max_work_unit_files,
+            max_source_files_per_batch=arguments.max_batch_files,
+            max_work_units_per_batch=arguments.max_batch_work_units,
+        )
+        forecast = None
+        if arguments.cost_profile:
+            profile = json.loads(
+                Path(arguments.cost_profile).read_text(encoding="utf-8")
+            )
+            if not isinstance(profile, dict):
+                raise ValueError("cost profile must be a JSON object")
+            forecast = forecast_plan_cost(plan, profile)
+        artifact_id = manager.record_plan(
+            campaign_id=arguments.campaign_id, plan=plan, inventory=inventory
+        )
+        files_by_unit = {
+            unit.work_unit_id: unit.source_files for unit in plan.work_units
+        }
+        floor_by_unit = {
+            unit.work_unit_id: discovery_output_floor_bytes(unit)
+            for unit in plan.work_units
+        }
+        boundary_reviews_by_unit = {
+            unit.work_unit_id: len(unit.boundary_edge_ids)
+            for unit in plan.work_units
+        }
+
+        def _size(path: str) -> int:
+            try:
+                return (manager.target_root / path).stat().st_size
+            except OSError:
+                return 0
+
+        _print({
+            "artifact_id": artifact_id,
+            "plan_id": plan.plan_id,
+            "work_units": len(plan.work_units),
+            "omitted_empty_components": list(plan.omitted_empty_component_ids),
+            "path_scope_counts": {
+                state.value: sum(
+                    item.state is state for item in plan.path_dispositions
+                )
+                for state in PlanPathState
+            },
+            "batches": len(plan.batches),
+            "handoffs": len(plan.handoffs),
+            "output_ceiling_bytes": TASK_OUTPUT_MAX_BYTES,
+            "oversize_work_units": [
+                {
+                    "work_unit_id": unit_id,
+                    "estimated_r1_output_floor_bytes": floor,
+                    "boundary_review_count": boundary_reviews_by_unit[unit_id],
+                }
+                for unit_id, floor in sorted(floor_by_unit.items())
+                if floor > TASK_OUTPUT_MAX_BYTES
+            ],
+            "batch_summaries": [
+                {
+                    "batch_id": batch.batch_id,
+                    "work_units": len(batch.work_unit_ids),
+                    "source_files": batch.source_file_count,
+                    "source_bytes": sum(
+                        _size(path)
+                        for unit_id in batch.work_unit_ids
+                        for path in files_by_unit[unit_id]
+                    ),
+                    "max_estimated_r1_output_floor_bytes": max(
+                        floor_by_unit[unit_id] for unit_id in batch.work_unit_ids
+                    ),
+                    "max_boundary_review_count": max(
+                        boundary_reviews_by_unit[unit_id]
+                        for unit_id in batch.work_unit_ids
+                    ),
+                }
+                for batch in plan.batches
+            ],
+            "cost_forecast": forecast,
+        })
+    return 0
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="reachable-audit")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -697,110 +804,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         if arguments.command == "plan":
-            boundaries = []
-            if arguments.boundaries:
-                boundary_value = json.loads(Path(arguments.boundaries).read_text(encoding="utf-8"))
-                if not isinstance(boundary_value, list):
-                    raise ValueError("boundaries must be a JSON array")
-                boundaries = [BoundaryEdge.from_dict(item) for item in boundary_value]
-            path_dispositions = []
-            if arguments.path_dispositions:
-                path_value = json.loads(
-                    Path(arguments.path_dispositions).read_text(encoding="utf-8")
-                )
-                if not isinstance(path_value, list):
-                    raise ValueError("path dispositions must be a JSON array")
-                path_dispositions = [
-                    PlanPathDisposition.from_dict(item) for item in path_value
-                ]
-            with CampaignManager(arguments.target, arguments.state_dir) as manager:
-                inventory = manager.load_inventory(arguments.campaign_id)
-                graph = manager.load_component_graph(arguments.campaign_id)
-                plan = create_audit_plan(
-                    campaign_id=arguments.campaign_id,
-                    inventory=inventory,
-                    category_families=arguments.categories.split(","),
-                    boundary_edges=[*graph.edges, *boundaries],
-                    path_dispositions=path_dispositions,
-                    max_source_files_per_work_unit=arguments.max_work_unit_files,
-                    max_source_files_per_batch=arguments.max_batch_files,
-                    max_work_units_per_batch=arguments.max_batch_work_units,
-                )
-                forecast = None
-                if arguments.cost_profile:
-                    profile = json.loads(
-                        Path(arguments.cost_profile).read_text(encoding="utf-8")
-                    )
-                    if not isinstance(profile, dict):
-                        raise ValueError("cost profile must be a JSON object")
-                    forecast = forecast_plan_cost(plan, profile)
-                artifact_id = manager.record_plan(
-                    campaign_id=arguments.campaign_id, plan=plan, inventory=inventory
-                )
-                files_by_unit = {
-                    unit.work_unit_id: unit.source_files for unit in plan.work_units
-                }
-                floor_by_unit = {
-                    unit.work_unit_id: discovery_output_floor_bytes(unit)
-                    for unit in plan.work_units
-                }
-                boundary_reviews_by_unit = {
-                    unit.work_unit_id: len(unit.boundary_edge_ids)
-                    for unit in plan.work_units
-                }
-
-                def _size(path: str) -> int:
-                    try:
-                        return (manager.target_root / path).stat().st_size
-                    except OSError:
-                        return 0
-
-                _print({
-                    "artifact_id": artifact_id,
-                    "plan_id": plan.plan_id,
-                    "work_units": len(plan.work_units),
-                    "omitted_empty_components": list(plan.omitted_empty_component_ids),
-                    "path_scope_counts": {
-                        state.value: sum(
-                            item.state is state for item in plan.path_dispositions
-                        )
-                        for state in PlanPathState
-                    },
-                    "batches": len(plan.batches),
-                    "handoffs": len(plan.handoffs),
-                    "output_ceiling_bytes": TASK_OUTPUT_MAX_BYTES,
-                    "oversize_work_units": [
-                        {
-                            "work_unit_id": unit_id,
-                            "estimated_r1_output_floor_bytes": floor,
-                            "boundary_review_count": boundary_reviews_by_unit[unit_id],
-                        }
-                        for unit_id, floor in sorted(floor_by_unit.items())
-                        if floor > TASK_OUTPUT_MAX_BYTES
-                    ],
-                    "batch_summaries": [
-                        {
-                            "batch_id": batch.batch_id,
-                            "work_units": len(batch.work_unit_ids),
-                            "source_files": batch.source_file_count,
-                            "source_bytes": sum(
-                                _size(path)
-                                for unit_id in batch.work_unit_ids
-                                for path in files_by_unit[unit_id]
-                            ),
-                            "max_estimated_r1_output_floor_bytes": max(
-                                floor_by_unit[unit_id] for unit_id in batch.work_unit_ids
-                            ),
-                            "max_boundary_review_count": max(
-                                boundary_reviews_by_unit[unit_id]
-                                for unit_id in batch.work_unit_ids
-                            ),
-                        }
-                        for batch in plan.batches
-                    ],
-                    "cost_forecast": forecast,
-                })
-            return 0
+            return _handle_plan(arguments)
 
         if arguments.command == "amend":
             with CampaignManager(arguments.target, arguments.state_dir) as manager:
