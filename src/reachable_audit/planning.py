@@ -296,6 +296,10 @@ def create_audit_plan(
             raise ModelError(
                 f"boundary source path is not owned by source component: {edge.edge_id}"
             )
+        if edge.target_path and source_owner_by_path.get(edge.target_path) != edge.target_component_id:
+            raise ModelError(
+                f"boundary target path is not owned by target component: {edge.edge_id}"
+            )
 
     files_by_component: dict[str, list[tuple[str, str]]] = {
         component_id: [] for component_id in known_components

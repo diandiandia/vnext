@@ -222,6 +222,38 @@ def test_plan_has_exact_ownership_limits_and_cross_batch_handoff(tmp_path: Path)
     )
 
 
+@pytest.mark.parametrize(
+    ("path_field", "invalid_path", "error"),
+    (
+        ("source_path", "tools/main.go", "source path is not owned by source component"),
+        ("target_path", "services/api/main.py", "target path is not owned by target component"),
+    ),
+)
+def test_plan_rejects_boundary_endpoint_path_owned_by_other_component(
+    tmp_path: Path, path_field: str, invalid_path: str, error: str,
+) -> None:
+    target = tmp_path / "endpoint-paths"
+    target.mkdir()
+    _fixture_monorepo(target)
+    inventory = build_inventory(target, "fixture:endpoint-paths")
+    components = {component.root: component.component_id for component in inventory.components}
+    edge = BoundaryEdge(
+        edge_id="EDGE-api-core",
+        source_component_id=components["services/api"],
+        target_component_id=components["libs/core"],
+        kind="ffi",
+        evidence="fixture boundary",
+    )
+
+    with pytest.raises(ModelError, match=error):
+        create_audit_plan(
+            campaign_id="CMP-endpoint-paths",
+            inventory=inventory,
+            category_families=["STATE"],
+            boundary_edges=[replace(edge, **{path_field: invalid_path})],
+        )
+
+
 def test_plan_splits_oversized_boundary_reviews_across_endpoint_work_units(
     tmp_path: Path,
 ) -> None:
