@@ -773,15 +773,26 @@ class CampaignManager:
 
     def load_component_graph(self, campaign_id: str) -> ComponentGraph:
         campaign = self.store.get_campaign(campaign_id)
-        path = self.state_dir / "campaigns" / campaign_id / "component_graph.json"
-        if not path.exists():
+        events = self.store.list_events(
+            campaign_id,
+            entity_type="component_graph",
+            entity_id=campaign_id,
+            event_type="COMPONENT_GRAPH_RECORDED",
+        )
+        if not events or events[-1].payload_ref is None:
             raise ValueError("Campaign component graph is missing; run the graph command first")
-        value = json.loads(path.read_text(encoding="utf-8"))
+        value = json.loads(self.artifacts.get_bytes(events[-1].payload_ref))
         if not isinstance(value, dict):
-            raise ValueError("Campaign component graph must be a JSON object")
+            raise ValueError("Campaign component graph artifact must be a JSON object")
         graph = ComponentGraph.from_dict(value)
         if graph.snapshot_id != campaign.snapshot_id:
-            raise ValueError("stored component graph does not match the Campaign snapshot")
+            raise ValueError("recorded component graph does not match the Campaign snapshot")
+        path = self.state_dir / "campaigns" / campaign_id / "component_graph.json"
+        exported = json.dumps(
+            value, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        )
+        if not path.exists() or path.read_text(encoding="utf-8") != exported:
+            self._atomic_json(path, value)
         return graph
 
     def load_audit_plan(self, campaign_id: str, plan_id: str) -> AuditPlan:

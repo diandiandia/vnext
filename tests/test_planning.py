@@ -9,6 +9,7 @@ from reachable_audit.inventory import build_inventory
 from reachable_audit.models import ModelError
 from reachable_audit.plan_models import (
     BoundaryEdge,
+    ComponentGraph,
     Component,
     PlanPathDisposition,
     PlanPathState,
@@ -837,6 +838,37 @@ def test_load_inventory_repairs_tampered_export_from_durable_artifact(
         assert manager.load_inventory("CMP-inventory-export") == inventory
         assert json.loads(export_path.read_text(encoding="utf-8")) == json.loads(
             json.dumps(asdict(inventory))
+        )
+
+
+def test_load_component_graph_repairs_tampered_export_from_durable_artifact(
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "graph-export"
+    target.mkdir()
+    _write(target / "app.py", "VALUE = 1\n")
+    inventory = build_inventory(target, "fixture:graph-export")
+    graph = ComponentGraph("1.0", inventory.snapshot_id, (), (), ())
+    with CampaignManager(target) as manager:
+        manager.create_campaign(
+            campaign_id="CMP-graph-export", snapshot_id=inventory.snapshot_id,
+        )
+        manager.record_inventory(campaign_id="CMP-graph-export", inventory=inventory)
+        manager.record_component_graph(campaign_id="CMP-graph-export", graph=graph)
+        export_path = (
+            manager.state_dir / "campaigns" / "CMP-graph-export" / "component_graph.json"
+        )
+        tampered = asdict(graph)
+        tampered["diagnostics"] = [{
+            "manifest_path": "forged.toml",
+            "code": "FORGED",
+            "detail": "caller-added build diagnostic",
+        }]
+        export_path.write_text(json.dumps(tampered), encoding="utf-8")
+
+        assert manager.load_component_graph("CMP-graph-export") == graph
+        assert json.loads(export_path.read_text(encoding="utf-8")) == json.loads(
+            json.dumps(asdict(graph))
         )
 
 
