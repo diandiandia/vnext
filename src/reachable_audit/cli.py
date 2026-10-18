@@ -158,6 +158,37 @@ def _handle_resource_cleanup(arguments: argparse.Namespace) -> int:
     return 0
 
 
+def _handle_inventory(arguments: argparse.Namespace) -> int:
+    with CampaignManager(arguments.target, arguments.state_dir) as manager:
+        campaign = manager.store.get_campaign(arguments.campaign_id)
+        inventory = build_inventory(arguments.target, campaign.snapshot_id)
+        artifact_id = manager.record_inventory(
+            campaign_id=arguments.campaign_id, inventory=inventory
+        )
+        _print({
+            "artifact_id": artifact_id,
+            "components": len(inventory.components),
+            "source_files": len(inventory.source_files),
+        })
+    return 0
+
+
+def _handle_graph(arguments: argparse.Namespace) -> int:
+    with CampaignManager(arguments.target, arguments.state_dir) as manager:
+        inventory = manager.load_inventory(arguments.campaign_id)
+        graph = build_component_graph(arguments.target, inventory)
+        artifact_id = manager.record_component_graph(
+            campaign_id=arguments.campaign_id, graph=graph
+        )
+        _print({
+            "artifact_id": artifact_id,
+            "build_units": len(graph.build_units),
+            "edges": len(graph.edges),
+            "diagnostics": [asdict(item) for item in graph.diagnostics],
+        })
+    return 0
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="reachable-audit")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -606,33 +637,10 @@ def main(argv: list[str] | None = None) -> int:
             return _handle_resource_cleanup(arguments)
 
         if arguments.command == "inventory":
-            with CampaignManager(arguments.target, arguments.state_dir) as manager:
-                campaign = manager.store.get_campaign(arguments.campaign_id)
-                inventory = build_inventory(arguments.target, campaign.snapshot_id)
-                artifact_id = manager.record_inventory(
-                    campaign_id=arguments.campaign_id, inventory=inventory
-                )
-                _print({
-                    "artifact_id": artifact_id,
-                    "components": len(inventory.components),
-                    "source_files": len(inventory.source_files),
-                })
-            return 0
+            return _handle_inventory(arguments)
 
         if arguments.command == "graph":
-            with CampaignManager(arguments.target, arguments.state_dir) as manager:
-                inventory = manager.load_inventory(arguments.campaign_id)
-                graph = build_component_graph(arguments.target, inventory)
-                artifact_id = manager.record_component_graph(
-                    campaign_id=arguments.campaign_id, graph=graph
-                )
-                _print({
-                    "artifact_id": artifact_id,
-                    "build_units": len(graph.build_units),
-                    "edges": len(graph.edges),
-                    "diagnostics": [asdict(item) for item in graph.diagnostics],
-                })
-            return 0
+            return _handle_graph(arguments)
 
         if arguments.command == "toolchain-probe":
             adapter = LANGUAGE_ADAPTERS.get(arguments.language)
