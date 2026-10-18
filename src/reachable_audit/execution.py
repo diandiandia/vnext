@@ -704,6 +704,10 @@ class ManualExecutionBackend:
                 f"missing={sorted(set(expected_axes) - set(actual_axes))}, "
                 f"extra={sorted(set(actual_axes) - set(expected_axes))}"
             )
+        for axis_run in run.axis_runs:
+            ManualExecutionBackend._validate_axis_review_altitude(
+                axis_run, task_id,
+            )
         if run.applicability is Applicability.APPLICABLE:
             expected_variants = tuple(
                 str(item) for item in category_plan.get("mechanism_variants", [])
@@ -818,7 +822,7 @@ class ManualExecutionBackend:
                 raise ModelError(
                     f"invalid R2 axis run structure: {task.task_id}: {error}"
                 ) from error
-            ManualExecutionBackend._validate_r2_review_altitude(
+            ManualExecutionBackend._validate_axis_review_altitude(
                 parsed_axis_run, task.task_id,
             )
         hypotheses = output.get("hypotheses")
@@ -862,7 +866,7 @@ class ManualExecutionBackend:
             hypothesis_ids.add(hypothesis.hypothesis_id)
 
     @staticmethod
-    def _validate_r2_review_altitude(axis_run: AxisRun, task_id: str) -> None:
+    def _validate_axis_review_altitude(axis_run: AxisRun, task_id: str) -> None:
         if (
             axis_run.applicability is Applicability.APPLICABLE
             and axis_run.review_altitude not in {
@@ -870,14 +874,14 @@ class ManualExecutionBackend:
             }
         ):
             raise ModelError(
-                f"applicable R2 axis requires SCREENED or INSPECTED altitude: {task_id}"
+                f"applicable axis requires SCREENED or INSPECTED altitude: {task_id}"
             )
         if (
             axis_run.applicability is not Applicability.APPLICABLE
             and axis_run.review_altitude is not ReviewAltitude.NOT_RECORDED
         ):
             raise ModelError(
-                f"non-applicable R2 axis must use NOT_RECORDED altitude: {task_id}"
+                f"non-applicable axis must use NOT_RECORDED altitude: {task_id}"
             )
 
     def _task_work_unit(self, task: TaskSpec) -> Mapping[str, Any]:
@@ -1426,7 +1430,7 @@ class DiscoveryCoordinator:
                 for item in raw_axis_runs
             ]
             for axis_run in parsed_axis_runs:
-                ManualExecutionBackend._validate_r2_review_altitude(
+                ManualExecutionBackend._validate_axis_review_altitude(
                     axis_run, view.task.task_id,
                 )
             axes_seen = [item.axis.value for item in parsed_axis_runs]
@@ -1479,7 +1483,7 @@ class DiscoveryCoordinator:
             if not isinstance(value.get("axis_run"), dict):
                 raise ModelError(f"R2 task output requires an axis_run: {view.task.task_id}")
             axis_run = AxisRun.from_dict(value["axis_run"])
-            ManualExecutionBackend._validate_r2_review_altitude(
+            ManualExecutionBackend._validate_axis_review_altitude(
                 axis_run, view.task.task_id,
             )
             if axis_run.axis.value != axis:
@@ -1906,6 +1910,9 @@ class DiscoveryCoordinator:
                 ],
                 "analysis_contract": (
                     "Execute every planned discovery axis and mechanism variant. Record "
+                    "SCREENED/INSPECTED altitude for each APPLICABLE AxisRun; use "
+                    "NOT_RECORDED for NOT_APPLICABLE or DEFERRED. These are Agent "
+                    "declarations, not host-observed inspection. "
                     "evidence for positive and zero-finding outcomes; do not omit an axis. "
                     "hypothesis_ids may reference only allowed_hypothesis_ids; use [] when "
                     "none apply. Never invent IDs for late candidates; report them as "
@@ -1913,7 +1920,7 @@ class DiscoveryCoordinator:
                 ),
                 "output_contract": {
                     "schema_version": "1.0",
-                    "category_run": "CategoryRun",
+                    "category_run": "CategoryRun with review_altitude on every APPLICABLE AxisRun",
                 },
             })
             views.append(self.backend.submit(TaskSpec(
@@ -2132,13 +2139,19 @@ class DiscoveryCoordinator:
                 "Review each category_item independently within its Work Unit. Do not "
                 "transfer evidence or conclusions across Work Units. Return exactly one "
                 "CategoryRun for every listed category_plan_id; preserve each Work Unit ID. "
+                "Declare SCREENED/INSPECTED altitude on each APPLICABLE AxisRun and "
+                "NOT_RECORDED for NOT_APPLICABLE/DEFERRED. These are Agent claims, not "
+                "host-observed reads. "
                 "Each run's hypothesis_ids must come from that category_item's "
                 "allowed_hypothesis_ids; use [] when none apply. Never invent IDs for "
                 "late candidates; report them as unresolved risks for explicit follow-up."
             ),
             "output_contract": {
                 "schema_version": "1.0",
-                "category_runs": "one CategoryRun per category_item, no missing or extra IDs",
+                "category_runs": (
+                    "one CategoryRun per category_item, no missing or extra IDs; "
+                    "APPLICABLE AxisRuns require SCREENED/INSPECTED altitude"
+                ),
             },
         }
 

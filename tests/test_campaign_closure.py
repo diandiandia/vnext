@@ -670,6 +670,12 @@ def test_campaign_report_separates_agent_path_review_claims(tmp_path: Path) -> N
         assert report["discovery_axis_review_altitudes"]["mechanism"] == {
             "INSPECTED": 1,
         }
+        assert report["category_axis_review_altitudes"]["STATE"]["surface"] == {
+            "SCREENED": 1,
+        }
+        assert report["category_axis_review_altitudes"]["STATE"]["mechanism"] == {
+            "INSPECTED": 1,
+        }
         assert {
             item["path"]: item["altitude"] for item in report["path_review_claims"]
         } == {"state.py": "INSPECTED", "other.py": "SCREENED"}

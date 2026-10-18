@@ -20,6 +20,7 @@ from reachable_audit.analysis_models import (
     Refutation,
     R5Assessment,
     R5Disposition,
+    ReviewAltitude,
     SurfaceReviewDisposition,
     SurfaceReviewState,
     VerdictKind,
@@ -81,6 +82,14 @@ def _ready_for_r5(
             Applicability.NOT_APPLICABLE if screening_work_unit else Applicability.APPLICABLE,
             (f"EVID-{axis}",),
             f"reviewed {axis}",
+            review_altitude=(
+                ReviewAltitude.NOT_RECORDED if screening_work_unit
+                else ReviewAltitude(
+                    (axis_review_altitudes or {}).get(
+                        axis, ReviewAltitude.INSPECTED.value,
+                    )
+                )
+            ),
         ) for axis in category_plan.discovery_axes),
         Applicability.NOT_APPLICABLE if screening_work_unit else Applicability.APPLICABLE,
         CategoryRunStatus.COMPLETE,

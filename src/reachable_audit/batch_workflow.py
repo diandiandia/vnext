@@ -806,6 +806,13 @@ class BatchWorkflow:
                 raise ModelError(
                     f"CategoryRun axis coverage mismatch: {run.category_run_id}"
                 )
+            if any(
+                not isinstance(axis_run.review_altitude, ReviewAltitude)
+                for axis_run in run.axis_runs
+            ):
+                raise ModelError(
+                    f"CategoryRun has an invalid review altitude: {run.category_run_id}"
+                )
             if run.applicability is Applicability.APPLICABLE and set(
                 run.mechanism_variants_examined
             ) != set(plan["mechanism_variants"]):

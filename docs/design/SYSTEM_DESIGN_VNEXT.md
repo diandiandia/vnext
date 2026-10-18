@@ -232,8 +232,8 @@ not a proven optimum for recall or cost.
 Six axes do not establish six independent line-by-line passes.
 
 Coverage summarizes axis-derived Work Unit counts, Plan path scope, and task-coordinated
-R1 path / R2 AxisRun Agent-declared SCREENED/INSPECTED claims. These declarations are
-not host-observed reads; aggregation by risk tier remains absent.
+R1 path, R2 discovery-axis, and R4 family/axis Agent-declared SCREENED/INSPECTED claims.
+These declarations are not host-observed reads; aggregation by risk tier remains absent.
 NOT_APPLICABLE is a scoped decision, not a safety result; these counts are not held-out
 inspection recall.
 

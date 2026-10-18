@@ -1077,7 +1077,7 @@ def test_collect_requires_altitude_for_applicable_r2_axis(tmp_path: Path) -> Non
             }],
             "hypotheses": [],
         })).artifact_id
-        with pytest.raises(ModelError, match="applicable R2 axis requires SCREENED or INSPECTED"):
+        with pytest.raises(ModelError, match="applicable axis requires SCREENED or INSPECTED"):
             backend.collect(lease, TaskResult(
                 True, output_ref, "missing axis altitude",
                 {"agent_runs": 1, "wall_seconds": 1},
@@ -1087,7 +1087,7 @@ def test_collect_requires_altitude_for_applicable_r2_axis(tmp_path: Path) -> Non
         output["axis_runs"][0]["applicability"] = "NOT_APPLICABLE"
         output["axis_runs"][0]["review_altitude"] = "INSPECTED"
         invalid_ref = manager.artifacts.put_text(json.dumps(output)).artifact_id
-        with pytest.raises(ModelError, match="non-applicable R2 axis must use NOT_RECORDED"):
+        with pytest.raises(ModelError, match="non-applicable axis must use NOT_RECORDED"):
             backend.collect(lease, TaskResult(
                 True, invalid_ref, "non-applicable axis has altitude",
                 {"agent_runs": 1, "wall_seconds": 1},

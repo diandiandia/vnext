@@ -16,6 +16,7 @@ from reachable_audit.analysis_models import (
     Hypothesis,
     HypothesisStatus,
     Mechanism,
+    ReviewAltitude,
     Surface,
     VerdictKind,
     VerdictSubmission,
@@ -198,6 +199,7 @@ def test_r4_category_plan_runs_as_durable_task(
             tuple(AxisRun(
                 DiscoveryAxis(axis), Applicability.APPLICABLE,
                 (f"EVID-{axis}",), f"reviewed {axis} axis",
+                review_altitude=ReviewAltitude.INSPECTED,
             ) for axis in category_plan.discovery_axes),
             Applicability.APPLICABLE, CategoryRunStatus.COMPLETE,
             ("EVID-category-review",), "all planned checks completed", (), (),
@@ -215,6 +217,19 @@ def test_r4_category_plan_runs_as_durable_task(
         assert bool(task_input["allowed_hypothesis_ids"]) is static_hypothesis
         lease = backend.claim("category-auditor")
         assert lease is not None
+        missing_altitude = asdict(run)
+        missing_altitude["axis_runs"][0]["review_altitude"] = "NOT_RECORDED"
+        missing_altitude_ref = manager.artifacts.put_text(json.dumps({
+            "schema_version": "1.0", "category_run": missing_altitude,
+        })).artifact_id
+        with pytest.raises(
+            ModelError, match="applicable axis requires SCREENED or INSPECTED altitude",
+        ):
+            backend.collect(lease, TaskResult(
+                True, missing_altitude_ref, "applicable R4 axis has no altitude",
+                {"agent_runs": 1, "wall_seconds": 1},
+            ))
+        assert backend.poll(scheduled[0].task.task_id).status.value == "LEASED"
         unknown_hypothesis = asdict(run)
         unknown_hypothesis["hypothesis_ids"] = ["invented-slug"]
         unknown_ref = manager.artifacts.put_text(json.dumps({
@@ -260,6 +275,12 @@ def test_r4_category_plan_runs_as_durable_task(
         coordinator.commit_r4()
         events = manager.store.list_events("CMP-r4")
         assert sum(event.event_type == "R4_COMPLETED" for event in events) == 1
+        event = next(item for item in events if item.event_type == "R4_COMPLETED")
+        artifact = json.loads(manager.artifacts.get_bytes(event.payload_ref))
+        assert all(
+            axis_run["review_altitude"] == "INSPECTED"
+            for axis_run in artifact["category_runs"][0]["axis_runs"]
+        )
     finally:
         manager.close()
 
@@ -364,6 +385,7 @@ def test_r4_bundle_schedules_two_work_units_and_commits_each_plan(tmp_path: Path
                     evidence_refs=(f"EVID-{axis}-{category_plan.work_unit_id}",),
                     rationale=f"reviewed {axis}",
                     work_unit_id=category_plan.work_unit_id,
+                    review_altitude=ReviewAltitude.INSPECTED,
                 ) for axis in category_plan.discovery_axes),
                 applicability=Applicability.APPLICABLE,
                 status=CategoryRunStatus.COMPLETE,
@@ -392,6 +414,11 @@ def test_r4_bundle_schedules_two_work_units_and_commits_each_plan(tmp_path: Path
         assert {run["category_plan_id"] for run in r4["category_runs"]} == {
             item.category_plan_id for item in category_plans
         }
+        assert all(
+            axis_run["review_altitude"] == "INSPECTED"
+            for run in r4["category_runs"]
+            for axis_run in run["axis_runs"]
+        )
     finally:
         manager.close()
 

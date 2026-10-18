@@ -566,10 +566,10 @@ envelope.
 
 Coverage uses axis-derived Work Unit counts: all planned axes NOT_APPLICABLE with no
 hypotheses means screening-only; any APPLICABLE axis contributes to substantive Work
-Units. Campaign reports show R1 path-level and R2 axis-level Agent-declared altitude
-counts alongside Plan scope and ownership counts, but do not aggregate by risk tier. An
-optional init-frozen screening ceiling is reported, not enforced as
-a closure or evaluator gate; signed overrides are not implemented.
+Units. Campaign reports show R1 path, R2 discovery-axis, and R4 family/axis
+Agent-declared altitude counts alongside Plan scope and ownership, but do not aggregate
+by risk tier. An optional init-frozen screening ceiling is reported, not enforced as a
+closure or evaluator gate; signed overrides are not implemented.
 
 R3, R3.5, and R5 validate their implemented evidence models, not universal strict schemas.
 R5's HarnessCatalog generates recipes with recipe ID, language, family, method,

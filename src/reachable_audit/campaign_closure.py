@@ -437,6 +437,17 @@ class CampaignCloser:
             )
             for axis in DiscoveryAxis
         }
+        category_axis_review_altitudes: dict[str, dict[str, dict[str, int]]] = {}
+        for category_run in category_runs:
+            family = str(category_run["family"])
+            family_counts = category_axis_review_altitudes.setdefault(family, {})
+            for axis_run in category_run.get("axis_runs", []):
+                axis = str(axis_run["axis"])
+                altitude = str(axis_run.get(
+                    "review_altitude", ReviewAltitude.NOT_RECORDED.value
+                ))
+                counts = family_counts.setdefault(axis, {})
+                counts[altitude] = counts.get(altitude, 0) + 1
         surface_ids = [item["surface_id"] for item in surfaces]
         analyzed_surface_ids = {
             surface_id
@@ -907,6 +918,7 @@ class CampaignCloser:
             "path_review_claims": path_review_claims,
             "path_review_altitude_counts": path_review_altitude_counts,
             "discovery_axis_review_altitudes": discovery_axis_review_altitudes,
+            "category_axis_review_altitudes": category_axis_review_altitudes,
             "residual_risks": list(closure.residual_risks),
             "limitations": list(closure.limitations),
             "lessons": list(closure.lessons),
@@ -1136,6 +1148,14 @@ class CampaignCloser:
                     f"{altitude} {count}" for altitude, count in counts.items()
                 )
             )
+        lines.extend(["", "### Security Category Review Altitude", ""])
+        for family, axes in report.get("category_axis_review_altitudes", {}).items():
+            for axis, counts in axes.items():
+                lines.append(
+                    f"- `{family}` / `{axis}`: " + ", ".join(
+                        f"{altitude} {count}" for altitude, count in counts.items()
+                    )
+                )
         not_feasible_experiments = report.get(
             "not_feasible_experiment_hypothesis_ids", []
         )
