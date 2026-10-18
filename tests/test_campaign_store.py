@@ -181,6 +181,36 @@ def test_event_queries_filter_by_entity_type_and_batch(tmp_path: Path) -> None:
             "CMP-filtered", entity_type="execution_task", event_type="TASK_SUBMITTED",
         ) == ("TASK-1", "TASK-2")
 
+def test_task_entity_ids_keep_oldest_sequence_at_30k_scale(tmp_path: Path) -> None:
+    task_count = 30_000
+    task_ids = [f"TASK-{index:05d}" for index in reversed(range(task_count))]
+    with AuditStore(tmp_path / "task-order-scale.db") as store:
+        store.create_campaign(
+            campaign_id="CMP-task-order-scale",
+            target_root="/runtime/target",
+            snapshot_id="fixture:task-order-scale",
+        )
+        store.append_events_batch("CMP-task-order-scale", [{
+            "batch_id": None,
+            "entity_type": "execution_task",
+            "entity_id": task_id,
+            "event_type": "TASK_SUBMITTED",
+            "idempotency_key": f"submit:{task_id}",
+            "actor": "scheduler",
+            "payload": {},
+            "payload_ref": None,
+        } for task_id in task_ids])
+
+        ordered_ids = store.list_entity_ids(
+            "CMP-task-order-scale",
+            entity_type="execution_task",
+            event_type="TASK_SUBMITTED",
+        )
+
+        assert len(ordered_ids) == task_count
+        assert ordered_ids[0] == task_ids[0]
+        assert ordered_ids[-1] == task_ids[-1]
+
 
 def test_filtered_task_ids_preserve_submission_order(tmp_path: Path) -> None:
     with AuditStore(tmp_path / "submission-order.db") as store:
