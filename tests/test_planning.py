@@ -86,6 +86,31 @@ def test_empty_repository_retains_one_planned_work_unit(tmp_path: Path) -> None:
         )
 
 
+def test_validate_plan_binds_plan_to_inventory_snapshot_and_digest(
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "inventory-binding"
+    target.mkdir()
+    _write(target / "app.py", "VALUE = 1\n")
+    inventory = build_inventory(target, "fixture:inventory-binding")
+    plan = create_audit_plan(
+        campaign_id="CMP-inventory-binding",
+        inventory=inventory,
+        category_families=["STATE"],
+    )
+
+    changed_inventory = replace(
+        inventory,
+        source_files=(replace(inventory.source_files[0], language="rust"),),
+    )
+    with pytest.raises(ModelError, match="inventory digest does not match"):
+        validate_plan(plan, changed_inventory)
+
+    other_snapshot = replace(inventory, snapshot_id="fixture:other-snapshot")
+    with pytest.raises(ModelError, match="snapshot does not match"):
+        validate_plan(plan, other_snapshot)
+
+
 def test_worktree_footprint_excludes_symlinks_and_runtime_state(tmp_path: Path) -> None:
     (tmp_path / "payload.txt").write_text("abc", encoding="utf-8")
     (tmp_path / "shortcut").symlink_to("payload.txt")

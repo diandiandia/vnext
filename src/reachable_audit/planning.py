@@ -513,6 +513,10 @@ def create_audit_plan(
 
 
 def validate_plan(plan: AuditPlan, inventory: ProjectInventory) -> None:
+    if plan.snapshot_id != inventory.snapshot_id:
+        raise ModelError("plan snapshot does not match inventory")
+    if plan.inventory_digest != inventory_digest(inventory):
+        raise ModelError("plan inventory digest does not match inventory")
     components = {component.component_id: component for component in inventory.components}
     source_owner_by_path = {
         source.path: source.component_id for source in inventory.source_files
