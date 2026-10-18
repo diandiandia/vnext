@@ -350,6 +350,159 @@ def _handle_campaign_abort(arguments: argparse.Namespace) -> int:
     return 0
 
 
+def _handle_task(arguments: argparse.Namespace) -> int:
+    with CampaignManager(arguments.target, arguments.state_dir) as manager:
+        backend = ManualExecutionBackend(manager, arguments.campaign_id)
+        if arguments.command == "task-list":
+            tasks = []
+            for view in backend.list_tasks(
+                operation=arguments.operation,
+                batch_id=arguments.batch_id,
+                operation_prefix=arguments.operation_prefix,
+            ):
+                task = asdict(view)
+                if view.status.value == "FAILED":
+                    if view.attempt >= view.task.max_attempts:
+                        task["operator_hint"] = (
+                            "attempts exhausted; authorize one bounded retry with: "
+                            f"task-retry {arguments.target} {arguments.campaign_id} "
+                            f"{view.task.task_id} --reason <reason>"
+                        )
+                    else:
+                        task["operator_hint"] = (
+                            "retry remains within the automatic attempt budget; "
+                            "claim this task again"
+                        )
+                tasks.append(task)
+            _print({"tasks": tasks})
+        elif arguments.command == "task-claim":
+            lease = backend.claim(
+                arguments.worker_id,
+                lease_seconds=arguments.lease_seconds,
+                operation=arguments.operation,
+                batch_id=arguments.batch_id,
+                task_id_filter=arguments.task_id,
+            )
+            _print(None if lease is None else backend.describe_lease(lease))
+        elif arguments.command == "task-collect":
+            value = json.loads(Path(arguments.input).read_text(encoding="utf-8"))
+            if not isinstance(value, dict):
+                raise ValueError("task result input must be a JSON object")
+            succeeded = bool(value.get("succeeded", False))
+            output_ref = None
+            if value.get("output") is not None:
+                output_ref = manager.artifacts.put_text(json.dumps(
+                    value["output"],
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                )).artifact_id
+            lease = backend.current_lease(arguments.task_id, arguments.worker_id)
+            _print(asdict(backend.collect(lease, TaskResult(
+                succeeded=succeeded,
+                output_ref=output_ref,
+                summary=str(value.get("summary", "")),
+                measurements={
+                    str(key): int(amount)
+                    for key, amount in value.get("measurements", {}).items()
+                },
+                configuration={
+                    str(key): str(item)
+                    for key, item in value.get("configuration", {}).items()
+                },
+            ))))
+        elif arguments.command == "task-amend":
+            value = json.loads(Path(arguments.input).read_text(encoding="utf-8"))
+            if not isinstance(value, dict) or not isinstance(value.get("output"), dict):
+                raise ValueError("task amendment input requires an output object")
+            output_ref = manager.artifacts.put_text(json.dumps(
+                value["output"],
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            )).artifact_id
+            view = backend.amend_completed_output(
+                arguments.task_id,
+                output_ref,
+                reason=str(value.get("reason", "")),
+                evidence_refs=tuple(str(item) for item in value.get("evidence_refs", [])),
+                actor=str(value.get("actor", "operator")),
+            )
+            _print(asdict(view))
+        elif arguments.command == "task-release":
+            lease = backend.current_lease(arguments.task_id, arguments.worker_id)
+            _print(asdict(backend.release(lease, reason=arguments.reason)))
+        elif arguments.command == "task-retry":
+            _print(asdict(backend.retry(
+                arguments.task_id,
+                reason=arguments.reason,
+                actor=arguments.actor,
+            )))
+        elif arguments.command == "task-cancel":
+            _print(asdict(backend.cancel(
+                arguments.task_id, reason=arguments.reason
+            )))
+        else:
+            workflow = BatchWorkflow(
+                manager, arguments.campaign_id, arguments.batch_id
+            )
+            coordinator = DiscoveryCoordinator(workflow, backend)
+            if arguments.command == "task-schedule-r1":
+                _print({"tasks": [asdict(view) for view in coordinator.schedule_r1()]})
+            elif arguments.command == "task-commit-r1":
+                _print({"artifact_id": coordinator.commit_r1()})
+            elif arguments.command == "task-schedule-r2":
+                _print({"tasks": [asdict(view) for view in coordinator.schedule_r2_compact()]})
+            elif arguments.command == "task-commit-r2":
+                _print({"artifact_id": coordinator.commit_r2_compact()})
+            elif arguments.command == "task-schedule-r2-per-axis":
+                _print({"tasks": [asdict(view) for view in coordinator.schedule_r2()]})
+            elif arguments.command == "task-commit-r2-per-axis":
+                _print({"artifact_id": coordinator.commit_r2()})
+            elif arguments.command == "task-schedule-r3":
+                _print({"tasks": [asdict(view) for view in coordinator.schedule_r3()]})
+            elif arguments.command == "task-commit-r3":
+                _print({"artifact_id": coordinator.commit_r3()})
+            elif arguments.command == "task-schedule-r35-refutations":
+                _print({"tasks": [
+                    asdict(view) for view in coordinator.schedule_r35_refutations()
+                ]})
+            elif arguments.command == "task-commit-r35-refutations":
+                _print({"artifact_ids": list(coordinator.commit_r35_refutations())})
+            elif arguments.command == "task-schedule-r35-adjudications":
+                _print({"tasks": [
+                    asdict(view) for view in coordinator.schedule_r35_adjudications()
+                ]})
+            elif arguments.command == "task-commit-r35-adjudications":
+                _print({"artifact_ids": list(coordinator.commit_r35_adjudications())})
+            elif arguments.command == "task-schedule-r35-revivals":
+                _print({"tasks": [
+                    asdict(view) for view in coordinator.schedule_r35_revivals()
+                ]})
+            elif arguments.command == "task-commit-r35-revivals":
+                _print({"artifact_id": coordinator.commit_r35_revivals()})
+            elif arguments.command == "task-schedule-r4":
+                if arguments.bundle_work_units == 1:
+                    scheduled = coordinator.schedule_r4()
+                else:
+                    scheduled = coordinator.schedule_r4_bundled(
+                        max_work_units_per_task=arguments.bundle_work_units,
+                        max_task_input_bytes=arguments.bundle_max_input_bytes,
+                    )
+                _print({"tasks": [asdict(view) for view in scheduled]})
+            elif arguments.command == "task-commit-r4":
+                _print({"artifact_id": coordinator.commit_r4()})
+            elif arguments.command == "task-schedule-r5":
+                _print({"tasks": [asdict(view) for view in coordinator.schedule_r5()]})
+            elif arguments.command == "task-commit-r5":
+                _print({"artifact_id": coordinator.commit_r5()})
+            elif arguments.command == "task-schedule-r6":
+                _print({"task": asdict(coordinator.schedule_r6())})
+            else:
+                _print(coordinator.commit_r6())
+    return 0
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="reachable-audit")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -1076,183 +1229,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         if arguments.command.startswith("task-"):
-            with CampaignManager(arguments.target, arguments.state_dir) as manager:
-                backend = ManualExecutionBackend(manager, arguments.campaign_id)
-                if arguments.command == "task-list":
-                    tasks = []
-                    for view in backend.list_tasks(
-                        operation=arguments.operation,
-                        batch_id=arguments.batch_id,
-                        operation_prefix=arguments.operation_prefix,
-                    ):
-                        task = asdict(view)
-                        if view.status.value == "FAILED":
-                            if view.attempt >= view.task.max_attempts:
-                                task["operator_hint"] = (
-                                    "attempts exhausted; authorize one bounded retry with: "
-                                    f"task-retry {arguments.target} {arguments.campaign_id} "
-                                    f"{view.task.task_id} --reason <reason>"
-                                )
-                            else:
-                                task["operator_hint"] = (
-                                    "retry remains within the automatic attempt budget; "
-                                    "claim this task again"
-                                )
-                        tasks.append(task)
-                    _print({"tasks": tasks})
-                elif arguments.command == "task-claim":
-                    lease = backend.claim(
-                        arguments.worker_id,
-                        lease_seconds=arguments.lease_seconds,
-                        operation=arguments.operation,
-                        batch_id=arguments.batch_id,
-                        task_id_filter=arguments.task_id,
-                    )
-                    _print(None if lease is None else backend.describe_lease(lease))
-                elif arguments.command == "task-collect":
-                    value = json.loads(
-                        Path(arguments.input).read_text(encoding="utf-8")
-                    )
-                    if not isinstance(value, dict):
-                        raise ValueError("task result input must be a JSON object")
-                    succeeded = bool(value.get("succeeded", False))
-                    output_ref = None
-                    if value.get("output") is not None:
-                        output_ref = manager.artifacts.put_text(json.dumps(
-                            value["output"],
-                            ensure_ascii=False,
-                            sort_keys=True,
-                            separators=(",", ":"),
-                        )).artifact_id
-                    lease = backend.current_lease(
-                        arguments.task_id, arguments.worker_id
-                    )
-                    _print(asdict(backend.collect(lease, TaskResult(
-                        succeeded=succeeded,
-                        output_ref=output_ref,
-                        summary=str(value.get("summary", "")),
-                        measurements={
-                            str(key): int(amount)
-                            for key, amount in value.get("measurements", {}).items()
-                        },
-                        configuration={
-                            str(key): str(item)
-                            for key, item in value.get("configuration", {}).items()
-                        },
-                    ))))
-                elif arguments.command == "task-amend":
-                    value = json.loads(
-                        Path(arguments.input).read_text(encoding="utf-8")
-                    )
-                    if not isinstance(value, dict) or not isinstance(value.get("output"), dict):
-                        raise ValueError("task amendment input requires an output object")
-                    output_ref = manager.artifacts.put_text(json.dumps(
-                        value["output"],
-                        ensure_ascii=False,
-                        sort_keys=True,
-                        separators=(",", ":"),
-                    )).artifact_id
-                    view = backend.amend_completed_output(
-                        arguments.task_id,
-                        output_ref,
-                        reason=str(value.get("reason", "")),
-                        evidence_refs=tuple(str(item) for item in value.get("evidence_refs", [])),
-                        actor=str(value.get("actor", "operator")),
-                    )
-                    _print(asdict(view))
-                elif arguments.command == "task-release":
-                    lease = backend.current_lease(
-                        arguments.task_id, arguments.worker_id
-                    )
-                    _print(asdict(backend.release(lease, reason=arguments.reason)))
-                elif arguments.command == "task-retry":
-                    _print(asdict(backend.retry(
-                        arguments.task_id,
-                        reason=arguments.reason,
-                        actor=arguments.actor,
-                    )))
-                elif arguments.command == "task-cancel":
-                    _print(asdict(backend.cancel(
-                        arguments.task_id, reason=arguments.reason
-                    )))
-                else:
-                    workflow = BatchWorkflow(
-                        manager, arguments.campaign_id, arguments.batch_id
-                    )
-                    coordinator = DiscoveryCoordinator(workflow, backend)
-                    if arguments.command == "task-schedule-r1":
-                        _print({"tasks": [
-                            asdict(view) for view in coordinator.schedule_r1()
-                        ]})
-                    elif arguments.command == "task-commit-r1":
-                        _print({"artifact_id": coordinator.commit_r1()})
-                    elif arguments.command == "task-schedule-r2":
-                        _print({"tasks": [
-                            asdict(view) for view in coordinator.schedule_r2_compact()
-                        ]})
-                    elif arguments.command == "task-commit-r2":
-                        _print({"artifact_id": coordinator.commit_r2_compact()})
-                    elif arguments.command == "task-schedule-r2-per-axis":
-                        _print({"tasks": [
-                            asdict(view) for view in coordinator.schedule_r2()
-                        ]})
-                    elif arguments.command == "task-commit-r2-per-axis":
-                        _print({"artifact_id": coordinator.commit_r2()})
-                    elif arguments.command == "task-schedule-r3":
-                        _print({"tasks": [
-                            asdict(view) for view in coordinator.schedule_r3()
-                        ]})
-                    elif arguments.command == "task-commit-r3":
-                        _print({"artifact_id": coordinator.commit_r3()})
-                    elif arguments.command == "task-schedule-r35-refutations":
-                        _print({"tasks": [
-                            asdict(view)
-                            for view in coordinator.schedule_r35_refutations()
-                        ]})
-                    elif arguments.command == "task-commit-r35-refutations":
-                        _print({"artifact_ids": list(
-                            coordinator.commit_r35_refutations()
-                        )})
-                    elif arguments.command == "task-schedule-r35-adjudications":
-                        _print({"tasks": [
-                            asdict(view)
-                            for view in coordinator.schedule_r35_adjudications()
-                        ]})
-                    elif arguments.command == "task-commit-r35-adjudications":
-                        _print({"artifact_ids": list(
-                            coordinator.commit_r35_adjudications()
-                        )})
-                    elif arguments.command == "task-schedule-r35-revivals":
-                        _print({"tasks": [
-                            asdict(view)
-                            for view in coordinator.schedule_r35_revivals()
-                        ]})
-                    elif arguments.command == "task-commit-r35-revivals":
-                        _print({
-                            "artifact_id": coordinator.commit_r35_revivals()
-                        })
-                    elif arguments.command == "task-schedule-r4":
-                        if arguments.bundle_work_units == 1:
-                            scheduled = coordinator.schedule_r4()
-                        else:
-                            scheduled = coordinator.schedule_r4_bundled(
-                                max_work_units_per_task=arguments.bundle_work_units,
-                                max_task_input_bytes=arguments.bundle_max_input_bytes,
-                            )
-                        _print({"tasks": [asdict(view) for view in scheduled]})
-                    elif arguments.command == "task-commit-r4":
-                        _print({"artifact_id": coordinator.commit_r4()})
-                    elif arguments.command == "task-schedule-r5":
-                        _print({"tasks": [
-                            asdict(view) for view in coordinator.schedule_r5()
-                        ]})
-                    elif arguments.command == "task-commit-r5":
-                        _print({"artifact_id": coordinator.commit_r5()})
-                    elif arguments.command == "task-schedule-r6":
-                        _print({"task": asdict(coordinator.schedule_r6())})
-                    else:
-                        _print(coordinator.commit_r6())
-            return 0
+            return _handle_task(arguments)
 
         if arguments.command == "drift-resolve":
             value = json.loads(Path(arguments.input).read_text(encoding="utf-8"))
