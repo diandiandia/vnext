@@ -42,6 +42,33 @@ def _workflow(
     return manager, BatchWorkflow(manager, campaign_id, plan.batches[0].batch_id), plan
 
 
+def test_r1_direct_claim_requires_inspected_altitude_for_low_tier(
+    tmp_path: Path,
+) -> None:
+    manager, workflow, plan = _workflow(tmp_path, "CMP-low-tier-altitude")
+    work_unit = plan.work_units[0]
+    try:
+        workflow.run_r0()
+        claim = {
+            "work_unit_id": work_unit.work_unit_id,
+            "path": work_unit.source_files[0],
+            "claim": "AGENT_DECLARED_REVIEWED",
+            "altitude": "SCREENED",
+            "risk_tier": "LOW",
+        }
+        with pytest.raises(
+            ModelError, match="LOW path risk tier requires INSPECTED review altitude",
+        ):
+            workflow.record_r1([], path_review_claims=[claim])
+        assert workflow._stage_event("R1_COMPLETED") is None
+
+        claim["altitude"] = "INSPECTED"
+        workflow.record_r1([], path_review_claims=[claim])
+        assert workflow._stage_event("R1_COMPLETED") is not None
+    finally:
+        manager.close()
+
+
 def test_r0_r3_slice_records_canonical_verdict_and_partial_report(tmp_path: Path) -> None:
     manager, workflow, plan = _workflow(tmp_path)
     work_unit = plan.work_units[0]

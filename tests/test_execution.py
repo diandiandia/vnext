@@ -1222,6 +1222,19 @@ def test_r1_accepts_reviewed_scope_all_and_input_groups_files_by_directory(
                 True, invalid_risk_tier_ref, "unknown risk tier",
                 {"agent_runs": 1, "wall_seconds": 1},
             ))
+        low_screened_ref = manager.artifacts.put_text(json.dumps({
+            "schema_version": "1.0", "reviewed_scope": "ALL_SOURCE_FILES",
+            "review_altitude": "SCREENED",
+            "path_risk_tiers": [{"path": "app.py", "risk_tier": "LOW"}],
+            "surfaces": [], "boundary_reviews": [],
+        })).artifact_id
+        with pytest.raises(
+            ModelError, match="LOW path risk tier requires INSPECTED review altitude",
+        ):
+            backend.collect(lease, TaskResult(
+                True, low_screened_ref, "low tier without inspection",
+                {"agent_runs": 1, "wall_seconds": 1},
+            ))
         complete_ref = manager.artifacts.put_text(json.dumps({
             "schema_version": "1.0", "reviewed_scope": "ALL_SOURCE_FILES",
             "review_altitude": "INSPECTED",

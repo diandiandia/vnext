@@ -194,11 +194,18 @@ class BatchWorkflow:
                     "R1 path review claim requires SCREENED or INSPECTED altitude"
                 )
             try:
-                PathRiskTier(risk_tier)
+                risk_tier_state = PathRiskTier(risk_tier)
             except ValueError as error:
                 raise ModelError(
                     "R1 path review claim has an invalid risk tier"
                 ) from error
+            if (
+                risk_tier_state is PathRiskTier.LOW
+                and altitude_state is not ReviewAltitude.INSPECTED
+            ):
+                raise ModelError(
+                    f"LOW path risk tier requires INSPECTED review altitude: {path}"
+                )
             key = (work_unit_id, path)
             if key in seen_path_review_claims:
                 raise ModelError("R1 contains duplicate path review claims")

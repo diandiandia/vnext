@@ -100,8 +100,9 @@ triage: `HIGH` is for direct handling of externally controlled data, a trust/pri
 boundary, security policy, or a security-sensitive operation; `MEDIUM` is for supporting
 validation, transformation, state, or resource logic plausibly connected to
 security-relevant behavior without a direct boundary or sensitive operation; `LOW` is
-allowed only when inspected evidence shows no plausible security-sensitive role in the
-path. Use `UNASSESSED` when evidence is insufficient. This rubric does not assert
+allowed only with `INSPECTED` Work Unit altitude and evidence showing no plausible
+security-sensitive role in the path. Use `UNASSESSED` when evidence is insufficient.
+This rubric does not assert
 vulnerability severity, exploitability, or safety. Campaign reports join each
 Work Unit's R2/R4 altitude to its included paths' declared tiers; this is a
 Work-Unit-level attribution, not per-file inspection proof.

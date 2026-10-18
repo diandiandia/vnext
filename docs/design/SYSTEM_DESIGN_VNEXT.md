@@ -238,8 +238,8 @@ tier. These declarations are not host-observed reads or path-specific inspection
 the operational rubric defines HIGH for direct handling of externally controlled data, a
 trust/privilege boundary, security policy, or a security-sensitive operation; MEDIUM for
 plausibly related supporting logic without a direct boundary or sensitive operation; LOW
-only with inspected evidence of no plausible security-sensitive role; and UNASSESSED for
-insufficient evidence.
+only with INSPECTED Work Unit altitude and inspected evidence of no plausible
+security-sensitive role; and UNASSESSED for insufficient evidence.
 Classification quality is not independently validated.
 NOT_APPLICABLE is a scoped decision, not a safety result; these counts are not held-out
 inspection recall.

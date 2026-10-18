@@ -610,7 +610,9 @@ class ManualExecutionBackend:
                         f"R1 task requires review_altitude SCREENED or INSPECTED: {task.task_id}"
                     )
                 self._validate_surface_coverage(task, output)
-                self._validate_path_risk_tiers(output, work_unit, task.task_id)
+                self._validate_path_risk_tiers(
+                    output, work_unit, task.task_id, altitude,
+                )
             else:
                 self._validate_hypothesis_output(task, output)
         if task.required_output == "category-run-bundle/v1":
@@ -895,6 +897,7 @@ class ManualExecutionBackend:
     @staticmethod
     def _validate_path_risk_tiers(
         output: Mapping[str, Any], work_unit: Mapping[str, Any], task_id: str,
+        altitude: ReviewAltitude,
     ) -> None:
         records = output.get("path_risk_tiers", [])
         if not isinstance(records, list):
@@ -911,9 +914,13 @@ class ManualExecutionBackend:
                 raise ModelError(f"R1 path risk tier is duplicated: {path}")
             seen_paths.add(path)
             try:
-                PathRiskTier(str(record["risk_tier"]))
+                risk_tier = PathRiskTier(str(record["risk_tier"]))
             except (KeyError, ValueError) as error:
                 raise ModelError(f"R1 path risk tier is invalid: {path}") from error
+            if risk_tier is PathRiskTier.LOW and altitude is not ReviewAltitude.INSPECTED:
+                raise ModelError(
+                    f"LOW path risk tier requires INSPECTED review altitude: {path}"
+                )
 
     def _task_work_unit(self, task: TaskSpec) -> Mapping[str, Any]:
         if not task.input_refs:

@@ -638,7 +638,7 @@ def test_campaign_report_separates_agent_path_review_claims(tmp_path: Path) -> N
             "work_unit_id": work_unit_id,
             "path": "other.py",
             "claim": "AGENT_DECLARED_REVIEWED",
-            "altitude": "SCREENED",
+            "altitude": "INSPECTED",
             "risk_tier": "LOW",
         },
     )
@@ -660,15 +660,14 @@ def test_campaign_report_separates_agent_path_review_claims(tmp_path: Path) -> N
 
         assert report["coverage"]["agent_declared_reviewed_paths"] == 2
         assert report["coverage"]["agent_declared_path_review_altitudes"] == {
-            "INSPECTED": 1,
-            "SCREENED": 1,
+            "INSPECTED": 2,
         }
         assert report["path_review_altitude_counts"] == {
-            "INSPECTED": 1, "SCREENED": 1,
+            "INSPECTED": 2,
         }
         assert report["path_risk_tier_altitudes"] == {
             "HIGH": {"INSPECTED": 1},
-            "LOW": {"SCREENED": 1},
+            "LOW": {"INSPECTED": 1},
         }
         assert report["coverage"]["path_risk_tiers"] == {"HIGH": 1, "LOW": 1}
         assert report["risk_tier_discovery_axis_altitudes"]["HIGH"]["surface"] == {
@@ -694,7 +693,7 @@ def test_campaign_report_separates_agent_path_review_claims(tmp_path: Path) -> N
             for item in report["path_review_claims"]
         } == {
             "state.py": ("INSPECTED", "HIGH"),
-            "other.py": ("SCREENED", "LOW"),
+            "other.py": ("INSPECTED", "LOW"),
         }
         markdown = (
             manager.state_dir / "campaigns" / "CMP-r4" / "report" / "report.md"
