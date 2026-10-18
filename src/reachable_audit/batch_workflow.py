@@ -158,6 +158,8 @@ class BatchWorkflow:
         surfaces: Sequence[Surface],
         boundary_reviews: Sequence[BoundaryReview] = (),
         path_review_claims: Sequence[Mapping[str, str]] = (),
+        *,
+        source_task_output_refs: Mapping[str, str] | None = None,
     ) -> str:
         self._require_stage("R0_COMPLETED")
         work_units = {str(item["work_unit_id"]): item for item in self._work_units()}
@@ -293,7 +295,13 @@ class BatchWorkflow:
                 key=lambda item: (item["work_unit_id"], item["path"]),
             ),
         }
-        existing_artifact_id = self._existing_stage_artifact("R1_COMPLETED", value)
+        revision_metadata = self._stage_revision_metadata(
+            "R1", value, source_task_output_refs or {}, ("R0_COMPLETED",)
+        )
+        existing_artifact_id = self._existing_stage_artifact(
+            "R1_COMPLETED", value,
+            expected_revision_id=revision_metadata["revision_id"],
+        )
         if existing_artifact_id is not None:
             batch = self.manager.store.get_batch(self.campaign_id, self.batch_id)
             if batch.status is BatchStatus.READY:
@@ -308,11 +316,15 @@ class BatchWorkflow:
             entity_type="batch_stage",
             entity_id=self.batch_id,
             event_type="R1_COMPLETED",
-            idempotency_key=f"r1:{self.campaign_id}:{self.batch_id}",
+            idempotency_key=(
+                f"r1:{self.campaign_id}:{self.batch_id}:"
+                f"{revision_metadata['revision_id']}"
+            ),
             actor="agent",
             payload={
                 "surface_ids": sorted(seen),
                 "boundary_review_count": len(boundary_reviews),
+                **revision_metadata,
             },
             payload_ref=artifact_id,
         )
@@ -1868,6 +1880,7 @@ class BatchWorkflow:
         value: Any,
         *,
         conflict_message: str | None = None,
+        expected_revision_id: str | None = None,
     ) -> str | None:
         events = self._events(event_type=event_type)
         if not events:
@@ -1887,7 +1900,47 @@ class BatchWorkflow:
         ))
         if self._read_artifact(event.payload_ref) != normalized:
             raise ModelError(message)
+        existing_revision_id = event.payload.get("revision_id")
+        if (
+            expected_revision_id is not None
+            and existing_revision_id is not None
+            and existing_revision_id != expected_revision_id
+        ):
+            raise ModelError(f"{event_type} already committed with different provenance")
         return event.payload_ref
+
+    def _stage_revision_metadata(
+        self,
+        stage: str,
+        projection: Any,
+        task_output_refs: Mapping[str, str],
+        upstream_stage_types: Sequence[str],
+    ) -> dict[str, Any]:
+        upstream_revisions = {}
+        for event_type in upstream_stage_types:
+            event = self._require_stage(event_type)
+            upstream_revisions[event_type] = str(
+                event.payload.get("revision_id", event.event_id)
+            )
+        canonical = {
+            "stage": stage,
+            "projection": projection,
+            "source_task_output_refs": dict(sorted(task_output_refs.items())),
+            "upstream_revision_ids": upstream_revisions,
+        }
+        encoded = json.dumps(
+            canonical,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+            default=str,
+        )
+        revision_id = "REV-" + hashlib.sha256(encoded.encode("utf-8")).hexdigest()[:24]
+        return {
+            "revision_id": revision_id,
+            "source_task_output_refs": canonical["source_task_output_refs"],
+            "upstream_revision_ids": upstream_revisions,
+        }
 
     def _require_stage(self, event_type: str) -> EventRecord:
         event = self._stage_event(event_type)

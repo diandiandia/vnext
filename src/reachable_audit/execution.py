@@ -1500,7 +1500,14 @@ class DiscoveryCoordinator:
                     )
                 boundary_reviews.append(review)
         return self.workflow.record_r1(
-            surfaces, boundary_reviews, path_review_claims=path_review_claims,
+            surfaces,
+            boundary_reviews,
+            path_review_claims=path_review_claims,
+            source_task_output_refs={
+                view.task.task_id: view.output_ref
+                for view in views
+                if view.output_ref is not None
+            },
         )
 
     def schedule_r2(self) -> tuple[TaskView, ...]:

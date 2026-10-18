@@ -493,11 +493,29 @@ def test_cli_drives_a_durable_surface_task(tmp_path: Path, capsys: object) -> No
         "task-collect", str(target), "CMP-tasks", task_id, "worker-b",
         "--input", str(result_path),
     ]) == 0
-    capsys.readouterr()  # type: ignore[attr-defined]
+    collected = json.loads(capsys.readouterr().out)  # type: ignore[attr-defined]
     assert main(["task-commit-r1", str(target), "CMP-tasks", batch_id]) == 0
     assert "artifact_id" in json.loads(
         capsys.readouterr().out  # type: ignore[attr-defined]
     )
+    with CampaignManager(target) as manager:
+        r0_event = next(
+            event for event in manager.store.list_batch_events(
+                "CMP-tasks", batch_id, event_type="R0_COMPLETED",
+            )
+        )
+        r1_event = next(
+            event for event in manager.store.list_batch_events(
+                "CMP-tasks", batch_id, event_type="R1_COMPLETED",
+            )
+        )
+        assert r1_event.payload["source_task_output_refs"] == {
+            task_id: collected["output_ref"],
+        }
+        assert r1_event.payload["upstream_revision_ids"] == {
+            "R0_COMPLETED": r0_event.event_id,
+        }
+        assert r1_event.payload["revision_id"].startswith("REV-")
 
 
 def test_default_r2_cli_schedules_one_compact_task_per_work_unit(
