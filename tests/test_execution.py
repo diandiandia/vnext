@@ -181,6 +181,64 @@ def test_r1_collect_rejects_bad_boundary_anchor_before_terminalizing(
         manager.close()
 
 
+def test_r1_collect_rejects_boundary_review_from_non_endpoint_work_unit(
+    tmp_path: Path,
+) -> None:
+    manager, workflow, plan = _workflow(tmp_path, "CMP-r1-boundary-endpoint")
+    work_unit = plan.work_units[0]
+    try:
+        workflow.run_r0()
+        backend = ManualExecutionBackend(manager, workflow.campaign_id)
+        input_ref = manager.artifacts.put_text(json.dumps({
+            "schema_version": "1.0",
+            "work_unit": {
+                "work_unit_id": work_unit.work_unit_id,
+                "component_id": "COMP-unrelated",
+                "source_files": list(work_unit.source_files),
+            },
+            "boundary_edges": [{
+                "edge_id": "EDGE-boundary-endpoint",
+                "source_component_id": work_unit.component_id,
+                "target_component_id": "COMP-remote",
+            }],
+        })).artifact_id
+        task = TaskSpec(
+            task_id="TASK-r1-boundary-endpoint",
+            campaign_id=workflow.campaign_id,
+            batch_id=workflow.batch_id,
+            work_unit_id=work_unit.work_unit_id,
+            operation="discover_surfaces",
+            input_refs=(input_ref,),
+            required_output="surface-set/v1",
+            budget={"agent_runs": 1},
+        )
+        backend.submit(task)
+        lease = backend.claim("surface-reviewer", task_id_filter=task.task_id)
+        assert lease is not None
+        output_ref = manager.artifacts.put_text(json.dumps({
+            "schema_version": "1.0",
+            "review_altitude": "INSPECTED",
+            "reviewed_paths": list(work_unit.source_files),
+            "surfaces": [],
+            "boundary_reviews": [{
+                "edge_id": "EDGE-boundary-endpoint",
+                "work_unit_id": work_unit.work_unit_id,
+                "disposition": "confirmed",
+                "evidence_refs": ["LOC-app.py:1"],
+                "rationale": "reviewed from an unrelated component",
+            }],
+        })).artifact_id
+
+        with pytest.raises(ModelError, match="Work Unit is not an edge endpoint"):
+            backend.collect(lease, TaskResult(
+                True, output_ref, "non-endpoint review",
+                {"agent_runs": 1, "wall_seconds": 1},
+            ))
+        assert backend.poll(task.task_id).status is TaskStatus.LEASED
+    finally:
+        manager.close()
+
+
 def test_collected_r1_output_can_be_amended_before_stage_commit(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
