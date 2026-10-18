@@ -398,6 +398,21 @@ def test_r2_axis_dispositions_are_scoped_per_work_unit(tmp_path: Path) -> None:
             for unit in plan.work_units
             for axis in DiscoveryAxis
         )
+        invalid_axis_runs = (
+            AxisRun(
+                axis=axis_runs[0].axis,
+                applicability=axis_runs[0].applicability,
+                evidence_refs=axis_runs[0].evidence_refs,
+                rationale=axis_runs[0].rationale,
+                work_unit_id=axis_runs[0].work_unit_id,
+                review_altitude="DEEP",
+            ),
+            *axis_runs[1:],
+        )
+        with pytest.raises(ModelError, match="invalid review altitude"):
+            workflow.record_r2(
+                [], axis_evidence=evidence, axis_runs=invalid_axis_runs,
+            )
         workflow.record_r2([], axis_evidence=evidence, axis_runs=axis_runs)
         event = next(
             item for item in manager.store.list_events("CMP-multi-r2")

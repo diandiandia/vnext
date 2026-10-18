@@ -259,6 +259,7 @@ def test_per_axis_r2_output_can_be_amended(tmp_path: Path, axis: DiscoveryAxis) 
             "reviewed_paths": list(plan.work_units[0].source_files),
             "axis_run": {
                 "axis": axis.value, "applicability": "APPLICABLE",
+                "review_altitude": "SCREENED",
                 "evidence_refs": ["LOC-app.py:1"], "rationale": "initial review",
             },
             "hypotheses": [],
@@ -843,6 +844,8 @@ def test_discovery_coordinator_commits_r1_and_six_axis_r2(tmp_path: Path) -> Non
         assert all(item["knowledge_context"]["knowledge_version"] == "portfolio-2026-09-v1" for item in r2_inputs)
         assert all(item["knowledge_context"]["issue_entries"] for item in r2_inputs)
         assert all(item["knowledge_context"]["mechanism_cards"] for item in r2_inputs)
+        assert all("SCREENED" in item["analysis_contract"] for item in r2_inputs)
+        assert all("review_altitude" in item["output_contract"]["axis_run"] for item in r2_inputs)
         while (axis_lease := backend.claim("hypothesis-worker")) is not None:
             axis = axis_lease.task.operation.split(":", 1)[1]
             hypotheses = []
@@ -870,6 +873,9 @@ def test_discovery_coordinator_commits_r1_and_six_axis_r2(tmp_path: Path) -> Non
                         "applicability": (
                             "NOT_APPLICABLE" if axis == "differential" else "APPLICABLE"
                         ),
+                        "review_altitude": (
+                            "NOT_RECORDED" if axis == "differential" else "SCREENED"
+                        ),
                         "evidence_refs": [f"EVID-{axis}"],
                         "rationale": (
                             "this static-only fixture has no alternate runtime mode"
@@ -892,6 +898,15 @@ def test_discovery_coordinator_commits_r1_and_six_axis_r2(tmp_path: Path) -> Non
         r2_event = next(event for event in report_events if event.event_type == "R2_COMPLETED")
         r2_artifact = json.loads(manager.artifacts.get_bytes(r2_event.payload_ref))
         assert len(r2_artifact["axis_runs"]) == 6
+        assert {
+            item["axis"]: item["review_altitude"]
+            for item in r2_artifact["axis_runs"]
+        } == {
+            axis.value: (
+                "NOT_RECORDED" if axis is DiscoveryAxis.DIFFERENTIAL else "SCREENED"
+            )
+            for axis in DiscoveryAxis
+        }
         assert next(
             item for item in r2_artifact["axis_runs"]
             if item["axis"] == "differential"
@@ -995,6 +1010,11 @@ def test_compact_r2_runs_all_axes_in_one_task_per_work_unit(tmp_path: Path) -> N
         assert len(tasks) == len(plan.work_units) == 1
         task_input = json.loads(manager.artifacts.get_bytes(tasks[0].task.input_refs[0]))
         assert set(task_input["analysis_contract"]) == {axis.value for axis in DiscoveryAxis}
+        assert all(
+            "SCREENED" in task_input["analysis_contract"][axis.value]
+            for axis in DiscoveryAxis
+        )
+        assert "review_altitude" in task_input["output_contract"]["axis_runs"]
         assert task_input["hotspot_report"]["provider_id"] == "python-ast-hotspots-v1"
         assert task_input["hotspot_report"]["candidates"][0]["rule_id"] == "PY-CMD-001"
         assert task_input["hotspot_report"]["candidates"][0]["evidence_ref"] == "LOC-app.py:4"
@@ -1003,6 +1023,7 @@ def test_compact_r2_runs_all_axes_in_one_task_per_work_unit(tmp_path: Path) -> N
         axis_runs = [{
             "axis": axis.value,
             "applicability": "APPLICABLE",
+            "review_altitude": "INSPECTED",
             "evidence_refs": ["LOC-app.py:1"],
             "rationale": f"reviewed {axis.value} axis",
         } for axis in DiscoveryAxis]
@@ -1024,6 +1045,54 @@ def test_compact_r2_runs_all_axes_in_one_task_per_work_unit(tmp_path: Path) -> N
         r2 = json.loads(manager.artifacts.get_bytes(r2_event.payload_ref))
         assert len(r2["axis_runs"]) == 6
         assert r2["hypotheses"] == []
+    finally:
+        manager.close()
+
+
+def test_collect_requires_altitude_for_applicable_r2_axis(tmp_path: Path) -> None:
+    manager, original = _setup(tmp_path)
+    input_ref = manager.artifacts.put_text(json.dumps({
+        "work_unit": {"work_unit_id": "WU-1", "source_files": []},
+    })).artifact_id
+    task = replace(
+        original,
+        task_id="TASK-r2-altitude",
+        operation="generate_hypotheses_compact",
+        input_refs=(input_ref,),
+        required_output="compact-hypothesis-set/v1",
+    )
+    try:
+        backend = ManualExecutionBackend(manager, "CMP-exec")
+        backend.submit(task)
+        lease = backend.claim("worker")
+        assert lease is not None
+        output_ref = manager.artifacts.put_text(json.dumps({
+            "schema_version": "1.0",
+            "reviewed_paths": [],
+            "axis_runs": [{
+                "axis": "surface",
+                "applicability": "APPLICABLE",
+                "evidence_refs": ["EVID-surface"],
+                "rationale": "surface discovery was applicable",
+            }],
+            "hypotheses": [],
+        })).artifact_id
+        with pytest.raises(ModelError, match="applicable R2 axis requires SCREENED or INSPECTED"):
+            backend.collect(lease, TaskResult(
+                True, output_ref, "missing axis altitude",
+                {"agent_runs": 1, "wall_seconds": 1},
+            ))
+        assert backend.poll(task.task_id).status is TaskStatus.LEASED
+        output = json.loads(manager.artifacts.get_bytes(output_ref))
+        output["axis_runs"][0]["applicability"] = "NOT_APPLICABLE"
+        output["axis_runs"][0]["review_altitude"] = "INSPECTED"
+        invalid_ref = manager.artifacts.put_text(json.dumps(output)).artifact_id
+        with pytest.raises(ModelError, match="non-applicable R2 axis must use NOT_RECORDED"):
+            backend.collect(lease, TaskResult(
+                True, invalid_ref, "non-applicable axis has altitude",
+                {"agent_runs": 1, "wall_seconds": 1},
+            ))
+        assert backend.poll(task.task_id).status is TaskStatus.LEASED
     finally:
         manager.close()
 

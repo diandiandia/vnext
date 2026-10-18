@@ -61,6 +61,7 @@ def _ready_for_r5(
     screening_work_unit: bool = False,
     path_dispositions: tuple[PlanPathDisposition, ...] = (),
     path_review_claims: tuple[dict[str, str], ...] = (),
+    axis_review_altitudes: dict[str, str] | None = None,
 ):  # type: ignore[no-untyped-def]
     manager, workflow, plan = _ready_for_r4(
         tmp_path, static_hypothesis=static_hypothesis,
@@ -68,6 +69,7 @@ def _ready_for_r5(
         screening_work_unit=screening_work_unit,
         path_dispositions=path_dispositions,
         path_review_claims=path_review_claims,
+        axis_review_altitudes=axis_review_altitudes,
     )
     category_plan = create_category_audit_plans(plan.work_units, [_card()], budget={})[0]
     workflow.record_category_audit_plan([category_plan])

@@ -73,6 +73,13 @@ _AXIS_INSTRUCTIONS = {
     ),
 }
 
+_R2_ALTITUDE_CONTRACT = (
+    "For an APPLICABLE axis, declare review_altitude as SCREENED for bounded breadth "
+    "triage or INSPECTED for targeted source analysis relevant to that axis. For "
+    "NOT_APPLICABLE or DEFERRED axes use NOT_RECORDED. This is an Agent declaration, "
+    "not host-observed reading or proof of safety."
+)
+
 _VERIFICATION_INSTRUCTIONS = (
     "Determine reachability from a declared principal. REACHABLE requires an explicit "
     "call chain and edge evidence; UNREACHABLE requires blocking evidence; uncertainty "
@@ -806,11 +813,14 @@ class ManualExecutionBackend:
             if not isinstance(axis_run, dict):
                 raise ModelError(f"R2 axis run must be an object: {task.task_id}")
             try:
-                AxisRun.from_dict(axis_run)
+                parsed_axis_run = AxisRun.from_dict(axis_run)
             except (KeyError, TypeError, ValueError) as error:
                 raise ModelError(
                     f"invalid R2 axis run structure: {task.task_id}: {error}"
                 ) from error
+            ManualExecutionBackend._validate_r2_review_altitude(
+                parsed_axis_run, task.task_id,
+            )
         hypotheses = output.get("hypotheses")
         if not isinstance(hypotheses, list):
             raise ModelError(f"R2 hypotheses must be an array: {task.task_id}")
@@ -850,6 +860,25 @@ class ManualExecutionBackend:
                     f"duplicate R2 hypothesis ID in task: {hypothesis.hypothesis_id}"
                 )
             hypothesis_ids.add(hypothesis.hypothesis_id)
+
+    @staticmethod
+    def _validate_r2_review_altitude(axis_run: AxisRun, task_id: str) -> None:
+        if (
+            axis_run.applicability is Applicability.APPLICABLE
+            and axis_run.review_altitude not in {
+                ReviewAltitude.SCREENED, ReviewAltitude.INSPECTED,
+            }
+        ):
+            raise ModelError(
+                f"applicable R2 axis requires SCREENED or INSPECTED altitude: {task_id}"
+            )
+        if (
+            axis_run.applicability is not Applicability.APPLICABLE
+            and axis_run.review_altitude is not ReviewAltitude.NOT_RECORDED
+        ):
+            raise ModelError(
+                f"non-applicable R2 axis must use NOT_RECORDED altitude: {task_id}"
+            )
 
     def _task_work_unit(self, task: TaskSpec) -> Mapping[str, Any]:
         if not task.input_refs:
@@ -1280,11 +1309,16 @@ class DiscoveryCoordinator:
                     "surfaces": surfaces_by_work_unit.get(work_unit_id, []),
                     "language_adapters": self._language_adapter_context(work_unit),
                     "knowledge_context": knowledge_context,
-                    "analysis_contract": _AXIS_INSTRUCTIONS[axis.value],
+                    "analysis_contract": (
+                        _AXIS_INSTRUCTIONS[axis.value] + " " + _R2_ALTITUDE_CONTRACT
+                    ),
                     "output_contract": {
                         "schema_version": "1.0",
                         "reviewed_scope": _REVIEWED_SCOPE_CONTRACT,
-                        "axis_run": "AxisRun with APPLICABLE/NOT_APPLICABLE/DEFERRED, evidence_refs, rationale",
+                        "axis_run": (
+                            "AxisRun with APPLICABLE/NOT_APPLICABLE/DEFERRED, evidence_refs, "
+                            "rationale, and review_altitude per analysis_contract"
+                        ),
                         "hypotheses": (
                             "array<Hypothesis>; each mechanism is an object with required "
                             "family and variant fields, optional freeform; hypothesis_id must "
@@ -1337,12 +1371,16 @@ class DiscoveryCoordinator:
                 "language_adapters": self._language_adapter_context(work_unit),
                 "knowledge_context": knowledge_context,
                 "analysis_contract": {
-                    axis: _AXIS_INSTRUCTIONS[axis] for axis in axes
+                    axis: _AXIS_INSTRUCTIONS[axis] + " " + _R2_ALTITUDE_CONTRACT
+                    for axis in axes
                 },
                 "output_contract": {
                     "schema_version": "1.0",
                     "reviewed_scope": _REVIEWED_SCOPE_CONTRACT,
-                    "axis_runs": "exactly one evidenced AxisRun per listed axis",
+                    "axis_runs": (
+                        "exactly one evidenced AxisRun per listed axis, including "
+                        "review_altitude per analysis_contract"
+                    ),
                     "hypotheses": (
                         "array<Hypothesis>, each with its origin_axis; mechanism is an "
                         "object with required family and variant fields, optional freeform; "
@@ -1387,6 +1425,10 @@ class DiscoveryCoordinator:
                 replace(AxisRun.from_dict(item), work_unit_id=work_unit_id)
                 for item in raw_axis_runs
             ]
+            for axis_run in parsed_axis_runs:
+                ManualExecutionBackend._validate_r2_review_altitude(
+                    axis_run, view.task.task_id,
+                )
             axes_seen = [item.axis.value for item in parsed_axis_runs]
             if set(axes_seen) != required_axes or len(axes_seen) != len(required_axes):
                 raise ModelError(f"compact R2 axis coverage mismatch: {view.task.task_id}")
@@ -1437,6 +1479,9 @@ class DiscoveryCoordinator:
             if not isinstance(value.get("axis_run"), dict):
                 raise ModelError(f"R2 task output requires an axis_run: {view.task.task_id}")
             axis_run = AxisRun.from_dict(value["axis_run"])
+            ManualExecutionBackend._validate_r2_review_altitude(
+                axis_run, view.task.task_id,
+            )
             if axis_run.axis.value != axis:
                 raise ModelError(f"R2 axis disposition mismatch: {view.task.task_id}")
             if axis_run.work_unit_id not in (None, work_unit_id):

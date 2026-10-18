@@ -45,6 +45,7 @@ def _ready_for_r4(
     screening_work_unit: bool = False,
     path_dispositions: tuple[PlanPathDisposition, ...] = (),
     path_review_claims: tuple[dict[str, str], ...] = (),
+    axis_review_altitudes: dict[str, str] | None = None,
 ):  # type: ignore[no-untyped-def]
     (tmp_path / "state.py").write_text("STATE = {}\n", encoding="utf-8")
     inventory = build_inventory(tmp_path, "fixture:r4")
@@ -79,6 +80,7 @@ def _ready_for_r4(
         axis_runs=axis_runs_from_evidence(
             axis_evidence,
             not_applicable=tuple(axis_evidence) if screening_work_unit else (),
+            review_altitudes=axis_review_altitudes,
         ),
     )
     workflow.record_r3([

@@ -10,6 +10,7 @@ from typing import Any, Mapping
 
 from .analysis_models import (
     CampaignClosure,
+    DiscoveryAxis,
     R5Disposition,
     ReviewAltitude,
     ScopeDispositionKind,
@@ -428,6 +429,14 @@ class CampaignCloser:
         path_review_altitude_counts = _counts(
             item["altitude"] for item in path_review_claims
         )
+        discovery_axis_review_altitudes = {
+            axis.value: _counts(
+                str(item.get("review_altitude", ReviewAltitude.NOT_RECORDED.value))
+                for item in discovery_axis_runs
+                if item.get("axis") == axis.value
+            )
+            for axis in DiscoveryAxis
+        }
         surface_ids = [item["surface_id"] for item in surfaces]
         analyzed_surface_ids = {
             surface_id
@@ -897,6 +906,7 @@ class CampaignCloser:
             ],
             "path_review_claims": path_review_claims,
             "path_review_altitude_counts": path_review_altitude_counts,
+            "discovery_axis_review_altitudes": discovery_axis_review_altitudes,
             "residual_risks": list(closure.residual_risks),
             "limitations": list(closure.limitations),
             "lessons": list(closure.lessons),
@@ -1116,6 +1126,16 @@ class CampaignCloser:
             )
         else:
             lines.append("- No path review claims recorded.")
+        lines.extend([
+            "", "### Discovery Axis Review Altitude", "",
+            "These R2 altitudes are Agent declarations, not host-observed reads.",
+        ])
+        for axis, counts in report.get("discovery_axis_review_altitudes", {}).items():
+            lines.append(
+                f"- `{axis}`: " + ", ".join(
+                    f"{altitude} {count}" for altitude, count in counts.items()
+                )
+            )
         not_feasible_experiments = report.get(
             "not_feasible_experiment_hypothesis_ids", []
         )

@@ -48,6 +48,7 @@ def _closable_campaign(
     screening_work_unit: bool = False, not_feasible: bool = False,
     path_dispositions: tuple[PlanPathDisposition, ...] = (),
     path_review_claims: tuple[dict[str, str], ...] = (),
+    axis_review_altitudes: dict[str, str] | None = None,
 ):  # type: ignore[no-untyped-def]
     manager, workflow = _ready_for_r5(
         tmp_path,
@@ -56,6 +57,7 @@ def _closable_campaign(
         screening_work_unit=screening_work_unit,
         path_dispositions=path_dispositions,
         path_review_claims=path_review_claims,
+        axis_review_altitudes=axis_review_altitudes,
     )
     inventory = manager.load_inventory("CMP-r4")
     manager.record_component_graph(
@@ -641,6 +643,10 @@ def test_campaign_report_separates_agent_path_review_claims(tmp_path: Path) -> N
     manager, plan = _closable_campaign(
         tmp_path,
         path_review_claims=scope_claims,
+        axis_review_altitudes={
+            "surface": "SCREENED",
+            "mechanism": "INSPECTED",
+        },
     )
     try:
         assert plan.work_units[0].work_unit_id == work_unit_id
@@ -658,6 +664,12 @@ def test_campaign_report_separates_agent_path_review_claims(tmp_path: Path) -> N
         assert report["path_review_altitude_counts"] == {
             "INSPECTED": 1, "SCREENED": 1,
         }
+        assert report["discovery_axis_review_altitudes"]["surface"] == {
+            "SCREENED": 1,
+        }
+        assert report["discovery_axis_review_altitudes"]["mechanism"] == {
+            "INSPECTED": 1,
+        }
         assert {
             item["path"]: item["altitude"] for item in report["path_review_claims"]
         } == {"state.py": "INSPECTED", "other.py": "SCREENED"}
@@ -667,6 +679,7 @@ def test_campaign_report_separates_agent_path_review_claims(tmp_path: Path) -> N
         assert "Agent declarations, not host-observed file reads" in markdown
         assert "INSPECTED 1" in markdown
         assert "SCREENED 1" in markdown
+        assert "`mechanism`: INSPECTED 1" in markdown
     finally:
         manager.close()
 

@@ -132,6 +132,7 @@ class SurfaceReviewState(StrEnum):
 class ReviewAltitude(StrEnum):
     SCREENED = "SCREENED"
     INSPECTED = "INSPECTED"
+    NOT_RECORDED = "NOT_RECORDED"
 
 
 class FindingSeverity(StrEnum):
@@ -684,6 +685,7 @@ class AxisRun:
     evidence_refs: tuple[str, ...]
     rationale: str
     work_unit_id: str | None = None
+    review_altitude: ReviewAltitude = ReviewAltitude.NOT_RECORDED
 
     @classmethod
     def from_dict(cls, value: Mapping[str, Any]) -> "AxisRun":
@@ -696,6 +698,9 @@ class AxisRun:
                 str(value["work_unit_id"])
                 if value.get("work_unit_id") is not None else None
             ),
+            review_altitude=ReviewAltitude(str(
+                value.get("review_altitude", ReviewAltitude.NOT_RECORDED.value)
+            )),
         )
         if not run.evidence_refs or not run.rationale:
             raise ModelError("axis run requires evidence refs and rationale")

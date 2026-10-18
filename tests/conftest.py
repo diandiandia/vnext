@@ -4,7 +4,12 @@ import sys
 SOURCE_ROOT = Path(__file__).resolve().parents[1] / "src"
 sys.path.insert(0, str(SOURCE_ROOT))
 
-from reachable_audit.analysis_models import Applicability, AxisRun, DiscoveryAxis
+from reachable_audit.analysis_models import (
+	Applicability,
+	AxisRun,
+	DiscoveryAxis,
+	ReviewAltitude,
+)
 
 
 def execution_configuration_fixture() -> dict[str, str]:
@@ -19,7 +24,9 @@ def axis_runs_from_evidence(
 	evidence: dict[str, tuple[str, ...]],
 	*,
 	not_applicable: tuple[str, ...] = (),
+	review_altitudes: dict[str, str] | None = None,
 ) -> tuple[AxisRun, ...]:
+	review_altitudes = review_altitudes or {}
 	return tuple(
 		AxisRun(
 			axis=DiscoveryAxis(axis),
@@ -31,6 +38,9 @@ def axis_runs_from_evidence(
 			rationale=(
 				"axis is not applicable to this fixture"
 				if axis in not_applicable else "axis was explicitly reviewed"
+			),
+			review_altitude=ReviewAltitude(
+				review_altitudes.get(axis, ReviewAltitude.NOT_RECORDED.value)
 			),
 		)
 		for axis, refs in sorted(evidence.items())

@@ -362,6 +362,8 @@ class BatchWorkflow:
         work_unit_ids = set(work_units)
         axis_run_by_key = {}
         for item in axis_runs:
+            if not isinstance(item.review_altitude, ReviewAltitude):
+                raise ModelError("R2 axis run has an invalid review altitude")
             work_unit_id = item.work_unit_id
             if work_unit_id is None and len(work_unit_ids) == 1:
                 work_unit_id = next(iter(work_unit_ids))
@@ -374,6 +376,7 @@ class BatchWorkflow:
                 evidence_refs=item.evidence_refs,
                 rationale=item.rationale,
                 work_unit_id=work_unit_id,
+                review_altitude=item.review_altitude,
             )
         expected_axis_runs = {
             (work_unit_id, axis) for work_unit_id in work_unit_ids for axis in allowed_axes
