@@ -334,6 +334,22 @@ def _handle_batch_stage(arguments: argparse.Namespace) -> int:
     return 0
 
 
+def _handle_campaign_abort(arguments: argparse.Namespace) -> int:
+    value = json.loads(Path(arguments.input).read_text(encoding="utf-8"))
+    if not isinstance(value, dict) or not isinstance(value.get("skill_issues"), list):
+        raise ValueError("campaign-abort input requires a skill_issues array")
+    with CampaignManager(arguments.target, arguments.state_dir) as manager:
+        report = manager.abort_campaign(
+            arguments.campaign_id,
+            reason=arguments.reason,
+            skill_issues=tuple(
+                SkillIssue.from_dict(item) for item in value["skill_issues"]
+            ),
+        )
+        _print(report)
+    return 0
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="reachable-audit")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -1047,19 +1063,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         if arguments.command == "campaign-abort":
-            value = json.loads(Path(arguments.input).read_text(encoding="utf-8"))
-            if not isinstance(value, dict) or not isinstance(value.get("skill_issues"), list):
-                raise ValueError("campaign-abort input requires a skill_issues array")
-            with CampaignManager(arguments.target, arguments.state_dir) as manager:
-                report = manager.abort_campaign(
-                    arguments.campaign_id,
-                    reason=arguments.reason,
-                    skill_issues=tuple(
-                        SkillIssue.from_dict(item) for item in value["skill_issues"]
-                    ),
-                )
-                _print(report)
-            return 0
+            return _handle_campaign_abort(arguments)
 
         if arguments.command == "shadow-evaluate":
             value = json.loads(Path(arguments.input).read_text(encoding="utf-8"))
