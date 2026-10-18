@@ -10,7 +10,7 @@ they do not substitute for host attestation, held-out campaigns, or release qual
 
 ### 1. Stage Revision, Invalidation, and Recovery
 
-Status: **LOCAL MECHANICS IMPLEMENTED; ACCEPTANCE IN PROGRESS**. R1-R5 projection
+Status: **LOCAL IMPLEMENTATION AND SYNTHETIC ACCEPTANCE COMPLETE**. R1-R5 projection
 events carry deterministic revision IDs,
 exact source task-output refs, and upstream revision pins. R1/R2/R4 main/R5 preflight
 exact retries before artifact writes; R3 adjudication and R4 screening retain partial-
@@ -21,10 +21,12 @@ stale tasks; R3.5 ledgers are revision-aware; Campaign closure blocks unresolved
 invalidations and stale ancestry. Full-Batch Plan Amendment remains the quiescent replay
 path when task evidence cannot be safely reused.
 
-Remaining Phase 1 work is to strengthen the amendment matrix so each stage proves both
-that every descendant is invalidated and every unrelated projection remains active, and
-to fault-inject the final Batch COMPLETE transition after R6 event persistence. Preserve
-append-only history and the existing terminal R6 amendment policy.
+The tested amendment matrix proves descendant invalidation and preserves unrelated
+CategoryAuditPlan projections. Fault injection covers partial R3 adjudications, R1-R5
+projection writes, R1 Batch status transition, atomic amendment/invalidation writes, and
+R6 event/Batch completion recovery. Append-only history and terminal R6 amendment behavior
+are preserved. Representative-host amendment behavior remains part of external release
+qualification, not a local unit-test claim.
 
 Acceptance: fault-injection tests at every write boundary; exact retry is idempotent;
 conflicting retries do not mutate state; full-Batch replay preserves old history and
@@ -118,9 +120,8 @@ are external evidence; local synthetic tests cannot mark these gates complete.
 The latest full local verification after stage provenance, invalidation, revision-bound
 tasks, R3.5 ledger replay, closure ancestry, and commit-boundary recovery tests is
 **319 passed, 1 skipped**; compatibility-scan passes with no findings (49 Python files,
-167 knowledge files, 1 prompt file). Before closing Phase 1, prove unrelated projections
-remain active for each amendment boundary and fault-inject the final R6 Batch COMPLETE
-transition after its event append. The complete suite must pass after those refinements.
+167 knowledge files, 1 prompt file). Phase 1's local acceptance tests pass; its real-host
+behavior remains unverified until release qualification.
 
 Before closing Phase 2, retain old-form compatibility, add compact multi-item round-trip
 and measured byte-reduction tests, verify rejected task output remains repairable, and
