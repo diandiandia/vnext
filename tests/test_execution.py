@@ -2195,6 +2195,8 @@ def test_discovery_coordinator_schedules_and_commits_r3(
             event_type="REFUTATION_SUBMITTED",
             entity_id="HYP-r3",
         )[0]
+        prior_r35_tasks = coordinator.schedule_r35_refutations()
+        assert len(prior_r35_tasks) == 2
         assert r3_event.payload["source_task_output_refs"] == {
             lease.task.task_id: output_ref,
         }
@@ -2230,6 +2232,14 @@ def test_discovery_coordinator_schedules_and_commits_r3(
         assert replacement_r3_event.payload["source_task_output_refs"] == {
             lease.task.task_id: replacement_ref,
         }
+        replacement_r35_tasks = coordinator.schedule_r35_refutations()
+        assert len(replacement_r35_tasks) == len(prior_r35_tasks)
+        assert {
+            view.task.task_id for view in replacement_r35_tasks
+        }.isdisjoint({view.task.task_id for view in prior_r35_tasks})
+        assert coordinator._active_task_views(
+            operation="refute_reachability",
+        ) == replacement_r35_tasks
         adjudication = workflow._stage_event("VERDICT_ADJUDICATED")
         assert adjudication is not None
         assert adjudication.event_id != prior_adjudication.event_id

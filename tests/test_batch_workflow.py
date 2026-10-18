@@ -184,6 +184,19 @@ def test_r1_exact_retry_recovers_batch_transition_after_commit(
     manager, workflow, _ = _workflow(tmp_path, "CMP-r1-recovery")
     try:
         workflow.run_r0()
+        original_append = manager.store._append_event_tx
+
+        def fail_r1_append(**kwargs: object) -> object:
+            if kwargs.get("event_type") == "R1_COMPLETED":
+                raise RuntimeError("injected R1 event append failure")
+            return original_append(**kwargs)
+
+        with monkeypatch.context() as patch:
+            patch.setattr(manager.store, "_append_event_tx", fail_r1_append)
+            with pytest.raises(RuntimeError, match="injected R1 event append failure"):
+                workflow.record_r1([])
+        assert workflow._stage_event("R1_COMPLETED") is None
+
         original_transition = manager.store.transition_batch
 
         def fail_running_transition(*args: object, **kwargs: object) -> object:

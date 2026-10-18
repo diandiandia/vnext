@@ -566,7 +566,9 @@ def test_r6_rejects_handoff_manifest_mismatch(tmp_path: Path) -> None:
         manager.close()
 
 
-def test_r6_closure_evidence_runs_as_durable_task(tmp_path: Path) -> None:
+def test_r6_closure_evidence_runs_as_durable_task(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
     manager, workflow = _ready_for_r5(tmp_path)
     try:
         workflow.record_r5([], [])
@@ -599,6 +601,19 @@ def test_r6_closure_evidence_runs_as_durable_task(tmp_path: Path) -> None:
             True, output_ref, "closure evidence collected", {"minutes": 3, "agent_runs": 1, "wall_seconds": 3},
             execution_configuration_fixture(),
         ))
+        original_append = manager.store._append_event_tx
+
+        def fail_r6_append(**kwargs: object) -> object:
+            if kwargs.get("event_type") == "R6_COMPLETED":
+                raise RuntimeError("injected R6 event append failure")
+            return original_append(**kwargs)
+
+        with monkeypatch.context() as patch:
+            patch.setattr(manager.store, "_append_event_tx", fail_r6_append)
+            with pytest.raises(RuntimeError, match="injected R6 event append failure"):
+                coordinator.commit_r6()
+        assert workflow._stage_event("R6_COMPLETED") is None
+
         report = coordinator.commit_r6()
         assert report["status"] == "PASS"
         assert report["closure"]["budget_used"] == {
