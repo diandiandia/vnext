@@ -553,13 +553,32 @@ def test_zero_hypothesis_r35_stages_short_circuit_without_task_listing(
             axis_runs=axis_runs_from_evidence(evidence),
         )
         workflow.record_r3([])
+        manager.add_batch(
+            campaign_id=workflow.campaign_id,
+            batch_id="B-unrelated-events",
+            manifest={"work_unit_ids": []},
+        )
+        manager.store.append_events_batch(workflow.campaign_id, [{
+            "batch_id": "B-unrelated-events",
+            "entity_type": "unrelated_fixture",
+            "entity_id": f"EVENT-{index:05d}",
+            "event_type": "UNRELATED_EVENT",
+            "idempotency_key": f"unrelated-event:{index:05d}",
+            "actor": "test",
+            "payload": {},
+            "payload_ref": None,
+        } for index in range(30_000)])
         backend = ManualExecutionBackend(manager, workflow.campaign_id)
         coordinator = DiscoveryCoordinator(workflow, backend)
 
         def unexpected_list_tasks(*_args: object, **_kwargs: object):
             raise AssertionError("zero-target stage must not enumerate tasks")
 
+        def unexpected_campaign_scan(*_args: object, **_kwargs: object):
+            raise AssertionError("zero-target stage must not scan Campaign events")
+
         monkeypatch.setattr(backend, "list_tasks", unexpected_list_tasks)
+        monkeypatch.setattr(manager.store, "list_events", unexpected_campaign_scan)
         assert coordinator.schedule_r35_refutations() == ()
         assert coordinator.commit_r35_refutations() == ()
         assert coordinator.schedule_r35_adjudications() == ()
