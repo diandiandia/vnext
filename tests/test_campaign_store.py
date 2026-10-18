@@ -149,6 +149,56 @@ def test_bulk_event_append_rolls_back_earlier_inserts_on_conflict(
         ]
 
 
+def test_bulk_event_append_rolls_back_30k_batch_on_final_conflict(
+    tmp_path: Path,
+) -> None:
+    event_count = 30_000
+    with AuditStore(tmp_path / "bulk-rollback-scale.db") as store:
+        store.create_campaign(
+            campaign_id="CMP-bulk-rollback-scale",
+            target_root="/runtime/target",
+            snapshot_id="fixture:bulk-rollback-scale",
+        )
+        store.append_event(
+            campaign_id="CMP-bulk-rollback-scale",
+            batch_id=None,
+            entity_type="scale_fixture",
+            entity_id="existing",
+            event_type="SCALE_EVENT",
+            idempotency_key="scale-conflict",
+            actor="test",
+            payload={"value": "original"},
+        )
+        events = [{
+            "batch_id": None,
+            "entity_type": "scale_fixture",
+            "entity_id": f"new-{index:05d}",
+            "event_type": "SCALE_EVENT",
+            "idempotency_key": f"scale-new-{index:05d}",
+            "actor": "test",
+            "payload": {"value": index},
+        } for index in range(event_count - 1)]
+        events.append({
+            "batch_id": None,
+            "entity_type": "scale_fixture",
+            "entity_id": "existing",
+            "event_type": "SCALE_EVENT",
+            "idempotency_key": "scale-conflict",
+            "actor": "test",
+            "payload": {"value": "different"},
+        })
+
+        with pytest.raises(ConflictError, match="idempotency key reused"):
+            store.append_events_batch("CMP-bulk-rollback-scale", events)
+
+        persisted = store.list_events(
+            "CMP-bulk-rollback-scale", event_type="SCALE_EVENT",
+        )
+        assert len(persisted) == 1
+        assert persisted[0].entity_id == "existing"
+        assert persisted[0].payload == {"value": "original"}
+
+
 def test_event_queries_filter_by_entity_type_and_batch(tmp_path: Path) -> None:
     with AuditStore(tmp_path / "filtered.db") as store:
         store.create_campaign(
