@@ -328,6 +328,13 @@ boundary-edge obligations; manifest-only and boundary-only components remain pla
 Omitted component IDs are persisted in the plan. If every component is otherwise empty,
 one Work Unit is retained so the Campaign still has a closure path. Forecasts and bundling
 are advisory/opt-in controls: their cost and quality effects require measured paired runs.
+Before persistence, the Plan is revalidated against its inventory snapshot/digest,
+component/path and language ownership, normalized categories, all-six axis coverage,
+Batch projections, and exact-once endpoint edge reviews. Edge owners and cross-Batch
+Handoffs must match the actual target review Work Unit and derived source/target Batches.
+Plan Amendments preserve Work Units and immutable scope/edge content, validate their
+retired-to-replacement Batch map, and must extend the latest Plan; direct Plan replacement
+is rejected. Exact durable replays remain idempotent.
 
 Each successful task records positive `agent_runs` and `wall_seconds`; failures may
 report zero when no worker ran. Hosts define and report whether
