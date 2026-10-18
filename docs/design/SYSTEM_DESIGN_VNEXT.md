@@ -330,10 +330,14 @@ Measured-rate and hypothesis assumptions remain unvalidated; forecasts are advis
 not enforced budgets. Released, expired, cancelled, or active claims without terminal
 usage records make the separate attempt-cost view incomplete.
 
-Cross-Batch Handoffs have one owner, evidence-backed resolution, and a mechanically
-integrated chain. Open handoffs block dependent findings and Campaign closure. Snapshot
-drift invalidates only affected evidence and dependent conclusions; it cannot silently
-mix evidence from different source states.
+Cross-Batch Handoffs have one owner, typed edge/endpoint-bound proof for EDGE_PROVEN
+resolution, and a mechanically integrated chain. The proof carries interface direction,
+principal/premises, endpoint evidence, and data mappings; the resolver checks planned
+edge identity, endpoint ownership, and evidence-reference resolution. These are
+structural checks on Agent declarations, not independent proof of semantic truth or
+complete boundary discovery. Open handoffs block dependent findings and Campaign
+closure. Snapshot drift invalidates only affected evidence and dependent conclusions;
+it cannot silently mix evidence from different source states.
 
 20GB+ capability is certified only by a real representative Campaign that records
 resource use, interruption/recovery, scope coverage, and final evidence reconciliation.

@@ -18,9 +18,10 @@ The current implementation has a durable Campaign/Batch workflow, source/build i
 	anchors records a late R4 candidate as unresolved risk; an explicitly declared
 	follow-up Campaign re-verifies it without rewriting original verdict history.
 	This is neither automatic stage reopening nor real vulnerability-discovery proof.
-3. **Still required:** complete input dependency/invalidation contracts, revision-aware
-	candidate reopening, distinct ownership/review/evidence metrics, and interface/
-	principal/data-mapping proof records. Software design section 1.1 is the target.
+3. **Still required:** complete input dependency/invalidation contracts,
+	revision-aware candidate reopening, distinct ownership/review/evidence metrics,
+	and independent semantic adjudication of typed interface/principal/data-mapping
+	proofs. Software design section 1.1 is the target.
 4. **External acceptance remains blocked:** RG12 real provider-quality evidence, RG13 real
 	host-isolation evidence, and RG15 independent fixture/large-Campaign evidence,
 	held-out discovery quality, matched cost studies, and representative scale/recovery.
@@ -52,7 +53,7 @@ document. Preserve the original evidence only in the access-controlled Campaign 
 | P1 | Multi-Batch forecasts do not reconcile. | **Repaired and tested:** Campaign counts, hypothesis rounding, R4 boundaries, R6 tasks, and rounded costs aggregate per Batch. Rates and savings still lack real calibration. |
 | P1 | Real applicable catalog cards crash R4 bundling. | **Repaired and tested:** serialize raw card mappings directly; the existing bundle fixture now selects an applicable Python card and asserts nonempty card seeds. |
 | P1 | Abort leaves a retry active; issue exports overwrite host notes. | **Repaired and tested:** cleanup uses latest task state; failed, released, and leased retries cancel; digest-marked issue revisions preserve host content and are idempotent. |
-| P1 | Unjoined Handoff chains and post-R0 hotspot source changes are accepted. | **Repaired at structural/managed-input scope:** mismatched joins are rejected before integration; R1/R2 recheck R0 and providers verify parsed bytes. Semantic interface proof and host-wide isolation remain absent. |
+| P1 | Unjoined Handoff chains and post-R0 hotspot source changes are accepted. | **Repaired at structural/managed-input scope:** mismatched joins are rejected before integration; `EDGE_PROVEN` requires a typed endpoint/interface/principal/data-mapping proof with component-bound evidence; R1/R2 recheck R0 and providers verify parsed bytes. Semantic truth adjudication, boundary completeness, and host-wide isolation remain absent. |
 | P1 | Released/expired/cancelled attempts disappear from cost completeness. | **Repaired and tested:** every unfinalized claim makes attempt usage incomplete, including active claims. Actual unreported tokens cannot be reconstructed. |
 | P2 | Empty repositories lose all planned work; footprint counts symlink bytes. | **Repaired and tested:** retain one root Work Unit; footprint counts only regular files and excludes runtime state. |
 | P0 | Static-only reachability, Surface coverage, and scope accounting can block closure. | **Partially fixed:** BG2 accepts explicit R5 dispositions; CG3 counts Work Unit axis review independently of Hypothesis links; closure records evidence-backed exclusions/deferments. Plan-level path states now distinguish included, excluded, and deferred inventory paths. Post-commit R3 amendment and host-observed review proof remain open; affected Campaigns require replay. |

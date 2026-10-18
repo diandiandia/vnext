@@ -357,6 +357,106 @@ class CanonicalVerdict:
 
 
 @dataclass(frozen=True)
+class BoundaryDataMapping:
+    source_value: str
+    target_value: str
+    meaning: str
+    evidence_refs: tuple[str, ...]
+
+    @classmethod
+    def from_dict(cls, value: Mapping[str, Any]) -> "BoundaryDataMapping":
+        if not isinstance(value, Mapping):
+            raise ModelError("Boundary data mapping must be an object")
+        mapping = cls(
+            source_value=str(value["source_value"]),
+            target_value=str(value["target_value"]),
+            meaning=str(value["meaning"]),
+            evidence_refs=tuple(str(item) for item in value.get("evidence_refs", [])),
+        )
+        if not all((
+            mapping.source_value.strip(), mapping.target_value.strip(),
+            mapping.meaning.strip(), mapping.evidence_refs,
+            all(ref.strip() for ref in mapping.evidence_refs),
+        )):
+            raise ModelError(
+                "Boundary data mapping requires source, target, meaning, and evidence"
+            )
+        return mapping
+
+
+class BoundaryDirection(StrEnum):
+    SOURCE_TO_TARGET = "SOURCE_TO_TARGET"
+    TARGET_TO_SOURCE = "TARGET_TO_SOURCE"
+    BIDIRECTIONAL = "BIDIRECTIONAL"
+
+
+@dataclass(frozen=True)
+class BoundaryProof:
+    edge_id: str
+    source_component_id: str
+    target_component_id: str
+    interface_kind: str
+    direction: BoundaryDirection
+    principal: str
+    premises: tuple[str, ...]
+    source_evidence_refs: tuple[str, ...]
+    target_evidence_refs: tuple[str, ...]
+    data_mappings: tuple[BoundaryDataMapping, ...]
+
+    @classmethod
+    def from_dict(cls, value: Mapping[str, Any]) -> "BoundaryProof":
+        if not isinstance(value, Mapping):
+            raise ModelError("Boundary proof must be an object")
+        proof = cls(
+            edge_id=str(value["edge_id"]),
+            source_component_id=str(value["source_component_id"]),
+            target_component_id=str(value["target_component_id"]),
+            interface_kind=str(value["interface_kind"]),
+            direction=BoundaryDirection(str(value["direction"])),
+            principal=str(value["principal"]),
+            premises=tuple(str(item) for item in value.get("premises", [])),
+            source_evidence_refs=tuple(
+                str(item) for item in value.get("source_evidence_refs", [])
+            ),
+            target_evidence_refs=tuple(
+                str(item) for item in value.get("target_evidence_refs", [])
+            ),
+            data_mappings=tuple(
+                BoundaryDataMapping.from_dict(item)
+                for item in value.get("data_mappings", [])
+            ),
+        )
+        if not all((
+            proof.edge_id.strip(), proof.source_component_id.strip(),
+            proof.target_component_id.strip(), proof.interface_kind.strip(),
+            proof.principal.strip(), proof.premises,
+            all(item.strip() for item in proof.premises),
+            proof.source_evidence_refs, proof.target_evidence_refs,
+            proof.data_mappings,
+        )):
+            raise ModelError(
+                "Boundary proof requires edge, interface, direction, principal, "
+                "premises, source/target evidence, and data mappings"
+            )
+        if not all(
+            ref.strip()
+            for ref in (*proof.source_evidence_refs, *proof.target_evidence_refs)
+        ):
+            raise ModelError("Boundary proof evidence refs cannot be blank")
+        source_refs = set(proof.source_evidence_refs)
+        target_refs = set(proof.target_evidence_refs)
+        if any(
+            not source_refs.intersection(mapping.evidence_refs)
+            or not target_refs.intersection(mapping.evidence_refs)
+            for mapping in proof.data_mappings
+        ):
+            raise ModelError(
+                "each Boundary data mapping must reference both source and target evidence"
+            )
+        return proof
+
+
+@dataclass(frozen=True)
 class HandoffResolution:
     handoff_id: str
     owner_batch_id: str
@@ -365,13 +465,22 @@ class HandoffResolution:
     evidence_refs: tuple[str, ...]
     rationale: str
     adjudication_event_id: str | None = None
+    boundary_proof: BoundaryProof | None = None
 
     @classmethod
     def from_dict(cls, value: Mapping[str, Any]) -> "HandoffResolution":
+        outcome = HandoffOutcome(str(value["outcome"]))
+        proof_value = value.get("boundary_proof")
+        proof = (
+            BoundaryProof.from_dict(proof_value)
+            if isinstance(proof_value, Mapping) else None
+        )
+        if proof_value is not None and proof is None:
+            raise ModelError("Handoff boundary_proof must be an object")
         resolution = cls(
             handoff_id=str(value["handoff_id"]),
             owner_batch_id=str(value["owner_batch_id"]),
-            outcome=HandoffOutcome(str(value["outcome"])),
+            outcome=outcome,
             chain_suffix=tuple(str(item) for item in value.get("chain_suffix", [])),
             evidence_refs=tuple(str(item) for item in value.get("evidence_refs", [])),
             rationale=str(value["rationale"]),
@@ -380,11 +489,16 @@ class HandoffResolution:
                 if value.get("adjudication_event_id") is not None
                 else None
             ),
+            boundary_proof=proof,
         )
         if not resolution.rationale or not resolution.evidence_refs:
             raise ModelError("Handoff resolution requires rationale and evidence refs")
         if resolution.outcome is HandoffOutcome.EDGE_PROVEN and not resolution.chain_suffix:
             raise ModelError("EDGE_PROVEN Handoff requires a chain suffix")
+        if resolution.outcome is HandoffOutcome.EDGE_PROVEN and proof is None:
+            raise ModelError("EDGE_PROVEN Handoff requires a boundary proof")
+        if resolution.outcome is not HandoffOutcome.EDGE_PROVEN and proof is not None:
+            raise ModelError("boundary proof is valid only for EDGE_PROVEN Handoffs")
         if (
             resolution.outcome is HandoffOutcome.CANCELLED
             and not resolution.adjudication_event_id

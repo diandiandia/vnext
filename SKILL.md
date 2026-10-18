@@ -371,6 +371,43 @@ PYTHONPATH=<vnext>/src python3 -m reachable_audit shadow-evaluate \
   --input <paired-runs.json> --output <acceptance-report.json>
 ```
 
+For `handoff-resolve`, an `EDGE_PROVEN` resolution requires `boundary_proof` bound to
+the planned edge: edge/component IDs, interface kind, direction, principal, premises,
+source/target evidence refs, and data mappings. Each mapping must cite evidence from
+both endpoint sets. The resolver verifies component ownership and that each LOC anchor
+or Campaign artifact resolves, but these Agent declarations do not prove semantic truth
+or complete boundary discovery. Other resolution outcomes cannot carry `boundary_proof`.
+An `EDGE_PROVEN` input has this shape (IDs, kind, and evidence must match the stored
+Plan and current Campaign):
+
+```json
+{
+  "handoff_id": "HO-id",
+  "owner_batch_id": "B-owner",
+  "outcome": "EDGE_PROVEN",
+  "chain_suffix": ["LOC-source.py:12", "LOC-target.py:34"],
+  "evidence_refs": ["sha256:campaign-artifact-digest"],
+  "rationale": "Describe the supported cross-boundary transfer.",
+  "boundary_proof": {
+    "edge_id": "EDGE-id",
+    "source_component_id": "COMP-source",
+    "target_component_id": "COMP-target",
+    "interface_kind": "call",
+    "direction": "SOURCE_TO_TARGET",
+    "principal": "remote client",
+    "premises": ["The principal can reach the source endpoint."],
+    "source_evidence_refs": ["LOC-source.py:12"],
+    "target_evidence_refs": ["LOC-target.py:34"],
+    "data_mappings": [{
+      "source_value": "request bytes",
+      "target_value": "parser input",
+      "meaning": "Untrusted bytes are passed to the target parser.",
+      "evidence_refs": ["LOC-source.py:12", "LOC-target.py:34"]
+    }]
+  }
+}
+```
+
 `path-scope.json` is an array of `{path, state, rationale, approved_by,
 evidence_refs}` records. `state` is `INCLUDED`, `EXCLUDED`, or `DEFERRED`; paths
 omitted from the file default to `INCLUDED`. EXCLUDED/DEFERRED records require an

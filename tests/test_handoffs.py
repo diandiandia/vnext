@@ -1,4 +1,5 @@
 from pathlib import Path
+from dataclasses import replace
 
 import pytest
 
@@ -8,6 +9,9 @@ from reachable_audit.analysis_models import (
     Applicability,
     AttackAngle,
     AxisRun,
+    BoundaryDataMapping,
+    BoundaryDirection,
+    BoundaryProof,
     BatchClosure,
     BoundaryDisposition,
     BoundaryReview,
@@ -122,17 +126,43 @@ def test_resolved_handoff_merges_a_cross_batch_call_chain(tmp_path: Path) -> Non
             workflow.record_r3([])
 
         resolver = HandoffResolver(manager, "CMP-handoff", plan)
-        resolutions = tuple(HandoffResolution(
-            handoff_id=handoff.handoff_id,
-            owner_batch_id=handoff.owner_batch,
-            outcome=HandoffOutcome.EDGE_PROVEN,
-            chain_suffix=(
-                "LOC-entry/entry.py:1",
-                f"LOC-{units_by_batch[handoff.owner_batch].source_files[0]}:1",
-            ),
-            evidence_refs=(f"EVID-owner-{handoff.edge_id}",),
-            rationale="owner verified the cross-batch entry edge",
-        ) for handoff in handoffs)
+        edges_by_id = {edge.edge_id: edge for edge in plan.boundary_edges}
+        resolutions = tuple(
+            HandoffResolution(
+                handoff_id=handoff.handoff_id,
+                owner_batch_id=handoff.owner_batch,
+                outcome=HandoffOutcome.EDGE_PROVEN,
+                chain_suffix=(
+                    "LOC-entry/entry.py:1",
+                    f"LOC-{units_by_batch[handoff.owner_batch].source_files[0]}:1",
+                ),
+                evidence_refs=(f"EVID-owner-{handoff.edge_id}",),
+                rationale="owner verified the cross-batch entry edge",
+                boundary_proof=BoundaryProof(
+                    edge_id=handoff.edge_id,
+                    source_component_id=edges_by_id[handoff.edge_id].source_component_id,
+                    target_component_id=edges_by_id[handoff.edge_id].target_component_id,
+                    interface_kind=edges_by_id[handoff.edge_id].kind,
+                    direction=BoundaryDirection.SOURCE_TO_TARGET,
+                    principal="remote client",
+                    premises=("the client can reach the entry function",),
+                    source_evidence_refs=("LOC-entry/entry.py:1",),
+                    target_evidence_refs=(
+                        f"LOC-{units_by_batch[handoff.owner_batch].source_files[0]}:1",
+                    ),
+                    data_mappings=(BoundaryDataMapping(
+                        source_value="request bytes",
+                        target_value="parser input",
+                        meaning="untrusted request bytes reach the target parser",
+                        evidence_refs=(
+                            "LOC-entry/entry.py:1",
+                            f"LOC-{units_by_batch[handoff.owner_batch].source_files[0]}:1",
+                        ),
+                    ),),
+                ),
+            )
+            for handoff in handoffs
+        )
         with pytest.raises(ModelError, match="duplicate handoff IDs"):
             resolver.resolve_many((resolutions[0], resolutions[0]))
         with pytest.raises(ModelError, match="non-owner Batch"):
@@ -149,6 +179,59 @@ def test_resolved_handoff_merges_a_cross_batch_call_chain(tmp_path: Path) -> Non
             event for event in manager.store.list_events("CMP-handoff")
             if event.event_type == "HANDOFF_RESOLVED"
         ]
+        first_proof = resolutions[0].boundary_proof
+        assert first_proof is not None
+        with pytest.raises(ModelError, match="requires a boundary proof"):
+            resolver.resolve_many((replace(
+                resolutions[0], boundary_proof=None,
+            ),))
+        with pytest.raises(ModelError, match="valid only for EDGE_PROVEN"):
+            resolver.resolve_many((replace(
+                resolutions[0], outcome=HandoffOutcome.BLOCKED,
+            ),))
+        with pytest.raises(ModelError, match="each Boundary data mapping"):
+            resolver.resolve_many((replace(
+                resolutions[0],
+                boundary_proof=replace(
+                    first_proof,
+                    data_mappings=(replace(
+                        first_proof.data_mappings[0],
+                        evidence_refs=(first_proof.source_evidence_refs[0],),
+                    ),),
+                ),
+            ),))
+        with pytest.raises(ModelError, match="does not match planned edge endpoints"):
+            resolver.resolve_many((replace(
+                resolutions[0],
+                boundary_proof=replace(
+                    first_proof, target_component_id="COMP-forged",
+                ),
+            ),))
+        with pytest.raises(ModelError, match="source proof evidence"):
+            resolver.resolve_many((replace(
+                resolutions[0],
+                boundary_proof=replace(
+                    first_proof,
+                    source_evidence_refs=(
+                        *first_proof.source_evidence_refs,
+                        "LOC-missing.py:1",
+                    ),
+                ),
+            ),))
+        with pytest.raises(ModelError, match="not owned by the planned endpoint component"):
+            resolver.resolve_many((replace(
+                resolutions[0],
+                boundary_proof=replace(
+                    first_proof,
+                    source_evidence_refs=(
+                        *first_proof.source_evidence_refs,
+                        "LOC-parser/parser.py:1",
+                    ),
+                ),
+            ),))
+        assert not manager.store.list_events(
+            "CMP-handoff", event_type="HANDOFF_RESOLVED"
+        )
         artifact_ids = resolver.resolve_many(resolutions)
         assert len(artifact_ids) == 2
         assert len([
@@ -176,8 +259,10 @@ def test_resolved_handoff_merges_a_cross_batch_call_chain(tmp_path: Path) -> Non
             "LOC-entry/entry.py:1", resolutions[0].chain_suffix[1]
         ]
         assert integrated["evidence_refs"] == [
-            "EVID-source-edge", *resolutions[0].evidence_refs
+            "EVID-source-edge", *resolutions[0].evidence_refs,
+            "LOC-entry/entry.py:1", resolutions[0].boundary_proof.target_evidence_refs[0],
         ]
+        assert integrated["boundary_proof"]["edge_id"] == handoff.edge_id
         event_types = [
             event.event_type for event in manager.store.list_events("CMP-handoff")
         ]
@@ -268,3 +353,15 @@ def test_handoff_can_record_evidenced_non_security_boundary() -> None:
 
     assert resolution.outcome is HandoffOutcome.NOT_SECURITY_BOUNDARY
     assert resolution.chain_suffix == ()
+
+
+def test_edge_proven_handoff_requires_interface_and_data_mapping_proof() -> None:
+    with pytest.raises(ModelError, match="requires a boundary proof"):
+        HandoffResolution.from_dict({
+            "handoff_id": "HO-edge-proof",
+            "owner_batch_id": "B-owner",
+            "outcome": HandoffOutcome.EDGE_PROVEN.value,
+            "chain_suffix": ["LOC-source.py:1", "LOC-target.py:1"],
+            "evidence_refs": ["EVID-edge"],
+            "rationale": "the chain is structurally joined",
+        })

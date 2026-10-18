@@ -47,10 +47,12 @@ release-certification claim. The as-implemented sections below remain the baseli
   measured resource use is separate from advisory forecasts. Interrupted/released
   attempts without usage make attempt accounting incomplete, not free.
 5. Cross-boundary proof needs an identified interface, direction, principal/premises,
-  source/target evidence, and relevant data/argument mapping. Matching chain join
-  nodes is a necessary structural check, not a semantic proof. Unresolved interfaces
-  cannot support dependent confirmed Findings. Rich interface proofs remain target
-  work beyond the current location-chain model.
+  source/target evidence, and relevant data/argument mapping. EDGE_PROVEN Handoff
+  resolutions now require a typed BoundaryProof bound to the planned edge and endpoint
+  components, with resolvable endpoint evidence and mappings that cite both ends.
+  Matching chain join nodes remain a necessary structural check, not a semantic proof;
+  proof declarations do not establish that the asserted interface or data flow is true.
+  Automatic boundary discovery and independent semantic adjudication remain target work.
 
 The minimum vertical acceptance scenario must exercise a mixed-language boundary,
 a late candidate routed to verification, source/input invalidation, interrupted-task
@@ -496,8 +498,15 @@ evidence references. `NOT_SECURITY_BOUNDARY` requires evidence that the edge is
 development/build-only or otherwise outside runtime trust flow; it is not an unresolved
 review.
 `EDGE_PROVEN` must include a chain suffix whose first node joins the submitted chain
-prefix; the integrator deduplicates the join node and records the combined chain as an
-artifact. A dependent finding cannot use an unresolved or cancelled edge as proof.
+prefix; it also requires a typed `boundary_proof` with planned edge identity, source and
+target components, interface kind, direction, principal, premises, source/target
+evidence refs, and at least one source-to-target data mapping. Every mapping cites at
+least one ref from each endpoint evidence set. The resolver binds these fields to the
+planned edge, checks LOC ownership and current source anchors, and accepts only artifacts
+owned by the Campaign. The integrator retains the proof and deduplicates the join node
+when recording the combined chain. These checks validate structure and reference
+identity, not semantic truth. A dependent finding cannot use an unresolved or cancelled
+edge as proof.
 
 Generated build-dependency edges and security call/dataflow edges remain distinct.
 The Planner can route only edges present in its input graph; boundary completeness is
