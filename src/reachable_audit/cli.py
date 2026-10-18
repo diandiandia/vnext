@@ -64,6 +64,73 @@ def _print(value: Any) -> None:
     print(json.dumps(value, ensure_ascii=False, indent=2, default=default))
 
 
+def _handle_init(arguments: argparse.Namespace) -> int:
+    snapshot_id = arguments.snapshot_id or detect_clean_git_snapshot(arguments.target)
+    if arguments.max_screening_fraction is not None and not (
+        0 <= arguments.max_screening_fraction <= 1
+    ):
+        raise ValueError("max-screening-fraction must be between 0 and 1")
+    budget = {}
+    if arguments.max_screening_fraction is not None:
+        budget["max_screening_fraction"] = arguments.max_screening_fraction
+    if arguments.require_host_worker_attestation:
+        budget["require_host_worker_attestation"] = True
+    with CampaignManager(arguments.target, arguments.state_dir) as manager:
+        campaign = manager.create_campaign(
+            snapshot_id=snapshot_id,
+            campaign_id=arguments.campaign_id,
+            budget=budget or None,
+            audit_mode=CampaignAuditMode(arguments.audit_mode),
+            history_source_campaign_ids=tuple(arguments.history_source),
+        )
+        _print(asdict(campaign))
+    return 0
+
+
+def _handle_status(arguments: argparse.Namespace) -> int:
+    with CampaignManager(arguments.target, arguments.state_dir) as manager:
+        campaigns = []
+        for campaign in manager.store.list_campaigns():
+            campaigns.append({
+                **asdict(campaign),
+                "batches": [
+                    asdict(batch)
+                    for batch in manager.store.list_batches(campaign.campaign_id)
+                ],
+            })
+        _print({"campaigns": campaigns})
+    return 0
+
+
+def _handle_skill_backlog(arguments: argparse.Namespace) -> int:
+    with CampaignManager(arguments.target, arguments.state_dir) as manager:
+        campaign = manager.store.get_campaign(arguments.campaign_id)
+        source_ids = (
+            campaign.history_source_campaign_ids
+            if campaign.audit_mode is CampaignAuditMode.FOLLOW_UP
+            else ()
+        )
+        _print({
+            "purpose": "tool_regression_only",
+            "campaign_id": campaign.campaign_id,
+            "pending_issues": manager.load_skill_regression_backlog(source_ids),
+        })
+    return 0
+
+
+def _handle_skill_review(arguments: argparse.Namespace) -> int:
+    value = json.loads(Path(arguments.input).read_text(encoding="utf-8"))
+    if not isinstance(value, dict) or not isinstance(value.get("skill_issues"), list):
+        raise ValueError("skill review input requires a skill_issues array")
+    with CampaignManager(arguments.target, arguments.state_dir) as manager:
+        artifact_id = manager.record_skill_review(
+            arguments.campaign_id,
+            tuple(SkillIssue.from_dict(item) for item in value["skill_issues"]),
+        )
+        _print({"artifact_id": artifact_id})
+    return 0
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="reachable-audit")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -491,71 +558,16 @@ def main(argv: list[str] | None = None) -> int:
     arguments = _parser().parse_args(argv)
     try:
         if arguments.command == "init":
-            snapshot_id = arguments.snapshot_id or detect_clean_git_snapshot(arguments.target)
-            if arguments.max_screening_fraction is not None and not (
-                0 <= arguments.max_screening_fraction <= 1
-            ):
-                raise ValueError("max-screening-fraction must be between 0 and 1")
-            budget = {}
-            if arguments.max_screening_fraction is not None:
-                budget["max_screening_fraction"] = arguments.max_screening_fraction
-            if arguments.require_host_worker_attestation:
-                budget["require_host_worker_attestation"] = True
-            with CampaignManager(arguments.target, arguments.state_dir) as manager:
-                campaign = manager.create_campaign(
-                    snapshot_id=snapshot_id,
-                    campaign_id=arguments.campaign_id,
-                    budget=budget or None,
-                    audit_mode=CampaignAuditMode(arguments.audit_mode),
-                    history_source_campaign_ids=tuple(arguments.history_source),
-                )
-                _print(asdict(campaign))
-            return 0
+            return _handle_init(arguments)
 
         if arguments.command == "status":
-            with CampaignManager(arguments.target, arguments.state_dir) as manager:
-                campaigns = []
-                for campaign in manager.store.list_campaigns():
-                    campaigns.append(
-                        {
-                            **asdict(campaign),
-                            "batches": [
-                                asdict(batch)
-                                for batch in manager.store.list_batches(campaign.campaign_id)
-                            ],
-                        }
-                    )
-                _print({"campaigns": campaigns})
-            return 0
+            return _handle_status(arguments)
 
         if arguments.command == "skill-backlog":
-            with CampaignManager(arguments.target, arguments.state_dir) as manager:
-                campaign = manager.store.get_campaign(arguments.campaign_id)
-                source_ids = (
-                    campaign.history_source_campaign_ids
-                    if campaign.audit_mode is CampaignAuditMode.FOLLOW_UP
-                    else ()
-                )
-                _print({
-                    "purpose": "tool_regression_only",
-                    "campaign_id": campaign.campaign_id,
-                    "pending_issues": manager.load_skill_regression_backlog(source_ids),
-                })
-            return 0
+            return _handle_skill_backlog(arguments)
 
         if arguments.command == "skill-review":
-            value = json.loads(Path(arguments.input).read_text(encoding="utf-8"))
-            if not isinstance(value, dict) or not isinstance(
-                value.get("skill_issues"), list
-            ):
-                raise ValueError("skill review input requires a skill_issues array")
-            with CampaignManager(arguments.target, arguments.state_dir) as manager:
-                artifact_id = manager.record_skill_review(
-                    arguments.campaign_id,
-                    tuple(SkillIssue.from_dict(item) for item in value["skill_issues"]),
-                )
-                _print({"artifact_id": artifact_id})
-            return 0
+            return _handle_skill_review(arguments)
 
         if arguments.command == "resource-register-process":
             with CampaignManager(arguments.target, arguments.state_dir) as manager:
