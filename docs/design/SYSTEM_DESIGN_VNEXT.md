@@ -235,7 +235,12 @@ Coverage summarizes axis-derived Work Unit counts, Plan path scope, and task-coo
 R1 path, R2 discovery-axis, and R4 family/axis Agent-declared SCREENED/INSPECTED claims.
 Optional R1 path risk-priority labels are used to aggregate R2/R4 Work Unit altitudes by
 tier. These declarations are not host-observed reads or path-specific inspection proof;
-tier taxonomy quality is not independently validated.
+the operational rubric defines HIGH for direct handling of externally controlled data, a
+trust/privilege boundary, security policy, or a security-sensitive operation; MEDIUM for
+plausibly related supporting logic without a direct boundary or sensitive operation; LOW
+only with inspected evidence of no plausible security-sensitive role; and UNASSESSED for
+insufficient evidence.
+Classification quality is not independently validated.
 NOT_APPLICABLE is a scoped decision, not a safety result; these counts are not held-out
 inspection recall.
 

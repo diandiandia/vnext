@@ -569,7 +569,13 @@ hypotheses means screening-only; any APPLICABLE axis contributes to substantive 
 Units. Campaign reports show R1 path, R2 discovery-axis, and R4 family/axis
 Agent-declared altitude counts alongside Plan scope and ownership. Optional R1 path
 risk-priority labels join to R2/R4 altitude by Work Unit and are reported by tier; they
-are declarations, not vulnerability severity or per-file inspection proof. An optional
+use an operational rubric: HIGH for direct handling of externally controlled data, a
+trust/privilege boundary, security policy, or a security-sensitive operation; MEDIUM for
+plausibly related supporting logic without a direct boundary or sensitive operation; LOW
+only with inspected evidence of no plausible security-sensitive role; and UNASSESSED when
+evidence is insufficient.
+They are Agent declarations, not vulnerability severity or per-file inspection proof;
+the rubric's classification quality remains unvalidated. An optional
 init-frozen screening ceiling is reported, not enforced as a closure or evaluator gate;
 signed overrides are not implemented.
 

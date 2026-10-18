@@ -195,6 +195,12 @@ def test_r1_blank_anchor_is_rejected_before_collection(tmp_path: Path) -> None:
         assert "review_altitude" in task_input["output_contract"]
         assert "SCREENED" in task_input["analysis_contract"]
         assert "INSPECTED" in task_input["analysis_contract"]
+        assert "HIGH for direct handling" in task_input["analysis_contract"]
+        assert "MEDIUM for supporting validation" in task_input["analysis_contract"]
+        assert "LOW only when inspected evidence" in task_input["analysis_contract"]
+        assert "not vulnerability severity, exploitability, or a safety verdict" in task_input[
+            "analysis_contract"
+        ]
         lease = backend.claim("surface-reviewer", task_id_filter=task.task_id)
         assert lease is not None
         unit = plan.work_units[0]

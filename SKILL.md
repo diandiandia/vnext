@@ -96,7 +96,13 @@ from Plan ownership and explicitly state that they are not host-observed reads. 
 altitude or anchors leave the lease available for correction and resubmission.
 R1 may also return `path_risk_tiers` entries `{path, risk_tier}` using `LOW`, `MEDIUM`,
 `HIGH`, or `UNASSESSED`; omitted paths default to `UNASSESSED`. This is review-priority
-triage, not vulnerability severity or a safety verdict. Campaign reports join each
+triage: `HIGH` is for direct handling of externally controlled data, a trust/privilege
+boundary, security policy, or a security-sensitive operation; `MEDIUM` is for supporting
+validation, transformation, state, or resource logic plausibly connected to
+security-relevant behavior without a direct boundary or sensitive operation; `LOW` is
+allowed only when inspected evidence shows no plausible security-sensitive role in the
+path. Use `UNASSESSED` when evidence is insufficient. This rubric does not assert
+vulnerability severity, exploitability, or safety. Campaign reports join each
 Work Unit's R2/R4 altitude to its included paths' declared tiers; this is a
 Work-Unit-level attribution, not per-file inspection proof.
 Malformed or missing task scope fails closed. A rejection lists the gap (counts plus the
