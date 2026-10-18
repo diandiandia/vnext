@@ -460,6 +460,9 @@ class BatchWorkflow:
             ],
             "hypotheses": [asdict(hypothesis) for hypothesis in hypotheses],
         }
+        existing_artifact_id = self._existing_stage_artifact("R2_COMPLETED", value)
+        if existing_artifact_id is not None:
+            return existing_artifact_id
         artifact_id = self._put_json(value)
         self.manager.store.append_event(
             campaign_id=self.campaign_id,

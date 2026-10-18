@@ -141,6 +141,51 @@ def test_r1_conflicting_retry_is_rejected_before_artifact_write(
         manager.close()
 
 
+def test_r2_exact_retry_reuses_artifact_and_rejects_conflicts_before_write(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manager, workflow, _ = _workflow(tmp_path, "CMP-r2-recovery")
+    evidence = {
+        axis: (f"EVID-{axis}",)
+        for axis in (
+            "surface", "mechanism", "state", "fix_variant", "boundary",
+            "differential",
+        )
+    }
+    try:
+        workflow.run_r0()
+        workflow.record_r1([])
+        artifact_id = workflow.record_r2(
+            [], axis_evidence=evidence, axis_runs=axis_runs_from_evidence(evidence)
+        )
+        original_put_text = manager.artifacts.put_text
+        writes = []
+
+        def track_artifact_write(value: str) -> object:
+            writes.append(value)
+            return original_put_text(value)
+
+        monkeypatch.setattr(manager.artifacts, "put_text", track_artifact_write)
+        assert workflow.record_r2(
+            [], axis_evidence=evidence, axis_runs=axis_runs_from_evidence(evidence)
+        ) == artifact_id
+        assert writes == []
+
+        changed_evidence = {**evidence, "surface": ("EVID-changed",)}
+        with pytest.raises(ModelError, match="R2_COMPLETED already committed"):
+            workflow.record_r2(
+                [],
+                axis_evidence=changed_evidence,
+                axis_runs=axis_runs_from_evidence(evidence),
+            )
+        assert writes == []
+        stage_events = workflow._events(event_type="R2_COMPLETED")
+        assert len(stage_events) == 1
+        assert stage_events[0].payload_ref == artifact_id
+    finally:
+        manager.close()
+
+
 def test_r0_r3_slice_records_canonical_verdict_and_partial_report(tmp_path: Path) -> None:
     manager, workflow, plan = _workflow(tmp_path)
     work_unit = plan.work_units[0]
