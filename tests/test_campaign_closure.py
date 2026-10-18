@@ -21,7 +21,7 @@ from reachable_audit.analysis_models import (
     SkillIssueKind,
     SkillIssueStatus,
 )
-from reachable_audit.campaign_closure import CampaignCloser
+from reachable_audit.campaign_closure import CampaignCloser, _derive_screening_coverage
 from reachable_audit.execution import (
     DiscoveryCoordinator,
     ManualExecutionBackend,
@@ -209,6 +209,43 @@ def test_campaign_report_marks_screening_scope_not_release_eligible(
         assert report["scope_completeness"] == "WITH_SCREENING_ONLY_WORK_UNITS"
     finally:
         manager.close()
+
+
+def test_screening_coverage_helper_handles_ceiling_states() -> None:
+    axes = ("surface", "mechanism")
+    axis_runs = [
+        {"work_unit_id": "WU-screen", "axis": axis, "applicability": "NOT_APPLICABLE"}
+        for axis in axes
+    ] + [
+        {"work_unit_id": "WU-substantive", "axis": "surface", "applicability": "APPLICABLE"},
+        {"work_unit_id": "WU-substantive", "axis": "mechanism", "applicability": "NOT_APPLICABLE"},
+    ]
+    work_unit_ids = {"WU-screen", "WU-substantive"}
+
+    within = _derive_screening_coverage(
+        work_unit_ids, axes, axis_runs, (), 0.5,
+    )
+    assert within["screened_work_unit_ids"] == ["WU-screen"]
+    assert within["substantive_work_unit_ids"] == ["WU-substantive"]
+    assert within["screened_fraction"] == 0.5
+    assert within["ceiling_status"] == "WITHIN_CEILING"
+
+    exceeded = _derive_screening_coverage(
+        work_unit_ids, axes, axis_runs, (), 0.25,
+    )
+    assert exceeded["ceiling_status"] == "EXCEEDS_CEILING"
+    assert exceeded["release_eligible"] is False
+
+    unconfigured = _derive_screening_coverage(
+        work_unit_ids, axes, axis_runs, (), None,
+    )
+    assert unconfigured["ceiling_status"] == "NOT_CONFIGURED"
+
+    no_screening = _derive_screening_coverage(
+        {"WU-substantive"}, axes, axis_runs, (), 0.0,
+    )
+    assert no_screening["screened_fraction"] == 0.0
+    assert no_screening["ceiling_status"] == "WITHIN_CEILING"
 
 
 def test_campaign_closure_accepts_reviewed_surface_without_hypothesis(

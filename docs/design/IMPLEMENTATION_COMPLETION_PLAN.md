@@ -82,6 +82,11 @@ external prerequisites.
 
 ### 5. Output Density and Structural Debt
 
+Status: **IN PROGRESS**. Campaign screening/substantive classification and ceiling state
+are now isolated in a pure helper with direct boundary-case tests. R4 AxisRun IDs and
+bundle mechanism-card definitions are compacted at the wire. CLI dispatch/CampaignCloser
+gate decomposition, further R4 repetition, and selective exception narrowing remain.
+
 Deduplicate repeated R4 schema fields where safe. Split the CLI dispatcher and
 CampaignCloser gate evaluation into bounded helpers only with behavior-pinned tests.
 Narrow broad exception handling only where rollback/cleanup semantics are explicit.
