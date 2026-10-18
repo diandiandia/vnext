@@ -587,6 +587,7 @@ def validate_plan(plan: AuditPlan, inventory: ProjectInventory) -> None:
         for component_id in (edge.source_component_id, edge.target_component_id)
     }
     actual_edge_reviews: dict[tuple[str, str], int] = {}
+    edge_review_units: dict[tuple[str, str], WorkUnit] = {}
     for unit in plan.work_units:
         for edge_id in unit.boundary_edge_ids:
             edge = edges_by_id.get(edge_id)
@@ -602,12 +603,18 @@ def validate_plan(plan: AuditPlan, inventory: ProjectInventory) -> None:
                 )
             key = (unit.component_id, edge_id)
             actual_edge_reviews[key] = actual_edge_reviews.get(key, 0) + 1
+            edge_review_units[key] = unit
     if (
         set(actual_edge_reviews) != expected_edge_reviews
         or any(count != 1 for count in actual_edge_reviews.values())
     ):
         raise ModelError("boundary edge review coverage must be exact per endpoint")
     known_batches = {batch.batch_id for batch in plan.batches}
+    batch_by_work_unit = {
+        work_unit_id: batch.batch_id
+        for batch in plan.batches
+        for work_unit_id in batch.work_unit_ids
+    }
     for edge in plan.boundary_edges:
         if edge.owner_work_unit_id not in known_work_units:
             raise ModelError(f"boundary edge has no owning Work Unit: {edge.edge_id}")
@@ -616,11 +623,37 @@ def validate_plan(plan: AuditPlan, inventory: ProjectInventory) -> None:
             raise ModelError(
                 f"boundary edge owner is not in its target component: {edge.edge_id}"
             )
+    handoff_by_edge = {handoff.edge_id: handoff for handoff in plan.handoffs}
+    if len(handoff_by_edge) != len(plan.handoffs):
+        raise ModelError("plan duplicates Handoffs for a boundary edge")
+    expected_handoff_routes: dict[str, tuple[str, str]] = {}
+    for edge in plan.boundary_edges:
+        source_unit = edge_review_units[(edge.source_component_id, edge.edge_id)]
+        if edge.source_path:
+            source_unit = next((
+                unit for unit in plan.work_units
+                if unit.component_id == edge.source_component_id
+                and edge.source_path in unit.source_files
+            ), source_unit)
+        target_unit = edge_review_units[(edge.target_component_id, edge.edge_id)]
+        source_batch = batch_by_work_unit[source_unit.work_unit_id]
+        owner_batch = batch_by_work_unit[target_unit.work_unit_id]
+        if source_batch != owner_batch:
+            expected_handoff_routes[edge.edge_id] = (source_batch, owner_batch)
+    if set(handoff_by_edge) != set(expected_handoff_routes):
+        raise ModelError("plan Handoff coverage does not match cross-Batch boundary edges")
+    handoff_ids = [handoff.handoff_id for handoff in plan.handoffs]
+    if len(handoff_ids) != len(set(handoff_ids)):
+        raise ModelError("plan duplicates Handoff IDs")
     for handoff in plan.handoffs:
         if handoff.from_batch not in known_batches or handoff.owner_batch not in known_batches:
             raise ModelError(f"handoff references unknown batch: {handoff.handoff_id}")
         if handoff.from_batch == handoff.owner_batch:
             raise ModelError(f"handoff is not cross-batch: {handoff.handoff_id}")
+        if handoff.edge_id not in expected_handoff_routes:
+            raise ModelError(f"Handoff references a non-cross-Batch edge: {handoff.edge_id}")
+        if (handoff.from_batch, handoff.owner_batch) != expected_handoff_routes[handoff.edge_id]:
+            raise ModelError(f"Handoff route does not match boundary ownership: {handoff.edge_id}")
 
 
 def batch_manifest(plan: AuditPlan, batch: PlannedBatch) -> dict[str, object]:

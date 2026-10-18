@@ -220,6 +220,20 @@ def test_plan_has_exact_ownership_limits_and_cross_batch_handoff(tmp_path: Path)
     assert plan.discovery_axes == (
         "surface", "mechanism", "state", "fix_variant", "boundary", "differential"
     )
+    handoff = plan.handoffs[0]
+    unrelated_batch = next(
+        batch.batch_id for batch in plan.batches
+        if batch.batch_id not in {handoff.from_batch, handoff.owner_batch}
+    )
+    wrong_route = replace(
+        plan,
+        handoffs=(replace(handoff, owner_batch=unrelated_batch),),
+    )
+    with pytest.raises(ModelError, match="Handoff route does not match"):
+        validate_plan(wrong_route, inventory)
+    missing_route = replace(plan, handoffs=())
+    with pytest.raises(ModelError, match="Handoff coverage does not match"):
+        validate_plan(missing_route, inventory)
 
 
 @pytest.mark.parametrize(
