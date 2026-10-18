@@ -513,11 +513,7 @@ def create_audit_plan(
     return plan
 
 
-def validate_plan(plan: AuditPlan, inventory: ProjectInventory) -> None:
-    if plan.snapshot_id != inventory.snapshot_id:
-        raise ModelError("plan snapshot does not match inventory")
-    if plan.inventory_digest != inventory_digest(inventory):
-        raise ModelError("plan inventory digest does not match inventory")
+def validate_inventory(inventory: ProjectInventory) -> None:
     component_ids = [component.component_id for component in inventory.components]
     if len(component_ids) != len(set(component_ids)):
         raise ModelError("inventory duplicates component IDs")
@@ -542,6 +538,14 @@ def validate_plan(plan: AuditPlan, inventory: ProjectInventory) -> None:
             raise ModelError(
                 f"inventory component languages do not match source files: {component.component_id}"
             )
+
+
+def validate_plan(plan: AuditPlan, inventory: ProjectInventory) -> None:
+    if plan.snapshot_id != inventory.snapshot_id:
+        raise ModelError("plan snapshot does not match inventory")
+    if plan.inventory_digest != inventory_digest(inventory):
+        raise ModelError("plan inventory digest does not match inventory")
+    validate_inventory(inventory)
     if (
         not plan.category_families
         or plan.category_families != tuple(sorted({

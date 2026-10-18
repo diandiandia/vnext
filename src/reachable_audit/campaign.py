@@ -19,6 +19,7 @@ from .plan_models import AuditPlan, ComponentGraph, PlanAmendment, ProjectInvent
 from .planning import (
     batch_manifest,
     inventory_digest,
+    validate_inventory,
     validate_plan,
     validate_plan_amendment,
 )
@@ -389,6 +390,7 @@ class CampaignManager:
             raise ValueError(
                 f"inventory snapshot does not match Campaign: {inventory.snapshot_id} != {campaign.snapshot_id}"
             )
+        validate_inventory(inventory)
         value = asdict(inventory)
         encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
         baseline = {
@@ -763,6 +765,7 @@ class CampaignManager:
         inventory = ProjectInventory.from_dict(value)
         if inventory.snapshot_id != campaign.snapshot_id:
             raise ValueError("recorded inventory does not match the Campaign snapshot")
+        validate_inventory(inventory)
         path = self.state_dir / "campaigns" / campaign_id / "inventory.json"
         exported = json.dumps(
             value, ensure_ascii=False, sort_keys=True, separators=(",", ":")

@@ -830,6 +830,37 @@ def test_campaign_inventory_is_write_once_after_initial_record(tmp_path: Path) -
         )) == 1
 
 
+def test_record_inventory_rejects_inconsistent_component_summary(tmp_path: Path) -> None:
+    target = tmp_path / "invalid-inventory-write"
+    target.mkdir()
+    _write(target / "app.py", "VALUE = 1\n")
+    inventory = build_inventory(target, "fixture:invalid-inventory-write")
+    invalid_inventory = replace(
+        inventory,
+        components=(replace(
+            inventory.components[0],
+            source_file_count=inventory.components[0].source_file_count + 1,
+        ),),
+    )
+
+    with CampaignManager(target) as manager:
+        manager.create_campaign(
+            campaign_id="CMP-invalid-inventory-write",
+            snapshot_id=inventory.snapshot_id,
+        )
+        with pytest.raises(ModelError, match="component source_file_count"):
+            manager.record_inventory(
+                campaign_id="CMP-invalid-inventory-write",
+                inventory=invalid_inventory,
+            )
+        assert not manager.store.list_events(
+            "CMP-invalid-inventory-write", event_type="INVENTORY_RECORDED",
+        )
+        assert not manager.store.list_events(
+            "CMP-invalid-inventory-write", event_type="SNAPSHOT_BASELINE_RECORDED",
+        )
+
+
 def test_load_inventory_repairs_tampered_export_from_durable_artifact(
     tmp_path: Path,
 ) -> None:
