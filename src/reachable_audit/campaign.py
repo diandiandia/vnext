@@ -19,6 +19,7 @@ from .plan_models import AuditPlan, ComponentGraph, PlanAmendment, ProjectInvent
 from .planning import (
     batch_manifest,
     inventory_digest,
+    validate_boundary_edge_endpoints,
     validate_inventory,
     validate_plan,
     validate_plan_amendment,
@@ -602,6 +603,8 @@ class CampaignManager:
             raise ValueError(
                 f"component graph snapshot mismatch: {graph.snapshot_id} != {campaign.snapshot_id}"
             )
+        inventory = self.load_inventory(campaign_id)
+        self._validate_component_graph(graph, inventory)
         value = asdict(graph)
         encoded = json.dumps(
             value, ensure_ascii=False, sort_keys=True, separators=(",", ":")
@@ -811,6 +814,7 @@ class CampaignManager:
         graph = ComponentGraph.from_dict(value)
         if graph.snapshot_id != campaign.snapshot_id:
             raise ValueError("recorded component graph does not match the Campaign snapshot")
+        self._validate_component_graph(graph, self.load_inventory(campaign_id))
         path = self.state_dir / "campaigns" / campaign_id / "component_graph.json"
         exported = json.dumps(
             value, ensure_ascii=False, sort_keys=True, separators=(",", ":")
@@ -818,6 +822,31 @@ class CampaignManager:
         if not path.exists() or path.read_text(encoding="utf-8") != exported:
             self._atomic_json(path, value)
         return graph
+
+    @staticmethod
+    def _validate_component_graph(
+        graph: ComponentGraph, inventory: ProjectInventory,
+    ) -> None:
+        validate_inventory(inventory)
+        components = {component.component_id: component for component in inventory.components}
+        validate_boundary_edge_endpoints(
+            graph.edges,
+            set(components),
+            {source.path: source.component_id for source in inventory.source_files},
+        )
+        build_unit_ids = [unit.build_unit_id for unit in graph.build_units]
+        if len(build_unit_ids) != len(set(build_unit_ids)):
+            raise ValueError("component graph duplicates BuildUnit IDs")
+        for unit in graph.build_units:
+            component = components.get(unit.component_id)
+            if component is None:
+                raise ValueError(
+                    f"component graph BuildUnit has an unknown component: {unit.build_unit_id}"
+                )
+            if unit.manifest_path not in component.build_manifests:
+                raise ValueError(
+                    f"component graph BuildUnit manifest is not owned by its component: {unit.build_unit_id}"
+                )
 
     def load_audit_plan(self, campaign_id: str, plan_id: str) -> AuditPlan:
         campaign = self.store.get_campaign(campaign_id)

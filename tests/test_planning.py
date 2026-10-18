@@ -9,8 +9,9 @@ from reachable_audit.inventory import build_inventory
 from reachable_audit.models import ModelError
 from reachable_audit.plan_models import (
     BoundaryEdge,
-    ComponentGraph,
+    BuildUnit,
     Component,
+    ComponentGraph,
     PlanPathDisposition,
     PlanPathState,
 )
@@ -954,6 +955,42 @@ def test_load_component_graph_repairs_tampered_export_from_durable_artifact(
         assert manager.load_component_graph("CMP-graph-export") == graph
         assert json.loads(export_path.read_text(encoding="utf-8")) == json.loads(
             json.dumps(asdict(graph))
+        )
+
+
+def test_record_component_graph_rejects_unowned_build_manifest(tmp_path: Path) -> None:
+    target = tmp_path / "graph-owner"
+    target.mkdir()
+    _write(target / "pyproject.toml", "[project]\nname='app'\n")
+    _write(target / "app.py", "VALUE = 1\n")
+    inventory = build_inventory(target, "fixture:graph-owner")
+    component_id = inventory.components[0].component_id
+    graph = ComponentGraph(
+        "1.0",
+        inventory.snapshot_id,
+        (BuildUnit(
+            build_unit_id="BUILD-forged",
+            component_id=component_id,
+            manifest_path="outside/pyproject.toml",
+            ecosystem="python",
+            name="forged",
+            dependencies=(),
+        ),),
+        (),
+        (),
+    )
+
+    with CampaignManager(target) as manager:
+        manager.create_campaign(
+            campaign_id="CMP-graph-owner", snapshot_id=inventory.snapshot_id,
+        )
+        manager.record_inventory(campaign_id="CMP-graph-owner", inventory=inventory)
+        with pytest.raises(ValueError, match="manifest is not owned"):
+            manager.record_component_graph(
+                campaign_id="CMP-graph-owner", graph=graph,
+            )
+        assert not manager.store.list_events(
+            "CMP-graph-owner", event_type="COMPONENT_GRAPH_RECORDED",
         )
 
 

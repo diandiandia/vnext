@@ -92,7 +92,7 @@ def _largest_boundary_edge_prefix(
     return low
 
 
-def _validate_boundary_edge_endpoints(
+def validate_boundary_edge_endpoints(
     boundary_edges: Sequence[BoundaryEdge],
     known_components: set[str],
     source_owner_by_path: Mapping[str, str],
@@ -308,7 +308,7 @@ def create_audit_plan(
     path_state_by_path = {
         item.path: item.state for item in normalized_path_dispositions
     }
-    _validate_boundary_edge_endpoints(
+    validate_boundary_edge_endpoints(
         boundary_edges, known_components, source_owner_by_path,
     )
 
@@ -566,7 +566,7 @@ def validate_plan(plan: AuditPlan, inventory: ProjectInventory) -> None:
     source_language_by_path = {
         source.path: source.language for source in inventory.source_files
     }
-    _validate_boundary_edge_endpoints(
+    validate_boundary_edge_endpoints(
         plan.boundary_edges, set(components), source_owner_by_path,
     )
     omitted = set(plan.omitted_empty_component_ids)
