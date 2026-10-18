@@ -223,6 +223,12 @@ digests; source/artifact references are checked by the validators that consume t
 not universally at task collection. Reports are derived views; persisted store state
 and events remain authoritative.
 
+Inventory, snapshot baseline, ComponentGraph, and Plan reads resolve the latest
+content-addressed recording event and repair their JSON files as derived exports. The
+Campaign inventory and source baseline are write-once for a snapshot; changed source
+scope or bytes require a new Campaign. A recorded Plan cannot be replaced directly: a
+Plan Amendment must extend the latest Plan and preserve its Work Units and scope.
+
 Hot event queries use composite indexes keyed by Campaign, Batch, entity, and event
 type. APIs provide filtered reads, submission-ordered task-ID enumeration, and atomic
 batch event append while preserving per-entity idempotency. Empty expected task sets
