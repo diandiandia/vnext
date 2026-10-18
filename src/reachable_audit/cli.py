@@ -407,6 +407,17 @@ def _handle_campaign_abort(arguments: argparse.Namespace) -> int:
     return 0
 
 
+def _handle_shadow_evaluate(arguments: argparse.Namespace) -> int:
+    value = json.loads(Path(arguments.input).read_text(encoding="utf-8"))
+    if not isinstance(value, dict):
+        raise ValueError("shadow evaluation input must be a JSON object")
+    report = evaluate_release(value)
+    if arguments.output:
+        write_evaluation_report(arguments.output, report)
+    _print(report)
+    return 0
+
+
 def _handle_task(arguments: argparse.Namespace) -> int:
     with CampaignManager(arguments.target, arguments.state_dir) as manager:
         backend = ManualExecutionBackend(manager, arguments.campaign_id)
@@ -1231,14 +1242,7 @@ def main(argv: list[str] | None = None) -> int:
             return _handle_campaign_abort(arguments)
 
         if arguments.command == "shadow-evaluate":
-            value = json.loads(Path(arguments.input).read_text(encoding="utf-8"))
-            if not isinstance(value, dict):
-                raise ValueError("shadow evaluation input must be a JSON object")
-            report = evaluate_release(value)
-            if arguments.output:
-                write_evaluation_report(arguments.output, report)
-            _print(report)
-            return 0
+            return _handle_shadow_evaluate(arguments)
 
         if arguments.command.startswith("task-"):
             return _handle_task(arguments)
