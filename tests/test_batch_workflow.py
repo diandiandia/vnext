@@ -25,6 +25,7 @@ from reachable_audit.planning import create_audit_plan
 from reachable_audit.stage_revisions import (
     STAGE_INVALIDATION_DEPENDENTS,
     active_stage_events,
+    stage_revision_ancestry_errors,
     unresolved_stage_invalidations,
 )
 from conftest import axis_runs_from_evidence
@@ -101,6 +102,53 @@ def test_stage_invalidation_clears_only_after_later_same_batch_revision() -> Non
     assert unresolved_stage_invalidations([
         target, marker, other_batch_replacement, replacement,
     ]) == []
+
+
+def test_active_projection_rejects_mismatched_upstream_revision_pin() -> None:
+    old_r1 = SimpleNamespace(
+        event_id="EVT-r1-old", event_type="R1_COMPLETED", batch_id="B-1",
+        sequence=10, payload={"revision_id": "REV-r1-old"},
+    )
+    r2 = SimpleNamespace(
+        event_id="EVT-r2", event_type="R2_COMPLETED", batch_id="B-1",
+        sequence=11,
+        payload={
+            "revision_id": "REV-r2",
+            "upstream_revision_ids": {"R1_COMPLETED": "REV-r1-old"},
+        },
+    )
+    invalidation = SimpleNamespace(
+        event_id="EVT-invalidate-r1", event_type="STAGE_PROJECTION_INVALIDATED",
+        batch_id="B-1", sequence=12,
+        payload={"target_event_id": "EVT-r1-old", "target_stage": "R1_COMPLETED"},
+    )
+    replacement_r1 = SimpleNamespace(
+        event_id="EVT-r1-new", event_type="R1_COMPLETED", batch_id="B-1",
+        sequence=13, payload={"revision_id": "REV-r1-new"},
+    )
+
+    assert stage_revision_ancestry_errors([old_r1, r2]) == []
+    other_batch_r1 = SimpleNamespace(
+        event_id="EVT-r1-other", event_type="R1_COMPLETED", batch_id="B-2",
+        sequence=20, payload={"revision_id": "REV-r1-other"},
+    )
+    other_batch_r2 = SimpleNamespace(
+        event_id="EVT-r2-other", event_type="R2_COMPLETED", batch_id="B-2",
+        sequence=21,
+        payload={
+            "revision_id": "REV-r2-other",
+            "upstream_revision_ids": {"R1_COMPLETED": "REV-r1-other"},
+        },
+    )
+    assert stage_revision_ancestry_errors([
+        old_r1, r2, other_batch_r1, other_batch_r2,
+    ]) == []
+    errors = stage_revision_ancestry_errors([
+        old_r1, r2, invalidation, replacement_r1,
+    ])
+    assert len(errors) == 1
+    assert "R2_COMPLETED" in errors[0]
+    assert "active revision is REV-r1-new" in errors[0]
 
 
 def test_r1_direct_claim_requires_inspected_altitude_for_low_tier(

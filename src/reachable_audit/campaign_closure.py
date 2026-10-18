@@ -21,7 +21,11 @@ from .models import BatchStatus, CampaignStatus, ModelError
 from .plan_models import AuditPlan, PlanPathState
 from .resource_cleanup import cleanup_campaign_resources
 from .runtime_policy import execution_policy_digest
-from .stage_revisions import invalidated_stage_event_ids, unresolved_stage_invalidations
+from .stage_revisions import (
+    invalidated_stage_event_ids,
+    stage_revision_ancestry_errors,
+    unresolved_stage_invalidations,
+)
 
 
 _SEVERITY_ORDER = {"LOW": 0, "MEDIUM": 1, "HIGH": 2, "CRITICAL": 3}
@@ -299,6 +303,12 @@ class CampaignCloser:
             raise ModelError(
                 "Campaign closure requires stale stage projections to be recommitted: "
                 f"{ {batch_id: sorted(stages) for batch_id, stages in sorted(stale_by_batch.items())} }"
+            )
+        ancestry_errors = stage_revision_ancestry_errors(events)
+        if ancestry_errors:
+            raise ModelError(
+                "Campaign closure requires stage revisions to be recommitted in order: "
+                f"{ancestry_errors}"
             )
         pending_r6_amendments: dict[str, int] = {}
         for event in events:

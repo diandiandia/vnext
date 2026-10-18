@@ -1058,6 +1058,41 @@ def test_campaign_closure_rejects_unrecommitted_stale_projection(
         manager.close()
 
 
+def test_campaign_closure_rejects_projection_with_stale_ancestry(
+    tmp_path: Path,
+) -> None:
+    manager, plan = _closable_campaign(tmp_path)
+    try:
+        batch_id = plan.batches[0].batch_id
+        prior_r1 = manager.store.list_batch_events(
+            "CMP-r4", batch_id, event_type="R1_COMPLETED",
+        )[-1]
+        manager.store.append_event(
+            campaign_id="CMP-r4",
+            batch_id=batch_id,
+            entity_type="batch_stage",
+            entity_id=batch_id,
+            event_type="R1_COMPLETED",
+            idempotency_key="test-unmarked-r1-revision-replacement",
+            actor="test",
+            payload={**prior_r1.payload, "revision_id": "REV-r1-unmarked"},
+            payload_ref=prior_r1.payload_ref,
+        )
+
+        with pytest.raises(ModelError, match="stage revisions to be recommitted in order"):
+            CampaignCloser(manager, "CMP-r4", plan).close(CampaignClosure(
+                architecture_overview="One component.",
+                unreviewed_scope=(),
+                residual_risks=(),
+                limitations=(),
+                lessons=(),
+                knowledge_nominations=(),
+                skill_issues=(),
+            ))
+    finally:
+        manager.close()
+
+
 def test_handoff_resolve_cli_accepts_empty_resolution_batch(
     tmp_path: Path, capsys: object,
 ) -> None:

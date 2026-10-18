@@ -103,3 +103,45 @@ def unresolved_stage_invalidations(events: Iterable[Any]) -> list[Any]:
         if not replacement_exists:
             unresolved.append(marker)
     return unresolved
+
+
+def stage_revision_ancestry_errors(events: Iterable[Any]) -> list[str]:
+    active = active_stage_events(events)
+    events_by_batch: dict[str, list[Any]] = {}
+    for event in active:
+        if event.batch_id is not None:
+            events_by_batch.setdefault(str(event.batch_id), []).append(event)
+    errors = []
+    for batch_events in events_by_batch.values():
+        latest_by_type = {}
+        latest_versioned_by_type = {}
+        for event in batch_events:
+            latest_by_type[event.event_type] = event
+            if event.payload.get("revision_id"):
+                latest_versioned_by_type[event.event_type] = event
+        latest_by_type = {
+            event_type: latest_versioned_by_type.get(event_type, event)
+            for event_type, event in latest_by_type.items()
+        }
+        for event in batch_events:
+            upstream_revisions = event.payload.get("upstream_revision_ids")
+            if not isinstance(upstream_revisions, dict):
+                continue
+            for upstream_type, pinned_revision_id in upstream_revisions.items():
+                upstream_event = latest_by_type.get(str(upstream_type))
+                if upstream_event is None:
+                    errors.append(
+                        f"{event.event_type} {event.event_id} has missing upstream "
+                        f"{upstream_type}"
+                    )
+                    continue
+                active_revision_id = str(
+                    upstream_event.payload.get("revision_id", upstream_event.event_id)
+                )
+                if str(pinned_revision_id) != active_revision_id:
+                    errors.append(
+                        f"{event.event_type} {event.event_id} pins stale "
+                        f"{upstream_type} revision {pinned_revision_id}; "
+                        f"active revision is {active_revision_id}"
+                    )
+    return errors
