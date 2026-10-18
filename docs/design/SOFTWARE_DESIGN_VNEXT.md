@@ -340,7 +340,9 @@ Campaign budget may freeze `max_screening_fraction` in the range [0, 1] at init.
 reports screened Work Unit IDs, count, fraction, ceiling status, and release eligibility.
 Any nonzero screening share without a ceiling is marked not release-eligible in the
 Campaign report. Missing/exceeded ceilings do not alone block closure. There is no
-authenticated override workflow, and the evaluator does not enforce this report policy.
+authenticated override workflow; the independent RG14 evaluator validates the
+digest-backed counts and fraction against the frozen ceiling and rejects missing,
+inconsistent, exceeded, or overridden screening evidence.
 
 Release returns a task to PENDING without replenishing its claim budget. Exhausted
 released claims, like exhausted failures, require bounded retry authorization. Delegated
