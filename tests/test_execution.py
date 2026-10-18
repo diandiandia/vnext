@@ -32,6 +32,7 @@ from reachable_audit.models import ModelError
 from reachable_audit.knowledge_catalog import KnowledgeCatalog, default_knowledge_root
 from reachable_audit.store import ConflictError
 from reachable_audit.runtime_policy import TASK_OUTPUT_MAX_BYTES, execution_policy_digest
+from reachable_audit.stage_revisions import STAGE_INVALIDATION_DEPENDENTS
 from conftest import axis_runs_from_evidence
 from conftest import execution_configuration_fixture
 from test_batch_workflow import _workflow
@@ -782,6 +783,19 @@ def test_per_axis_r2_output_can_be_amended(tmp_path: Path, axis: DiscoveryAxis) 
 
 
 @pytest.mark.parametrize("operation,required_output,stage,output", [
+    ("discover_surfaces", "surface-set/v1", "R1_COMPLETED", {
+        "schema_version": "1.0", "review_altitude": "INSPECTED",
+        "reviewed_paths": [], "surfaces": [], "boundary_reviews": [],
+    }),
+    ("generate_hypotheses_compact", "compact-hypothesis-set/v1", "R2_COMPLETED", {
+        "schema_version": "1.0", "axis_runs": [], "hypotheses": [],
+    }),
+    ("verify_reachability", "verdict-submission/v1", "R3_COMPLETED", {
+        "schema_version": "1.0", "verdict": {"hypothesis_id": "HYP-1"},
+    }),
+    ("run_category_audit", "category-run/v1", "R4_COMPLETED", {
+        "schema_version": "1.0", "category_run": {},
+    }),
     ("assess_experiment", "r5-assessment/v1", "R5_COMPLETED", {
         "schema_version": "1.0", "experiments": [],
         "assessment": {
@@ -800,6 +814,7 @@ def test_per_axis_r2_output_can_be_amended(tmp_path: Path, axis: DiscoveryAxis) 
 ])
 def test_late_stage_output_can_be_amended_before_stage_commit(
     tmp_path: Path, operation: str, required_output: str, stage: str, output: dict,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     manager, task = _setup(tmp_path)
     try:
@@ -813,6 +828,7 @@ def test_late_stage_output_can_be_amended_before_stage_commit(
         task = replace(task, operation=operation, required_output=required_output,
                        input_refs=input_refs)
         backend = ManualExecutionBackend(manager, task.campaign_id)
+        monkeypatch.setattr(backend, "_validate_task_output", lambda *_args: {})
         backend.submit(task)
         lease = backend.claim("reviewer")
         assert lease is not None
@@ -831,9 +847,26 @@ def test_late_stage_output_can_be_amended_before_stage_commit(
         manager.store.append_event(
             campaign_id=task.campaign_id, batch_id=task.batch_id,
             entity_type="batch", entity_id=task.batch_id, event_type=stage,
-            idempotency_key=f"fixture:{stage}", actor="test", payload={},
+            idempotency_key=f"fixture:{stage}", actor="test",
+            payload={"revision_id": f"REV-{stage}"},
             payload_ref=replacement_ref,
         )
+        if stage != "R6_COMPLETED":
+            downstream_types = STAGE_INVALIDATION_DEPENDENTS[stage]
+            for index, event_type in enumerate(downstream_types):
+                if event_type == stage:
+                    continue
+                manager.store.append_event(
+                    campaign_id=task.campaign_id,
+                    batch_id=task.batch_id,
+                    entity_type="batch_stage",
+                    entity_id=task.batch_id,
+                    event_type=event_type,
+                    idempotency_key=f"fixture:{stage}:{event_type}:{index}",
+                    actor="test",
+                    payload={"revision_id": f"REV-{event_type}"},
+                    payload_ref=replacement_ref,
+                )
         if stage == "R6_COMPLETED":
             amended_after_commit = backend.amend_completed_output(
                 task.task_id, original_ref, reason="terminal R6 correction",
@@ -846,13 +879,13 @@ def test_late_stage_output_can_be_amended_before_stage_commit(
                 evidence_refs=(replacement_ref,),
             )
             assert amended_after_commit.output_ref == original_ref
-            invalidation = next(
-                event for event in manager.store.list_batch_events(
+            invalidations = manager.store.list_batch_events(
                     task.campaign_id, task.batch_id,
                     event_type="STAGE_PROJECTION_INVALIDATED",
-                )
             )
-            assert invalidation.payload["target_stage"] == stage
+            assert {
+                event.payload["target_stage"] for event in invalidations
+            } == set(STAGE_INVALIDATION_DEPENDENTS[stage])
     finally:
         manager.close()
 
