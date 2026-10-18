@@ -390,6 +390,8 @@ PYTHONPATH=<vnext>/src python3 -m reachable_audit r4 \
   <target> <campaign-id> <batch-id> --input <category-runs.json>
 PYTHONPATH=<vnext>/src python3 -m reachable_audit r5 \
   <target> <campaign-id> <batch-id> --input <experiments.json>
+PYTHONPATH=<vnext>/src python3 -m reachable_audit r5-observation-register \
+  <target> <campaign-id> --input <signed-observation.json>
 PYTHONPATH=<vnext>/src python3 -m reachable_audit metrics \
   <target> <campaign-id> <batch-id>
 PYTHONPATH=<vnext>/src python3 -m reachable_audit finding \
@@ -403,6 +405,11 @@ PYTHONPATH=<vnext>/src python3 -m reachable_audit drift-resolve \
 PYTHONPATH=<vnext>/src python3 -m reachable_audit shadow-evaluate \
   --input <paired-runs.json> --output <acceptance-report.json>
 ```
+
+`r5-observation-register` requires `VNA_R5_EXTERNAL_OBSERVATION_HMAC_KEY` in the host
+environment and a signed observation bound to the current Campaign, snapshot, Batch,
+hypothesis, observer, method, timestamp, and Campaign-owned `sha256:` evidence artifacts.
+It records provenance only; it never confirms or refutes an R5 hypothesis.
 
 For `handoff-resolve`, an `EDGE_PROVEN` resolution requires `boundary_proof` bound to
 the planned edge: edge/component IDs, interface kind, direction, principal, premises,

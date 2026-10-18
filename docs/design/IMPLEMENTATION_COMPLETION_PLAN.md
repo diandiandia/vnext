@@ -64,6 +64,12 @@ identity and provider enforcement require a host integration acceptance run.
 
 ### 4. R5 Out-of-Band Evidence Provenance
 
+Status: **PARTIAL MECHANICS IMPLEMENTED**. `r5-observation-register` verifies a
+host-authority HMAC and binds an observation to Campaign/snapshot/Batch/hypothesis,
+observer/method/time, and Campaign-owned artifact digests. Registration is evidence-only
+and cannot upgrade R5. Authority key custody, observer identity trust, and independent
+accept-path qualification remain external.
+
 Support authorized external observations without treating a string reference as proof.
 Bind evidence to hypothesis, snapshot, target, observer identity, method, timestamp,
 artifact digests, and an authority signature. Keep it distinct from managed harness

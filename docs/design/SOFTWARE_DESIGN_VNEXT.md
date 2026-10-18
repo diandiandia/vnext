@@ -303,6 +303,11 @@ R5 collection and commit share experiment structure, hypothesis scope, and task-
 reference checks. An absent experiment ID is JSON null; invalid output remains leased
 for correction. Legacy successful output can be amended before R5 commit. Empirical
 fidelity and registered harness evidence are additionally validated at stage commit.
+`r5-observation-register` separately verifies a host-authority HMAC binding an external
+observation to Campaign/snapshot/Batch/hypothesis, observer, method, timestamp, and
+Campaign-owned evidence digests. It records evidence-only provenance and does not alter
+R5 disposition or satisfy the managed-harness empirical-upgrade gate. Authority key
+custody and independent observer identity trust remain external.
 R6 closure uses canonical stage artifacts rather than a source-discovery inventory.
 A rejection reports counts and the first ten missing or extra edge IDs and leaves the
 task leased. Agent-facing task inputs are compacted
