@@ -42,7 +42,9 @@ release-certification claim. The as-implemented sections below remain the baseli
   and do not relabel the original scope as fully verified. Budget exhaustion retains
   an explicit unresolved disposition rather than silently dropping the candidate.
 4. Ownership coverage, declared review execution, and evidenced security paths are
-  separate metrics. File assignment or an AxisRun does not prove inspection or safety.
+  separate metrics. Task-coordinated R1 preserves Agent-declared per-path review claims
+  and reports them separately from Plan ownership; neither a file assignment, AxisRun,
+  nor claim proves host-observed inspection or safety.
   NOT_APPLICABLE, DEFERRED, unsupported, and unreviewed work remain distinguishable;
   measured resource use is separate from advisory forecasts. Interrupted/released
   attempts without usage make attempt accounting incomplete, not free.

@@ -88,7 +88,10 @@ edge exactly once; each review must have the task Work Unit ID, a valid disposit
 non-empty evidence references, and a non-empty rationale. Evidence anchors are checked
 against the snapshot during stage commit. R1 collection also checks that every Surface
 has an entry-path LOC anchor inside its Work Unit on an existing, nonblank source line.
-Invalid anchors leave the lease available for correction and resubmission.
+Task-coordinated `task-commit-r1` preserves one `AGENT_DECLARED_REVIEWED` path claim
+for each path in the validated Work Unit scope. Campaign reports count these claims
+separately from Plan ownership and explicitly state that they are not host-observed
+reads. Invalid anchors leave the lease available for correction and resubmission.
 Malformed or missing task scope fails closed. A rejection lists the gap (counts plus the
 first ten edge IDs/paths where applicable) and leaves the task leased so the same worker
 can resubmit the complete result.

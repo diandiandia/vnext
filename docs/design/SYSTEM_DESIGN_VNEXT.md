@@ -190,7 +190,7 @@ The existing R0-R6 semantics remain the workflow vocabulary, with one canonical 
 | Stage | Responsibility | Required output |
 |---|---|---|
 | R0 | Compare scoped source digests with the Campaign baseline | Content-addressed digest receipt; no baseline signature |
-| R1 | Record surfaces, principals, components, and supplied-boundary reviews | Source-anchored Surface and BoundaryReview records; final per-Surface states are recorded by R6, while path-role ledger remains absent |
+| R1 | Record surfaces, principals, components, supplied-boundary reviews, and path-review declarations | Source-anchored Surface/BoundaryReview records and, for task-coordinated R1, persisted Agent-declared path claims; Plan path roles determine which paths are assigned. Claims are not host-observed reads; final per-Surface states are recorded by R6. |
 | R2 | Generate and screen hypotheses using multiple discovery axes and approved knowledge | Falsifiable hypotheses with axis, language, mechanism, and seed provenance |
 | R3 | Verify reachability and vulnerability mechanism | Call/dataflow evidence, counterevidence, and provisional verdict |
 | R3.5 | Independent refutation and adjudication | Reviewer evidence and explicit disposition |

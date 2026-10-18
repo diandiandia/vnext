@@ -154,6 +154,7 @@ class BatchWorkflow:
         self,
         surfaces: Sequence[Surface],
         boundary_reviews: Sequence[BoundaryReview] = (),
+        path_review_claims: Sequence[Mapping[str, str]] = (),
     ) -> str:
         self._require_stage("R0_COMPLETED")
         work_units = {str(item["work_unit_id"]): item for item in self._work_units()}
@@ -163,6 +164,28 @@ class BatchWorkflow:
         plan = self.manager.load_audit_plan(self.campaign_id, plan_id)
         inventory = self.manager.load_inventory(self.campaign_id)
         inventoried_paths = {source.path for source in inventory.source_files}
+        path_review_claim_records = []
+        seen_path_review_claims: set[tuple[str, str]] = set()
+        for claim in path_review_claims:
+            work_unit_id = str(claim.get("work_unit_id", ""))
+            path = str(claim.get("path", ""))
+            claim_state = str(claim.get("claim", ""))
+            work_unit = work_units.get(work_unit_id)
+            if work_unit is None or path not in {
+                str(item) for item in work_unit.get("source_files", [])
+            }:
+                raise ModelError("R1 path review claim is outside its Work Unit")
+            if claim_state != "AGENT_DECLARED_REVIEWED":
+                raise ModelError("R1 path review claim has an invalid state")
+            key = (work_unit_id, path)
+            if key in seen_path_review_claims:
+                raise ModelError("R1 contains duplicate path review claims")
+            seen_path_review_claims.add(key)
+            path_review_claim_records.append({
+                "work_unit_id": work_unit_id,
+                "path": path,
+                "claim": claim_state,
+            })
         line_count_cache: dict[str, tuple[int, frozenset[int]]] = {}
         boundary_edges = {edge.edge_id: edge for edge in plan.boundary_edges}
         expected_boundary_reviews = {
@@ -233,6 +256,10 @@ class BatchWorkflow:
             "schema_version": "1.0",
             "surfaces": [asdict(surface) for surface in surfaces],
             "boundary_reviews": [asdict(review) for review in boundary_reviews],
+            "path_review_claims": sorted(
+                path_review_claim_records,
+                key=lambda item: (item["work_unit_id"], item["path"]),
+            ),
         }
         artifact_id = self._put_json(value)
         self.manager.store.append_event(

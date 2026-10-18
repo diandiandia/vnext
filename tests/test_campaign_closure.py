@@ -31,8 +31,10 @@ from reachable_audit.execution import (
 )
 from conftest import execution_configuration_fixture
 from reachable_audit.graph import build_component_graph
+from reachable_audit.inventory import build_inventory
 from reachable_audit.models import CampaignAuditMode, CampaignStatus, ModelError
 from reachable_audit.plan_models import PlanPathDisposition, PlanPathState
+from reachable_audit.planning import create_audit_plan
 from reachable_audit.planning import create_audit_plan
 from reachable_audit.resource_cleanup import (
     create_campaign_temp_directory,
@@ -45,6 +47,7 @@ def _closable_campaign(
     tmp_path: Path, *, surface_without_hypothesis: bool = False,
     screening_work_unit: bool = False, not_feasible: bool = False,
     path_dispositions: tuple[PlanPathDisposition, ...] = (),
+    path_review_claims: tuple[dict[str, str], ...] = (),
 ):  # type: ignore[no-untyped-def]
     manager, workflow = _ready_for_r5(
         tmp_path,
@@ -52,6 +55,7 @@ def _closable_campaign(
         surface_without_hypothesis=surface_without_hypothesis,
         screening_work_unit=screening_work_unit,
         path_dispositions=path_dispositions,
+        path_review_claims=path_review_claims,
     )
     inventory = manager.load_inventory("CMP-r4")
     manager.record_component_graph(
@@ -608,6 +612,44 @@ def test_campaign_closure_rejects_invalid_path_scope_evidence(tmp_path: Path) ->
                 unreviewed_scope=(), residual_risks=(), limitations=(),
                 lessons=(), knowledge_nominations=(), skill_issues=(),
             ))
+    finally:
+        manager.close()
+
+
+def test_campaign_report_separates_agent_path_review_claims(tmp_path: Path) -> None:
+    (tmp_path / "state.py").write_text("STATE = {}\n", encoding="utf-8")
+    inventory = build_inventory(tmp_path, "fixture:r4")
+    plan_seed = create_audit_plan(
+        campaign_id="CMP-r4", inventory=inventory, category_families=["STATE"],
+    )
+    work_unit_id = plan_seed.work_units[0].work_unit_id
+    manager, plan = _closable_campaign(
+        tmp_path,
+        path_review_claims=({
+            "work_unit_id": work_unit_id,
+            "path": "state.py",
+            "claim": "AGENT_DECLARED_REVIEWED",
+        },),
+    )
+    try:
+        assert plan.work_units[0].work_unit_id == work_unit_id
+        report = CampaignCloser(manager, "CMP-r4", plan).close(CampaignClosure(
+            architecture_overview="One component with an Agent-declared path review.",
+            unreviewed_scope=(), residual_risks=(), limitations=(),
+            lessons=(), knowledge_nominations=(), skill_issues=(),
+        ))
+
+        assert report["coverage"]["agent_declared_reviewed_paths"] == 1
+        assert report["path_review_claims"] == [{
+            "batch_id": plan.batches[0].batch_id,
+            "work_unit_id": work_unit_id,
+            "path": "state.py",
+            "claim": "AGENT_DECLARED_REVIEWED",
+        }]
+        markdown = (
+            manager.state_dir / "campaigns" / "CMP-r4" / "report" / "report.md"
+        ).read_text(encoding="utf-8")
+        assert "Agent declarations, not host-observed file reads" in markdown
     finally:
         manager.close()
 

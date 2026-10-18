@@ -1206,10 +1206,19 @@ class DiscoveryCoordinator:
         views = self._successful_tasks("discover_surfaces", expected)
         surfaces = []
         boundary_reviews = []
+        path_review_claims = []
         for view in views:
             value = self._read_output(view)
             work_unit = expected[view.task.task_id]
             self._validate_reviewed_paths(value, work_unit, view.task.task_id)
+            reviewed_paths = value.get("reviewed_paths")
+            if not isinstance(reviewed_paths, list):
+                reviewed_paths = work_unit.get("source_files", [])
+            path_review_claims.extend({
+                "work_unit_id": str(work_unit["work_unit_id"]),
+                "path": str(path),
+                "claim": "AGENT_DECLARED_REVIEWED",
+            } for path in reviewed_paths)
             for item in value.get("surfaces", []):
                 surface = Surface.from_dict(item)
                 if surface.work_unit_id != str(work_unit["work_unit_id"]):
@@ -1224,7 +1233,9 @@ class DiscoveryCoordinator:
                         f"boundary review task scope mismatch: {review.edge_id}"
                     )
                 boundary_reviews.append(review)
-        return self.workflow.record_r1(surfaces, boundary_reviews)
+        return self.workflow.record_r1(
+            surfaces, boundary_reviews, path_review_claims=path_review_claims,
+        )
 
     def schedule_r2(self) -> tuple[TaskView, ...]:
         r1_event = self._require_stage("R1_COMPLETED")

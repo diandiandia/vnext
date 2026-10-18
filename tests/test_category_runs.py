@@ -44,6 +44,7 @@ def _ready_for_r4(
     surface_without_hypothesis: bool = False,
     screening_work_unit: bool = False,
     path_dispositions: tuple[PlanPathDisposition, ...] = (),
+    path_review_claims: tuple[dict[str, str], ...] = (),
 ):  # type: ignore[no-untyped-def]
     (tmp_path / "state.py").write_text("STATE = {}\n", encoding="utf-8")
     inventory = build_inventory(tmp_path, "fixture:r4")
@@ -62,7 +63,7 @@ def _ready_for_r4(
         "SURF-static", work_unit.work_unit_id, work_unit.component_id,
         "function_entry", "state.py", "run", "local", ("LOC-state.py:1",),
     )] if static_hypothesis or surface_without_hypothesis else []
-    workflow.record_r1(surfaces)
+    workflow.record_r1(surfaces, path_review_claims=path_review_claims)
     axis_evidence = {
         "surface": ("EVID-surface",), "mechanism": ("EVID-mechanism",),
         "state": ("EVID-state",), "fix_variant": ("EVID-fix",),

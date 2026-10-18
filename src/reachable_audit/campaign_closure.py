@@ -339,6 +339,13 @@ class CampaignCloser:
         r5_assessments = []
         batch_reports_by_id: dict[str, Mapping[str, Any]] = {}
         metrics = []
+        path_review_claims: list[dict[str, str]] = []
+        path_review_claim_errors: list[str] = []
+        unit_paths = {
+            unit.work_unit_id: set(unit.source_files)
+            for unit in self.plan.work_units
+        }
+        seen_path_review_claims: set[tuple[str, str]] = set()
         artifact_event_types = {
             "R1_COMPLETED", "R2_COMPLETED", "R3_COMPLETED", "R4_COMPLETED", "R5_COMPLETED",
             "R6_COMPLETED", "TRANSMISSION_METRICS_RECORDED",
@@ -353,6 +360,40 @@ class CampaignCloser:
                 if event.event_type == "R1_COMPLETED":
                     surfaces.extend(artifact["surfaces"])
                     boundary_reviews.extend(artifact.get("boundary_reviews", []))
+                    for item in artifact.get("path_review_claims", []):
+                        if not isinstance(item, dict):
+                            path_review_claim_errors.append(
+                                "R1 path review claim is not an object"
+                            )
+                            continue
+                        work_unit_id = str(item.get("work_unit_id", ""))
+                        path = str(item.get("path", ""))
+                        claim = str(item.get("claim", ""))
+                        key = (work_unit_id, path)
+                        if claim != "AGENT_DECLARED_REVIEWED":
+                            path_review_claim_errors.append(
+                                f"invalid path review claim: {work_unit_id}/{path}"
+                            )
+                        elif path not in unit_paths.get(work_unit_id, set()):
+                            path_review_claim_errors.append(
+                                f"path review claim is outside its Work Unit: {work_unit_id}/{path}"
+                            )
+                        elif path not in included_source_files:
+                            path_review_claim_errors.append(
+                                f"path review claim is not for an INCLUDED path: {path}"
+                            )
+                        elif key in seen_path_review_claims:
+                            path_review_claim_errors.append(
+                                f"duplicate path review claim: {work_unit_id}/{path}"
+                            )
+                        else:
+                            seen_path_review_claims.add(key)
+                            path_review_claims.append({
+                                "batch_id": batch_id,
+                                "work_unit_id": work_unit_id,
+                                "path": path,
+                                "claim": claim,
+                            })
                 elif event.event_type == "R2_COMPLETED":
                     hypotheses.extend(artifact["hypotheses"])
                     discovery_axis_runs.extend(artifact.get("axis_runs", []))
@@ -467,6 +508,11 @@ class CampaignCloser:
                 ),
             },
         }
+        if path_review_claim_errors:
+            gates["CG2"]["pass"] = False
+            gates["CG2"]["detail"]["path_review_claim_errors"] = (
+                path_review_claim_errors
+            )
 
         expected_category_coverage = {
             (unit.work_unit_id, family)
@@ -758,6 +804,9 @@ class CampaignCloser:
                 "included_source_files": len(included_source_files),
                 "excluded_source_files": len(excluded_source_files),
                 "deferred_source_files": len(deferred_source_files),
+                "agent_declared_reviewed_paths": len({
+                    item["path"] for item in path_review_claims
+                }),
                 "surfaces": len(surfaces),
                 "surface_review_dispositions": len(surface_review_dispositions),
                 "boundary_reviews": len(boundary_reviews),
@@ -833,6 +882,7 @@ class CampaignCloser:
                 }
                 for item in path_dispositions
             ],
+            "path_review_claims": path_review_claims,
             "residual_risks": list(closure.residual_risks),
             "limitations": list(closure.limitations),
             "lessons": list(closure.lessons),
@@ -1033,6 +1083,20 @@ class CampaignCloser:
         lines.extend(
             f"- {name}: {count}" for name, count in coverage.items()
         )
+        lines.extend([
+            "",
+            "### Declared Path Review",
+            "",
+            "These are Agent declarations, not host-observed file reads or safety proof.",
+        ])
+        if report.get("path_review_claims"):
+            lines.extend(
+                f"- `{item['path']}` in `{item['batch_id']}` / "
+                f"`{item['work_unit_id']}`: `{item['claim']}`"
+                for item in report["path_review_claims"]
+            )
+        else:
+            lines.append("- No path review claims recorded.")
         not_feasible_experiments = report.get(
             "not_feasible_experiment_hypothesis_ids", []
         )

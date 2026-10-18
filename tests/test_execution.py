@@ -143,7 +143,17 @@ def test_collected_r1_output_can_be_amended_before_stage_commit(
         assert amended.output_ref == corrected_ref
 
         coordinator.commit_r1()
-        assert workflow._stage_event("R1_COMPLETED") is not None
+        r1_event = workflow._stage_event("R1_COMPLETED")
+        assert r1_event is not None
+        r1_artifact = json.loads(manager.artifacts.get_bytes(r1_event.payload_ref))
+        assert r1_artifact["path_review_claims"] == [
+            {
+                "work_unit_id": plan.work_units[0].work_unit_id,
+                "path": path,
+                "claim": "AGENT_DECLARED_REVIEWED",
+            }
+            for path in plan.work_units[0].source_files
+        ]
         with pytest.raises(ModelError, match="after its stage has committed"):
             backend.amend_completed_output(
                 task.task_id,
