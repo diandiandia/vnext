@@ -182,11 +182,17 @@ class BatchWorkflow:
             if claim_state != "AGENT_DECLARED_REVIEWED":
                 raise ModelError("R1 path review claim has an invalid state")
             try:
-                ReviewAltitude(altitude)
+                altitude_state = ReviewAltitude(altitude)
             except ValueError as error:
                 raise ModelError(
                     "R1 path review claim requires SCREENED or INSPECTED altitude"
                 ) from error
+            if altitude_state not in {
+                ReviewAltitude.SCREENED, ReviewAltitude.INSPECTED,
+            }:
+                raise ModelError(
+                    "R1 path review claim requires SCREENED or INSPECTED altitude"
+                )
             try:
                 PathRiskTier(risk_tier)
             except ValueError as error:

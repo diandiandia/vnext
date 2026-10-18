@@ -227,6 +227,14 @@ def test_r1_blank_anchor_is_rejected_before_collection(tmp_path: Path) -> None:
                 {"agent_runs": 1, "wall_seconds": 1},
             ))
         assert backend.poll(task.task_id).status is TaskStatus.LEASED
+        output["review_altitude"] = "NOT_RECORDED"
+        not_recorded_ref = manager.artifacts.put_text(json.dumps(output)).artifact_id
+        with pytest.raises(ModelError, match="review_altitude SCREENED or INSPECTED"):
+            backend.collect(lease, TaskResult(
+                True, not_recorded_ref, "not recorded is not a review altitude",
+                {"agent_runs": 1, "wall_seconds": 1},
+            ))
+        assert backend.poll(task.task_id).status is TaskStatus.LEASED
         output["review_altitude"] = "INSPECTED"
         invalid_ref = manager.artifacts.put_text(json.dumps(output)).artifact_id
         with pytest.raises(ModelError, match="blank line"):

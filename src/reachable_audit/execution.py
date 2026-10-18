@@ -598,11 +598,15 @@ class ManualExecutionBackend:
             )
             if task.required_output == "surface-set/v1":
                 try:
-                    ReviewAltitude(str(output["review_altitude"]))
+                    altitude = ReviewAltitude(str(output["review_altitude"]))
                 except (KeyError, ValueError) as error:
                     raise ModelError(
                         f"R1 task requires review_altitude SCREENED or INSPECTED: {task.task_id}"
                     ) from error
+                if altitude not in {ReviewAltitude.SCREENED, ReviewAltitude.INSPECTED}:
+                    raise ModelError(
+                        f"R1 task requires review_altitude SCREENED or INSPECTED: {task.task_id}"
+                    )
                 self._validate_surface_coverage(task, output)
                 self._validate_path_risk_tiers(output, work_unit, task.task_id)
             else:
