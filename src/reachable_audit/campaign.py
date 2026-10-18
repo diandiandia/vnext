@@ -16,7 +16,7 @@ from .artifacts import ArtifactStore
 from .models import BatchRecord, BatchStatus, CampaignAuditMode, CampaignRecord
 from .analysis_models import SkillIssue, SkillIssueStatus
 from .plan_models import AuditPlan, ComponentGraph, PlanAmendment, ProjectInventory
-from .planning import batch_manifest, validate_plan
+from .planning import batch_manifest, validate_plan, validate_plan_amendment
 from .store import AuditStore
 
 
@@ -534,6 +534,28 @@ class CampaignManager:
             raise ValueError("Plan Amendment base plan mismatch")
         if amendment.amended_plan_id != amended_plan.plan_id:
             raise ValueError("Plan Amendment result plan mismatch")
+        validate_plan(base_plan, inventory)
+        validate_plan(amended_plan, inventory)
+        base_plan_events = self.store.list_events(
+            campaign_id,
+            entity_type="plan",
+            entity_id=base_plan.plan_id,
+            event_type="PLAN_RECORDED",
+        )
+        if not base_plan_events or base_plan_events[-1].payload_ref is None:
+            raise ValueError("Plan Amendment base Plan artifact is missing")
+        durable_base_plan = json.loads(
+            self.artifacts.get_bytes(base_plan_events[-1].payload_ref)
+        )
+        supplied_base_plan = json.loads(json.dumps(
+            asdict(base_plan),
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ))
+        if durable_base_plan != supplied_base_plan:
+            raise ValueError("Plan Amendment base Plan differs from its durable artifact")
+        validate_plan_amendment(base_plan, amended_plan, amendment)
         existing_amendments = self.store.list_events(
             campaign_id,
             entity_type="plan_amendment",

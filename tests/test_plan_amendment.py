@@ -1,3 +1,4 @@
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -5,7 +6,11 @@ import pytest
 from reachable_audit.campaign import CampaignManager
 from reachable_audit.inventory import build_inventory
 from reachable_audit.models import BatchStatus
-from reachable_audit.plan_models import PlanPathDisposition, PlanPathState
+from reachable_audit.plan_models import (
+    BatchReplacement,
+    PlanPathDisposition,
+    PlanPathState,
+)
 from reachable_audit.planning import amend_plan, create_audit_plan
 
 
@@ -117,6 +122,85 @@ def test_amendment_rejects_a_plan_with_an_active_batch(tmp_path: Path) -> None:
                 amendment=amendment,
                 inventory=inventory,
             )
+
+
+def test_amendment_rejects_forged_preservation_and_batch_mapping(
+    tmp_path: Path,
+) -> None:
+    inventory = _inventory(tmp_path)
+    base_plan = create_audit_plan(
+        campaign_id="CMP-amend-mapping",
+        inventory=inventory,
+        category_families=["STATE"],
+        max_source_files_per_work_unit=1,
+        max_source_files_per_batch=4,
+        max_work_units_per_batch=4,
+    )
+    amended_plan, amendment = amend_plan(
+        base_plan,
+        reason="repack for predictable task load",
+        max_source_files_per_batch=1,
+        max_work_units_per_batch=1,
+    )
+
+    with CampaignManager(tmp_path) as manager:
+        manager.create_campaign(
+            campaign_id="CMP-amend-mapping", snapshot_id=inventory.snapshot_id,
+        )
+        manager.record_inventory(campaign_id="CMP-amend-mapping", inventory=inventory)
+        manager.record_plan(
+            campaign_id="CMP-amend-mapping", plan=base_plan, inventory=inventory,
+        )
+
+        forged_preservation = replace(amendment, preserved_work_unit_ids=())
+        with pytest.raises(ValueError, match="preserved Work Unit IDs"):
+            manager.record_plan_amendment(
+                campaign_id="CMP-amend-mapping",
+                base_plan=base_plan,
+                amended_plan=amended_plan,
+                amendment=forged_preservation,
+                inventory=inventory,
+            )
+
+        forged_replacements = replace(
+            amendment,
+            batch_replacements=(BatchReplacement(
+                retired_batch_id=base_plan.batches[0].batch_id,
+                replacement_batch_ids=(),
+            ),),
+        )
+        with pytest.raises(ValueError, match="Batch replacements do not match"):
+            manager.record_plan_amendment(
+                campaign_id="CMP-amend-mapping",
+                base_plan=base_plan,
+                amended_plan=amended_plan,
+                amendment=forged_replacements,
+                inventory=inventory,
+            )
+
+        assert not manager.store.list_events(
+            "CMP-amend-mapping", event_type="PLAN_AMENDED",
+        )
+
+        forged_base = replace(
+            base_plan,
+            category_families=("INJECTION",),
+            work_units=tuple(
+                replace(unit, category_families=("INJECTION",))
+                for unit in base_plan.work_units
+            ),
+        )
+        with pytest.raises(ValueError, match="differs from its durable artifact"):
+            manager.record_plan_amendment(
+                campaign_id="CMP-amend-mapping",
+                base_plan=forged_base,
+                amended_plan=amended_plan,
+                amendment=amendment,
+                inventory=inventory,
+            )
+        assert not manager.store.list_events(
+            "CMP-amend-mapping", event_type="PLAN_AMENDED",
+        )
 
 
 def test_amendment_rejects_stale_base_but_preserves_exact_replay(

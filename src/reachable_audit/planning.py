@@ -750,6 +750,52 @@ def batch_manifest(plan: AuditPlan, batch: PlannedBatch) -> dict[str, object]:
     }
 
 
+def validate_plan_amendment(
+    base_plan: AuditPlan,
+    amended_plan: AuditPlan,
+    amendment: PlanAmendment,
+) -> None:
+    if amendment.base_plan_id != base_plan.plan_id or amendment.amended_plan_id != amended_plan.plan_id:
+        raise ModelError("Plan Amendment IDs do not match the supplied Plans")
+    immutable_fields = (
+        "schema_version", "campaign_id", "snapshot_id", "inventory_digest",
+        "category_families", "discovery_axes", "work_units", "boundary_edges",
+        "omitted_empty_component_ids", "path_dispositions",
+    )
+    if any(
+        getattr(base_plan, field) != getattr(amended_plan, field)
+        for field in immutable_fields
+    ):
+        raise ModelError("Plan Amendment must preserve immutable plan content")
+    expected_work_unit_ids = tuple(sorted(
+        unit.work_unit_id for unit in base_plan.work_units
+    ))
+    if amendment.preserved_work_unit_ids != expected_work_unit_ids:
+        raise ModelError("Plan Amendment preserved Work Unit IDs do not match the base Plan")
+
+    new_batch_by_work_unit = {
+        work_unit_id: batch.batch_id
+        for batch in amended_plan.batches
+        for work_unit_id in batch.work_unit_ids
+    }
+    expected_replacements = {
+        batch.batch_id: tuple(sorted({
+            new_batch_by_work_unit[work_unit_id]
+            for work_unit_id in batch.work_unit_ids
+        }))
+        for batch in base_plan.batches
+    }
+    actual_replacements = {
+        replacement.retired_batch_id: replacement.replacement_batch_ids
+        for replacement in amendment.batch_replacements
+    }
+    if (
+        len(actual_replacements) != len(amendment.batch_replacements)
+        or actual_replacements != expected_replacements
+    ):
+        raise ModelError("Plan Amendment Batch replacements do not match Work Unit movement")
+
+
 def amend_plan(
     base_plan: AuditPlan,
     *,
