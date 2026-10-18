@@ -243,6 +243,14 @@ def test_plan_rejects_boundary_endpoint_path_owned_by_other_component(
         target_component_id=components["libs/core"],
         kind="ffi",
         evidence="fixture boundary",
+        source_path="services/api/main.py",
+        target_path="libs/core/src/lib.rs",
+    )
+    plan = create_audit_plan(
+        campaign_id="CMP-endpoint-paths",
+        inventory=inventory,
+        category_families=["STATE"],
+        boundary_edges=[edge],
     )
 
     with pytest.raises(ModelError, match=error):
@@ -252,6 +260,14 @@ def test_plan_rejects_boundary_endpoint_path_owned_by_other_component(
             category_families=["STATE"],
             boundary_edges=[replace(edge, **{path_field: invalid_path})],
         )
+    invalid_plan = replace(
+        plan,
+        boundary_edges=(replace(
+            plan.boundary_edges[0], **{path_field: invalid_path},
+        ),),
+    )
+    with pytest.raises(ModelError, match=error):
+        validate_plan(invalid_plan, inventory)
 
 
 def test_plan_splits_oversized_boundary_reviews_across_endpoint_work_units(

@@ -91,6 +91,32 @@ def _largest_boundary_edge_prefix(
     return low
 
 
+def _validate_boundary_edge_endpoints(
+    boundary_edges: Sequence[BoundaryEdge],
+    known_components: set[str],
+    source_owner_by_path: Mapping[str, str],
+) -> None:
+    edge_ids: set[str] = set()
+    for edge in boundary_edges:
+        if edge.edge_id in edge_ids:
+            raise ModelError(f"duplicate boundary edge ID: {edge.edge_id}")
+        edge_ids.add(edge.edge_id)
+        if edge.source_component_id not in known_components:
+            raise ModelError(f"unknown boundary source component: {edge.source_component_id}")
+        if edge.target_component_id not in known_components:
+            raise ModelError(f"unknown boundary target component: {edge.target_component_id}")
+        if edge.source_component_id == edge.target_component_id:
+            raise ModelError(f"boundary edge is not cross-component: {edge.edge_id}")
+        if edge.source_path and source_owner_by_path.get(edge.source_path) != edge.source_component_id:
+            raise ModelError(
+                f"boundary source path is not owned by source component: {edge.edge_id}"
+            )
+        if edge.target_path and source_owner_by_path.get(edge.target_path) != edge.target_component_id:
+            raise ModelError(
+                f"boundary target path is not owned by target component: {edge.edge_id}"
+            )
+
+
 _FORECAST_BASE_OPERATIONS = (
     "discover_surfaces", "generate_hypotheses_compact", "verify_reachability",
     "refute_reachability", "adjudicate_refutations", "assess_experiment",
@@ -281,25 +307,9 @@ def create_audit_plan(
     path_state_by_path = {
         item.path: item.state for item in normalized_path_dispositions
     }
-    edge_ids: set[str] = set()
-    for edge in boundary_edges:
-        if edge.edge_id in edge_ids:
-            raise ModelError(f"duplicate boundary edge ID: {edge.edge_id}")
-        edge_ids.add(edge.edge_id)
-        if edge.source_component_id not in known_components:
-            raise ModelError(f"unknown boundary source component: {edge.source_component_id}")
-        if edge.target_component_id not in known_components:
-            raise ModelError(f"unknown boundary target component: {edge.target_component_id}")
-        if edge.source_component_id == edge.target_component_id:
-            raise ModelError(f"boundary edge is not cross-component: {edge.edge_id}")
-        if edge.source_path and source_owner_by_path.get(edge.source_path) != edge.source_component_id:
-            raise ModelError(
-                f"boundary source path is not owned by source component: {edge.edge_id}"
-            )
-        if edge.target_path and source_owner_by_path.get(edge.target_path) != edge.target_component_id:
-            raise ModelError(
-                f"boundary target path is not owned by target component: {edge.edge_id}"
-            )
+    _validate_boundary_edge_endpoints(
+        boundary_edges, known_components, source_owner_by_path,
+    )
 
     files_by_component: dict[str, list[tuple[str, str]]] = {
         component_id: [] for component_id in known_components
@@ -504,6 +514,12 @@ def create_audit_plan(
 
 def validate_plan(plan: AuditPlan, inventory: ProjectInventory) -> None:
     components = {component.component_id: component for component in inventory.components}
+    source_owner_by_path = {
+        source.path: source.component_id for source in inventory.source_files
+    }
+    _validate_boundary_edge_endpoints(
+        plan.boundary_edges, set(components), source_owner_by_path,
+    )
     omitted = set(plan.omitted_empty_component_ids)
     if len(omitted) != len(plan.omitted_empty_component_ids):
         raise ModelError("plan duplicates omitted empty component IDs")
