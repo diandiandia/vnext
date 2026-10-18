@@ -131,6 +131,33 @@ def _handle_skill_review(arguments: argparse.Namespace) -> int:
     return 0
 
 
+def _handle_resource_register_process(arguments: argparse.Namespace) -> int:
+    with CampaignManager(arguments.target, arguments.state_dir) as manager:
+        event_id = register_process_group(
+            manager,
+            arguments.campaign_id,
+            arguments.process_group_id,
+            label=arguments.label,
+        )
+        _print({"event_id": event_id})
+    return 0
+
+
+def _handle_resource_create_temp(arguments: argparse.Namespace) -> int:
+    with CampaignManager(arguments.target, arguments.state_dir) as manager:
+        path = create_campaign_temp_directory(
+            manager, arguments.campaign_id, label=arguments.label
+        )
+        _print({"path": str(path)})
+    return 0
+
+
+def _handle_resource_cleanup(arguments: argparse.Namespace) -> int:
+    with CampaignManager(arguments.target, arguments.state_dir) as manager:
+        _print(cleanup_campaign_resources(manager, arguments.campaign_id))
+    return 0
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="reachable-audit")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -570,28 +597,13 @@ def main(argv: list[str] | None = None) -> int:
             return _handle_skill_review(arguments)
 
         if arguments.command == "resource-register-process":
-            with CampaignManager(arguments.target, arguments.state_dir) as manager:
-                event_id = register_process_group(
-                    manager,
-                    arguments.campaign_id,
-                    arguments.process_group_id,
-                    label=arguments.label,
-                )
-                _print({"event_id": event_id})
-            return 0
+            return _handle_resource_register_process(arguments)
 
         if arguments.command == "resource-create-temp":
-            with CampaignManager(arguments.target, arguments.state_dir) as manager:
-                path = create_campaign_temp_directory(
-                    manager, arguments.campaign_id, label=arguments.label
-                )
-                _print({"path": str(path)})
-            return 0
+            return _handle_resource_create_temp(arguments)
 
         if arguments.command == "resource-cleanup":
-            with CampaignManager(arguments.target, arguments.state_dir) as manager:
-                _print(cleanup_campaign_resources(manager, arguments.campaign_id))
-            return 0
+            return _handle_resource_cleanup(arguments)
 
         if arguments.command == "inventory":
             with CampaignManager(arguments.target, arguments.state_dir) as manager:
