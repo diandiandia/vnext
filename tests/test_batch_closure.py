@@ -614,6 +614,23 @@ def test_r6_closure_evidence_runs_as_durable_task(
                 coordinator.commit_r6()
         assert workflow._stage_event("R6_COMPLETED") is None
 
+        original_transition = manager.store.transition_batch
+
+        def fail_complete_transition(*args: object, **kwargs: object) -> object:
+            target = kwargs.get("target", args[2] if len(args) > 2 else None)
+            if target is BatchStatus.COMPLETE:
+                raise RuntimeError("injected R6 Batch completion failure")
+            return original_transition(*args, **kwargs)
+
+        with monkeypatch.context() as patch:
+            patch.setattr(manager.store, "transition_batch", fail_complete_transition)
+            with pytest.raises(RuntimeError, match="injected R6 Batch completion failure"):
+                coordinator.commit_r6()
+        assert workflow._stage_event("R6_COMPLETED") is not None
+        assert manager.store.get_batch(
+            workflow.campaign_id, workflow.batch_id
+        ).status is not BatchStatus.COMPLETE
+
         report = coordinator.commit_r6()
         assert report["status"] == "PASS"
         assert report["closure"]["budget_used"] == {
@@ -622,6 +639,10 @@ def test_r6_closure_evidence_runs_as_durable_task(
             "wall_seconds": 3,
             "task_count": 1,
         }
+        assert manager.store.get_batch(
+            workflow.campaign_id, workflow.batch_id
+        ).status is BatchStatus.COMPLETE
+        assert len(workflow._events(event_type="R6_COMPLETED")) == 1
     finally:
         manager.close()
 

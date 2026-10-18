@@ -32,7 +32,10 @@ from reachable_audit.models import ModelError
 from reachable_audit.knowledge_catalog import KnowledgeCatalog, default_knowledge_root
 from reachable_audit.store import ConflictError
 from reachable_audit.runtime_policy import TASK_OUTPUT_MAX_BYTES, execution_policy_digest
-from reachable_audit.stage_revisions import STAGE_INVALIDATION_DEPENDENTS
+from reachable_audit.stage_revisions import (
+    STAGE_INVALIDATION_DEPENDENTS,
+    active_stage_events,
+)
 from conftest import axis_runs_from_evidence
 from conftest import execution_configuration_fixture
 from test_batch_workflow import _workflow
@@ -880,6 +883,17 @@ def test_late_stage_output_can_be_amended_before_stage_commit(
                     payload={"revision_id": f"REV-{event_type}"},
                     payload_ref=replacement_ref,
                 )
+        unrelated_event = manager.store.append_event(
+            campaign_id=task.campaign_id,
+            batch_id=task.batch_id,
+            entity_type="batch_stage",
+            entity_id=task.batch_id,
+            event_type="CATEGORY_AUDIT_PLAN_RECORDED",
+            idempotency_key=f"fixture:{stage}:unrelated-category-plan",
+            actor="test",
+            payload={"fixture": stage},
+            payload_ref=replacement_ref,
+        ).event_id
         if stage == "R6_COMPLETED":
             amended_after_commit = backend.amend_completed_output(
                 task.task_id, original_ref, reason="terminal R6 correction",
@@ -899,6 +913,10 @@ def test_late_stage_output_can_be_amended_before_stage_commit(
             assert {
                 event.payload["target_stage"] for event in invalidations
             } == set(STAGE_INVALIDATION_DEPENDENTS[stage])
+        active_events = active_stage_events(
+            manager.store.list_batch_events(task.campaign_id, task.batch_id)
+        )
+        assert any(event.event_id == unrelated_event for event in active_events)
     finally:
         manager.close()
 
