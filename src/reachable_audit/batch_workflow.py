@@ -44,6 +44,7 @@ from .campaign import CampaignManager
 from .drift import record_snapshot_drift
 from .models import BatchStatus, CampaignStatus, EventRecord, ModelError
 from .plan_models import WorkUnit
+from .stage_revisions import active_stage_events
 
 
 class BatchWorkflow:
@@ -1940,7 +1941,7 @@ class BatchWorkflow:
         return hypothesis, verdict
 
     def _stage_event(self, event_type: str) -> EventRecord | None:
-        events = self._events(event_type=event_type)
+        events = active_stage_events(self._events(), event_type)
         return events[-1] if events else None
 
     def _existing_stage_artifact(
@@ -1951,7 +1952,7 @@ class BatchWorkflow:
         conflict_message: str | None = None,
         expected_revision_id: str | None = None,
     ) -> str | None:
-        events = self._events(event_type=event_type)
+        events = active_stage_events(self._events(), event_type)
         if not events:
             return None
         message = conflict_message or f"{event_type} already committed with different content"

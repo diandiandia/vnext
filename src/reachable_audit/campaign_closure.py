@@ -21,6 +21,7 @@ from .models import BatchStatus, CampaignStatus, ModelError
 from .plan_models import AuditPlan, PlanPathState
 from .resource_cleanup import cleanup_campaign_resources
 from .runtime_policy import execution_policy_digest
+from .stage_revisions import invalidated_stage_event_ids, unresolved_stage_invalidations
 
 
 _SEVERITY_ORDER = {"LOW": 0, "MEDIUM": 1, "HIGH": 2, "CRITICAL": 3}
@@ -288,6 +289,17 @@ class CampaignCloser:
             raise ModelError(
                 "Campaign closure Plan file differs from latest Plan artifact"
             )
+        unresolved_invalidations = unresolved_stage_invalidations(events)
+        if unresolved_invalidations:
+            stale_by_batch: dict[str, set[str]] = {}
+            for marker in unresolved_invalidations:
+                stale_by_batch.setdefault(str(marker.batch_id), set()).add(
+                    str(marker.payload.get("target_stage", "unknown stage"))
+                )
+            raise ModelError(
+                "Campaign closure requires stale stage projections to be recommitted: "
+                f"{ {batch_id: sorted(stages) for batch_id, stages in sorted(stale_by_batch.items())} }"
+            )
         pending_r6_amendments: dict[str, int] = {}
         for event in events:
             if event.batch_id is None:
@@ -441,9 +453,14 @@ class CampaignCloser:
             "R1_COMPLETED", "R2_COMPLETED", "R3_COMPLETED", "R4_COMPLETED", "R5_COMPLETED",
             "R6_COMPLETED", "TRANSMISSION_METRICS_RECORDED",
         }
+        invalidated_event_ids = invalidated_stage_event_ids(events)
         for batch_id in planned_batch_ids:
             for event in event_by_batch.get(batch_id, []):
-                if event.payload_ref is None or event.event_type not in artifact_event_types:
+                if (
+                    event.event_id in invalidated_event_ids
+                    or event.payload_ref is None
+                    or event.event_type not in artifact_event_types
+                ):
                     continue
                 artifact = json.loads(
                     self.manager.artifacts.get_bytes(event.payload_ref)

@@ -1,6 +1,7 @@
 from dataclasses import replace
 from pathlib import Path
 import json
+from types import SimpleNamespace
 
 import pytest
 
@@ -21,6 +22,11 @@ from reachable_audit.campaign import CampaignManager
 from reachable_audit.inventory import build_inventory
 from reachable_audit.models import BatchStatus, ModelError
 from reachable_audit.planning import create_audit_plan
+from reachable_audit.stage_revisions import (
+    STAGE_INVALIDATION_DEPENDENTS,
+    active_stage_events,
+    unresolved_stage_invalidations,
+)
 from conftest import axis_runs_from_evidence
 
 
@@ -41,6 +47,58 @@ def _workflow(
     manager.record_inventory(campaign_id=campaign_id, inventory=inventory)
     manager.record_plan(campaign_id=campaign_id, plan=plan, inventory=inventory)
     return manager, BatchWorkflow(manager, campaign_id, plan.batches[0].batch_id), plan
+
+
+def test_stage_event_filter_keeps_replacement_revision_active() -> None:
+    prior = SimpleNamespace(
+        event_id="EVT-r1-prior", event_type="R1_COMPLETED", payload={},
+    )
+    replacement = SimpleNamespace(
+        event_id="EVT-r1-replacement", event_type="R1_COMPLETED", payload={},
+    )
+    invalidation = SimpleNamespace(
+        event_id="EVT-invalidate", event_type="STAGE_PROJECTION_INVALIDATED",
+        payload={"target_event_id": "EVT-r1-prior"},
+    )
+
+    assert active_stage_events(
+        [prior, invalidation, replacement], "R1_COMPLETED"
+    ) == [replacement]
+    assert STAGE_INVALIDATION_DEPENDENTS["R1_COMPLETED"] == (
+        "R1_COMPLETED", "R2_COMPLETED", "R3_COMPLETED", "R3_5_COMPLETED",
+        "R4_SCREENING_COVERAGE_RECORDED", "R4_COMPLETED", "R5_COMPLETED", "R6_COMPLETED",
+        "TRANSMISSION_METRICS_RECORDED",
+    )
+    assert "CATEGORY_AUDIT_PLAN_RECORDED" not in STAGE_INVALIDATION_DEPENDENTS[
+        "R2_COMPLETED"
+    ]
+
+
+def test_stage_invalidation_clears_only_after_later_same_batch_revision() -> None:
+    target = SimpleNamespace(
+        event_id="EVT-r1-prior", event_type="R1_COMPLETED", batch_id="B-1",
+        sequence=10, payload={},
+    )
+    marker = SimpleNamespace(
+        event_id="EVT-invalidate", event_type="STAGE_PROJECTION_INVALIDATED",
+        batch_id="B-1", sequence=11,
+        payload={"target_event_id": "EVT-r1-prior", "target_stage": "R1_COMPLETED"},
+    )
+    other_batch_replacement = SimpleNamespace(
+        event_id="EVT-r1-other", event_type="R1_COMPLETED", batch_id="B-2",
+        sequence=12, payload={},
+    )
+    replacement = SimpleNamespace(
+        event_id="EVT-r1-new", event_type="R1_COMPLETED", batch_id="B-1",
+        sequence=13, payload={},
+    )
+
+    assert unresolved_stage_invalidations([target, marker, other_batch_replacement]) == [
+        marker,
+    ]
+    assert unresolved_stage_invalidations([
+        target, marker, other_batch_replacement, replacement,
+    ]) == []
 
 
 def test_r1_direct_claim_requires_inspected_altitude_for_low_tier(

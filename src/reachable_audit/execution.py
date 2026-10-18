@@ -37,6 +37,10 @@ from .analysis_models import (
 )
 from .batch_workflow import BatchWorkflow
 from .campaign import CampaignManager
+from .stage_revisions import (
+    STAGE_INVALIDATION_DEPENDENTS,
+    active_stage_events,
+)
 from .discovery.hotspots import compact_hotspot_report, scan_work_unit_hotspots
 from .adapters.languages import LANGUAGE_ADAPTERS
 from .knowledge_catalog import KnowledgeCatalog, default_knowledge_root
@@ -602,16 +606,10 @@ class ManualExecutionBackend:
             raise ModelError(
                 f"task output amendment is not supported for operation: {view.task.operation}"
             )
-        stage_committed = bool(self.manager.store.list_batch_events(
-            self.campaign_id,
-            view.task.batch_id,
-            event_type=committed_stage,
-        ))
-        if stage_committed and committed_stage != "R6_COMPLETED":
-            raise ModelError(
-                "task output cannot be amended after its stage has committed; "
-                "downstream stage amendment is required"
-            )
+        batch_events = self.manager.store.list_batch_events(
+            self.campaign_id, view.task.batch_id
+        )
+        stage_committed = bool(active_stage_events(batch_events, committed_stage))
         self._validate_task_output(view.task, replacement_output_ref)
         for evidence_ref in evidence_refs:
             try:
@@ -620,26 +618,60 @@ class ManualExecutionBackend:
                 raise ModelError(
                     f"task amendment evidence artifact cannot be resolved: {evidence_ref}"
                 ) from error
-        self.manager.store.append_event(
-            campaign_id=self.campaign_id,
-            batch_id=view.task.batch_id,
-            entity_type="execution_task_amendment",
-            entity_id=task_id,
-            event_type="TASK_OUTPUT_AMENDED",
-            idempotency_key=(
+        amendment_event = {
+            "batch_id": view.task.batch_id,
+            "entity_type": "execution_task_amendment",
+            "entity_id": task_id,
+            "event_type": "TASK_OUTPUT_AMENDED",
+            "idempotency_key": (
                 f"task-output-amend:{self.campaign_id}:{task_id}:"
                 f"{view.output_ref}:{replacement_output_ref}"
             ),
-            actor=actor,
-            payload={
+            "actor": actor,
+            "payload": {
                 "prior_output_ref": view.output_ref,
                 "replacement_output_ref": replacement_output_ref,
                 "reason": reason.strip(),
                 "evidence_refs": list(evidence_refs),
                 "stage": committed_stage,
             },
-            payload_ref=replacement_output_ref,
-        )
+            "payload_ref": replacement_output_ref,
+        }
+        if stage_committed and committed_stage != "R6_COMPLETED":
+            invalidated_types = STAGE_INVALIDATION_DEPENDENTS[committed_stage]
+            invalidated_events = [
+                event for event in active_stage_events(batch_events)
+                if event.event_type in invalidated_types
+            ]
+            invalidation_events = [{
+                "batch_id": view.task.batch_id,
+                "entity_type": "batch_stage_invalidation",
+                "entity_id": event.event_id,
+                "event_type": "STAGE_PROJECTION_INVALIDATED",
+                "idempotency_key": (
+                    f"stage-invalidate:{self.campaign_id}:{view.task.batch_id}:"
+                    f"{event.event_id}:{task_id}:{replacement_output_ref}"
+                ),
+                "actor": actor,
+                "payload": {
+                    "target_event_id": event.event_id,
+                    "target_stage": event.event_type,
+                    "target_revision_id": str(
+                        event.payload.get("revision_id", event.event_id)
+                    ),
+                    "amended_stage": committed_stage,
+                    "task_id": task_id,
+                    "replacement_output_ref": replacement_output_ref,
+                },
+            } for event in invalidated_events]
+            self.manager.store.append_events_batch(
+                self.campaign_id, [amendment_event, *invalidation_events]
+            )
+        else:
+            self.manager.store.append_event(
+                campaign_id=self.campaign_id,
+                **amendment_event,
+            )
         return self.poll(task_id)
 
     def _validate_task_output(self, task: TaskSpec, output_ref: str) -> Mapping[str, Any]:

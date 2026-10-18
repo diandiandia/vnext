@@ -530,6 +530,7 @@ def test_collected_r1_output_can_be_amended_before_stage_commit(
             ],
             "surfaces": [],
             "boundary_reviews": [],
+            "operator_note": "post-commit correction",
         })).artifact_id
         amended = backend.amend_completed_output(
             task.task_id,
@@ -554,20 +555,79 @@ def test_collected_r1_output_can_be_amended_before_stage_commit(
             }
             for path in plan.work_units[0].source_files
         ]
-        with pytest.raises(ModelError, match="after its stage has committed"):
-            backend.amend_completed_output(
-                task.task_id,
-                original_ref,
-                reason="attempted post-commit correction",
-                evidence_refs=(corrected_ref,),
+        prior_r1_event = workflow._require_stage("R1_COMPLETED")
+        post_commit_ref = manager.artifacts.put_text(json.dumps({
+            "schema_version": "1.0",
+            "review_altitude": "INSPECTED",
+            "reviewed_paths": list(plan.work_units[0].source_files),
+            "path_risk_tiers": [
+                {"path": path, "risk_tier": "HIGH"}
+                for path in plan.work_units[0].source_files
+            ],
+            "surfaces": [],
+            "boundary_reviews": [],
+            "operator_note": "updated after R1 commit",
+        })).artifact_id
+        original_append_event_tx = manager.store._append_event_tx
+        prior_amendments = manager.store.list_batch_events(
+            workflow.campaign_id, workflow.batch_id,
+            event_type="TASK_OUTPUT_AMENDED",
+        )
+
+        def fail_invalidation_write(**kwargs: object) -> object:
+            if kwargs.get("event_type") == "STAGE_PROJECTION_INVALIDATED":
+                raise RuntimeError("injected invalidation write failure")
+            return original_append_event_tx(**kwargs)
+
+        with monkeypatch.context() as patch:
+            patch.setattr(manager.store, "_append_event_tx", fail_invalidation_write)
+            with pytest.raises(RuntimeError, match="injected invalidation write failure"):
+                backend.amend_completed_output(
+                    task.task_id,
+                    post_commit_ref,
+                    reason="corrected the committed surface review",
+                    evidence_refs=(corrected_ref, post_commit_ref),
+                )
+        assert backend.poll(task.task_id).output_ref == corrected_ref
+        assert manager.store.list_batch_events(
+            workflow.campaign_id, workflow.batch_id,
+            event_type="TASK_OUTPUT_AMENDED",
+        ) == prior_amendments
+        assert manager.store.list_batch_events(
+            workflow.campaign_id, workflow.batch_id,
+            event_type="STAGE_PROJECTION_INVALIDATED",
+        ) == []
+
+        amended_after_commit = backend.amend_completed_output(
+            task.task_id,
+            post_commit_ref,
+            reason="corrected the committed surface review",
+            evidence_refs=(corrected_ref, post_commit_ref),
+        )
+        assert amended_after_commit.output_ref == post_commit_ref
+        assert workflow._stage_event("R1_COMPLETED") is None
+        invalidation = next(
+            event for event in manager.store.list_batch_events(
+                workflow.campaign_id, workflow.batch_id,
+                event_type="STAGE_PROJECTION_INVALIDATED",
             )
+        )
+        assert invalidation.payload["target_event_id"] == prior_r1_event.event_id
+
+        coordinator.commit_r1()
+        replacement_r1_event = workflow._stage_event("R1_COMPLETED")
+        assert replacement_r1_event is not None
+        assert replacement_r1_event.event_id != prior_r1_event.event_id
+        assert replacement_r1_event.payload["source_task_output_refs"] == {
+            task.task_id: post_commit_ref,
+        }
         amendments = manager.store.list_events(
             workflow.campaign_id,
             entity_type="execution_task_amendment",
             entity_id=task.task_id,
             event_type="TASK_OUTPUT_AMENDED",
         )
-        assert len(amendments) == 1
+        assert len(amendments) == 2
         assert amendments[0].payload["prior_output_ref"] == original_ref
     finally:
         manager.close()
@@ -750,11 +810,18 @@ def test_late_stage_output_can_be_amended_before_stage_commit(
             )
             assert amended_after_commit.output_ref == original_ref
         else:
-            with pytest.raises(ModelError, match="after its stage has committed"):
-                backend.amend_completed_output(
-                    task.task_id, original_ref, reason="post-commit correction",
-                    evidence_refs=(replacement_ref,),
+            amended_after_commit = backend.amend_completed_output(
+                task.task_id, original_ref, reason="post-commit correction",
+                evidence_refs=(replacement_ref,),
+            )
+            assert amended_after_commit.output_ref == original_ref
+            invalidation = next(
+                event for event in manager.store.list_batch_events(
+                    task.campaign_id, task.batch_id,
+                    event_type="STAGE_PROJECTION_INVALIDATED",
                 )
+            )
+            assert invalidation.payload["target_stage"] == stage
     finally:
         manager.close()
 
