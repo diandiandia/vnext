@@ -19,6 +19,7 @@ from .plan_models import (
     PlanPathDisposition,
     PlanPathState,
     ProjectInventory,
+    SourceFile,
     WorkUnit,
 )
 from .runtime_policy import TASK_OUTPUT_MAX_BYTES
@@ -520,6 +521,27 @@ def validate_plan(plan: AuditPlan, inventory: ProjectInventory) -> None:
     component_ids = [component.component_id for component in inventory.components]
     if len(component_ids) != len(set(component_ids)):
         raise ModelError("inventory duplicates component IDs")
+    source_paths = [source.path for source in inventory.source_files]
+    if len(source_paths) != len(set(source_paths)):
+        raise ModelError("inventory duplicates source paths")
+    component_source_files: dict[str, list[SourceFile]] = {
+        component_id: [] for component_id in component_ids
+    }
+    for source in inventory.source_files:
+        if source.component_id not in component_source_files:
+            raise ModelError(f"inventory source has an unknown component: {source.path}")
+        component_source_files[source.component_id].append(source)
+    for component in inventory.components:
+        sources = component_source_files[component.component_id]
+        expected_languages = tuple(sorted({source.language for source in sources}))
+        if component.source_file_count != len(sources):
+            raise ModelError(
+                f"inventory component source_file_count does not match source files: {component.component_id}"
+            )
+        if component.languages != expected_languages:
+            raise ModelError(
+                f"inventory component languages do not match source files: {component.component_id}"
+            )
     if (
         not plan.category_families
         or plan.category_families != tuple(sorted({

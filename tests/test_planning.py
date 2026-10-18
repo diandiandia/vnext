@@ -131,6 +131,47 @@ def test_validate_plan_rejects_duplicate_inventory_component_ids(
         )
 
 
+def test_validate_plan_rejects_inconsistent_inventory_summaries(tmp_path: Path) -> None:
+    target = tmp_path / "inventory-summaries"
+    target.mkdir()
+    _fixture_monorepo(target)
+    inventory = build_inventory(target, "fixture:inventory-summaries")
+    with pytest.raises(ModelError, match="component source_file_count"):
+        create_audit_plan(
+            campaign_id="CMP-bad-component-count",
+            inventory=replace(
+                inventory,
+                components=(replace(
+                    inventory.components[0],
+                    source_file_count=inventory.components[0].source_file_count + 1,
+                ), *inventory.components[1:]),
+            ),
+            category_families=["STATE"],
+        )
+
+    with pytest.raises(ModelError, match="component languages"):
+        create_audit_plan(
+            campaign_id="CMP-bad-component-languages",
+            inventory=replace(
+                inventory,
+                components=(replace(
+                    inventory.components[0], languages=("unknown",),
+                ), *inventory.components[1:]),
+            ),
+            category_families=["STATE"],
+        )
+
+    with pytest.raises(ModelError, match="duplicates source paths"):
+        create_audit_plan(
+            campaign_id="CMP-duplicate-source-path",
+            inventory=replace(
+                inventory,
+                source_files=(*inventory.source_files, inventory.source_files[0]),
+            ),
+            category_families=["STATE"],
+        )
+
+
 def test_validate_plan_binds_work_unit_paths_to_component_owners(
     tmp_path: Path,
 ) -> None:
@@ -692,6 +733,7 @@ def test_record_plan_rejects_caller_inventory_different_from_campaign_artifact(
     substituted_inventory = replace(
         inventory,
         source_files=(replace(inventory.source_files[0], language="rust"),),
+        components=(replace(inventory.components[0], languages=("rust",)),),
     )
     plan = create_audit_plan(
         campaign_id="CMP-durable-inventory",
