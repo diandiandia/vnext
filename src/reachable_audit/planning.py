@@ -517,6 +517,9 @@ def validate_plan(plan: AuditPlan, inventory: ProjectInventory) -> None:
         raise ModelError("plan snapshot does not match inventory")
     if plan.inventory_digest != inventory_digest(inventory):
         raise ModelError("plan inventory digest does not match inventory")
+    component_ids = [component.component_id for component in inventory.components]
+    if len(component_ids) != len(set(component_ids)):
+        raise ModelError("inventory duplicates component IDs")
     if (
         not plan.category_families
         or plan.category_families != tuple(sorted({

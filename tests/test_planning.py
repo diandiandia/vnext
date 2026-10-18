@@ -111,6 +111,26 @@ def test_validate_plan_binds_plan_to_inventory_snapshot_and_digest(
         validate_plan(plan, other_snapshot)
 
 
+def test_validate_plan_rejects_duplicate_inventory_component_ids(
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "duplicate-component-ids"
+    target.mkdir()
+    _fixture_monorepo(target)
+    inventory = build_inventory(target, "fixture:duplicate-component-ids")
+    duplicated_inventory = replace(
+        inventory,
+        components=(*inventory.components, inventory.components[0]),
+    )
+
+    with pytest.raises(ModelError, match="inventory duplicates component IDs"):
+        create_audit_plan(
+            campaign_id="CMP-duplicate-component-ids",
+            inventory=duplicated_inventory,
+            category_families=["STATE"],
+        )
+
+
 def test_validate_plan_binds_work_unit_paths_to_component_owners(
     tmp_path: Path,
 ) -> None:
