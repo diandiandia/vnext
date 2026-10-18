@@ -113,8 +113,18 @@ def test_amendment_rejects_a_plan_with_an_active_batch(tmp_path: Path) -> None:
         manager.store.transition_batch(
             "CMP-active", active_batch.batch_id, BatchStatus.RUNNING
         )
+        manager.store.append_event(
+            campaign_id="CMP-active",
+            batch_id=active_batch.batch_id,
+            entity_type="execution_task",
+            entity_id="TASK-pending",
+            event_type="TASK_SUBMITTED",
+            idempotency_key="submit:TASK-pending",
+            actor="scheduler",
+            payload={"max_attempts": 3},
+        )
 
-        with pytest.raises(ValueError, match="scheduled or executed"):
+        with pytest.raises(ValueError, match="unfinished execution task"):
             manager.record_plan_amendment(
                 campaign_id="CMP-active",
                 base_plan=base_plan,
@@ -335,6 +345,165 @@ def test_amendment_recovers_when_plan_recorded_before_amendment_event(
             manager.store.get_batch("CMP-amend-recovery", batch.batch_id).status
             is BatchStatus.DEFERRED
             for batch in base_plan.batches
+        )
+
+
+def test_plan_amendment_replays_completed_batch_with_fresh_batch_ids(
+    tmp_path: Path,
+) -> None:
+    inventory = _inventory(tmp_path)
+    base_plan = create_audit_plan(
+        campaign_id="CMP-amend-replay",
+        inventory=inventory,
+        category_families=["STATE"],
+        max_source_files_per_work_unit=1,
+        max_source_files_per_batch=4,
+        max_work_units_per_batch=4,
+    )
+    amended_plan, amendment = amend_plan(
+        base_plan,
+        reason="replay all stages after a committed R1 correction",
+        max_source_files_per_batch=1,
+        max_work_units_per_batch=1,
+    )
+
+    with CampaignManager(tmp_path) as manager:
+        manager.create_campaign(
+            campaign_id="CMP-amend-replay", snapshot_id=inventory.snapshot_id,
+        )
+        manager.record_inventory(campaign_id="CMP-amend-replay", inventory=inventory)
+        manager.record_plan(
+            campaign_id="CMP-amend-replay", plan=base_plan, inventory=inventory,
+        )
+        base_batch = base_plan.batches[0]
+        manager.store.transition_batch(
+            "CMP-amend-replay", base_batch.batch_id, BatchStatus.READY,
+        )
+        manager.store.transition_batch(
+            "CMP-amend-replay", base_batch.batch_id, BatchStatus.RUNNING,
+        )
+        manager.store.append_event(
+            campaign_id="CMP-amend-replay",
+            batch_id=base_batch.batch_id,
+            entity_type="execution_task",
+            entity_id="TASK-completed-r1",
+            event_type="TASK_SUBMITTED",
+            idempotency_key="submit:TASK-completed-r1",
+            actor="scheduler",
+            payload={"max_attempts": 1},
+        )
+        manager.store.append_event(
+            campaign_id="CMP-amend-replay",
+            batch_id=base_batch.batch_id,
+            entity_type="execution_task",
+            entity_id="TASK-completed-r1",
+            event_type="TASK_CLAIMED",
+            idempotency_key="claim:TASK-completed-r1",
+            actor="worker",
+            payload={"attempt": 1, "lease_expires_at": "2099-01-01T00:00:00+00:00"},
+        )
+        manager.store.append_event(
+            campaign_id="CMP-amend-replay",
+            batch_id=base_batch.batch_id,
+            entity_type="execution_task",
+            entity_id="TASK-completed-r1",
+            event_type="TASK_COMPLETED",
+            idempotency_key="complete:TASK-completed-r1",
+            actor="worker",
+            payload={"measurements": {"agent_runs": 1}},
+        )
+        manager.store.append_event(
+            campaign_id="CMP-amend-replay",
+            batch_id=base_batch.batch_id,
+            entity_type="batch_stage",
+            entity_id=base_batch.batch_id,
+            event_type="R1_COMPLETED",
+            idempotency_key="r1:committed-before-replay",
+            actor="agent",
+            payload={},
+        )
+        manager.store.transition_batch(
+            "CMP-amend-replay", base_batch.batch_id, BatchStatus.COMPLETE,
+        )
+
+        manager.record_plan_amendment(
+            campaign_id="CMP-amend-replay",
+            base_plan=base_plan,
+            amended_plan=amended_plan,
+            amendment=amendment,
+            inventory=inventory,
+        )
+
+        assert manager.store.get_batch(
+            "CMP-amend-replay", base_batch.batch_id,
+        ).status is BatchStatus.COMPLETE
+        assert manager.store.list_batch_events(
+            "CMP-amend-replay", base_batch.batch_id,
+            event_type="BATCH_SUPERSEDED",
+        )
+        assert {
+            batch.batch_id for batch in amended_plan.batches
+        }.isdisjoint({batch.batch_id for batch in base_plan.batches})
+        assert all(
+            manager.store.get_batch("CMP-amend-replay", batch.batch_id).status
+            is BatchStatus.PLANNED
+            for batch in amended_plan.batches
+        )
+
+
+def test_plan_amendment_blocks_replay_with_30k_pending_tasks(
+    tmp_path: Path,
+) -> None:
+    inventory = _inventory(tmp_path)
+    base_plan = create_audit_plan(
+        campaign_id="CMP-amend-pending-scale",
+        inventory=inventory,
+        category_families=["STATE"],
+        max_source_files_per_work_unit=1,
+        max_source_files_per_batch=4,
+        max_work_units_per_batch=4,
+    )
+    amended_plan, amendment = amend_plan(
+        base_plan,
+        reason="do not replay while old tasks remain pending",
+        max_source_files_per_batch=1,
+        max_work_units_per_batch=1,
+    )
+
+    with CampaignManager(tmp_path) as manager:
+        manager.create_campaign(
+            campaign_id="CMP-amend-pending-scale", snapshot_id=inventory.snapshot_id,
+        )
+        manager.record_inventory(
+            campaign_id="CMP-amend-pending-scale", inventory=inventory,
+        )
+        manager.record_plan(
+            campaign_id="CMP-amend-pending-scale", plan=base_plan, inventory=inventory,
+        )
+        batch_id = base_plan.batches[0].batch_id
+        manager.store.append_events_batch("CMP-amend-pending-scale", [{
+            "batch_id": batch_id,
+            "entity_type": "execution_task",
+            "entity_id": f"TASK-pending-{index:05d}",
+            "event_type": "TASK_SUBMITTED",
+            "idempotency_key": f"submit:pending:{index:05d}",
+            "actor": "scheduler",
+            "payload": {"max_attempts": 1},
+        } for index in range(30_000)])
+
+        with pytest.raises(ValueError, match="unfinished execution task"):
+            manager.record_plan_amendment(
+                campaign_id="CMP-amend-pending-scale",
+                base_plan=base_plan,
+                amended_plan=amended_plan,
+                amendment=amendment,
+                inventory=inventory,
+            )
+        assert not manager.store.list_events(
+            "CMP-amend-pending-scale", event_type="PLAN_AMENDED",
+        )
+        assert not manager.store.list_batch_events(
+            "CMP-amend-pending-scale", batch_id, event_type="BATCH_SUPERSEDED",
         )
 
 

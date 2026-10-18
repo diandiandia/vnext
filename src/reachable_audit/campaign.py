@@ -13,7 +13,13 @@ from typing import Any, Mapping
 import uuid
 
 from .artifacts import ArtifactStore
-from .models import BatchRecord, BatchStatus, CampaignAuditMode, CampaignRecord
+from .models import (
+    BatchRecord,
+    BatchStatus,
+    CampaignAuditMode,
+    CampaignRecord,
+    CampaignStatus,
+)
 from .analysis_models import SkillIssue, SkillIssueStatus
 from .plan_models import AuditPlan, ComponentGraph, PlanAmendment, ProjectInventory
 from .planning import (
@@ -639,6 +645,8 @@ class CampaignManager:
         amendment: PlanAmendment,
         inventory: ProjectInventory,
     ) -> str:
+        if self.store.get_campaign(campaign_id).status is CampaignStatus.COMPLETE:
+            raise ValueError("Plan Amendment is not allowed after Campaign completion")
         if amendment.campaign_id != campaign_id:
             raise ValueError("Plan Amendment Campaign mismatch")
         if amendment.base_plan_id != base_plan.plan_id:
@@ -667,6 +675,11 @@ class CampaignManager:
         if durable_base_plan != supplied_base_plan:
             raise ValueError("Plan Amendment base Plan differs from its durable artifact")
         validate_plan_amendment(base_plan, amended_plan, amendment)
+        base_batches = [
+            self.store.get_batch(campaign_id, batch.batch_id)
+            for batch in base_plan.batches
+        ]
+        self._require_batches_quiescent_for_replay(campaign_id, base_batches)
         existing_amendments = self.store.list_events(
             campaign_id,
             entity_type="plan_amendment",
@@ -690,6 +703,14 @@ class CampaignManager:
                 != json.loads(amendment_json)
             ):
                 raise ValueError("Plan Amendment ID conflicts with its recorded content")
+            self._record_plan_supersession(
+                campaign_id,
+                base_plan,
+                amended_plan,
+                amendment,
+                base_batches,
+                amendment_artifact_id=existing.payload_ref,
+            )
             self._atomic_json(
                 self.state_dir
                 / "campaigns"
@@ -722,46 +743,20 @@ class CampaignManager:
                 )
         elif latest_plan.entity_id != base_plan.plan_id:
             raise ValueError("Plan Amendment base is not the latest recorded Plan")
-        mutable_statuses = {BatchStatus.PLANNED, BatchStatus.DEFERRED}
-        base_batches = [
-            self.store.get_batch(campaign_id, batch.batch_id)
-            for batch in base_plan.batches
-        ]
-        immutable = [
-            batch.batch_id for batch in base_batches if batch.status not in mutable_statuses
-        ]
-        if immutable:
-            raise ValueError(
-                "cannot amend a plan with scheduled or executed batches: "
-                + ", ".join(sorted(immutable))
-            )
-
         self._record_plan(
             campaign_id=campaign_id,
             plan=amended_plan,
             inventory=inventory,
             replacing_plan_id=base_plan.plan_id,
         )
-        for batch in base_batches:
-            if batch.status is BatchStatus.PLANNED:
-                self.store.transition_batch(
-                    campaign_id, batch.batch_id, BatchStatus.DEFERRED
-                )
         artifact = self.artifacts.put_text(amendment_json)
-        self.store.append_event(
-            campaign_id=campaign_id,
-            batch_id=None,
-            entity_type="plan_amendment",
-            entity_id=amendment.amendment_id,
-            event_type="PLAN_AMENDED",
-            idempotency_key=f"plan-amendment:{campaign_id}:{amendment.amendment_id}",
-            actor="tool",
-            payload={
-                "base_plan_id": amendment.base_plan_id,
-                "amended_plan_id": amendment.amended_plan_id,
-                "retired_batches": len(amendment.batch_replacements),
-            },
-            payload_ref=artifact.artifact_id,
+        self._record_plan_supersession(
+            campaign_id,
+            base_plan,
+            amended_plan,
+            amendment,
+            base_batches,
+            amendment_artifact_id=artifact.artifact_id,
         )
         self._atomic_json(
             self.state_dir
@@ -772,6 +767,92 @@ class CampaignManager:
             amendment_value,
         )
         return artifact.artifact_id
+
+    def _require_batches_quiescent_for_replay(
+        self, campaign_id: str, batches: list[BatchRecord],
+    ) -> None:
+        state_event_types = {
+            "TASK_CLAIMED", "TASK_LEASE_RELEASED", "TASK_COMPLETED",
+            "TASK_FAILED", "TASK_RETRY_AUTHORIZED", "TASK_CANCELLED",
+        }
+        for batch in batches:
+            events = self.store.list_batch_events(
+                campaign_id,
+                batch.batch_id,
+                entity_type="execution_task",
+            )
+            states_by_task: dict[str, list[str]] = {}
+            submitted_task_ids = set()
+            for event in events:
+                if event.event_type == "TASK_SUBMITTED":
+                    submitted_task_ids.add(event.entity_id)
+                if event.event_type in state_event_types:
+                    states_by_task.setdefault(event.entity_id, []).append(
+                        event.event_type
+                    )
+            for task_id in submitted_task_ids:
+                task_states = states_by_task.get(task_id, [])
+                if not task_states or task_states[-1] not in {
+                    "TASK_COMPLETED", "TASK_CANCELLED",
+                }:
+                    raise ValueError(
+                        f"cannot replay Batch with an unfinished execution task: {task_id}"
+                    )
+
+    def _record_plan_supersession(
+        self,
+        campaign_id: str,
+        base_plan: AuditPlan,
+        amended_plan: AuditPlan,
+        amendment: PlanAmendment,
+        base_batches: list[BatchRecord],
+        *,
+        amendment_artifact_id: str | None = None,
+    ) -> None:
+        replacement_by_batch = {
+            item.retired_batch_id: item.replacement_batch_ids
+            for item in amendment.batch_replacements
+        }
+        events = [{
+            "batch_id": batch.batch_id,
+            "entity_type": "batch_lifecycle",
+            "entity_id": batch.batch_id,
+            "event_type": "BATCH_SUPERSEDED",
+            "idempotency_key": (
+                f"batch-superseded:{campaign_id}:{base_plan.plan_id}:"
+                f"{amended_plan.plan_id}:{batch.batch_id}"
+            ),
+            "actor": "tool",
+            "payload": {
+                "base_plan_id": base_plan.plan_id,
+                "amended_plan_id": amended_plan.plan_id,
+                "replacement_batch_ids": list(
+                    replacement_by_batch[batch.batch_id]
+                ),
+            },
+            "payload_ref": None,
+        } for batch in base_batches]
+        events.append({
+            "batch_id": None,
+            "entity_type": "plan_amendment",
+            "entity_id": amendment.amendment_id,
+            "event_type": "PLAN_AMENDED",
+            "idempotency_key": f"plan-amendment:{campaign_id}:{amendment.amendment_id}",
+            "actor": "tool",
+            "payload": {
+                "base_plan_id": amendment.base_plan_id,
+                "amended_plan_id": amendment.amended_plan_id,
+                "retired_batches": len(amendment.batch_replacements),
+            },
+            "payload_ref": amendment_artifact_id,
+        })
+        self.store.append_events_batch(campaign_id, events)
+        for batch in base_batches:
+            current = self.store.get_batch(campaign_id, batch.batch_id)
+            if current.status not in {BatchStatus.DEFERRED, BatchStatus.COMPLETE}:
+                self.store.transition_batch(
+                    campaign_id, batch.batch_id, BatchStatus.DEFERRED,
+                )
 
     def load_inventory(self, campaign_id: str) -> ProjectInventory:
         campaign = self.store.get_campaign(campaign_id)
