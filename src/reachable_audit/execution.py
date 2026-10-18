@@ -40,6 +40,8 @@ from .adapters.languages import LANGUAGE_ADAPTERS
 from .knowledge_catalog import KnowledgeCatalog, default_knowledge_root
 from .experiments.harness_catalog import DEFAULT_HARNESS_CATALOG
 from .models import CampaignStatus, ModelError
+from .plan_models import WorkUnit
+from .planning import discovery_output_floor_bytes
 from .runtime_policy import (
     TASK_OUTPUT_MAX_BYTES, TASK_OUTPUT_TARGET_BYTES, execution_policy_digest,
 )
@@ -1226,8 +1228,30 @@ class DiscoveryCoordinator:
     def schedule_r1(self) -> tuple[TaskView, ...]:
         self._require_stage("R0_COMPLETED")
         self.workflow.run_r0()
+        work_units = self._work_units()
+        oversized = [
+            (str(work_unit["work_unit_id"]), discovery_output_floor_bytes(
+                WorkUnit.from_dict(work_unit)
+            ))
+            for work_unit in work_units
+        ]
+        oversized = [
+            (work_unit_id, floor)
+            for work_unit_id, floor in oversized
+            if floor > TASK_OUTPUT_MAX_BYTES
+        ]
+        if oversized:
+            details = ", ".join(
+                f"{work_unit_id} ({floor} bytes)"
+                for work_unit_id, floor in oversized[:10]
+            )
+            raise ModelError(
+                "R1 scheduling blocked because estimated minimum output exceeds "
+                f"{TASK_OUTPUT_MAX_BYTES} bytes; split or amend the Plan first: "
+                f"{details}"
+            )
         views = []
-        for work_unit in self._work_units():
+        for work_unit in work_units:
             boundary_edges = self._boundary_edges_for_work_unit(work_unit)
             input_ref = self._put_json({
                 "schema_version": "1.0",

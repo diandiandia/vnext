@@ -302,7 +302,9 @@ maximum boundary-review count, and an estimated minimum R1 result size per Work 
 `oversize_work_units` identifies estimates above the hard ceiling. The estimate assumes
 one minimal evidence reference and rationale per required boundary review; actual Agent
 output can be larger, so edge counts are shown alongside it. These are planning signals,
-not result-size guarantees or price estimates.
+not result-size guarantees or price estimates. R1 scheduling blocks Work Units whose
+estimated minimum already exceeds the hard ceiling before submitting any tasks; an
+estimate below the ceiling does not guarantee the actual result will fit.
 
 An optional plan cost profile supplies measured per-operation task cost, currency,
 low/expected/high hypotheses per Work Unit, expected reachable fraction, and optional R4

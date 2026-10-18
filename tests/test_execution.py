@@ -93,6 +93,28 @@ def test_manual_backend_leases_once_and_collects_idempotently(tmp_path: Path) ->
         manager.close()
 
 
+def test_r1_schedule_blocks_oversized_boundary_review_floor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manager, workflow, _plan = _workflow(tmp_path, "CMP-r1-oversized-floor")
+    try:
+        workflow.run_r0()
+        backend = ManualExecutionBackend(manager, workflow.campaign_id)
+        coordinator = DiscoveryCoordinator(workflow, backend)
+        work_unit = coordinator._work_units()[0]
+        work_unit["boundary_edge_ids"] = [f"EDGE-{index:05}" for index in range(40000)]
+        monkeypatch.setattr(coordinator, "_work_units", lambda: [work_unit])
+
+        with pytest.raises(ModelError, match="R1 scheduling blocked.*split or amend"):
+            coordinator.schedule_r1()
+
+        assert backend.list_tasks(
+            operation="discover_surfaces", batch_id=workflow.batch_id,
+        ) == ()
+    finally:
+        manager.close()
+
+
 def test_collected_r1_output_can_be_amended_before_stage_commit(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
