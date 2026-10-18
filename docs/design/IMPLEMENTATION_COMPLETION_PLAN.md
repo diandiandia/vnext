@@ -12,8 +12,9 @@ they do not substitute for host attestation, held-out campaigns, or release qual
 
 Status: **IN PROGRESS**. R3's per-hypothesis verdict writes now preflight existing
 adjudications, reject conflicting retries before mutation, and recover from an exact
-retry after an injected partial write. R1/R2/R4/R5 projection recovery and the
-post-commit invalidation/revision model remain open.
+retry after an injected partial write. A quiescent Plan Amendment can supersede completed
+Batches with fresh IDs so all R0-R6 stages replay from immutable task evidence. R1/R2/R4/R5
+in-place projection recovery and the post-commit invalidation/revision model remain open.
 
 Define an append-only stage revision model for R1-R5. Each committed projection must
 pin the exact task-output artifact set and upstream revision IDs it consumed. A supported
@@ -23,9 +24,10 @@ be deterministic and preserve prior artifacts. Extend partial-write recovery bey
 R3 verdict path already covered.
 
 Acceptance: fault-injection tests at every write boundary; exact retry is idempotent;
-conflicting retries do not mutate state; amendment after R1 invalidates R2 through R6;
-amendment after each later stage invalidates only its descendants; closure fails until
-all affected projections are recommitted. Existing terminal R6 behavior remains intact.
+conflicting retries do not mutate state; full-Batch replay preserves old history and
+uses new IDs; in-place amendment after R1 invalidates R2 through R6, and amendment after
+each later stage invalidates only its descendants; closure fails until affected
+projections are recommitted. Existing terminal R6 behavior remains intact.
 
 ### 2. Compact R4 Task Payloads
 

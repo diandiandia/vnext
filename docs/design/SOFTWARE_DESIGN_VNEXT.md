@@ -241,7 +241,10 @@ R6 reports and skill reviews support append-only revisions. Collected R1, per-ax
 R3, individual/bundled R4, R5, and R6 task outputs can be amended before their stage commits;
 events retain prior/replacement refs, reason, actor, and resolvable artifact evidence.
 Readers select the amended task output. Other post-commit amendments are rejected;
-general R1-R5 post-commit amendments and downstream invalidation/recomputation are absent.
+general R1-R5 post-commit amendments and in-place downstream invalidation/recomputation
+are absent. A quiescent Plan Amendment can supersede completed Batches with fresh IDs and
+replay all R0-R6 stages; unfinished tasks block this full-Batch replay, and old evidence
+remains immutable history.
 Terminal R6 task output may be amended while the Campaign is open; R6 must be recommitted
 and Campaign closure rejects a pending amendment until that newer projection exists.
 Campaign-complete amendments are rejected.
