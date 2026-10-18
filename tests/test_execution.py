@@ -480,6 +480,25 @@ def test_manual_backend_claim_filters_by_operation(tmp_path: Path) -> None:
         manager.close()
 
 
+def test_manual_backend_claims_oldest_submission_before_lexical_order(
+    tmp_path: Path,
+) -> None:
+    manager, task = _setup(tmp_path)
+    try:
+        backend = ManualExecutionBackend(manager, "CMP-exec")
+        oldest = replace(task, task_id="TASK-z-first")
+        newest = replace(task, task_id="TASK-a-second")
+        backend.submit(oldest)
+        backend.submit(newest)
+
+        lease = backend.claim("worker")
+
+        assert lease is not None
+        assert lease.task.task_id == oldest.task_id
+    finally:
+        manager.close()
+
+
 def test_manual_backend_claim_targets_specific_task_and_batch(tmp_path: Path) -> None:
     manager, task = _setup(tmp_path)
     try:
