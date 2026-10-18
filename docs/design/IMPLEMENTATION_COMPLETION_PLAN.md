@@ -10,12 +10,13 @@ they do not substitute for host attestation, held-out campaigns, or release qual
 
 ### 1. Stage Revision, Invalidation, and Recovery
 
-Status: **IN PROGRESS**. R3's per-hypothesis verdict writes and R4 screening projections
-now preflight existing records, reject conflicting retries before mutation, and recover
-from exact retries after partial writes. A quiescent Plan Amendment can supersede
-completed Batches with fresh IDs so all R0-R6 stages replay from immutable task evidence.
-R1/R2/R4 main/R5 projection recovery and the in-place post-commit invalidation/revision
-model remain open.
+Status: **IN PROGRESS**. R1, R2, R4 main, and R5 now preflight existing projection
+artifacts: exact retries reuse the committed artifact and conflicting retries fail before
+artifact writes. R3 verdict writes and R4 screening projections retain their earlier
+partial-write/exact-retry protection. A quiescent Plan Amendment can supersede completed
+Batches with fresh IDs so all R0-R6 stages replay from immutable task evidence. The
+append-only revision, task-output provenance, post-commit amendment, descendant
+invalidation, and closure stale-projection model remain open.
 
 Define an append-only stage revision model for R1-R5. Each committed projection must
 pin the exact task-output artifact set and upstream revision IDs it consumed. A supported
@@ -85,12 +86,12 @@ external prerequisites.
 
 Status: **IN PROGRESS**. Campaign screening/substantive classification and ceiling state
 are isolated in a pure helper with direct boundary-case tests. CLI initialization, status,
-skill review/backlog, resource lifecycle, Inventory, ComponentGraph, Plan, R0-R3, execution
-task, Campaign abort, toolchain probe, and compatibility-scan commands now dispatch through
-focused handlers. CG5 Handoff evaluation is isolated with direct pass/fail coverage. R4
-AxisRun IDs and bundle mechanism-card definitions are compacted at the wire. Remaining
-work includes the other large stage command groups and CampaignCloser gates, further R4
-repetition, and selective exception narrowing.
+skill review/backlog, resources, Inventory, ComponentGraph, Plan/amend, R0-R3, Handoff,
+harness, execution tasks, Campaign close/abort, shadow evaluation, toolchain probe, and
+compatibility scan dispatch through focused handlers. CG5 Handoff evaluation is isolated
+with direct pass/fail coverage. R4 AxisRun IDs and bundled mechanism-card definitions are
+compacted at the wire. Remaining work includes R3.5/R4/R5/Finding CLI groups, other
+CampaignCloser gates, further R4 repetition, and selective exception narrowing.
 
 Deduplicate repeated R4 schema fields where safe. Split the CLI dispatcher and
 CampaignCloser gate evaluation into bounded helpers only with behavior-pinned tests.
@@ -109,6 +110,29 @@ language campaigns, and large-repository runs.
 Acceptance: measured budgets and reproducible harness/fixtures. Real project access,
 held-out labels, evaluator authority signatures, host-read proof, and large-run capacity
 are external evidence; local synthetic tests cannot mark these gates complete.
+
+## Current Test Gates
+
+The latest full local verification after R1/R2/R4/R5 retry recovery is **307 passed,
+1 skipped**, and compatibility-scan passes with no findings. Before closing Phase 1,
+tests must pin revision ancestry and task-output refs, fault-inject every commit boundary,
+prove exact-retry and conflict non-mutation, exercise each amendment-to-descendant
+invalidation boundary, and prove Campaign closure blocks stale projections. The complete
+suite must pass after that model lands.
+
+Before closing Phase 2, retain old-form compatibility, add compact multi-item round-trip
+and measured byte-reduction tests, verify rejected task output remains repairable, and
+prove reports are unchanged. Before closing Phase 3, test forgery, expiry, replay, identity
+binding, budget overrun, and concurrent reservation contention. Before closing Phase 4,
+test invalid signatures/scope/digests and trace valid provenance through R5, closure, and
+release output. Before closing Phase 5, test each extracted command/gate and confirm
+canonical output/error behavior is unchanged. Before closing Phase 6, run synthetic
+scale budgets locally and attach the required signed real-run evidence separately.
+
+External waiting items are host trust/key custody, provider-side hard budget reservation,
+authority-held R5 signing keys, independently trusted observer identity, target-read
+proof, held-out labels, supported-language strata, and representative large-project
+capacity. These cannot be marked complete by repository unit tests.
 
 ## Execution Rule
 
