@@ -436,6 +436,19 @@ def _handle_campaign_abort(arguments: argparse.Namespace) -> int:
     return 0
 
 
+def _handle_campaign_close(arguments: argparse.Namespace) -> int:
+    value = json.loads(Path(arguments.input).read_text(encoding="utf-8"))
+    if not isinstance(value, dict):
+        raise ValueError("Campaign closure input must be a JSON object")
+    with CampaignManager(arguments.target, arguments.state_dir) as manager:
+        plan = manager.load_audit_plan(arguments.campaign_id, arguments.plan_id)
+        report = CampaignCloser(manager, arguments.campaign_id, plan).close(
+            CampaignClosure.from_dict(value)
+        )
+        _print(report)
+    return 0
+
+
 def _handle_shadow_evaluate(arguments: argparse.Namespace) -> int:
     value = json.loads(Path(arguments.input).read_text(encoding="utf-8"))
     if not isinstance(value, dict):
@@ -1232,15 +1245,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         if arguments.command == "campaign-close":
-            value = json.loads(Path(arguments.input).read_text(encoding="utf-8"))
-            if not isinstance(value, dict):
-                raise ValueError("Campaign closure input must be a JSON object")
-            with CampaignManager(arguments.target, arguments.state_dir) as manager:
-                plan = manager.load_audit_plan(arguments.campaign_id, arguments.plan_id)
-                _print(CampaignCloser(
-                    manager, arguments.campaign_id, plan
-                ).close(CampaignClosure.from_dict(value)))
-            return 0
+            return _handle_campaign_close(arguments)
 
         if arguments.command == "campaign-abort":
             return _handle_campaign_abort(arguments)

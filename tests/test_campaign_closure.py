@@ -26,6 +26,7 @@ from reachable_audit.campaign_closure import (
     _derive_handoff_gate,
     _derive_screening_coverage,
 )
+from reachable_audit.cli import main
 from reachable_audit.execution import (
     DiscoveryCoordinator,
     ManualExecutionBackend,
@@ -991,6 +992,33 @@ def test_campaign_final_report_is_idempotent_but_immutable(tmp_path: Path) -> No
             CampaignCloser(manager, "CMP-r4", plan).close(changed)
     finally:
         manager.close()
+
+
+def test_campaign_close_cli_loads_plan_and_writes_final_report(
+    tmp_path: Path, capsys: object,
+) -> None:
+    manager, plan = _closable_campaign(tmp_path)
+    target = manager.target_root
+    manager.close()
+    closure_path = tmp_path / "closure.json"
+    closure_path.write_text(json.dumps({
+        "architecture_overview": "One component.",
+        "unreviewed_scope": [],
+        "scope_dispositions": [],
+        "residual_risks": [],
+        "limitations": [],
+        "lessons": [],
+        "knowledge_nominations": [],
+        "skill_issues": [],
+    }), encoding="utf-8")
+
+    assert main([
+        "campaign-close", str(target), "CMP-r4", plan.plan_id,
+        "--input", str(closure_path),
+    ]) == 0
+    report = json.loads(capsys.readouterr().out)  # type: ignore[attr-defined]
+    assert report["campaign_id"] == "CMP-r4"
+    assert report["status"] == "PASS"
 
 
 def test_campaign_report_exports_scope_and_execution_measurements(tmp_path: Path) -> None:
