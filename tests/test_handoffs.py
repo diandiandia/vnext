@@ -45,6 +45,73 @@ def _write(path: Path, text: str) -> None:
     path.write_text(text, encoding="utf-8")
 
 
+def test_resolve_many_reconciles_30k_handoffs(tmp_path: Path) -> None:
+    _write(tmp_path / "entry" / "pyproject.toml", "[project]\nname='entry'\n")
+    _write(tmp_path / "entry" / "entry.py", "def receive(): pass\n")
+    _write(tmp_path / "parser" / "pyproject.toml", "[project]\nname='parser'\n")
+    _write(tmp_path / "parser" / "parser.py", "def parse(): pass\n")
+    inventory = build_inventory(tmp_path, "fixture:handoff-scale")
+    components = {component.root: component.component_id for component in inventory.components}
+    edge_count = 30_000
+    plan = create_audit_plan(
+        campaign_id="CMP-handoff-scale",
+        inventory=inventory,
+        category_families=["PARSING"],
+        boundary_edges=tuple(BoundaryEdge(
+            edge_id=f"EDGE-{index:05d}",
+            source_component_id=components["entry"],
+            target_component_id=components["parser"],
+            kind="call",
+            evidence="synthetic scale edge",
+            source_path="entry/entry.py",
+        ) for index in range(edge_count)),
+        max_work_units_per_batch=1,
+    )
+    assert len(plan.handoffs) == edge_count
+
+    with CampaignManager(tmp_path) as manager:
+        manager.create_campaign(
+            campaign_id="CMP-handoff-scale", snapshot_id=inventory.snapshot_id,
+        )
+        manager.record_inventory(
+            campaign_id="CMP-handoff-scale", inventory=inventory,
+        )
+        manager.record_plan(
+            campaign_id="CMP-handoff-scale", plan=plan, inventory=inventory,
+        )
+        manager.store.append_events_batch("CMP-handoff-scale", [{
+            "batch_id": batch.batch_id,
+            "entity_type": "batch_stage",
+            "entity_id": batch.batch_id,
+            "event_type": "R3_COMPLETED",
+            "idempotency_key": f"scale-r3:{batch.batch_id}",
+            "actor": "test",
+            "payload": {},
+            "payload_ref": None,
+        } for batch in plan.batches])
+
+        resolutions = tuple(HandoffResolution(
+            handoff_id=handoff.handoff_id,
+            owner_batch_id=handoff.owner_batch,
+            outcome=HandoffOutcome.NEEDS_REVIEW,
+            chain_suffix=(),
+            evidence_refs=(f"EVID-scale-{index}",),
+            rationale="synthetic Handoff reconciliation scale fixture",
+        ) for index, handoff in enumerate(plan.handoffs))
+        artifact_ids = HandoffResolver(
+            manager, "CMP-handoff-scale", plan,
+        ).resolve_many(resolutions)
+
+        resolved_events = manager.store.list_events(
+            "CMP-handoff-scale", event_type="HANDOFF_RESOLVED",
+        )
+        assert len(artifact_ids) == edge_count
+        assert len(resolved_events) == edge_count
+        assert {event.entity_id for event in resolved_events} == {
+            handoff.handoff_id for handoff in plan.handoffs
+        }
+
+
 def test_resolved_handoff_merges_a_cross_batch_call_chain(tmp_path: Path) -> None:
     _write(tmp_path / "entry" / "pyproject.toml", "[project]\nname='entry'\n")
     _write(tmp_path / "entry" / "entry.py", "def receive(): pass\n")
