@@ -652,6 +652,8 @@ def validate_plan(plan: AuditPlan, inventory: ProjectInventory) -> None:
     if len(handoff_ids) != len(set(handoff_ids)):
         raise ModelError("plan duplicates Handoff IDs")
     for handoff in plan.handoffs:
+        if handoff.status != "OPEN":
+            raise ModelError(f"planned Handoff status must be OPEN: {handoff.handoff_id}")
         if handoff.from_batch not in known_batches or handoff.owner_batch not in known_batches:
             raise ModelError(f"handoff references unknown batch: {handoff.handoff_id}")
         if handoff.from_batch == handoff.owner_batch:

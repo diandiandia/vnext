@@ -234,6 +234,12 @@ def test_plan_has_exact_ownership_limits_and_cross_batch_handoff(tmp_path: Path)
     missing_route = replace(plan, handoffs=())
     with pytest.raises(ModelError, match="Handoff coverage does not match"):
         validate_plan(missing_route, inventory)
+    terminal_handoff = replace(
+        plan,
+        handoffs=(replace(handoff, status="RESOLVED"),),
+    )
+    with pytest.raises(ModelError, match="planned Handoff status must be OPEN"):
+        validate_plan(terminal_handoff, inventory)
 
 
 @pytest.mark.parametrize(
