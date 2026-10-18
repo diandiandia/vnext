@@ -1,4 +1,4 @@
-from dataclasses import asdict
+from dataclasses import asdict, replace
 import json
 from pathlib import Path
 
@@ -481,6 +481,21 @@ def test_r4_screening_work_unit_needs_no_agent_category_tasks(
         assert screening_event.payload["category_plan_ids"] == [
             category_plan.category_plan_id,
         ]
+        screening_runs = [
+            CategoryRun.from_dict(item)
+            for item in json.loads(
+                manager.artifacts.get_bytes(screening_event.payload_ref)
+            )["category_runs"]
+        ]
+        assert workflow.record_r4_screening_runs(screening_runs) == screening_event.payload_ref
+        with pytest.raises(ModelError, match="conflicts with its prior projection"):
+            workflow.record_r4_screening_runs((replace(
+                screening_runs[0], rationale="conflicting replay",
+            ),))
+        assert len(manager.store.list_batch_events(
+            workflow.campaign_id, workflow.batch_id,
+            event_type="R4_SCREENING_COVERAGE_RECORDED",
+        )) == 1
 
         coordinator.commit_r4()
         r4_event = next(

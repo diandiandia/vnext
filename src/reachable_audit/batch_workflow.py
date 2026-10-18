@@ -718,6 +718,8 @@ class BatchWorkflow:
         return artifact_id
 
     def record_r4_screening_runs(self, runs: Sequence[CategoryRun]) -> str:
+        if self._stage_event("R4_COMPLETED") is not None:
+            raise ModelError("R4 screening coverage cannot change after R4 commit")
         plan_event = self._require_stage("CATEGORY_AUDIT_PLAN_RECORDED")
         r2_event = self._require_stage("R2_COMPLETED")
         if plan_event.payload_ref is None or r2_event.payload_ref is None:
@@ -787,6 +789,13 @@ class BatchWorkflow:
             "schema_version": "1.0",
             "category_runs": [asdict(run) for run in runs],
         })
+        existing = self._events(event_type="R4_SCREENING_COVERAGE_RECORDED")
+        if existing:
+            if len(existing) != 1 or existing[0].payload_ref != artifact_id:
+                raise ModelError(
+                    "R4 screening coverage conflicts with its prior projection"
+                )
+            return artifact_id
         self.manager.store.append_event(
             campaign_id=self.campaign_id,
             batch_id=self.batch_id,

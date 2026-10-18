@@ -10,11 +10,12 @@ they do not substitute for host attestation, held-out campaigns, or release qual
 
 ### 1. Stage Revision, Invalidation, and Recovery
 
-Status: **IN PROGRESS**. R3's per-hypothesis verdict writes now preflight existing
-adjudications, reject conflicting retries before mutation, and recover from an exact
-retry after an injected partial write. A quiescent Plan Amendment can supersede completed
-Batches with fresh IDs so all R0-R6 stages replay from immutable task evidence. R1/R2/R4/R5
-in-place projection recovery and the post-commit invalidation/revision model remain open.
+Status: **IN PROGRESS**. R3's per-hypothesis verdict writes and R4 screening projections
+now preflight existing records, reject conflicting retries before mutation, and recover
+from exact retries after partial writes. A quiescent Plan Amendment can supersede
+completed Batches with fresh IDs so all R0-R6 stages replay from immutable task evidence.
+R1/R2/R4 main/R5 projection recovery and the in-place post-commit invalidation/revision
+model remain open.
 
 Define an append-only stage revision model for R1-R5. Each committed projection must
 pin the exact task-output artifact set and upstream revision IDs it consumed. A supported
