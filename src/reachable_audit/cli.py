@@ -216,6 +216,36 @@ def _handle_compatibility_scan(arguments: argparse.Namespace) -> int:
     return 0 if report["passed"] else 1
 
 
+def _handle_harness_run(arguments: argparse.Namespace) -> int:
+    value = json.loads(Path(arguments.input).read_text(encoding="utf-8"))
+    if not isinstance(value, dict) or not isinstance(value.get("command"), list):
+        raise ValueError("harness-run input requires a command argv array")
+    with CampaignManager(arguments.target, arguments.state_dir) as manager:
+        result = run_harness(
+            manager,
+            arguments.campaign_id,
+            command=value["command"],
+            cwd=str(value.get("cwd", ".")),
+            timeout_seconds=int(value.get("timeout_seconds", 30)),
+            environment=value.get("environment"),
+            output_limit_bytes=int(value.get("output_limit_bytes", 1_048_576)),
+            cpu_limit_seconds=(
+                int(value["cpu_limit_seconds"])
+                if value.get("cpu_limit_seconds") is not None else None
+            ),
+            memory_limit_bytes=(
+                int(value["memory_limit_bytes"])
+                if value.get("memory_limit_bytes") is not None else None
+            ),
+            hypothesis_id=(
+                str(value["hypothesis_id"])
+                if value.get("hypothesis_id") is not None else None
+            ),
+        )
+        _print(result)
+    return 0
+
+
 def _handle_plan(arguments: argparse.Namespace) -> int:
     boundaries = []
     if arguments.boundaries:
@@ -990,33 +1020,7 @@ def main(argv: list[str] | None = None) -> int:
             return _handle_compatibility_scan(arguments)
 
         if arguments.command == "harness-run":
-            value = json.loads(Path(arguments.input).read_text(encoding="utf-8"))
-            if not isinstance(value, dict) or not isinstance(value.get("command"), list):
-                raise ValueError("harness-run input requires a command argv array")
-            with CampaignManager(arguments.target, arguments.state_dir) as manager:
-                result = run_harness(
-                    manager,
-                    arguments.campaign_id,
-                    command=value["command"],
-                    cwd=str(value.get("cwd", ".")),
-                    timeout_seconds=int(value.get("timeout_seconds", 30)),
-                    environment=value.get("environment"),
-                    output_limit_bytes=int(value.get("output_limit_bytes", 1_048_576)),
-                    cpu_limit_seconds=(
-                        int(value["cpu_limit_seconds"])
-                        if value.get("cpu_limit_seconds") is not None else None
-                    ),
-                    memory_limit_bytes=(
-                        int(value["memory_limit_bytes"])
-                        if value.get("memory_limit_bytes") is not None else None
-                    ),
-                    hypothesis_id=(
-                        str(value["hypothesis_id"])
-                        if value.get("hypothesis_id") is not None else None
-                    ),
-                )
-                _print(result)
-            return 0
+            return _handle_harness_run(arguments)
 
         if arguments.command == "plan":
             return _handle_plan(arguments)
