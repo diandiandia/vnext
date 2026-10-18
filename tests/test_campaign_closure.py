@@ -532,10 +532,10 @@ def test_campaign_report_preserves_excluded_path_scope(tmp_path: Path) -> None:
         manager.close()
 
 
-def test_campaign_closure_rejects_stale_plan_after_new_plan_is_recorded(
+def test_campaign_manager_requires_amendment_for_plan_replacement(
     tmp_path: Path,
 ) -> None:
-    manager, old_plan = _closable_campaign(tmp_path)
+    manager, _old_plan = _closable_campaign(tmp_path)
     try:
         inventory = manager.load_inventory("CMP-r4")
         newer_plan = create_audit_plan(
@@ -543,16 +543,10 @@ def test_campaign_closure_rejects_stale_plan_after_new_plan_is_recorded(
             inventory=inventory,
             category_families=("STATE", "AUTHN"),
         )
-        manager.record_plan(
-            campaign_id="CMP-r4", plan=newer_plan, inventory=inventory,
-        )
-
-        with pytest.raises(ModelError, match="not the latest recorded Plan"):
-            CampaignCloser(manager, "CMP-r4", old_plan).close(CampaignClosure(
-                architecture_overview="Stale plan must not close the Campaign.",
-                unreviewed_scope=(), residual_risks=(), limitations=(),
-                lessons=(), knowledge_nominations=(), skill_issues=(),
-            ))
+        with pytest.raises(ValueError, match="Plan replacement requires a Plan Amendment"):
+            manager.record_plan(
+                campaign_id="CMP-r4", plan=newer_plan, inventory=inventory,
+            )
     finally:
         manager.close()
 

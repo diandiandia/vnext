@@ -450,6 +450,21 @@ class CampaignManager:
     def record_plan(
         self, *, campaign_id: str, plan: AuditPlan, inventory: ProjectInventory
     ) -> str:
+        return self._record_plan(
+            campaign_id=campaign_id,
+            plan=plan,
+            inventory=inventory,
+            replacing_plan_id=None,
+        )
+
+    def _record_plan(
+        self,
+        *,
+        campaign_id: str,
+        plan: AuditPlan,
+        inventory: ProjectInventory,
+        replacing_plan_id: str | None,
+    ) -> str:
         campaign = self.store.get_campaign(campaign_id)
         if plan.campaign_id != campaign_id:
             raise ValueError(f"plan Campaign mismatch: {plan.campaign_id} != {campaign_id}")
@@ -458,6 +473,23 @@ class CampaignManager:
         validate_plan(plan, inventory)
         value = asdict(plan)
         encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        prior_plans = self.store.list_events(
+            campaign_id, entity_type="plan", event_type="PLAN_RECORDED",
+        )
+        if prior_plans:
+            latest = prior_plans[-1]
+            if latest.entity_id == plan.plan_id:
+                if (
+                    latest.payload_ref is None
+                    or self.artifacts.get_bytes(latest.payload_ref) != encoded.encode("utf-8")
+                ):
+                    raise ValueError("recorded Plan ID conflicts with its durable content")
+            elif latest.entity_id != replacing_plan_id:
+                raise ValueError(
+                    "Plan replacement requires a Plan Amendment based on the latest Plan"
+                )
+        elif replacing_plan_id is not None:
+            raise ValueError("Plan Amendment base Plan is not recorded")
         artifact = self.artifacts.put_text(encoded)
         self.store.append_event(
             campaign_id=campaign_id,
@@ -625,8 +657,11 @@ class CampaignManager:
                 + ", ".join(sorted(immutable))
             )
 
-        self.record_plan(
-            campaign_id=campaign_id, plan=amended_plan, inventory=inventory
+        self._record_plan(
+            campaign_id=campaign_id,
+            plan=amended_plan,
+            inventory=inventory,
+            replacing_plan_id=base_plan.plan_id,
         )
         for batch in base_batches:
             if batch.status is BatchStatus.PLANNED:

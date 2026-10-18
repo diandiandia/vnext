@@ -290,8 +290,11 @@ def test_amendment_recovers_when_plan_recorded_before_amendment_event(
         manager.record_plan(
             campaign_id="CMP-amend-recovery", plan=base_plan, inventory=inventory,
         )
-        manager.record_plan(
-            campaign_id="CMP-amend-recovery", plan=amended_plan, inventory=inventory,
+        manager._record_plan(
+            campaign_id="CMP-amend-recovery",
+            plan=amended_plan,
+            inventory=inventory,
+            replacing_plan_id=base_plan.plan_id,
         )
 
         artifact_ref = manager.record_plan_amendment(
