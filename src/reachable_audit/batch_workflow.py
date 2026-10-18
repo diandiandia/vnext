@@ -1454,7 +1454,22 @@ class BatchWorkflow:
             for manifest in component.build_manifests
         }
         line_count_cache: dict[str, tuple[int, frozenset[int]]] = {}
-        for submission in sorted(submissions, key=lambda item: item.hypothesis_id):
+        ordered_submissions = sorted(
+            submissions, key=lambda item: item.hypothesis_id,
+        )
+        existing_adjudications: dict[str, EventRecord] = {}
+        for event in self._events(event_type="VERDICT_ADJUDICATED"):
+            if event.entity_id not in hypothesis_ids:
+                raise ModelError(
+                    f"R3 has an adjudication outside the R2 hypothesis set: {event.entity_id}"
+                )
+            if event.entity_id in existing_adjudications:
+                raise ModelError(
+                    f"R3 has multiple prior adjudications for hypothesis: {event.entity_id}"
+                )
+            existing_adjudications[event.entity_id] = event
+
+        for submission in ordered_submissions:
             for anchor in submission.call_chain:
                 self._validate_source_location(
                     anchor, inventoried_paths, line_count_cache=line_count_cache
@@ -1468,6 +1483,14 @@ class BatchWorkflow:
                     inventoried_paths,
                     line_count_cache=line_count_cache,
                 )
+            prior = existing_adjudications.get(submission.hypothesis_id)
+            submission_value = asdict(submission)
+            if prior is not None and prior.payload != json.loads(json.dumps(submission_value)):
+                raise ModelError(
+                    f"R3 submission conflicts with a prior adjudication: {submission.hypothesis_id}"
+                )
+
+        for submission in ordered_submissions:
             submission_value = asdict(submission)
             submission_digest = self._put_json(submission_value)
             adjudication = self.manager.store.append_event(

@@ -1,3 +1,4 @@
+from dataclasses import replace
 from pathlib import Path
 import json
 
@@ -139,6 +140,90 @@ def test_r0_r3_slice_records_canonical_verdict_and_partial_report(tmp_path: Path
             if event.event_type == "VERDICT_ADJUDICATED"
         )
         assert verdict_event.entity_id == "HYP-injection"
+    finally:
+        manager.close()
+
+
+def test_r3_partial_commit_rejects_conflict_and_recovers_exact_retry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manager, workflow, plan = _workflow(tmp_path, "CMP-r3-partial-commit")
+    work_unit = plan.work_units[0]
+    try:
+        workflow.run_r0()
+        workflow.record_r1([])
+        evidence = {
+            axis.value: (f"EVID-{axis.value}",) for axis in DiscoveryAxis
+        }
+        hypotheses = [Hypothesis(
+            hypothesis_id=f"HYP-{work_unit.work_unit_id}-surface-{ordinal}",
+            work_unit_id=work_unit.work_unit_id,
+            origin_axis="surface",
+            seed_refs=(f"EVID-seed-{ordinal}",),
+            surface_ids=(),
+            mechanism=Mechanism("INJECTION", f"candidate-{ordinal}"),
+            claim=f"candidate path {ordinal} may be reachable",
+            status=HypothesisStatus.NEW,
+        ) for ordinal in (1, 2)]
+        workflow.record_r2(
+            hypotheses,
+            axis_evidence=evidence,
+            axis_runs=axis_runs_from_evidence(evidence),
+        )
+        submissions = [VerdictSubmission(
+            hypothesis_id=hypothesis.hypothesis_id,
+            verdict=VerdictKind.NEEDS_REVIEW,
+            evidence_grade=EvidenceGrade.STATIC_ONLY,
+            principal="remote",
+            preconditions=(),
+            call_chain=(),
+            edge_evidence_ids=(),
+            blocking_evidence_ids=(),
+            experiment_ids=(),
+            rationale="retain this candidate for verification",
+        ) for hypothesis in hypotheses]
+        original_append_event = manager.store.append_event
+        adjudication_writes = 0
+
+        def fail_second_adjudication(**kwargs: object):
+            nonlocal adjudication_writes
+            if kwargs.get("event_type") == "VERDICT_ADJUDICATED":
+                adjudication_writes += 1
+                if adjudication_writes == 2:
+                    raise RuntimeError("injected second verdict write failure")
+            return original_append_event(**kwargs)  # type: ignore[arg-type]
+
+        with monkeypatch.context() as patch:
+            patch.setattr(manager.store, "append_event", fail_second_adjudication)
+            with pytest.raises(RuntimeError, match="injected second verdict"):
+                workflow.record_r3(submissions)
+
+        adjudication_events = manager.store.list_batch_events(
+            workflow.campaign_id,
+            workflow.batch_id,
+            event_type="VERDICT_ADJUDICATED",
+        )
+        assert len(adjudication_events) == 1
+        conflicting = [replace(
+            submission, rationale="a conflicting retry must not add a verdict",
+        ) if submission.hypothesis_id == adjudication_events[0].entity_id else submission
+            for submission in submissions]
+        with pytest.raises(ModelError, match="conflicts with a prior adjudication"):
+            workflow.record_r3(conflicting)
+        assert len(manager.store.list_batch_events(
+            workflow.campaign_id,
+            workflow.batch_id,
+            event_type="VERDICT_ADJUDICATED",
+        )) == 1
+        assert workflow._stage_event("R3_COMPLETED") is None
+
+        workflow.record_r3(submissions)
+        assert len(manager.store.list_batch_events(
+            workflow.campaign_id,
+            workflow.batch_id,
+            event_type="VERDICT_ADJUDICATED",
+        )) == 2
+        assert workflow._stage_event("R3_COMPLETED") is not None
     finally:
         manager.close()
 
