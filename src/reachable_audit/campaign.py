@@ -534,6 +534,61 @@ class CampaignManager:
             raise ValueError("Plan Amendment base plan mismatch")
         if amendment.amended_plan_id != amended_plan.plan_id:
             raise ValueError("Plan Amendment result plan mismatch")
+        existing_amendments = self.store.list_events(
+            campaign_id,
+            entity_type="plan_amendment",
+            entity_id=amendment.amendment_id,
+            event_type="PLAN_AMENDED",
+        )
+        amendment_value = asdict(amendment)
+        amendment_json = json.dumps(
+            amendment_value,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        if existing_amendments:
+            existing = existing_amendments[-1]
+            if (
+                existing.payload_ref is None
+                or existing.payload.get("base_plan_id") != amendment.base_plan_id
+                or existing.payload.get("amended_plan_id") != amendment.amended_plan_id
+                or json.loads(self.artifacts.get_bytes(existing.payload_ref))
+                != json.loads(amendment_json)
+            ):
+                raise ValueError("Plan Amendment ID conflicts with its recorded content")
+            self._atomic_json(
+                self.state_dir
+                / "campaigns"
+                / campaign_id
+                / "amendments"
+                / f"{amendment.amendment_id}.json",
+                amendment_value,
+            )
+            return existing.payload_ref
+        plan_events = self.store.list_events(
+            campaign_id, entity_type="plan", event_type="PLAN_RECORDED",
+        )
+        if not plan_events:
+            raise ValueError("Plan Amendment base is not the latest recorded Plan")
+        latest_plan = plan_events[-1]
+        if latest_plan.entity_id == amended_plan.plan_id:
+            expected_plan = json.loads(json.dumps(
+                asdict(amended_plan),
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ))
+            if (
+                latest_plan.payload_ref is None
+                or json.loads(self.artifacts.get_bytes(latest_plan.payload_ref))
+                != expected_plan
+            ):
+                raise ValueError(
+                    "latest Plan content conflicts with the requested Amendment"
+                )
+        elif latest_plan.entity_id != base_plan.plan_id:
+            raise ValueError("Plan Amendment base is not the latest recorded Plan")
         mutable_statuses = {BatchStatus.PLANNED, BatchStatus.DEFERRED}
         base_batches = [
             self.store.get_batch(campaign_id, batch.batch_id)
@@ -556,11 +611,7 @@ class CampaignManager:
                 self.store.transition_batch(
                     campaign_id, batch.batch_id, BatchStatus.DEFERRED
                 )
-        value = asdict(amendment)
-        encoded = json.dumps(
-            value, ensure_ascii=False, sort_keys=True, separators=(",", ":")
-        )
-        artifact = self.artifacts.put_text(encoded)
+        artifact = self.artifacts.put_text(amendment_json)
         self.store.append_event(
             campaign_id=campaign_id,
             batch_id=None,
@@ -582,7 +633,7 @@ class CampaignManager:
             / campaign_id
             / "amendments"
             / f"{amendment.amendment_id}.json",
-            value,
+            amendment_value,
         )
         return artifact.artifact_id
 

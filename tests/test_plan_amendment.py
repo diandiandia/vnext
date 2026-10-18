@@ -119,6 +119,120 @@ def test_amendment_rejects_a_plan_with_an_active_batch(tmp_path: Path) -> None:
             )
 
 
+def test_amendment_rejects_stale_base_but_preserves_exact_replay(
+    tmp_path: Path,
+) -> None:
+    inventory = _inventory(tmp_path)
+    base_plan = create_audit_plan(
+        campaign_id="CMP-amend-stale",
+        inventory=inventory,
+        category_families=["STATE"],
+        max_source_files_per_work_unit=1,
+        max_source_files_per_batch=4,
+        max_work_units_per_batch=4,
+    )
+    first_plan, first_amendment = amend_plan(
+        base_plan,
+        reason="reduce to one Work Unit per Batch",
+        max_source_files_per_batch=1,
+        max_work_units_per_batch=1,
+    )
+    stale_plan, stale_amendment = amend_plan(
+        base_plan,
+        reason="branch from retired base Plan",
+        max_source_files_per_batch=2,
+        max_work_units_per_batch=2,
+    )
+
+    with CampaignManager(tmp_path) as manager:
+        manager.create_campaign(
+            campaign_id="CMP-amend-stale", snapshot_id=inventory.snapshot_id,
+        )
+        manager.record_inventory(campaign_id="CMP-amend-stale", inventory=inventory)
+        manager.record_plan(
+            campaign_id="CMP-amend-stale", plan=base_plan, inventory=inventory,
+        )
+        first_ref = manager.record_plan_amendment(
+            campaign_id="CMP-amend-stale",
+            base_plan=base_plan,
+            amended_plan=first_plan,
+            amendment=first_amendment,
+            inventory=inventory,
+        )
+        assert manager.record_plan_amendment(
+            campaign_id="CMP-amend-stale",
+            base_plan=base_plan,
+            amended_plan=first_plan,
+            amendment=first_amendment,
+            inventory=inventory,
+        ) == first_ref
+
+        with pytest.raises(ValueError, match="base is not the latest recorded Plan"):
+            manager.record_plan_amendment(
+                campaign_id="CMP-amend-stale",
+                base_plan=base_plan,
+                amended_plan=stale_plan,
+                amendment=stale_amendment,
+                inventory=inventory,
+            )
+
+
+def test_amendment_recovers_when_plan_recorded_before_amendment_event(
+    tmp_path: Path,
+) -> None:
+    inventory = _inventory(tmp_path)
+    base_plan = create_audit_plan(
+        campaign_id="CMP-amend-recovery",
+        inventory=inventory,
+        category_families=["STATE"],
+        max_source_files_per_work_unit=1,
+        max_source_files_per_batch=4,
+        max_work_units_per_batch=4,
+    )
+    amended_plan, amendment = amend_plan(
+        base_plan,
+        reason="recover a partially persisted amendment",
+        max_source_files_per_batch=1,
+        max_work_units_per_batch=1,
+    )
+
+    with CampaignManager(tmp_path) as manager:
+        manager.create_campaign(
+            campaign_id="CMP-amend-recovery", snapshot_id=inventory.snapshot_id,
+        )
+        manager.record_inventory(
+            campaign_id="CMP-amend-recovery", inventory=inventory,
+        )
+        manager.record_plan(
+            campaign_id="CMP-amend-recovery", plan=base_plan, inventory=inventory,
+        )
+        manager.record_plan(
+            campaign_id="CMP-amend-recovery", plan=amended_plan, inventory=inventory,
+        )
+
+        artifact_ref = manager.record_plan_amendment(
+            campaign_id="CMP-amend-recovery",
+            base_plan=base_plan,
+            amended_plan=amended_plan,
+            amendment=amendment,
+            inventory=inventory,
+        )
+
+        amendment_events = manager.store.list_events(
+            "CMP-amend-recovery",
+            entity_type="plan_amendment",
+            entity_id=amendment.amendment_id,
+            event_type="PLAN_AMENDED",
+        )
+        assert len(amendment_events) == 1
+        assert amendment_events[0].payload_ref == artifact_ref
+        assert all(
+            manager.store.get_batch("CMP-amend-recovery", batch.batch_id).status
+            is BatchStatus.DEFERRED
+            for batch in base_plan.batches
+        )
+
+
 def test_amendment_preserves_path_scope_dispositions(tmp_path: Path) -> None:
     inventory = _inventory(tmp_path)
     base_plan = create_audit_plan(
