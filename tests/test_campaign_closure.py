@@ -21,7 +21,11 @@ from reachable_audit.analysis_models import (
     SkillIssueKind,
     SkillIssueStatus,
 )
-from reachable_audit.campaign_closure import CampaignCloser, _derive_screening_coverage
+from reachable_audit.campaign_closure import (
+    CampaignCloser,
+    _derive_handoff_gate,
+    _derive_screening_coverage,
+)
 from reachable_audit.execution import (
     DiscoveryCoordinator,
     ManualExecutionBackend,
@@ -930,6 +934,38 @@ def test_cancelled_handoff_requires_adjudication() -> None:
             "evidence_refs": ["ART-1"],
             "rationale": "The boundary is outside the declared product scope.",
         })
+
+
+def test_handoff_gate_requires_resolution_and_proven_edge_integration() -> None:
+    handoffs = ["H-unresolved", "H-proven", "H-integrated"]
+    gate = _derive_handoff_gate(
+        handoffs,
+        {
+            "H-proven": "EDGE_PROVEN",
+            "H-integrated": "EDGE_PROVEN",
+        },
+        {"H-integrated"},
+    )
+
+    assert gate == {
+        "pass": False,
+        "detail": {
+            "unresolved": ["H-unresolved"],
+            "unintegrated_edge_proven": ["H-proven"],
+        },
+    }
+    assert _derive_handoff_gate(
+        handoffs,
+        {
+            "H-unresolved": "EDGE_NOT_PROVEN",
+            "H-proven": "EDGE_PROVEN",
+            "H-integrated": "EDGE_PROVEN",
+        },
+        {"H-proven", "H-integrated"},
+    ) == {
+        "pass": True,
+        "detail": {"unresolved": [], "unintegrated_edge_proven": []},
+    }
 
 
 def test_campaign_final_report_is_idempotent_but_immutable(tmp_path: Path) -> None:

@@ -96,6 +96,29 @@ def _derive_screening_coverage(
     }
 
 
+def _derive_handoff_gate(
+    handoff_ids: Sequence[str],
+    resolution_outcomes: Mapping[str, str],
+    integrated_handoffs: set[str],
+) -> dict[str, Any]:
+    unresolved_handoffs = [
+        handoff_id for handoff_id in handoff_ids
+        if handoff_id not in resolution_outcomes
+    ]
+    unintegrated_proven_handoffs = [
+        handoff_id for handoff_id in handoff_ids
+        if resolution_outcomes.get(handoff_id) == "EDGE_PROVEN"
+        and handoff_id not in integrated_handoffs
+    ]
+    return {
+        "pass": not unresolved_handoffs and not unintegrated_proven_handoffs,
+        "detail": {
+            "unresolved": unresolved_handoffs,
+            "unintegrated_edge_proven": unintegrated_proven_handoffs,
+        },
+    }
+
+
 class CampaignCloser:
     def __init__(
         self, manager: CampaignManager, campaign_id: str, plan: AuditPlan
@@ -660,8 +683,8 @@ class CampaignCloser:
             },
         }
 
-        resolution_by_handoff = {
-            event.entity_id: event
+        resolution_outcomes = {
+            event.entity_id: str(event.payload.get("outcome", ""))
             for event in events
             if event.event_type == "HANDOFF_RESOLVED"
         }
@@ -670,24 +693,11 @@ class CampaignCloser:
             for event in events
             if event.event_type == "HANDOFF_INTEGRATED"
         }
-        unresolved_handoffs = []
-        unintegrated_proven_handoffs = []
-        for handoff in self.plan.handoffs:
-            resolution = resolution_by_handoff.get(handoff.handoff_id)
-            if resolution is None:
-                unresolved_handoffs.append(handoff.handoff_id)
-            elif (
-                resolution.payload.get("outcome") == "EDGE_PROVEN"
-                and handoff.handoff_id not in integrated_handoffs
-            ):
-                unintegrated_proven_handoffs.append(handoff.handoff_id)
-        gates["CG5"] = {
-            "pass": not unresolved_handoffs and not unintegrated_proven_handoffs,
-            "detail": {
-                "unresolved": unresolved_handoffs,
-                "unintegrated_edge_proven": unintegrated_proven_handoffs,
-            },
-        }
+        gates["CG5"] = _derive_handoff_gate(
+            [item.handoff_id for item in self.plan.handoffs],
+            resolution_outcomes,
+            integrated_handoffs,
+        )
 
         finding_events = [
             event for event in events if event.event_type == "FINDING_RECORDED"
