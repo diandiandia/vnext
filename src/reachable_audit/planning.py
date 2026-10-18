@@ -557,6 +557,12 @@ def validate_plan(plan: AuditPlan, inventory: ProjectInventory) -> None:
         raise ModelError(
             f"plan omits components with analysis obligations: {invalid_omissions}"
         )
+    work_unit_ids = [unit.work_unit_id for unit in plan.work_units]
+    if len(work_unit_ids) != len(set(work_unit_ids)):
+        raise ModelError("plan duplicates Work Unit IDs")
+    batch_ids = [batch.batch_id for batch in plan.batches]
+    if len(batch_ids) != len(set(batch_ids)):
+        raise ModelError("plan duplicates Batch IDs")
     planned_components = {unit.component_id for unit in plan.work_units}
     unassigned_components = set(components) - planned_components
     if unassigned_components != omitted:
@@ -627,7 +633,7 @@ def validate_plan(plan: AuditPlan, inventory: ProjectInventory) -> None:
         or any(count != 1 for count in actual_edge_reviews.values())
     ):
         raise ModelError("boundary edge review coverage must be exact per endpoint")
-    known_batches = {batch.batch_id for batch in plan.batches}
+    known_batches = set(batch_ids)
     batch_by_work_unit = {
         work_unit_id: batch.batch_id
         for batch in plan.batches

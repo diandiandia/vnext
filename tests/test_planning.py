@@ -144,6 +144,38 @@ def test_validate_plan_binds_work_unit_paths_to_component_owners(
         validate_plan(swapped_owners, inventory)
 
 
+def test_validate_plan_rejects_duplicate_work_unit_and_batch_ids(
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "duplicate-plan-ids"
+    target.mkdir()
+    _fixture_monorepo(target)
+    inventory = build_inventory(target, "fixture:duplicate-plan-ids")
+    plan = create_audit_plan(
+        campaign_id="CMP-duplicate-plan-ids",
+        inventory=inventory,
+        category_families=["STATE"],
+        max_source_files_per_work_unit=1,
+        max_work_units_per_batch=1,
+    )
+    assert len(plan.work_units) > 1
+    assert len(plan.batches) > 1
+
+    duplicate_work_unit = replace(
+        plan,
+        work_units=(*plan.work_units[:-1], plan.work_units[0]),
+    )
+    with pytest.raises(ModelError, match="duplicates Work Unit IDs"):
+        validate_plan(duplicate_work_unit, inventory)
+
+    duplicate_batch = replace(
+        plan,
+        batches=(*plan.batches[:-1], plan.batches[0]),
+    )
+    with pytest.raises(ModelError, match="duplicates Batch IDs"):
+        validate_plan(duplicate_batch, inventory)
+
+
 def test_worktree_footprint_excludes_symlinks_and_runtime_state(tmp_path: Path) -> None:
     (tmp_path / "payload.txt").write_text("abc", encoding="utf-8")
     (tmp_path / "shortcut").symlink_to("payload.txt")
