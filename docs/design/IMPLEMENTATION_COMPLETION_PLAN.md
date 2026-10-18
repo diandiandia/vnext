@@ -10,20 +10,21 @@ they do not substitute for host attestation, held-out campaigns, or release qual
 
 ### 1. Stage Revision, Invalidation, and Recovery
 
-Status: **IN PROGRESS**. R1, R2, R4 main, and R5 now preflight existing projection
-artifacts: exact retries reuse the committed artifact and conflicting retries fail before
-artifact writes. R3 verdict writes and R4 screening projections retain their earlier
-partial-write/exact-retry protection. A quiescent Plan Amendment can supersede completed
-Batches with fresh IDs so all R0-R6 stages replay from immutable task evidence. The
-append-only revision, task-output provenance, post-commit amendment, descendant
-invalidation, and closure stale-projection model remain open.
+Status: **IN PROGRESS**. R1-R5 projection events carry deterministic revision IDs,
+exact source task-output refs, and upstream revision pins. R1/R2/R4 main/R5 preflight
+exact retries before artifact writes; R3 adjudication and R4 screening retain partial-
+write/exact-retry protection. Post-commit R1-R5 task-output amendments append the
+replacement and dependent-projection invalidation markers in one SQLite batch transaction.
+Downstream TaskSpecs and task IDs bind consumed revisions; coordinator commits ignore
+stale tasks; R3.5 ledgers are revision-aware; Campaign closure blocks unresolved
+invalidations and stale ancestry. Full-Batch Plan Amendment remains the quiescent replay
+path when task evidence cannot be safely reused.
 
-Define an append-only stage revision model for R1-R5. Each committed projection must
-pin the exact task-output artifact set and upstream revision IDs it consumed. A supported
-post-commit amendment must atomically record the replacement and mark every dependent
-projection stale; Campaign closure must refuse stale projections. Recommit/replay must
-be deterministic and preserve prior artifacts. Extend partial-write recovery beyond the
-R3 verdict path already covered.
+Finish true end-to-end amendment/recommit coverage after each R1-R5 stage, including
+selective descendant replay and preservation of unaffected projections. Extend fault
+injection across every stage commit boundary and verify R3 per-hypothesis and R3.5 ledger
+replay deterministically. Prior artifacts and events remain append-only; closure must
+refuse stale or ancestry-mismatched projections until dependents are recommitted.
 
 Acceptance: fault-injection tests at every write boundary; exact retry is idempotent;
 conflicting retries do not mutate state; full-Batch replay preserves old history and
@@ -89,7 +90,8 @@ are isolated in a pure helper with direct boundary-case tests. CLI initializatio
 skill review/backlog, resources, Inventory, ComponentGraph, Plan/amend, R0-R3, Handoff,
 harness, execution tasks, Campaign close/abort, shadow evaluation, toolchain probe, and
 compatibility scan dispatch through focused handlers. CG5 Handoff evaluation is isolated
-with direct pass/fail coverage. R4 AxisRun IDs and bundled mechanism-card definitions are
+with direct pass/fail coverage. Campaign closure also validates stale stage markers and
+upstream revision ancestry. R4 AxisRun IDs and bundled mechanism-card definitions are
 compacted at the wire. Remaining work includes R3.5/R4/R5/Finding CLI groups, other
 CampaignCloser gates, further R4 repetition, and selective exception narrowing.
 
@@ -113,12 +115,13 @@ are external evidence; local synthetic tests cannot mark these gates complete.
 
 ## Current Test Gates
 
-The latest full local verification after R1/R2/R4/R5 retry recovery is **307 passed,
-1 skipped**, and compatibility-scan passes with no findings. Before closing Phase 1,
-tests must pin revision ancestry and task-output refs, fault-inject every commit boundary,
-prove exact-retry and conflict non-mutation, exercise each amendment-to-descendant
-invalidation boundary, and prove Campaign closure blocks stale projections. The complete
-suite must pass after that model lands.
+The latest full local verification after stage provenance, invalidation, revision-bound
+tasks, R3.5 ledger replay, and closure ancestry is **317 passed, 1 skipped**;
+compatibility-scan passes with no findings (49 Python files, 167 knowledge files, 1
+prompt file). Before closing Phase 1, add end-to-end amendment/recommit coverage after
+each R1-R5 stage, fault-inject every projection commit boundary, prove selective descendant
+replay and unaffected-stage preservation, and retain exact-retry/conflict non-mutation
+checks. The complete suite must pass after those refinements.
 
 Before closing Phase 2, retain old-form compatibility, add compact multi-item round-trip
 and measured byte-reduction tests, verify rejected task output remains repairable, and
