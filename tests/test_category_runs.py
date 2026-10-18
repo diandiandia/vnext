@@ -339,6 +339,7 @@ def test_r4_category_plan_runs_as_durable_task(
             axis_run["review_altitude"] == "INSPECTED"
             for axis_run in artifact["category_runs"][0]["axis_runs"]
         )
+        previous_r5_tasks = coordinator.schedule_r5()
         prior_event = event
         amended_run = asdict(replace(
             run, rationale="corrected after the R4 projection was committed",
@@ -361,6 +362,14 @@ def test_r4_category_plan_runs_as_durable_task(
         assert replacement_event.payload["source_task_output_refs"] == {
             scheduled[0].task.task_id: replacement_ref,
         }
+        replacement_r5_tasks = coordinator.schedule_r5()
+        assert len(replacement_r5_tasks) == len(previous_r5_tasks)
+        assert {
+            view.task.task_id for view in replacement_r5_tasks
+        }.isdisjoint({view.task.task_id for view in previous_r5_tasks})
+        assert coordinator._active_task_views(
+            operation="assess_experiment",
+        ) == replacement_r5_tasks
         assert sum(
             item.event_type == "R4_COMPLETED"
             for item in manager.store.list_batch_events(

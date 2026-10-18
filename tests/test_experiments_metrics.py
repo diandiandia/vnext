@@ -369,6 +369,7 @@ def test_r5_assessment_runs_as_durable_task(
             ],
         }
         if legacy_collected and invalid_experiment_id == "":
+            prior_r6_task = coordinator.schedule_r6()
             replacement_value = json.loads(manager.artifacts.get_bytes(output_ref))
             replacement_value["assessment"]["rationale"] = (
                 "corrected rationale after the R5 projection committed"
@@ -389,5 +390,10 @@ def test_r5_assessment_runs_as_durable_task(
             assert replacement_event.payload["source_task_output_refs"] == {
                 scheduled[0].task.task_id: replacement_ref,
             }
+            replacement_r6_task = coordinator.schedule_r6()
+            assert replacement_r6_task.task.task_id != prior_r6_task.task.task_id
+            assert coordinator._active_task_views(
+                operation="collect_batch_closure_evidence",
+            ) == (replacement_r6_task,)
     finally:
         manager.close()
