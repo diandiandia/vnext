@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import asdict
+import datetime as dt
 import hashlib
+import hmac
 import json
 import os
 from pathlib import Path
@@ -20,7 +22,7 @@ from .models import (
     CampaignRecord,
     CampaignStatus,
 )
-from .analysis_models import SkillIssue, SkillIssueStatus
+from .analysis_models import ExternalObservation, SkillIssue, SkillIssueStatus
 from .plan_models import AuditPlan, ComponentGraph, PlanAmendment, ProjectInventory
 from .planning import (
     batch_manifest,
@@ -633,6 +635,108 @@ class CampaignManager:
         )
         self._atomic_json(
             self.state_dir / "campaigns" / campaign_id / "component_graph.json", value
+        )
+        return artifact.artifact_id
+
+    def record_external_observation(
+        self, observation: ExternalObservation,
+    ) -> str:
+        value = json.loads(json.dumps(
+            asdict(observation), ensure_ascii=False, sort_keys=True,
+        ))
+        observation = ExternalObservation.from_dict(value)
+        campaign = self.store.get_campaign(observation.campaign_id)
+        if campaign.status is CampaignStatus.COMPLETE:
+            raise ValueError("external observations cannot be registered after Campaign completion")
+        if observation.snapshot_id != campaign.snapshot_id:
+            raise ValueError("external observation snapshot does not match Campaign")
+        if observation.target_ref != campaign.target_root:
+            raise ValueError("external observation target does not match Campaign")
+        try:
+            observed_at = dt.datetime.fromisoformat(
+                observation.observed_at.replace("Z", "+00:00")
+            )
+        except ValueError as error:
+            raise ValueError("external observation observed_at must be ISO-8601") from error
+        if observed_at.tzinfo is None:
+            raise ValueError("external observation observed_at must include a timezone")
+        self.store.get_batch(observation.campaign_id, observation.batch_id)
+        r2_events = self.store.list_batch_events(
+            observation.campaign_id,
+            observation.batch_id,
+            event_type="R2_COMPLETED",
+        )
+        if not r2_events or r2_events[-1].payload_ref is None:
+            raise ValueError("external observation requires a committed R2 hypothesis")
+        r2 = json.loads(self.artifacts.get_bytes(r2_events[-1].payload_ref))
+        if observation.hypothesis_id not in {
+            str(item.get("hypothesis_id", "")) for item in r2.get("hypotheses", [])
+        }:
+            raise ValueError("external observation hypothesis is outside its Batch R2 scope")
+
+        artifact_owners = self.store.artifact_campaign_owners(
+            set(observation.evidence_refs)
+        )
+        for reference in observation.evidence_refs:
+            if not reference.startswith("sha256:"):
+                raise ValueError("external observation evidence must use Campaign artifact refs")
+            try:
+                self.artifacts.get_bytes(reference)
+            except (OSError, ValueError) as error:
+                raise ValueError(
+                    f"external observation evidence artifact is missing: {reference}"
+                ) from error
+            if observation.campaign_id not in artifact_owners.get(reference, set()):
+                raise ValueError(
+                    f"external observation evidence is not owned by this Campaign: {reference}"
+                )
+
+        secret = os.environ.get("VNA_R5_EXTERNAL_OBSERVATION_HMAC_KEY", "").encode("utf-8")
+        if len(secret) < 32:
+            raise ValueError(
+                "VNA_R5_EXTERNAL_OBSERVATION_HMAC_KEY must contain at least 32 bytes"
+            )
+        unsigned = asdict(observation)
+        unsigned.pop("signature")
+        canonical = json.dumps(
+            unsigned, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        ).encode("utf-8")
+        expected_signature = hmac.new(secret, canonical, hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(observation.signature, expected_signature):
+            raise ValueError("external observation signature is invalid")
+
+        encoded = json.dumps(
+            asdict(observation),
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        artifact = self.artifacts.put_text(encoded)
+        existing = self.store.list_events(
+            observation.campaign_id,
+            entity_type="external_observation",
+            entity_id=observation.observation_id,
+            event_type="OUT_OF_BAND_OBSERVATION_RECORDED",
+        )
+        if existing and any(event.payload_ref != artifact.artifact_id for event in existing):
+            raise ValueError("external observation ID conflicts with prior signed content")
+        self.store.append_event(
+            campaign_id=observation.campaign_id,
+            batch_id=observation.batch_id,
+            entity_type="external_observation",
+            entity_id=observation.observation_id,
+            event_type="OUT_OF_BAND_OBSERVATION_RECORDED",
+            idempotency_key=(
+                f"external-observation:{observation.campaign_id}:{observation.observation_id}"
+            ),
+            actor="tool",
+            payload={
+                "hypothesis_id": observation.hypothesis_id,
+                "observer_id": observation.observer_id,
+                "snapshot_id": observation.snapshot_id,
+                "r5_effect": "EVIDENCE_ONLY_NOT_CONFIRMING",
+            },
+            payload_ref=artifact.artifact_id,
         )
         return artifact.artifact_id
 

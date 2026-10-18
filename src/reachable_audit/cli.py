@@ -20,6 +20,7 @@ from .analysis_models import (
     CampaignClosure,
     BoundaryReview,
     CategoryRun,
+    ExternalObservation,
     Experiment,
     Finding,
     HandoffResolution,
@@ -279,6 +280,15 @@ def _parser() -> argparse.ArgumentParser:
     r5.add_argument("batch_id")
     r5.add_argument("--input", required=True)
     r5.add_argument("--state-dir", default=".audit_vnext")
+
+    r5_observation = subparsers.add_parser(
+        "r5-observation-register",
+        help="register a signed external R5 observation without upgrading a verdict",
+    )
+    r5_observation.add_argument("target")
+    r5_observation.add_argument("campaign_id")
+    r5_observation.add_argument("--input", required=True)
+    r5_observation.add_argument("--state-dir", default=".audit_vnext")
 
     metrics = subparsers.add_parser(
         "metrics", help="derive non-gating discovery transmission metrics"
@@ -957,6 +967,18 @@ def main(argv: list[str] | None = None) -> int:
                         ],
                     )
                     _print({"artifact_id": artifact_id})
+            return 0
+
+        if arguments.command == "r5-observation-register":
+            value = json.loads(Path(arguments.input).read_text(encoding="utf-8"))
+            with CampaignManager(arguments.target, arguments.state_dir) as manager:
+                artifact_id = manager.record_external_observation(
+                    ExternalObservation.from_dict(value)
+                )
+                _print({
+                    "artifact_id": artifact_id,
+                    "effect": "EVIDENCE_ONLY_NOT_CONFIRMING",
+                })
             return 0
 
         if arguments.command in {"finding", "r6"}:

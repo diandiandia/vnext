@@ -15,7 +15,7 @@ IMPLEMENTED_RELEASE_GATES = tuple(f"RG{index}" for index in range(1, 16))
 
 
 _POLICY: dict[str, Any] = {
-    "policy_version": "vnext-task-policy-30",
+    "policy_version": "vnext-task-policy-31",
     "task_collection": {
         "shell_execution_by_scheduler": False,
         "required_measurements": ["agent_runs", "wall_seconds"],
@@ -46,6 +46,7 @@ _POLICY: dict[str, Any] = {
         "hotspot_source_identity": "parsed_bytes_match_r0_digest",
         "r5_experiment_reference_validation": "collect_and_commit_null_or_task_local_id",
         "r5_not_feasible": "required_blocker_evidence_null_experiment_id_needs_review_no_attempted_run",
+        "r5_external_observation": "host_hmac_campaign_snapshot_batch_hypothesis_observer_method_time_campaign_owned_artifacts_evidence_only_non_confirming",
         "late_stage_amendment": "r5_r6_precommit_and_terminal_r6_postcommit_before_campaign_close",
         "r5_empirical_contract": "host_registered_harness_for_same_hypothesis_and_snapshot",
         "experiment_recipe_prerequisites": "optional_tooling_scoped_to_memory_safety_and_numeric_families",

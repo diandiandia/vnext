@@ -836,6 +836,62 @@ class Experiment:
 
 
 @dataclass(frozen=True)
+class ExternalObservation:
+    schema_version: str
+    observation_id: str
+    campaign_id: str
+    batch_id: str
+    snapshot_id: str
+    hypothesis_id: str
+    target_ref: str
+    observer_id: str
+    method: str
+    observed_at: str
+    evidence_refs: tuple[str, ...]
+    signature: str
+
+    @classmethod
+    def from_dict(cls, value: Mapping[str, Any]) -> "ExternalObservation":
+        required = {
+            "schema_version", "observation_id", "campaign_id", "batch_id",
+            "snapshot_id", "hypothesis_id", "target_ref", "observer_id",
+            "method", "observed_at", "evidence_refs", "signature",
+        }
+        if not isinstance(value, Mapping) or set(value) != required:
+            raise ModelError("external observation has an invalid schema")
+        if not isinstance(value["evidence_refs"], list):
+            raise ModelError("external observation evidence_refs must be an array")
+        observation = cls(
+            schema_version=str(value["schema_version"]),
+            observation_id=str(value["observation_id"]),
+            campaign_id=str(value["campaign_id"]),
+            batch_id=str(value["batch_id"]),
+            snapshot_id=str(value["snapshot_id"]),
+            hypothesis_id=str(value["hypothesis_id"]),
+            target_ref=str(value["target_ref"]),
+            observer_id=str(value["observer_id"]),
+            method=str(value["method"]),
+            observed_at=str(value["observed_at"]),
+            evidence_refs=tuple(str(item) for item in value["evidence_refs"]),
+            signature=str(value["signature"]),
+        )
+        if observation.schema_version != "1.0":
+            raise ModelError("unsupported external observation schema version")
+        if not all((
+            observation.observation_id, observation.campaign_id,
+            observation.batch_id, observation.snapshot_id,
+            observation.hypothesis_id, observation.target_ref,
+            observation.observer_id, observation.method,
+            observation.observed_at, observation.signature,
+            observation.evidence_refs,
+        )):
+            raise ModelError("external observation identity, method, time, signature, and evidence are required")
+        if len(observation.evidence_refs) != len(set(observation.evidence_refs)):
+            raise ModelError("external observation evidence_refs must be unique")
+        return observation
+
+
+@dataclass(frozen=True)
 class R5Assessment:
     hypothesis_id: str
     experiment_required: bool

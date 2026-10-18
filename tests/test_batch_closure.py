@@ -1,4 +1,7 @@
 import json
+import hashlib
+import hmac
+from dataclasses import asdict
 from pathlib import Path
 import sys
 
@@ -10,6 +13,7 @@ from reachable_audit.analysis_models import (
     ExperimentFidelity,
     ExperimentResult,
     EvidenceGrade,
+    ExternalObservation,
     Finding,
     FindingSeverity,
     FindingStatus,
@@ -191,6 +195,103 @@ def test_r6_allows_static_only_verdict_with_explicit_review_disposition(
         assert report["gates"]["BG2"]["pass"] is True
         assert report["needs_review_hypothesis_ids"] == ["HYP-static"]
         assert report["static_only_retained_as_review"] == ["HYP-static"]
+    finally:
+        manager.close()
+
+
+def test_signed_external_observation_is_registered_without_r5_upgrade(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+) -> None:
+    manager, workflow = _ready_for_r5(tmp_path, static_hypothesis=True)
+    secret = "external-observation-authority-key-2026".encode()
+    monkeypatch.setenv("VNA_R5_EXTERNAL_OBSERVATION_HMAC_KEY", secret.decode())
+    try:
+        r2_event = workflow._require_stage("R2_COMPLETED")
+        evidence_ref = r2_event.payload_ref
+        assert evidence_ref is not None
+        unsigned = {
+            "schema_version": "1.0",
+            "observation_id": "OBS-host-001",
+            "campaign_id": workflow.campaign_id,
+            "batch_id": workflow.batch_id,
+            "snapshot_id": manager.store.get_campaign(workflow.campaign_id).snapshot_id,
+            "hypothesis_id": "HYP-static",
+            "target_ref": manager.store.get_campaign(workflow.campaign_id).target_root,
+            "observer_id": "independent-observer-001",
+            "method": "manual runtime observation",
+            "observed_at": "2026-10-18T12:00:00Z",
+            "evidence_refs": [evidence_ref],
+        }
+
+        def signed(
+            signature: str | None = None, *, target_ref: str | None = None,
+        ) -> ExternalObservation:
+            observation_value = {
+                **unsigned,
+                "target_ref": target_ref or unsigned["target_ref"],
+            }
+            canonical = json.dumps(
+                observation_value,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+            value = {
+                **observation_value,
+                "signature": signature or hmac.new(
+                    secret, canonical, hashlib.sha256,
+                ).hexdigest(),
+            }
+            return ExternalObservation.from_dict(value)
+
+        with pytest.raises(ValueError, match="signature is invalid"):
+            manager.record_external_observation(signed("0" * 64))
+        assert not manager.store.list_events(
+            workflow.campaign_id,
+            entity_type="external_observation",
+            event_type="OUT_OF_BAND_OBSERVATION_RECORDED",
+        )
+        with pytest.raises(ValueError, match="target does not match Campaign"):
+            manager.record_external_observation(signed(target_ref="other-target"))
+        assert not manager.store.list_events(
+            workflow.campaign_id,
+            entity_type="external_observation",
+            event_type="OUT_OF_BAND_OBSERVATION_RECORDED",
+        )
+
+        from reachable_audit.cli import main
+
+        observation_path = tmp_path / "external-observation.json"
+        observation_path.write_text(json.dumps(asdict(signed())), encoding="utf-8")
+        assert main([
+            "r5-observation-register",
+            str(tmp_path),
+            workflow.campaign_id,
+            "--input",
+            str(observation_path),
+        ]) == 0
+        registration = json.loads(capsys.readouterr().out)
+        assert registration["effect"] == "EVIDENCE_ONLY_NOT_CONFIRMING"
+        observation_ref = registration["artifact_id"]
+        observation_event = manager.store.list_events(
+            workflow.campaign_id,
+            entity_type="external_observation",
+            event_type="OUT_OF_BAND_OBSERVATION_RECORDED",
+        )[0]
+        assert observation_event.payload["r5_effect"] == "EVIDENCE_ONLY_NOT_CONFIRMING"
+        assert observation_event.payload_ref == observation_ref
+
+        workflow.record_r5([], [R5Assessment(
+            hypothesis_id="HYP-static",
+            experiment_required=False,
+            experiment_id=None,
+            disposition=R5Disposition.NEEDS_REVIEW,
+            evidence_refs=(observation_ref,),
+            rationale="external observation is registered but not independently promoted",
+        )])
+        r5_event = workflow._require_stage("R5_COMPLETED")
+        r5 = json.loads(manager.artifacts.get_bytes(r5_event.payload_ref))
+        assert r5["assessments"][0]["disposition"] == R5Disposition.NEEDS_REVIEW.value
     finally:
         manager.close()
 
