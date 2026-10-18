@@ -13,6 +13,7 @@ from reachable_audit.plan_models import (
     PlanPathState,
 )
 from reachable_audit.planning import (
+    amend_plan,
     create_audit_plan,
     discovery_output_floor_bytes,
     forecast_plan_cost,
@@ -240,6 +241,13 @@ def test_plan_has_exact_ownership_limits_and_cross_batch_handoff(tmp_path: Path)
     )
     with pytest.raises(ModelError, match="planned Handoff status must be OPEN"):
         validate_plan(terminal_handoff, inventory)
+    amended_plan, _ = amend_plan(
+        plan,
+        reason="repack batches while preserving endpoint ownership",
+        max_source_files_per_batch=1,
+        max_work_units_per_batch=1,
+    )
+    validate_plan(amended_plan, inventory)
 
 
 @pytest.mark.parametrize(

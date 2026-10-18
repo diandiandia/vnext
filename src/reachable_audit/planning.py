@@ -749,16 +749,32 @@ def amend_plan(
         units_by_component.setdefault(work_unit.component_id, []).append(work_unit)
     for units in units_by_component.values():
         units.sort(key=lambda item: item.work_unit_id)
+    work_units_by_id = {unit.work_unit_id: unit for unit in base_plan.work_units}
     handoffs = []
     for edge in base_plan.boundary_edges:
-        source_unit = units_by_component[edge.source_component_id][0]
-        if edge.source_path:
-            source_unit = next(
-                unit
-                for unit in units_by_component[edge.source_component_id]
-                if edge.source_path in unit.source_files
+        source_unit = next((
+            unit for unit in units_by_component.get(edge.source_component_id, [])
+            if edge.edge_id in unit.boundary_edge_ids
+        ), None)
+        if source_unit is None:
+            raise ModelError(
+                f"base Plan has no source review Work Unit for edge: {edge.edge_id}"
             )
-        target_unit = units_by_component[edge.target_component_id][0]
+        if edge.owner_work_unit_id not in work_units_by_id:
+            raise ModelError(
+                f"base Plan has no target review Work Unit for edge: {edge.edge_id}"
+            )
+        target_unit = work_units_by_id[edge.owner_work_unit_id]
+        if target_unit.component_id != edge.target_component_id or edge.edge_id not in target_unit.boundary_edge_ids:
+            raise ModelError(
+                f"base Plan target owner is not the review Work Unit for edge: {edge.edge_id}"
+            )
+        if edge.source_path:
+            source_unit = next((
+                unit
+                for unit in units_by_component.get(edge.source_component_id, [])
+                if edge.source_path in unit.source_files
+            ), source_unit)
         from_batch = batch_by_work_unit[source_unit.work_unit_id]
         owner_batch = batch_by_work_unit[target_unit.work_unit_id]
         if from_batch != owner_batch:
