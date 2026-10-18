@@ -994,7 +994,9 @@ class ManualExecutionBackend:
         surfaces = output.get("surfaces")
         if not isinstance(surfaces, list):
             raise ModelError(f"R1 surfaces must be an array: {task.task_id}")
-        source_paths = set(_expand_agent_work_unit_files(self._task_work_unit(task)))
+        work_unit = self._task_work_unit(task)
+        source_paths = set(_expand_agent_work_unit_files(work_unit))
+        component_id = str(work_unit.get("component_id", ""))
         workflow = BatchWorkflow(self.manager, task.campaign_id, task.batch_id)
         line_count_cache: dict[str, tuple[int, frozenset[int]]] = {}
         if parsed_reviews:
@@ -1006,8 +1008,6 @@ class ManualExecutionBackend:
                 ) from error
             inventoried_paths = {source.path for source in inventory.source_files}
             edge_by_id = {str(edge["edge_id"]): edge for edge in edges}
-            work_unit = self._task_work_unit(task)
-            component_id = str(work_unit.get("component_id", ""))
             for review in parsed_reviews:
                 edge = edge_by_id[review.edge_id]
                 if component_id not in {
@@ -1023,11 +1023,23 @@ class ManualExecutionBackend:
                     inventoried_paths,
                     line_count_cache,
                 )
+        seen_surface_ids = set()
         for value in surfaces:
             try:
                 surface = Surface.from_dict(value)
             except (KeyError, TypeError, ValueError) as error:
                 raise ModelError(f"invalid R1 surface: {task.task_id}: {error}") from error
+            if surface.surface_id in seen_surface_ids:
+                raise ModelError(f"duplicate R1 Surface ID: {surface.surface_id}")
+            seen_surface_ids.add(surface.surface_id)
+            if surface.work_unit_id != task.work_unit_id:
+                raise ModelError(
+                    f"Surface Work Unit mismatch: {task.task_id}: {surface.surface_id}"
+                )
+            if surface.component_id != component_id:
+                raise ModelError(
+                    f"Surface component mismatch: {task.task_id}: {surface.surface_id}"
+                )
             if surface.entry_path not in source_paths:
                 raise ModelError(f"surface entry path is outside Work Unit: {surface.surface_id}")
             anchors = [

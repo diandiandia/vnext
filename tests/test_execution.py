@@ -239,6 +239,76 @@ def test_r1_collect_rejects_boundary_review_from_non_endpoint_work_unit(
         manager.close()
 
 
+def test_r1_collect_rejects_duplicate_surface_ids_before_terminalizing(
+    tmp_path: Path,
+) -> None:
+    manager, workflow, plan = _workflow(tmp_path, "CMP-r1-duplicate-surfaces")
+    work_unit = plan.work_units[0]
+    try:
+        workflow.run_r0()
+        backend = ManualExecutionBackend(manager, workflow.campaign_id)
+        task = DiscoveryCoordinator(workflow, backend).schedule_r1()[0].task
+        lease = backend.claim("surface-reviewer", task_id_filter=task.task_id)
+        assert lease is not None
+        surface = {
+            "surface_id": "SURF-duplicate",
+            "work_unit_id": work_unit.work_unit_id,
+            "component_id": work_unit.component_id,
+            "kind": "function_entry",
+            "entry_path": "app.py",
+            "entry_symbol": "handle",
+            "principal": "remote",
+            "evidence_refs": ["LOC-app.py:1"],
+        }
+        output = {
+            "schema_version": "1.0",
+            "review_altitude": "INSPECTED",
+            "reviewed_scope": "ALL_SOURCE_FILES",
+            "surfaces": [surface],
+            "boundary_reviews": [],
+        }
+
+        output["surfaces"][0]["work_unit_id"] = "WU-unrelated"
+        wrong_work_unit_ref = manager.artifacts.put_text(json.dumps(output)).artifact_id
+        with pytest.raises(ModelError, match="Surface Work Unit mismatch"):
+            backend.collect(lease, TaskResult(
+                True, wrong_work_unit_ref, "wrong Surface Work Unit",
+                {"agent_runs": 1, "wall_seconds": 1},
+            ))
+        assert backend.poll(task.task_id).status is TaskStatus.LEASED
+
+        output["surfaces"][0]["work_unit_id"] = work_unit.work_unit_id
+        output["surfaces"][0]["component_id"] = "COMP-unrelated"
+        wrong_component_ref = manager.artifacts.put_text(json.dumps(output)).artifact_id
+        with pytest.raises(ModelError, match="Surface component mismatch"):
+            backend.collect(lease, TaskResult(
+                True, wrong_component_ref, "wrong Surface component",
+                {"agent_runs": 1, "wall_seconds": 1},
+            ))
+        assert backend.poll(task.task_id).status is TaskStatus.LEASED
+
+        output["surfaces"][0]["component_id"] = work_unit.component_id
+        output["surfaces"].append(dict(output["surfaces"][0]))
+        duplicate_ref = manager.artifacts.put_text(json.dumps(output)).artifact_id
+
+        with pytest.raises(ModelError, match="duplicate R1 Surface ID"):
+            backend.collect(lease, TaskResult(
+                True, duplicate_ref, "duplicate surfaces",
+                {"agent_runs": 1, "wall_seconds": 1},
+            ))
+        assert backend.poll(task.task_id).status is TaskStatus.LEASED
+
+        output["surfaces"] = output["surfaces"][:1]
+        corrected_ref = manager.artifacts.put_text(json.dumps(output)).artifact_id
+        backend.collect(lease, TaskResult(
+            True, corrected_ref, "corrected Surface identity",
+            {"agent_runs": 1, "wall_seconds": 1},
+        ))
+        assert backend.poll(task.task_id).status is TaskStatus.SUCCEEDED
+    finally:
+        manager.close()
+
+
 def test_collected_r1_output_can_be_amended_before_stage_commit(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
