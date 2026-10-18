@@ -412,6 +412,12 @@ def test_plan_has_exact_ownership_limits_and_cross_batch_handoff(tmp_path: Path)
     )
     with pytest.raises(ModelError, match="planned Handoff status must be OPEN"):
         validate_plan(terminal_handoff, inventory)
+    forged_handoff_id = replace(
+        plan,
+        handoffs=(replace(handoff, handoff_id="HO-forged"),),
+    )
+    with pytest.raises(ModelError, match="Handoff ID does not match its Plan and edge"):
+        validate_plan(forged_handoff_id, inventory)
     amended_plan, _ = amend_plan(
         plan,
         reason="repack batches while preserving endpoint ownership",

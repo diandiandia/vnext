@@ -722,6 +722,8 @@ def validate_plan(plan: AuditPlan, inventory: ProjectInventory) -> None:
     for handoff in plan.handoffs:
         if handoff.status != "OPEN":
             raise ModelError(f"planned Handoff status must be OPEN: {handoff.handoff_id}")
+        if handoff.handoff_id != _stable_id("HO", plan.plan_id, handoff.edge_id):
+            raise ModelError(f"Handoff ID does not match its Plan and edge: {handoff.edge_id}")
         if handoff.from_batch not in known_batches or handoff.owner_batch not in known_batches:
             raise ModelError(f"handoff references unknown batch: {handoff.handoff_id}")
         if handoff.from_batch == handoff.owner_batch:
