@@ -115,6 +115,72 @@ def test_r1_schedule_blocks_oversized_boundary_review_floor(
         manager.close()
 
 
+def test_r1_collect_rejects_bad_boundary_anchor_before_terminalizing(
+    tmp_path: Path,
+) -> None:
+    manager, workflow, plan = _workflow(tmp_path, "CMP-r1-boundary-anchor")
+    work_unit = plan.work_units[0]
+    try:
+        workflow.run_r0()
+        backend = ManualExecutionBackend(manager, workflow.campaign_id)
+        input_ref = manager.artifacts.put_text(json.dumps({
+            "schema_version": "1.0",
+            "work_unit": {
+                "work_unit_id": work_unit.work_unit_id,
+                "component_id": work_unit.component_id,
+                "source_files": list(work_unit.source_files),
+            },
+            "boundary_edges": [{
+                "edge_id": "EDGE-boundary-anchor",
+                "source_component_id": work_unit.component_id,
+                "target_component_id": "COMP-remote",
+            }],
+        })).artifact_id
+        task = TaskSpec(
+            task_id="TASK-r1-boundary-anchor",
+            campaign_id=workflow.campaign_id,
+            batch_id=workflow.batch_id,
+            work_unit_id=work_unit.work_unit_id,
+            operation="discover_surfaces",
+            input_refs=(input_ref,),
+            required_output="surface-set/v1",
+            budget={"agent_runs": 1},
+        )
+        backend.submit(task)
+        lease = backend.claim("surface-reviewer", task_id_filter=task.task_id)
+        assert lease is not None
+        output = {
+            "schema_version": "1.0",
+            "review_altitude": "INSPECTED",
+            "reviewed_paths": list(work_unit.source_files),
+            "surfaces": [],
+            "boundary_reviews": [{
+                "edge_id": "EDGE-boundary-anchor",
+                "work_unit_id": work_unit.work_unit_id,
+                "disposition": "confirmed",
+                "evidence_refs": ["LOC-app.py:1000"],
+                "rationale": "validated the boundary endpoint",
+            }],
+        }
+        invalid_ref = manager.artifacts.put_text(json.dumps(output)).artifact_id
+        with pytest.raises(ModelError, match="boundary source anchor is outside the file"):
+            backend.collect(lease, TaskResult(
+                True, invalid_ref, "invalid boundary anchor",
+                {"agent_runs": 1, "wall_seconds": 1},
+            ))
+        assert backend.poll(task.task_id).status is TaskStatus.LEASED
+
+        output["boundary_reviews"][0]["evidence_refs"] = ["LOC-app.py:1"]
+        corrected_ref = manager.artifacts.put_text(json.dumps(output)).artifact_id
+        backend.collect(lease, TaskResult(
+            True, corrected_ref, "corrected boundary anchor",
+            {"agent_runs": 1, "wall_seconds": 1},
+        ))
+        assert backend.poll(task.task_id).status is TaskStatus.SUCCEEDED
+    finally:
+        manager.close()
+
+
 def test_collected_r1_output_can_be_amended_before_stage_commit(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1484,21 +1550,7 @@ def test_collect_rejects_missing_boundary_reviews_with_gap_list(tmp_path: Path) 
                 True, evidenced_partial_ref, "one edge omitted",
                 {"agent_runs": 1, "wall_seconds": 1},
             ))
-        complete_ref = manager.artifacts.put_text(json.dumps({
-            "schema_version": "1.0", "review_altitude": "INSPECTED",
-            "reviewed_paths": [], "surfaces": [],
-            "boundary_reviews": [
-                {
-                    "edge_id": edge_id, "work_unit_id": "WU-1",
-                    "disposition": "confirmed", "evidence_refs": ["LOC-app.py:1"],
-                    "rationale": "reviewed the endpoint boundary",
-                }
-                for edge_id in ("EDGE-a", "EDGE-b")
-            ],
-        })).artifact_id
-        assert backend.collect(lease, TaskResult(
-            True, complete_ref, "complete", {"agent_runs": 1, "wall_seconds": 1},
-        )).status is TaskStatus.SUCCEEDED
+        assert backend.poll(task.task_id).status is TaskStatus.LEASED
     finally:
         manager.close()
 

@@ -997,6 +997,32 @@ class ManualExecutionBackend:
         source_paths = set(_expand_agent_work_unit_files(self._task_work_unit(task)))
         workflow = BatchWorkflow(self.manager, task.campaign_id, task.batch_id)
         line_count_cache: dict[str, tuple[int, frozenset[int]]] = {}
+        if parsed_reviews:
+            try:
+                inventory = self.manager.load_inventory(task.campaign_id)
+            except ValueError as error:
+                raise ModelError(
+                    f"R1 boundary reviews require a recorded Campaign inventory: {task.task_id}"
+                ) from error
+            inventoried_paths = {source.path for source in inventory.source_files}
+            edge_by_id = {str(edge["edge_id"]): edge for edge in edges}
+            work_unit = self._task_work_unit(task)
+            component_id = str(work_unit.get("component_id", ""))
+            for review in parsed_reviews:
+                edge = edge_by_id[review.edge_id]
+                if component_id not in {
+                    str(edge.get("source_component_id", "")),
+                    str(edge.get("target_component_id", "")),
+                }:
+                    raise ModelError(
+                        f"boundary review Work Unit is not an edge endpoint: {review.edge_id}"
+                    )
+                workflow._validate_boundary_evidence(
+                    review.evidence_refs,
+                    review.edge_id,
+                    inventoried_paths,
+                    line_count_cache,
+                )
         for value in surfaces:
             try:
                 surface = Surface.from_dict(value)

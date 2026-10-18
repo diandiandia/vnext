@@ -86,7 +86,8 @@ scalar string `"ALL_SOURCE_FILES"` and omit `reviewed_paths`; otherwise provide
 `excluded_paths` are rejected. For R1, `boundary_reviews` must also cover every supplied
 edge exactly once; each review must have the task Work Unit ID, a valid disposition,
 non-empty evidence references, and a non-empty rationale. Evidence anchors are checked
-against the snapshot during stage commit. R1 collection also checks that every Surface
+against endpoint ownership and snapshot source lines during task collection; stage commit
+repeats the checks. R1 collection also checks that every Surface
 has an entry-path LOC anchor inside its Work Unit on an existing, nonblank source line.
 Task-coordinated R1 also requires `review_altitude`: `SCREENED` for bounded breadth
 triage or `INSPECTED` for targeted source analysis of relevant entry paths and security
