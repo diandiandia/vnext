@@ -297,7 +297,8 @@ coverage; missing fields return actionable `ModelError`s rather than raw `KeyErr
 R4 inputs supply a Work Unit/family-scoped hypothesis-ID allowlist, enforced at collect.
 R4 AxisRun wire records may omit the repeated Work Unit ID; collection inherits it from
 the parent CategoryRun, rejects a conflicting explicit ID, and persists the normalized
-canonical record.
+canonical record. Bundled R4 task inputs serialize shared mechanism-card definitions
+once at bundle scope while retaining per-item seed-card allowlists.
 R5 collection and commit share experiment structure, hypothesis scope, and task-local
 reference checks. An absent experiment ID is JSON null; invalid output remains leased
 for correction. Legacy successful output can be amended before R5 commit. Empirical

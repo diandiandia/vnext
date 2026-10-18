@@ -15,7 +15,7 @@ IMPLEMENTED_RELEASE_GATES = tuple(f"RG{index}" for index in range(1, 16))
 
 
 _POLICY: dict[str, Any] = {
-    "policy_version": "vnext-task-policy-27",
+    "policy_version": "vnext-task-policy-28",
     "task_collection": {
         "shell_execution_by_scheduler": False,
         "required_measurements": ["agent_runs", "wall_seconds"],
@@ -33,6 +33,7 @@ _POLICY: dict[str, Any] = {
         "r4_bundle": "opt-in_same-family_preserve_per_plan_results",
         "r4_bundle_default_work_units": 1,
         "r4_bundle_max_input_bytes": 524288,
+        "r4_bundle_mechanism_cards": "shared_once_at_bundle_scope_seed_ids_remain_item_local",
         "empty_component_planning": "omit_only_without_source_manifest_or_boundary_obligation",
         "r2_hypothesis_id": "HYP-work_unit_id-origin_axis-positive_ordinal",
         "r4_category_run_validation": "collect_plan_scope_axes_and_verbatim_variants",

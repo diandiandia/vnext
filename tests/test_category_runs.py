@@ -391,9 +391,17 @@ def test_r4_bundle_schedules_two_work_units_and_commits_each_plan(tmp_path: Path
         task_input = json.loads(manager.artifacts.get_bytes(tasks[0].task.input_refs[0]))
         assert len(task_input["category_items"]) == 2
         assert all(
-            item["mechanism_cards"] == [state_card]
+            item["category_plan"]["seed_card_ids"] == [state_card["mechanism_id"]]
             for item in task_input["category_items"]
         )
+        assert task_input["mechanism_cards"] == [state_card]
+        expanded_payload = {
+            **task_input,
+            "mechanism_cards": [state_card, state_card],
+        }
+        compact_size = len(json.dumps(task_input, separators=(",", ":")).encode("utf-8"))
+        expanded_size = len(json.dumps(expanded_payload, separators=(",", ":")).encode("utf-8"))
+        assert compact_size < expanded_size
         assert all(item["allowed_hypothesis_ids"] == [] for item in task_input["category_items"])
         lease = backend.claim("bundle-worker")
         assert lease is not None

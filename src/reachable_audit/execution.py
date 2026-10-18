@@ -2253,9 +2253,11 @@ class DiscoveryCoordinator:
         hypotheses_by_work_unit: Mapping[str, Sequence[Mapping[str, Any]]],
     ) -> dict[str, Any]:
         items = []
+        shared_card_ids: set[str] = set()
         for category_plan in category_plans:
             work_unit = work_units[str(category_plan["work_unit_id"])]
             card_ids = tuple(str(item) for item in category_plan["seed_card_ids"])
+            shared_card_ids.update(card_ids)
             items.append({
                 "category_plan": category_plan,
                 "work_unit": _agent_work_unit(work_unit),
@@ -2265,9 +2267,6 @@ class DiscoveryCoordinator:
                     families=[family],
                     max_entries=10,
                 ).to_dict(),
-                "mechanism_cards": [
-                    self.knowledge_catalog.cards[card_id] for card_id in card_ids
-                ],
                 "allowed_hypothesis_ids": [
                     str(item["hypothesis_id"])
                     for item in hypotheses_by_work_unit.get(str(work_unit["work_unit_id"]), [])
@@ -2279,10 +2278,17 @@ class DiscoveryCoordinator:
             "operation": "run_category_audit_bundle",
             "snapshot_id": self.workflow.campaign.snapshot_id,
             "family": family,
+            "mechanism_cards": [
+                self.knowledge_catalog.cards[card_id]
+                for card_id in sorted(shared_card_ids)
+            ],
             "category_items": items,
             "analysis_contract": (
-                "Review each category_item independently within its Work Unit. Do not "
-                "transfer evidence or conclusions across Work Units. Return exactly one "
+                "Review each category_item independently within its Work Unit. Definitions "
+                "are shared at bundle scope: each item may use only cards in its "
+                "category_plan.seed_card_ids. Do not transfer evidence or conclusions "
+                "across Work Units. "
+                "Return exactly one "
                 "CategoryRun for every listed category_plan_id; preserve each Work Unit ID. "
                 "Omit work_unit_id from each AxisRun; it is inherited from the parent "
                 "CategoryRun. If supplied, it must match. "

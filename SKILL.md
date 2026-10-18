@@ -464,7 +464,9 @@ Individual R4 inputs and every bundled `category_item` include `allowed_hypothes
 for that Work Unit and family. A CategoryRun may reference only those IDs; use an empty
 array when none apply. New late candidates must remain unresolved follow-up risks,
 not invented IDs. Omit `work_unit_id` from each R4 `AxisRun`; it is inherited from the
-parent `CategoryRun`. A supplied AxisRun ID must match that parent. R6 is a Batch closure task over canonical stage artifacts, not a
+parent `CategoryRun`. A supplied AxisRun ID must match that parent. Bundled R4 inputs
+carry shared `mechanism_cards` once at bundle scope; each item may use only its plan's
+`seed_card_ids`. R6 is a Batch closure task over canonical stage artifacts, not a
 source-discovery task: do not require an absent Work Unit inventory or invent LOC anchors.
 For every R1 Surface ID, R6 output must contain exactly one `surface_dispositions`
 entry. Use `REVIEWED`, `DEFERRED`, `NOT_APPLICABLE`, or `UNREVIEWED`; include a
