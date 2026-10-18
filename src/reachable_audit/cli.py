@@ -189,6 +189,33 @@ def _handle_graph(arguments: argparse.Namespace) -> int:
     return 0
 
 
+def _handle_toolchain_probe(arguments: argparse.Namespace) -> int:
+    adapter = LANGUAGE_ADAPTERS.get(arguments.language)
+    if adapter is None:
+        raise ValueError(f"no registered language adapter: {arguments.language}")
+    results = [probe_toolchain(command) for command in adapter.toolchain_probe]
+    _print({
+        "language": adapter.language_id,
+        "probes": [asdict(result) for result in results],
+    })
+    return 0
+
+
+def _handle_compatibility_scan(arguments: argparse.Namespace) -> int:
+    report = scan_runtime_compatibility(
+        arguments.root,
+        [
+            line.strip()
+            for line in Path(arguments.forbidden_tokens_file).read_text(
+                encoding="utf-8"
+            ).splitlines()
+            if line.strip()
+        ] if arguments.forbidden_tokens_file else (),
+    )
+    _print(report)
+    return 0 if report["passed"] else 1
+
+
 def _handle_plan(arguments: argparse.Namespace) -> int:
     boundaries = []
     if arguments.boundaries:
@@ -957,29 +984,10 @@ def main(argv: list[str] | None = None) -> int:
             return _handle_graph(arguments)
 
         if arguments.command == "toolchain-probe":
-            adapter = LANGUAGE_ADAPTERS.get(arguments.language)
-            if adapter is None:
-                raise ValueError(f"no registered language adapter: {arguments.language}")
-            results = [probe_toolchain(command) for command in adapter.toolchain_probe]
-            _print({
-                "language": adapter.language_id,
-                "probes": [asdict(result) for result in results],
-            })
-            return 0
+            return _handle_toolchain_probe(arguments)
 
         if arguments.command == "compatibility-scan":
-            report = scan_runtime_compatibility(
-                arguments.root,
-                [
-                    line.strip()
-                    for line in Path(arguments.forbidden_tokens_file).read_text(
-                        encoding="utf-8"
-                    ).splitlines()
-                    if line.strip()
-                ] if arguments.forbidden_tokens_file else (),
-            )
-            _print(report)
-            return 0 if report["passed"] else 1
+            return _handle_compatibility_scan(arguments)
 
         if arguments.command == "harness-run":
             value = json.loads(Path(arguments.input).read_text(encoding="utf-8"))
