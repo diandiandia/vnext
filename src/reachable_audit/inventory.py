@@ -107,7 +107,10 @@ def build_inventory(target_root: str | Path, snapshot_id: str) -> ProjectInvento
         directories[:] = kept_directories
         relative_directory = _relative(root, directory_path)
         for filename in files:
-            relative_file = _relative(root, directory_path / filename)
+            file_path = directory_path / filename
+            if file_path.is_symlink():
+                continue
+            relative_file = _relative(root, file_path)
             if filename in BUILD_MANIFESTS or Path(filename).suffix.lower() in BUILD_MANIFEST_SUFFIXES:
                 manifests_by_root[relative_directory].append(relative_file)
             detected = detect_language(relative_file)
@@ -117,7 +120,7 @@ def build_inventory(target_root: str | Path, snapshot_id: str) -> ProjectInvento
                 detected is None
                 and filename not in BUILD_MANIFESTS
                 and Path(filename).suffix.lower() not in NON_SOURCE_TEXT_SUFFIXES
-                and _unknown_source_file(directory_path / filename)
+                and _unknown_source_file(file_path)
             ):
                 detected = ("unknown", "unknown")
             if detected is not None:

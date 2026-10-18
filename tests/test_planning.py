@@ -329,6 +329,46 @@ def test_worktree_footprint_excludes_symlinks_and_runtime_state(tmp_path: Path) 
     assert build_inventory(tmp_path, "fixture:footprint").repository_size_bytes == 3
 
 
+def test_inventory_skips_symlinked_source_files(tmp_path: Path) -> None:
+    target = tmp_path / "project"
+    target.mkdir()
+    external_source = tmp_path / "outside.py"
+    external_source.write_text("SECRET = True\n", encoding="utf-8")
+    (target / "entry.py").symlink_to(external_source)
+
+    inventory = build_inventory(target, "fixture:symlink-source")
+
+    assert inventory.source_files == ()
+    assert inventory.repository_size_bytes == 0
+
+
+def test_record_inventory_rejects_source_path_escape(tmp_path: Path) -> None:
+    target = tmp_path / "project"
+    target.mkdir()
+    _write(target / "app.py", "VALUE = 1\n")
+    inventory = build_inventory(target, "fixture:path-escape")
+    outside = tmp_path / "outside.py"
+    outside.write_text("OUTSIDE = True\n", encoding="utf-8")
+    component = inventory.components[0]
+    invalid_inventory = replace(
+        inventory,
+        source_files=(replace(inventory.source_files[0], path="../outside.py"),),
+        components=(replace(component, root=".", source_file_count=1),),
+    )
+
+    with CampaignManager(target) as manager:
+        manager.create_campaign(
+            campaign_id="CMP-path-escape", snapshot_id=inventory.snapshot_id,
+        )
+        with pytest.raises(ValueError, match="source path escapes"):
+            manager.record_inventory(
+                campaign_id="CMP-path-escape", inventory=invalid_inventory,
+            )
+        assert not manager.store.list_events(
+            "CMP-path-escape", event_type="INVENTORY_RECORDED",
+        )
+
+
 @pytest.mark.parametrize("axes", [("surface",), ("surface", "unknown")])
 def test_planner_rejects_unsupported_axis_subsets(tmp_path: Path, axes: tuple[str, ...]) -> None:
     with pytest.raises(ModelError, match="all-six"):

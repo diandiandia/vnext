@@ -391,6 +391,27 @@ class CampaignManager:
                 f"inventory snapshot does not match Campaign: {inventory.snapshot_id} != {campaign.snapshot_id}"
             )
         validate_inventory(inventory)
+        target_root = self.target_root.resolve()
+        for source in inventory.source_files:
+            relative_path = Path(source.path)
+            source_path = target_root / relative_path
+            try:
+                resolved_path = source_path.resolve(strict=True)
+            except OSError as error:
+                raise ValueError(
+                    f"inventory source path is not a readable regular file: {source.path}"
+                ) from error
+            if (
+                relative_path.is_absolute()
+                or ".." in relative_path.parts
+                or relative_path.as_posix() != source.path
+                or source_path.is_symlink()
+                or not resolved_path.is_relative_to(target_root)
+                or not resolved_path.is_file()
+            ):
+                raise ValueError(
+                    f"inventory source path escapes or is not a regular file: {source.path}"
+                )
         value = asdict(inventory)
         encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
         baseline = {
