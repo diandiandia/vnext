@@ -368,5 +368,26 @@ def test_r5_assessment_runs_as_durable_task(
                 "revision_id"
             ],
         }
+        if legacy_collected and invalid_experiment_id == "":
+            replacement_value = json.loads(manager.artifacts.get_bytes(output_ref))
+            replacement_value["assessment"]["rationale"] = (
+                "corrected rationale after the R5 projection committed"
+            )
+            replacement_ref = manager.artifacts.put_text(
+                json.dumps(replacement_value)
+            ).artifact_id
+            backend.amend_completed_output(
+                scheduled[0].task.task_id,
+                replacement_ref,
+                reason="corrected the committed R5 assessment",
+                evidence_refs=(output_ref, replacement_ref),
+            )
+            assert workflow._stage_event("R5_COMPLETED") is None
+            coordinator.commit_r5()
+            replacement_event = workflow._require_stage("R5_COMPLETED")
+            assert replacement_event.event_id != r5_event.event_id
+            assert replacement_event.payload["source_task_output_refs"] == {
+                scheduled[0].task.task_id: replacement_ref,
+            }
     finally:
         manager.close()

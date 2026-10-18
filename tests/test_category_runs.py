@@ -339,6 +339,34 @@ def test_r4_category_plan_runs_as_durable_task(
             axis_run["review_altitude"] == "INSPECTED"
             for axis_run in artifact["category_runs"][0]["axis_runs"]
         )
+        prior_event = event
+        amended_run = asdict(replace(
+            run, rationale="corrected after the R4 projection was committed",
+        ))
+        for axis_run in amended_run["axis_runs"]:
+            axis_run.pop("work_unit_id")
+        replacement_ref = manager.artifacts.put_text(json.dumps({
+            "schema_version": "1.0", "category_run": amended_run,
+        })).artifact_id
+        backend.amend_completed_output(
+            scheduled[0].task.task_id,
+            replacement_ref,
+            reason="corrected a committed category rationale",
+            evidence_refs=(output_ref, replacement_ref),
+        )
+        assert workflow._stage_event("R4_COMPLETED") is None
+        coordinator.commit_r4()
+        replacement_event = workflow._require_stage("R4_COMPLETED")
+        assert replacement_event.event_id != prior_event.event_id
+        assert replacement_event.payload["source_task_output_refs"] == {
+            scheduled[0].task.task_id: replacement_ref,
+        }
+        assert sum(
+            item.event_type == "R4_COMPLETED"
+            for item in manager.store.list_batch_events(
+                "CMP-r4", workflow.batch_id, event_type="R4_COMPLETED",
+            )
+        ) == 2
     finally:
         manager.close()
 

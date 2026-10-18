@@ -1501,6 +1501,38 @@ def test_discovery_coordinator_commits_r1_and_six_axis_r2(tmp_path: Path) -> Non
         assert set(reference for refs in r2_artifact["axis_evidence"].values() for reference in refs) == {
             f"EVID-{axis.value}" for axis in DiscoveryAxis
         }
+        prior_r2_event = r2_event
+        previous_r3_tasks = coordinator.schedule_r3()
+        task_id, original_output_ref = sorted(axis_output_refs.items())[0]
+        amended_axis_output = json.loads(
+            manager.artifacts.get_bytes(original_output_ref)
+        )
+        amended_axis_output["operator_note"] = "corrected after R2 commit"
+        replacement_output_ref = manager.artifacts.put_text(
+            json.dumps(amended_axis_output)
+        ).artifact_id
+        backend.amend_completed_output(
+            task_id,
+            replacement_output_ref,
+            reason="corrected a committed R2 axis result",
+            evidence_refs=(original_output_ref, replacement_output_ref),
+        )
+        assert workflow._stage_event("R2_COMPLETED") is None
+        coordinator.commit_r2()
+        replacement_r2_event = workflow._require_stage("R2_COMPLETED")
+        assert replacement_r2_event.event_id != prior_r2_event.event_id
+        expected_output_refs = dict(axis_output_refs)
+        expected_output_refs[task_id] = replacement_output_ref
+        assert replacement_r2_event.payload["source_task_output_refs"] == expected_output_refs
+
+        replacement_r3_tasks = coordinator.schedule_r3()
+        assert len(replacement_r3_tasks) == len(previous_r3_tasks)
+        assert {
+            view.task.task_id for view in replacement_r3_tasks
+        }.isdisjoint({view.task.task_id for view in previous_r3_tasks})
+        assert coordinator._active_task_views(
+            operation="verify_reachability",
+        ) == replacement_r3_tasks
     finally:
         manager.close()
 
