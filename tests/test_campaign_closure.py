@@ -1021,6 +1021,22 @@ def test_campaign_close_cli_loads_plan_and_writes_final_report(
     assert report["status"] == "PASS"
 
 
+def test_handoff_resolve_cli_accepts_empty_resolution_batch(
+    tmp_path: Path, capsys: object,
+) -> None:
+    manager, plan = _closable_campaign(tmp_path)
+    target = manager.target_root
+    manager.close()
+    input_path = tmp_path / "handoffs.json"
+    input_path.write_text(json.dumps({"resolutions": []}), encoding="utf-8")
+
+    assert main([
+        "handoff-resolve", str(target), "CMP-r4", plan.plan_id,
+        "--input", str(input_path),
+    ]) == 0
+    assert json.loads(capsys.readouterr().out) == {"artifact_ids": []}  # type: ignore[attr-defined]
+
+
 def test_campaign_report_exports_scope_and_execution_measurements(tmp_path: Path) -> None:
     manager, plan = _closable_campaign(tmp_path)
     try:

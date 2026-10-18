@@ -420,6 +420,34 @@ def _handle_batch_stage(arguments: argparse.Namespace) -> int:
     return 0
 
 
+def _handle_handoff(arguments: argparse.Namespace) -> int:
+    value = json.loads(Path(arguments.input).read_text(encoding="utf-8"))
+    if not isinstance(value, dict):
+        raise ValueError("Handoff input must be a JSON object")
+    with CampaignManager(arguments.target, arguments.state_dir) as manager:
+        plan = manager.load_audit_plan(arguments.campaign_id, arguments.plan_id)
+        resolver = HandoffResolver(manager, arguments.campaign_id, plan)
+        if arguments.command == "handoff-resolve":
+            if "resolutions" in value:
+                if not isinstance(value["resolutions"], list):
+                    raise ValueError("Handoff resolutions must be an array")
+                artifact_ids = resolver.resolve_many(tuple(
+                    HandoffResolution.from_dict(item)
+                    for item in value["resolutions"]
+                ))
+                _print({"artifact_ids": artifact_ids})
+            else:
+                artifact_id = resolver.resolve(HandoffResolution.from_dict(value))
+                _print({"artifact_id": artifact_id})
+        else:
+            _print(resolver.integrate(
+                arguments.handoff_id,
+                known_chain_prefix=value.get("known_chain_prefix", []),
+                evidence_refs=value.get("evidence_refs", []),
+            ))
+    return 0
+
+
 def _handle_campaign_abort(arguments: argparse.Namespace) -> int:
     value = json.loads(Path(arguments.input).read_text(encoding="utf-8"))
     if not isinstance(value, dict) or not isinstance(value.get("skill_issues"), list):
@@ -1085,31 +1113,7 @@ def main(argv: list[str] | None = None) -> int:
             return _handle_batch_stage(arguments)
 
         if arguments.command in {"handoff-resolve", "handoff-integrate"}:
-            value = json.loads(Path(arguments.input).read_text(encoding="utf-8"))
-            if not isinstance(value, dict):
-                raise ValueError("Handoff input must be a JSON object")
-            with CampaignManager(arguments.target, arguments.state_dir) as manager:
-                plan = manager.load_audit_plan(arguments.campaign_id, arguments.plan_id)
-                resolver = HandoffResolver(manager, arguments.campaign_id, plan)
-                if arguments.command == "handoff-resolve":
-                    if "resolutions" in value:
-                        if not isinstance(value["resolutions"], list):
-                            raise ValueError("Handoff resolutions must be an array")
-                        artifact_ids = resolver.resolve_many(tuple(
-                            HandoffResolution.from_dict(item)
-                            for item in value["resolutions"]
-                        ))
-                        _print({"artifact_ids": artifact_ids})
-                    else:
-                        artifact_id = resolver.resolve(HandoffResolution.from_dict(value))
-                        _print({"artifact_id": artifact_id})
-                else:
-                    _print(resolver.integrate(
-                        arguments.handoff_id,
-                        known_chain_prefix=value.get("known_chain_prefix", []),
-                        evidence_refs=value.get("evidence_refs", []),
-                    ))
-            return 0
+            return _handle_handoff(arguments)
 
         if arguments.command.startswith("r35-"):
             with CampaignManager(arguments.target, arguments.state_dir) as manager:
