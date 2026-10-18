@@ -111,10 +111,11 @@ first ten edge IDs/paths where applicable) and leaves the task leased so the sam
 can resubmit the complete result.
 `plan` prints `oversize_work_units` (estimated minimum R1 output above the hard ceiling)
 and per-batch maximum boundary-review count/output estimate. Treat the estimate as a
-lower-bound planning signal, not a cost or actual-size prediction. R1 scheduling rejects
-any Work Unit whose estimated minimum exceeds the hard ceiling; split or amend the plan
-before dispatching it. Estimates below the ceiling do not guarantee that actual output
-will fit.
+lower-bound planning signal, not a cost or actual-size prediction. The planner shards
+boundary reviews across endpoint Work Units when necessary. R1 scheduling rejects any
+remaining Work Unit whose estimated minimum exceeds the hard ceiling; amend the Plan if
+an indivisible edge remains oversized. Estimates below the ceiling do not guarantee
+that actual output will fit.
 An optional `--cost-profile <json>` adds low/expected/high task-fanout and cost scenarios.
 The caller must supply measured cost per operation and explicit hypothesis/reachability
 assumptions; the forecast never changes the plan and omits retries, revival sampling, and

@@ -12,7 +12,13 @@ from reachable_audit.plan_models import (
     PlanPathDisposition,
     PlanPathState,
 )
-from reachable_audit.planning import create_audit_plan, forecast_plan_cost
+from reachable_audit.planning import (
+    create_audit_plan,
+    discovery_output_floor_bytes,
+    forecast_plan_cost,
+    validate_plan,
+)
+from reachable_audit.runtime_policy import TASK_OUTPUT_MAX_BYTES
 
 
 def _write(path: Path, text: str = "") -> None:
@@ -214,6 +220,98 @@ def test_plan_has_exact_ownership_limits_and_cross_batch_handoff(tmp_path: Path)
     assert plan.discovery_axes == (
         "surface", "mechanism", "state", "fix_variant", "boundary", "differential"
     )
+
+
+def test_plan_splits_oversized_boundary_reviews_across_endpoint_work_units(
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "boundary-split"
+    target.mkdir()
+    _fixture_monorepo(target)
+    inventory = build_inventory(target, "fixture:boundary-split")
+    source_component = Component("COMP-empty", "external", (), (), 0)
+    inventory = replace(inventory, components=(*inventory.components, source_component))
+    target_component = next(
+        item.component_id for item in inventory.components if item.root == "tools"
+    )
+    edges = tuple(BoundaryEdge(
+        edge_id=f"EDGE-{index:05d}-{'x' * 360}",
+        source_component_id=source_component.component_id,
+        target_component_id=target_component,
+        kind="ipc",
+        evidence="large fixture edge",
+    ) for index in range(10_000))
+
+    plan = create_audit_plan(
+        campaign_id="CMP-boundary-split",
+        inventory=inventory,
+        category_families=["STATE"],
+        boundary_edges=edges,
+    )
+
+    expected_edge_ids = {edge.edge_id for edge in edges}
+    owner_by_edge = {edge.edge_id: edge.owner_work_unit_id for edge in plan.boundary_edges}
+    batch_by_work_unit = {
+        work_unit_id: batch.batch_id
+        for batch in plan.batches
+        for work_unit_id in batch.work_unit_ids
+    }
+    for component_id in (source_component.component_id, target_component):
+        units = [unit for unit in plan.work_units if unit.component_id == component_id]
+        reviewed_edge_ids = [edge_id for unit in units for edge_id in unit.boundary_edge_ids]
+        assert len(units) > 1
+        assert len(reviewed_edge_ids) == len(expected_edge_ids)
+        assert set(reviewed_edge_ids) == expected_edge_ids
+        assert all(
+            discovery_output_floor_bytes(unit) <= TASK_OUTPUT_MAX_BYTES
+            for unit in units
+        )
+    target_review_units = {
+        unit.work_unit_id: set(unit.boundary_edge_ids)
+        for unit in plan.work_units if unit.component_id == target_component
+    }
+    assert all(
+        edge_id in target_review_units[owner_id]
+        for edge_id, owner_id in owner_by_edge.items()
+        if owner_id is not None
+    )
+    assert all(
+        handoff.owner_batch == batch_by_work_unit[owner_by_edge[handoff.edge_id]]
+        for handoff in plan.handoffs
+    )
+
+    review_unit = next(
+        unit for unit in plan.work_units
+        if unit.component_id == source_component.component_id
+        and unit.boundary_edge_ids
+    )
+    broken_coverage = replace(
+        plan,
+        work_units=tuple(
+            replace(unit, boundary_edge_ids=unit.boundary_edge_ids[1:])
+            if unit.work_unit_id == review_unit.work_unit_id else unit
+            for unit in plan.work_units
+        ),
+    )
+    with pytest.raises(ModelError, match="exact per endpoint"):
+        validate_plan(broken_coverage, inventory)
+
+    first_edge = plan.boundary_edges[0]
+    source_review_unit = next(
+        unit for unit in plan.work_units
+        if unit.component_id == first_edge.source_component_id
+        and first_edge.edge_id in unit.boundary_edge_ids
+    )
+    broken_owner = replace(
+        plan,
+        boundary_edges=tuple(
+            replace(edge, owner_work_unit_id=source_review_unit.work_unit_id)
+            if edge.edge_id == first_edge.edge_id else edge
+            for edge in plan.boundary_edges
+        ),
+    )
+    with pytest.raises(ModelError, match="not in its target component"):
+        validate_plan(broken_owner, inventory)
 
 
 @pytest.mark.parametrize(

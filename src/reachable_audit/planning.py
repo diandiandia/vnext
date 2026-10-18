@@ -21,6 +21,7 @@ from .plan_models import (
     ProjectInventory,
     WorkUnit,
 )
+from .runtime_policy import TASK_OUTPUT_MAX_BYTES
 
 
 REQUIRED_STAGES = ("R0", "R1", "R2", "R3", "R3.5", "R4", "R5", "R6")
@@ -70,6 +71,24 @@ def discovery_output_floor_bytes(work_unit: WorkUnit) -> int:
     return len(json.dumps(
         output, ensure_ascii=False, separators=(",", ":")
     ).encode("utf-8"))
+
+
+def _largest_boundary_edge_prefix(
+    work_unit: WorkUnit, edge_ids: Sequence[str], offset: int,
+) -> int:
+    low = 0
+    high = len(edge_ids) - offset
+    while low < high:
+        middle = (low + high + 1) // 2
+        candidate = replace(
+            work_unit,
+            boundary_edge_ids=tuple(edge_ids[offset:offset + middle]),
+        )
+        if discovery_output_floor_bytes(candidate) <= TASK_OUTPUT_MAX_BYTES:
+            low = middle
+        else:
+            high = middle - 1
+    return low
 
 
 _FORECAST_BASE_OPERATIONS = (
@@ -308,6 +327,7 @@ def create_audit_plan(
     omitted_empty = set(omitted_empty_component_ids)
 
     work_units = []
+    boundary_review_units: dict[tuple[str, str], WorkUnit] = {}
     for component_id in sorted(files_by_component):
         if component_id in omitted_empty:
             continue
@@ -315,19 +335,75 @@ def create_audit_plan(
         paths = [path for path, _ in component_files]
         languages_by_path = {path: language for path, language in component_files}
         file_chunks = tuple(_chunks(paths, max_source_files_per_work_unit)) or ((),)
+        component_units = []
         for shard_index, file_chunk in enumerate(file_chunks, start=1):
-            work_units.append(WorkUnit(
+            component_units.append(WorkUnit(
                 work_unit_id=_stable_id("WU", inventory.snapshot_id, component_id, str(shard_index), *file_chunk),
                 component_id=component_id,
                 source_files=file_chunk,
                 languages=tuple(sorted({languages_by_path[path] for path in file_chunk})),
                 category_families=categories,
                 discovery_axes=axes,
-                boundary_edge_ids=(
-                    tuple(sorted(edges_by_component[component_id]))
-                    if shard_index == 1 else ()
-                ),
+                boundary_edge_ids=(),
             ))
+        component_edge_ids = tuple(sorted(edges_by_component[component_id]))
+        edge_offset = 0
+        for unit_index, unit in enumerate(component_units):
+            fit_count = _largest_boundary_edge_prefix(
+                unit, component_edge_ids, edge_offset,
+            )
+            component_units[unit_index] = replace(
+                unit,
+                boundary_edge_ids=component_edge_ids[
+                    edge_offset:edge_offset + fit_count
+                ],
+            )
+            edge_offset += fit_count
+
+        boundary_shard_index = 0
+        existing_unit_ids = {unit.work_unit_id for unit in component_units}
+        while edge_offset < len(component_edge_ids):
+            boundary_shard_index += 1
+            boundary_work_unit = WorkUnit(
+                work_unit_id=_stable_id(
+                    "WU", inventory.snapshot_id, component_id,
+                    "boundary", str(boundary_shard_index),
+                ),
+                component_id=component_id,
+                source_files=(),
+                languages=(),
+                category_families=categories,
+                discovery_axes=axes,
+                boundary_edge_ids=(),
+            )
+            while boundary_work_unit.work_unit_id in existing_unit_ids:
+                boundary_shard_index += 1
+                boundary_work_unit = replace(
+                    boundary_work_unit,
+                    work_unit_id=_stable_id(
+                        "WU", inventory.snapshot_id, component_id,
+                        "boundary", str(boundary_shard_index),
+                    ),
+                )
+            fit_count = _largest_boundary_edge_prefix(
+                boundary_work_unit, component_edge_ids, edge_offset,
+            )
+            if fit_count == 0:
+                fit_count = 1
+            boundary_work_unit = replace(
+                boundary_work_unit,
+                boundary_edge_ids=component_edge_ids[
+                    edge_offset:edge_offset + fit_count
+                ],
+            )
+            component_units.append(boundary_work_unit)
+            existing_unit_ids.add(boundary_work_unit.work_unit_id)
+            edge_offset += fit_count
+
+        for unit in component_units:
+            work_units.append(unit)
+            for edge_id in unit.boundary_edge_ids:
+                boundary_review_units[(component_id, edge_id)] = unit
 
     work_units.sort(key=lambda unit: (-len(unit.source_files), unit.work_unit_id))
     packed: list[list[WorkUnit]] = []
@@ -353,6 +429,8 @@ def create_audit_plan(
         "edges": [asdict(edge) for edge in boundary_edges],
         "path_dispositions": [asdict(item) for item in normalized_path_dispositions],
         "omitted_empty_component_ids": omitted_empty_component_ids,
+        "boundary_edge_sharding": "r1-minimum-output-floor-v1",
+        "r1_output_ceiling_bytes": TASK_OUTPUT_MAX_BYTES,
         "limits": [max_source_files_per_work_unit, max_source_files_per_batch, max_work_units_per_batch],
     }, sort_keys=True, separators=(",", ":"))
     plan_id = _stable_id("PLAN", plan_seed)
@@ -382,13 +460,13 @@ def create_audit_plan(
     handoffs = []
     owned_edges = []
     for edge in sorted(boundary_edges, key=lambda item: item.edge_id):
-        source_unit = units_by_component[edge.source_component_id][0]
+        source_unit = boundary_review_units[(edge.source_component_id, edge.edge_id)]
         if edge.source_path:
             source_unit = next((
                 unit for unit in units_by_component[edge.source_component_id]
                 if edge.source_path in unit.source_files
             ), source_unit)
-        target_unit = units_by_component[edge.target_component_id][0]
+        target_unit = boundary_review_units[(edge.target_component_id, edge.edge_id)]
         owned_edges.append(replace(edge, owner_work_unit_id=target_unit.work_unit_id))
         from_batch = batch_by_work_unit[source_unit.work_unit_id]
         owner_batch = batch_by_work_unit[target_unit.work_unit_id]
@@ -479,10 +557,45 @@ def validate_plan(plan: AuditPlan, inventory: ProjectInventory) -> None:
         raise ModelError("a work unit is assigned to multiple batches")
     if set(planned_work_units) != known_work_units:
         raise ModelError("batch work unit coverage mismatch")
+    work_units_by_id = {unit.work_unit_id: unit for unit in plan.work_units}
+    edges_by_id = {edge.edge_id: edge for edge in plan.boundary_edges}
+    if len(edges_by_id) != len(plan.boundary_edges):
+        raise ModelError("plan duplicates boundary edge IDs")
+    expected_edge_reviews = {
+        (component_id, edge.edge_id)
+        for edge in plan.boundary_edges
+        for component_id in (edge.source_component_id, edge.target_component_id)
+    }
+    actual_edge_reviews: dict[tuple[str, str], int] = {}
+    for unit in plan.work_units:
+        for edge_id in unit.boundary_edge_ids:
+            edge = edges_by_id.get(edge_id)
+            if edge is None:
+                raise ModelError(
+                    f"Work Unit references unknown boundary edge: {edge_id}"
+                )
+            if unit.component_id not in {
+                edge.source_component_id, edge.target_component_id,
+            }:
+                raise ModelError(
+                    f"Work Unit is not an endpoint for boundary edge: {edge_id}"
+                )
+            key = (unit.component_id, edge_id)
+            actual_edge_reviews[key] = actual_edge_reviews.get(key, 0) + 1
+    if (
+        set(actual_edge_reviews) != expected_edge_reviews
+        or any(count != 1 for count in actual_edge_reviews.values())
+    ):
+        raise ModelError("boundary edge review coverage must be exact per endpoint")
     known_batches = {batch.batch_id for batch in plan.batches}
     for edge in plan.boundary_edges:
         if edge.owner_work_unit_id not in known_work_units:
             raise ModelError(f"boundary edge has no owning Work Unit: {edge.edge_id}")
+        owner = work_units_by_id[edge.owner_work_unit_id]
+        if owner.component_id != edge.target_component_id:
+            raise ModelError(
+                f"boundary edge owner is not in its target component: {edge.edge_id}"
+            )
     for handoff in plan.handoffs:
         if handoff.from_batch not in known_batches or handoff.owner_batch not in known_batches:
             raise ModelError(f"handoff references unknown batch: {handoff.handoff_id}")

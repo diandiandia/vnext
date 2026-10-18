@@ -305,6 +305,8 @@ output can be larger, so edge counts are shown alongside it. These are planning 
 not result-size guarantees or price estimates. R1 scheduling blocks Work Units whose
 estimated minimum already exceeds the hard ceiling before submitting any tasks; an
 estimate below the ceiling does not guarantee the actual result will fit.
+The planner shards boundary reviews across endpoint Work Units under the estimated
+ceiling when possible; a single indivisible oversized edge remains visible and blocked.
 
 An optional plan cost profile supplies measured per-operation task cost, currency,
 low/expected/high hypotheses per Work Unit, expected reachable fraction, and optional R4
