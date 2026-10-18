@@ -34,8 +34,9 @@ projections are recommitted. Existing terminal R6 behavior remains intact.
 
 Status: **LOCAL WIRE SLICE COMPLETE**. R4 AxisRun Work Unit IDs may be omitted and are
 inherited from the parent CategoryRun; explicit mismatches fail, and canonical stage
-artifacts retain the complete ID. Broader payload reduction and measured bundle-size
-acceptance remain open.
+artifacts retain the complete ID. Bundled mechanism-card definitions are serialized
+once at bundle scope while each item retains its seed-card allowlist. Broader payload
+reduction and measured real-project bundle-size acceptance remain open.
 
 Reduce repeated Work Unit/category/axis fields in bundled R4 inputs without weakening
 per-item identity, allowed-hypothesis, altitude, or coverage validation. Keep one
