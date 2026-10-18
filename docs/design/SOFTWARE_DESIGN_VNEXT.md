@@ -292,6 +292,9 @@ between R2 Work Unit/axis tasks. Individual and bundled R4 CategoryRuns are chec
 collection against their plan identity, axis coverage, and verbatim mechanism-variant
 coverage; missing fields return actionable `ModelError`s rather than raw `KeyError`s.
 R4 inputs supply a Work Unit/family-scoped hypothesis-ID allowlist, enforced at collect.
+R4 AxisRun wire records may omit the repeated Work Unit ID; collection inherits it from
+the parent CategoryRun, rejects a conflicting explicit ID, and persists the normalized
+canonical record.
 R5 collection and commit share experiment structure, hypothesis scope, and task-local
 reference checks. An absent experiment ID is JSON null; invalid output remains leased
 for correction. Legacy successful output can be amended before R5 commit. Empirical

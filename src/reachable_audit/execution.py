@@ -2053,6 +2053,8 @@ class DiscoveryCoordinator:
                     "SCREENED/INSPECTED altitude for each APPLICABLE AxisRun; use "
                     "NOT_RECORDED for NOT_APPLICABLE or DEFERRED. These are Agent "
                     "declarations, not host-observed inspection. "
+                    "Omit work_unit_id from each AxisRun; it is inherited from the "
+                    "parent CategoryRun. If supplied, it must match. "
                     "evidence for positive and zero-finding outcomes; do not omit an axis. "
                     "hypothesis_ids may reference only allowed_hypothesis_ids; use [] when "
                     "none apply. Never invent IDs for late candidates; report them as "
@@ -2060,7 +2062,10 @@ class DiscoveryCoordinator:
                 ),
                 "output_contract": {
                     "schema_version": "1.0",
-                    "category_run": "CategoryRun with review_altitude on every APPLICABLE AxisRun",
+                    "category_run": (
+                        "CategoryRun; omit redundant AxisRun.work_unit_id (inherited "
+                        "from the parent), with review_altitude on every APPLICABLE axis"
+                    ),
                 },
             })
             views.append(self.backend.submit(TaskSpec(
@@ -2279,6 +2284,8 @@ class DiscoveryCoordinator:
                 "Review each category_item independently within its Work Unit. Do not "
                 "transfer evidence or conclusions across Work Units. Return exactly one "
                 "CategoryRun for every listed category_plan_id; preserve each Work Unit ID. "
+                "Omit work_unit_id from each AxisRun; it is inherited from the parent "
+                "CategoryRun. If supplied, it must match. "
                 "Declare SCREENED/INSPECTED altitude on each APPLICABLE AxisRun and "
                 "NOT_RECORDED for NOT_APPLICABLE/DEFERRED. These are Agent claims, not "
                 "host-observed reads. "
@@ -2290,6 +2297,7 @@ class DiscoveryCoordinator:
                 "schema_version": "1.0",
                 "category_runs": (
                     "one CategoryRun per category_item, no missing or extra IDs; "
+                    "omit redundant AxisRun.work_unit_id (inherited from parent); "
                     "APPLICABLE AxisRuns require SCREENED/INSPECTED altitude"
                 ),
             },

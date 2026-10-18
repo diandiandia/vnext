@@ -463,7 +463,8 @@ loaded from the versioned catalog under `<vnext>/knowledge/`.
 Individual R4 inputs and every bundled `category_item` include `allowed_hypothesis_ids`
 for that Work Unit and family. A CategoryRun may reference only those IDs; use an empty
 array when none apply. New late candidates must remain unresolved follow-up risks,
-not invented IDs. R6 is a Batch closure task over canonical stage artifacts, not a
+not invented IDs. Omit `work_unit_id` from each R4 `AxisRun`; it is inherited from the
+parent `CategoryRun`. A supplied AxisRun ID must match that parent. R6 is a Batch closure task over canonical stage artifacts, not a
 source-discovery task: do not require an absent Work Unit inventory or invent LOC anchors.
 For every R1 Surface ID, R6 output must contain exactly one `surface_dispositions`
 entry. Use `REVIEWED`, `DEFERRED`, `NOT_APPLICABLE`, or `UNREVIEWED`; include a

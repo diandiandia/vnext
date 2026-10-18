@@ -211,6 +211,7 @@ def test_r4_category_plan_runs_as_durable_task(
         task_input = json.loads(
             manager.artifacts.get_bytes(scheduled[0].task.input_refs[0])
         )
+        assert "Omit work_unit_id from each AxisRun" in task_input["analysis_contract"]
         assert task_input["mechanism_cards"][0]["mechanism_id"] == state_card["mechanism_id"]
         assert task_input["knowledge_context"]["issue_entries"]
         assert task_input["knowledge_context"]["knowledge_version"] == "portfolio-2026-09-v1"
@@ -264,9 +265,30 @@ def test_r4_category_plan_runs_as_durable_task(
                 {"agent_runs": 1, "wall_seconds": 1},
             ))
         assert backend.poll(scheduled[0].task.task_id).status.value == "LEASED"
+        mismatched_axis_work_unit = asdict(run)
+        mismatched_axis_work_unit["axis_runs"][0]["work_unit_id"] = "WU-unrelated"
+        mismatched_axis_ref = manager.artifacts.put_text(json.dumps({
+            "schema_version": "1.0", "category_run": mismatched_axis_work_unit,
+        })).artifact_id
+        with pytest.raises(ModelError, match="AxisRun Work Unit mismatch"):
+            backend.collect(lease, TaskResult(
+                True, mismatched_axis_ref, "mismatched AxisRun Work Unit",
+                {"agent_runs": 1, "wall_seconds": 1},
+            ))
+        assert backend.poll(scheduled[0].task.task_id).status.value == "LEASED"
+        compact_run = asdict(run)
+        for axis_run in compact_run["axis_runs"]:
+            axis_run.pop("work_unit_id")
+        compact_output_bytes = len(json.dumps({
+            "schema_version": "1.0", "category_run": compact_run,
+        }).encode("utf-8"))
+        expanded_output_bytes = len(json.dumps({
+            "schema_version": "1.0", "category_run": asdict(run),
+        }).encode("utf-8"))
+        assert compact_output_bytes < expanded_output_bytes
         output_ref = manager.artifacts.put_text(json.dumps({
             "schema_version": "1.0",
-            "category_run": asdict(run),
+            "category_run": compact_run,
         })).artifact_id
         backend.collect(lease, TaskResult(
             True, output_ref, "category complete", {"agent_runs": 1, "wall_seconds": 1},
@@ -277,6 +299,10 @@ def test_r4_category_plan_runs_as_durable_task(
         assert sum(event.event_type == "R4_COMPLETED" for event in events) == 1
         event = next(item for item in events if item.event_type == "R4_COMPLETED")
         artifact = json.loads(manager.artifacts.get_bytes(event.payload_ref))
+        assert all(
+            axis_run["work_unit_id"] == category_plan.work_unit_id
+            for axis_run in artifact["category_runs"][0]["axis_runs"]
+        )
         assert all(
             axis_run["review_altitude"] == "INSPECTED"
             for axis_run in artifact["category_runs"][0]["axis_runs"]

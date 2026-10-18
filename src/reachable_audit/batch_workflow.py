@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict
+from dataclasses import asdict, replace
 import hashlib
 import json
 from pathlib import Path, PurePosixPath
@@ -823,6 +823,13 @@ class BatchWorkflow:
             plan = plans[run.category_plan_id]
             if run.work_unit_id != plan["work_unit_id"] or run.family != plan["family"]:
                 raise ModelError(f"CategoryRun does not match plan: {run.category_run_id}")
+            if any(
+                axis_run.work_unit_id not in (None, run.work_unit_id)
+                for axis_run in run.axis_runs
+            ):
+                raise ModelError(
+                    f"CategoryRun AxisRun Work Unit mismatch: {run.category_run_id}"
+                )
             axes = [axis_run.axis.value for axis_run in run.axis_runs]
             if len(axes) != len(set(axes)) or set(axes) != set(plan["discovery_axes"]):
                 raise ModelError(
@@ -858,7 +865,13 @@ class BatchWorkflow:
                 )
         artifact_id = self._put_json({
             "schema_version": "1.0",
-            "category_runs": [asdict(run) for run in runs],
+            "category_runs": [asdict(replace(
+                run,
+                axis_runs=tuple(
+                    replace(axis_run, work_unit_id=run.work_unit_id)
+                    for axis_run in run.axis_runs
+                ),
+            )) for run in runs],
         })
         self.manager.store.append_event(
             campaign_id=self.campaign_id,

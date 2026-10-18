@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import StrEnum
 from typing import Any, Mapping
 
@@ -742,15 +742,24 @@ class CategoryRun:
             raise ModelError(f"CategoryRun is missing fields: {sorted(missing)}")
         if not isinstance(value["axis_runs"], list):
             raise ModelError("CategoryRun axis_runs must be an array")
+        work_unit_id = str(value["work_unit_id"])
+        axis_runs = []
+        for item in value["axis_runs"]:
+            axis_run = AxisRun.from_dict(item)
+            if axis_run.work_unit_id is not None and axis_run.work_unit_id != work_unit_id:
+                raise ModelError(
+                    f"CategoryRun AxisRun Work Unit mismatch: {work_unit_id}/{axis_run.axis.value}"
+                )
+            axis_runs.append(replace(axis_run, work_unit_id=work_unit_id))
         run = cls(
             category_run_id=str(value["category_run_id"]),
             category_plan_id=str(value["category_plan_id"]),
-            work_unit_id=str(value["work_unit_id"]),
+            work_unit_id=work_unit_id,
             family=str(value["family"]).upper(),
             mechanism_variants_examined=tuple(
                 str(item) for item in value.get("mechanism_variants_examined", [])
             ),
-            axis_runs=tuple(AxisRun.from_dict(item) for item in value["axis_runs"]),
+            axis_runs=tuple(axis_runs),
             applicability=Applicability(str(value["applicability"])),
             status=CategoryRunStatus(str(value["status"])),
             evidence_refs=tuple(str(item) for item in value.get("evidence_refs", [])),
