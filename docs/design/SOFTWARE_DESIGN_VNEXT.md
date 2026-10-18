@@ -417,9 +417,14 @@ a current inventory LOC anchor; artifact evidence must be recorded by the curren
 Campaign, or by an explicitly declared history source in follow-up mode. The derived
 report includes `audit_mode`, declared history sources, and `scope_completeness`.
 
-This closure-level record does not yet implement per-path exclusions in inventory and
-planning. Plans still assign all inventoried source files to Work Units; SYSR-030 remains
-partially implemented until path-level included/excluded/deferred roles are modeled.
+Plans retain one path-scope record for every inventory source path. Omitted CLI records
+default to INCLUDED; EXCLUDED and DEFERRED paths require rationale, an approver
+declaration, and evidence refs. Only INCLUDED paths are assigned to Work Units. CG2
+checks exact inventory classification, included-path ownership, and resolvable evidence;
+the final report and Markdown export retain every path decision. The approver string is
+not authenticated identity, and this ledger is not host-observed review evidence.
+Closure-level `scope_dispositions` remain separate decisions for broader unreviewed
+scope statements.
 
 ## 5. Source and Build Adapter Contracts
 
@@ -440,7 +445,8 @@ confirmed.
 Inventory recognizes registered/known-unsupported extensions and heuristic source-like
 files. SourceFile uses `language` and `language_status`, not a universal language_id/
 diagnostic contract. Arbitrary unknown syntax can be missed. Inventoried unsupported
-files remain assigned to Work Units; planning does not create per-path deferments.
+files are INCLUDED by default. A Plan may explicitly mark a path EXCLUDED or DEFERRED
+while retaining it in the path-scope ledger and final report.
 
 ### 5.2 Build Adapter
 
@@ -470,10 +476,11 @@ the edge's existence or security relevance could not be established.
 
 ### 5.4 Work Unit and Handoff Integration
 
-The Planner assigns every inventoried source path to exactly one Work Unit and Batch.
-Per-path role/exclusion/deferment records are absent; closure scope decisions do not
-change ownership. Stable Work Unit identity is
-derived from the frozen snapshot, component identity, shard identity, and owned paths.
+The Planner retains every inventoried source path in exactly one Plan disposition.
+INCLUDED paths are assigned to exactly one Work Unit and Batch; EXCLUDED and DEFERRED
+paths remain visible but are not assigned to source-review Work Units. Closure scope
+decisions do not change these Plan dispositions. Stable Work Unit identity is derived
+from the frozen snapshot, component identity, shard identity, and included owned paths.
 Any split, merge, or ownership change is a Plan Amendment and preserves references to
 completed evidence.
 

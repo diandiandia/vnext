@@ -269,7 +269,8 @@ PYTHONPATH=<vnext>/src python3 -m reachable_audit inventory <target> <campaign-i
 PYTHONPATH=<vnext>/src python3 -m reachable_audit toolchain-probe <language>
 PYTHONPATH=<vnext>/src python3 -m reachable_audit graph <target> <campaign-id>
 PYTHONPATH=<vnext>/src python3 -m reachable_audit plan <target> <campaign-id> \
-  --categories MEMORY-SAFETY,STATE,RESOURCE-DOS
+  --categories MEMORY-SAFETY,STATE,RESOURCE-DOS \
+  [--path-dispositions <path-scope.json>]
 PYTHONPATH=<vnext>/src python3 -m reachable_audit amend <target> \
   <campaign-id> <plan-id> --reason <reason> \
   --max-batch-files 500 --max-batch-work-units 2
@@ -369,6 +370,15 @@ PYTHONPATH=<vnext>/src python3 -m reachable_audit drift-resolve \
 PYTHONPATH=<vnext>/src python3 -m reachable_audit shadow-evaluate \
   --input <paired-runs.json> --output <acceptance-report.json>
 ```
+
+`path-scope.json` is an array of `{path, state, rationale, approved_by,
+evidence_refs}` records. `state` is `INCLUDED`, `EXCLUDED`, or `DEFERRED`; paths
+omitted from the file default to `INCLUDED`. EXCLUDED/DEFERRED records require an
+approver declaration and evidence refs that resolve at Campaign closure to current
+inventory LOC anchors or artifacts owned by that Campaign. Only INCLUDED paths enter
+Work Units; all inventory paths and their decisions remain in the Plan and final report.
+The approver string is not authenticated identity, and a scope decision does not prove
+that a host or Agent reviewed the path.
 
 After a `task-collect` validation error, the task remains leased and non-terminal;
 correct the result JSON and resubmit it with the same task/worker before the lease

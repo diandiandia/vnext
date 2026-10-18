@@ -333,6 +333,56 @@ def test_cli_runs_inventory_graph_plan_in_order(tmp_path: Path, capsys: object) 
     assert plan_output["cost_forecast"]["scenarios"]["expected"]["estimated_total_tasks"] == 11
 
 
+def test_cli_plan_accepts_path_dispositions_and_reports_them(
+    tmp_path: Path, capsys: object,
+) -> None:
+    target = tmp_path / "target"
+    target.mkdir()
+    (target / "included.py").write_text("print('in')\n", encoding="utf-8")
+    (target / "excluded.py").write_text("print('out')\n", encoding="utf-8")
+    scope_file = tmp_path / "path-dispositions.json"
+    scope_file.write_text(json.dumps([{
+        "path": "excluded.py",
+        "state": "EXCLUDED",
+        "rationale": "outside approved scope",
+        "approved_by": "scope-owner",
+        "evidence_refs": ["LOC-excluded.py:1"],
+    }]), encoding="utf-8")
+
+    assert main([
+        "init", str(target), "--snapshot-id", "fixture:path-scope",
+        "--campaign-id", "CMP-path-scope",
+    ]) == 0
+    capsys.readouterr()  # type: ignore[attr-defined]
+    assert main(["inventory", str(target), "CMP-path-scope"]) == 0
+    capsys.readouterr()  # type: ignore[attr-defined]
+    assert main(["graph", str(target), "CMP-path-scope"]) == 0
+    capsys.readouterr()  # type: ignore[attr-defined]
+
+    assert main([
+        "plan", str(target), "CMP-path-scope", "--categories", "STATE",
+        "--path-dispositions", str(scope_file),
+    ]) == 0
+    output = json.loads(capsys.readouterr().out)  # type: ignore[attr-defined]
+    assert output["path_scope_counts"] == {
+        "INCLUDED": 1, "EXCLUDED": 1, "DEFERRED": 0,
+    }
+    assert output["batch_summaries"][0]["source_files"] == 1
+    plan_file = next(
+        (target / ".audit_vnext" / "campaigns" / "CMP-path-scope" / "plans").glob(
+            "*.json"
+        )
+    )
+    plan = json.loads(plan_file.read_text(encoding="utf-8"))
+    assert {item["path"]: item["state"] for item in plan["path_dispositions"]} == {
+        "excluded.py": "EXCLUDED",
+        "included.py": "INCLUDED",
+    }
+    assert [
+        path for unit in plan["work_units"] for path in unit["source_files"]
+    ] == ["included.py"]
+
+
 def test_cli_writes_shadow_evaluation_report(
     tmp_path: Path, capsys: object, monkeypatch: object
 ) -> None:

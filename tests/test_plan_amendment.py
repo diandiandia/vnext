@@ -5,6 +5,7 @@ import pytest
 from reachable_audit.campaign import CampaignManager
 from reachable_audit.inventory import build_inventory
 from reachable_audit.models import BatchStatus
+from reachable_audit.plan_models import PlanPathDisposition, PlanPathState
 from reachable_audit.planning import amend_plan, create_audit_plan
 
 
@@ -116,3 +117,31 @@ def test_amendment_rejects_a_plan_with_an_active_batch(tmp_path: Path) -> None:
                 amendment=amendment,
                 inventory=inventory,
             )
+
+
+def test_amendment_preserves_path_scope_dispositions(tmp_path: Path) -> None:
+    inventory = _inventory(tmp_path)
+    base_plan = create_audit_plan(
+        campaign_id="CMP-amend-scope",
+        inventory=inventory,
+        category_families=["STATE"],
+        path_dispositions=(PlanPathDisposition(
+            path="source_0.py",
+            state=PlanPathState.DEFERRED,
+            rationale="awaiting generated-source ownership confirmation",
+            approved_by="scope-owner",
+            evidence_refs=("LOC-source_0.py:1",),
+        ),),
+        max_source_files_per_work_unit=1,
+    )
+    amended_plan, _amendment = amend_plan(
+        base_plan,
+        reason="reduce batch size",
+        max_source_files_per_batch=1,
+        max_work_units_per_batch=1,
+    )
+
+    assert amended_plan.path_dispositions == base_plan.path_dispositions
+    assert "source_0.py" not in {
+        path for unit in amended_plan.work_units for path in unit.source_files
+    }

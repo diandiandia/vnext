@@ -14,7 +14,7 @@ from .analysis_models import (
 )
 from .campaign import CampaignManager
 from .models import BatchStatus, CampaignStatus, ModelError
-from .plan_models import AuditPlan
+from .plan_models import AuditPlan, PlanPathState
 from .resource_cleanup import cleanup_campaign_resources
 from .runtime_policy import execution_policy_digest
 
@@ -130,6 +130,42 @@ class CampaignCloser:
             return False
         return True
 
+    def _path_scope_evidence_errors(
+        self, inventory_source_files: set[str]
+    ) -> list[str]:
+        evidence_refs = {
+            ref
+            for item in self.plan.path_dispositions
+            if item.state is not PlanPathState.INCLUDED
+            for ref in item.evidence_refs
+            if ref.startswith("sha256:")
+        }
+        artifact_owners = self.manager.store.artifact_campaign_owners(evidence_refs)
+        errors = []
+        for item in self.plan.path_dispositions:
+            if item.state is PlanPathState.INCLUDED:
+                continue
+            label = f"path {item.path!r}"
+            for ref in item.evidence_refs:
+                if ref.startswith("LOC-"):
+                    if not self._valid_source_anchor(ref, inventory_source_files):
+                        errors.append(f"{label} has an invalid source anchor")
+                elif ref.startswith("sha256:"):
+                    try:
+                        self.manager.artifacts.get_bytes(ref)
+                    except (OSError, ValueError):
+                        errors.append(f"{label} references a missing evidence artifact")
+                        continue
+                    if artifact_owners.get(ref, set()) != {self.campaign_id}:
+                        errors.append(
+                            f"{label} references an artifact not owned by this Campaign"
+                        )
+                else:
+                    errors.append(
+                        f"{label} evidence must be a LOC anchor or Campaign artifact"
+                    )
+        return errors
+
     def close(self, closure: CampaignClosure) -> dict[str, Any]:
         events = self.manager.store.list_events(self.campaign_id)
         pending_r6_amendments: dict[str, int] = {}
@@ -187,11 +223,24 @@ class CampaignCloser:
         inventory = self.manager.load_inventory(self.campaign_id)
         graph = self.manager.load_component_graph(self.campaign_id)
         owned_components = {unit.component_id for unit in self.plan.work_units}
-        inventory_components = {
-            component.component_id for component in inventory.components
-        }
         build_components = {unit.component_id for unit in graph.build_units}
         inventory_source_files = {source.path for source in inventory.source_files}
+        path_dispositions = list(self.plan.path_dispositions)
+        path_state_by_path = {
+            item.path: item.state for item in path_dispositions
+        }
+        included_source_files = {
+            path for path, state in path_state_by_path.items()
+            if state is PlanPathState.INCLUDED
+        }
+        excluded_source_files = {
+            path for path, state in path_state_by_path.items()
+            if state is PlanPathState.EXCLUDED
+        }
+        deferred_source_files = {
+            path for path, state in path_state_by_path.items()
+            if state is PlanPathState.DEFERRED
+        }
         planned_source_files = [
             source_path
             for work_unit in self.plan.work_units
@@ -203,20 +252,51 @@ class CampaignCloser:
             if planned_source_files.count(source_path) > 1
         })
         planned_source_file_set = set(planned_source_files)
+        boundary_components = {
+            component_id
+            for edge in self.plan.boundary_edges
+            for component_id in (edge.source_component_id, edge.target_component_id)
+        }
+        included_components = {
+            source.component_id for source in inventory.source_files
+            if source.path in included_source_files
+        }
+        path_state_counts = {
+            state.value: sum(item.state is state for item in path_dispositions)
+            for state in PlanPathState
+        }
+        required_components = build_components | boundary_components | included_components
+        path_scope_coverage_valid = (
+            len(path_dispositions) == len(path_state_by_path)
+            and set(path_state_by_path) == inventory_source_files
+        )
+        path_scope_evidence_errors = self._path_scope_evidence_errors(
+            inventory_source_files
+        )
         gates["CG2"] = {
-            "pass": inventory_components.issubset(owned_components)
-            and build_components.issubset(owned_components)
-            and inventory_source_files == planned_source_file_set
+            "pass": required_components.issubset(owned_components)
+            and path_scope_coverage_valid
+            and not path_scope_evidence_errors
+            and included_source_files == planned_source_file_set
             and not duplicate_source_files,
             "detail": {
-                "unowned_components": sorted(inventory_components - owned_components),
+                "unowned_components": sorted(required_components - owned_components),
                 "unowned_build_units": sorted(build_components - owned_components),
-                "missing_source_files": sorted(
-                    inventory_source_files - planned_source_file_set
+                "unclassified_source_files": sorted(
+                    inventory_source_files - set(path_state_by_path)
                 ),
-                "unexpected_source_files": sorted(
-                    planned_source_file_set - inventory_source_files
+                "unknown_scope_paths": sorted(
+                    set(path_state_by_path) - inventory_source_files
                 ),
+                "included_paths_without_work_unit": sorted(
+                    included_source_files - planned_source_file_set
+                ),
+                "work_unit_paths_not_included": sorted(
+                    planned_source_file_set - included_source_files
+                ),
+                "excluded_source_files": sorted(excluded_source_files),
+                "deferred_source_files": sorted(deferred_source_files),
+                "path_scope_evidence_errors": path_scope_evidence_errors,
                 "duplicate_source_files": duplicate_source_files,
             },
         }
@@ -645,6 +725,10 @@ class CampaignCloser:
                 "components": len(inventory.components),
                 "build_units": len(graph.build_units),
                 "work_units": len(self.plan.work_units),
+                "inventory_source_files": len(inventory_source_files),
+                "included_source_files": len(included_source_files),
+                "excluded_source_files": len(excluded_source_files),
+                "deferred_source_files": len(deferred_source_files),
                 "surfaces": len(surfaces),
                 "surface_review_dispositions": len(surface_review_dispositions),
                 "boundary_reviews": len(boundary_reviews),
@@ -709,6 +793,17 @@ class CampaignCloser:
                 )
             ),
             "scope_dispositions": gates["CG10"]["detail"]["scope_dispositions"],
+            "path_scope_counts": path_state_counts,
+            "path_scope_dispositions": [
+                {
+                    "path": item.path,
+                    "state": item.state.value,
+                    "rationale": item.rationale,
+                    "approved_by": item.approved_by,
+                    "evidence_refs": list(item.evidence_refs),
+                }
+                for item in path_dispositions
+            ],
             "residual_risks": list(closure.residual_risks),
             "limitations": list(closure.limitations),
             "lessons": list(closure.lessons),
@@ -870,6 +965,7 @@ class CampaignCloser:
         execution = report.get("execution_measurements", {})
         coverage = report.get("coverage", {})
         unreviewed_scope = report.get("unreviewed_scope", [])
+        path_scope = report.get("path_scope_dispositions", [])
         scope_completeness = report.get(
             "scope_completeness",
             "LEGACY_REPORT_WITH_UNSTRUCTURED_UNREVIEWED_SCOPE"
@@ -943,6 +1039,22 @@ class CampaignCloser:
             "### Architecture", "", report.get("architecture_overview", "Not recorded."),
             "",
         ])
+        lines.extend(["### Path Scope", ""])
+        if path_scope:
+            lines.extend(
+                f"- **{item['state']}** `{cell(item['path'])}`. {cell(item['rationale'])}"
+                + (
+                    f" Approved by `{cell(item['approved_by'])}`."
+                    if item.get("approved_by") else ""
+                )
+                + (
+                    f" Evidence: {', '.join(cell(ref) for ref in item['evidence_refs'])}."
+                    if item.get("evidence_refs") else ""
+                )
+                for item in path_scope
+            )
+        else:
+            lines.append("- No paths recorded in the plan.")
         if report.get("history_source_campaign_ids"):
             lines.extend([
                 "", "## Declared History Sources", "",

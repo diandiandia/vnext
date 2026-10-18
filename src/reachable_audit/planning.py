@@ -16,6 +16,8 @@ from .plan_models import (
     Handoff,
     PlanAmendment,
     PlannedBatch,
+    PlanPathDisposition,
+    PlanPathState,
     ProjectInventory,
     WorkUnit,
 )
@@ -213,6 +215,7 @@ def create_audit_plan(
     inventory: ProjectInventory,
     category_families: Sequence[str],
     boundary_edges: Sequence[BoundaryEdge] = (),
+    path_dispositions: Sequence[PlanPathDisposition] = (),
     discovery_axes: Sequence[str] = DEFAULT_DISCOVERY_AXES,
     max_source_files_per_work_unit: int = 1000,
     max_source_files_per_batch: int = 2000,
@@ -237,6 +240,28 @@ def create_audit_plan(
     source_owner_by_path = {
         source_file.path: source_file.component_id for source_file in inventory.source_files
     }
+    inventory_paths = {source_file.path for source_file in inventory.source_files}
+    supplied_path_dispositions = {item.path: item for item in path_dispositions}
+    if len(supplied_path_dispositions) != len(path_dispositions):
+        raise ModelError("duplicate plan path dispositions")
+    unknown_path_dispositions = set(supplied_path_dispositions) - inventory_paths
+    if unknown_path_dispositions:
+        raise ModelError(
+            f"plan path disposition references unknown paths: "
+            f"{sorted(unknown_path_dispositions)}"
+        )
+    normalized_path_dispositions = tuple(
+        supplied_path_dispositions.get(
+            source.path,
+            PlanPathDisposition(
+                source.path, PlanPathState.INCLUDED, "Included by default."
+            ),
+        )
+        for source in sorted(inventory.source_files, key=lambda item: item.path)
+    )
+    path_state_by_path = {
+        item.path: item.state for item in normalized_path_dispositions
+    }
     edge_ids: set[str] = set()
     for edge in boundary_edges:
         if edge.edge_id in edge_ids:
@@ -259,7 +284,10 @@ def create_audit_plan(
     for source_file in inventory.source_files:
         if source_file.component_id not in known_components:
             raise ModelError(f"source file has unknown component owner: {source_file.path}")
-        files_by_component[source_file.component_id].append((source_file.path, source_file.language))
+        if path_state_by_path[source_file.path] is PlanPathState.INCLUDED:
+            files_by_component[source_file.component_id].append(
+                (source_file.path, source_file.language)
+            )
     edges_by_component: dict[str, list[str]] = {
         component_id: [] for component_id in known_components
     }
@@ -323,6 +351,7 @@ def create_audit_plan(
         "categories": categories,
         "axes": axes,
         "edges": [asdict(edge) for edge in boundary_edges],
+        "path_dispositions": [asdict(item) for item in normalized_path_dispositions],
         "omitted_empty_component_ids": omitted_empty_component_ids,
         "limits": [max_source_files_per_work_unit, max_source_files_per_batch, max_work_units_per_batch],
     }, sort_keys=True, separators=(",", ":"))
@@ -385,6 +414,7 @@ def create_audit_plan(
         handoffs=tuple(handoffs),
         boundary_edges=tuple(sorted(owned_edges, key=lambda item: item.edge_id)),
         omitted_empty_component_ids=omitted_empty_component_ids,
+        path_dispositions=normalized_path_dispositions,
     )
     validate_plan(plan, inventory)
     return plan
@@ -403,7 +433,18 @@ def validate_plan(plan: AuditPlan, inventory: ProjectInventory) -> None:
         for edge in plan.boundary_edges
         for component_id in (edge.source_component_id, edge.target_component_id)
     }
-    source_components = {source.component_id for source in inventory.source_files}
+    path_state_by_path = {
+        item.path: item.state for item in plan.path_dispositions
+    }
+    inventory_paths = {source.path for source in inventory.source_files}
+    if len(path_state_by_path) != len(plan.path_dispositions):
+        raise ModelError("plan duplicates path disposition records")
+    if set(path_state_by_path) != inventory_paths:
+        raise ModelError("plan path disposition coverage does not match inventory")
+    source_components = {
+        source.component_id for source in inventory.source_files
+        if path_state_by_path[source.path] is PlanPathState.INCLUDED
+    }
     invalid_omissions = sorted(
         component_id for component_id in omitted
         if components[component_id].build_manifests
@@ -421,13 +462,16 @@ def validate_plan(plan: AuditPlan, inventory: ProjectInventory) -> None:
             "plan component ownership mismatch: "
             f"unassigned={sorted(unassigned_components)}, declared_omitted={sorted(omitted)}"
         )
-    inventory_paths = [source_file.path for source_file in inventory.source_files]
+    inventory_paths = {
+        source.path for source in inventory.source_files
+        if path_state_by_path[source.path] is PlanPathState.INCLUDED
+    }
     planned_paths = [path for unit in plan.work_units for path in unit.source_files]
     if len(planned_paths) != len(set(planned_paths)):
         raise ModelError("a source file is owned by multiple work units")
-    if set(planned_paths) != set(inventory_paths):
-        missing = sorted(set(inventory_paths) - set(planned_paths))
-        extra = sorted(set(planned_paths) - set(inventory_paths))
+    if set(planned_paths) != inventory_paths:
+        missing = sorted(inventory_paths - set(planned_paths))
+        extra = sorted(set(planned_paths) - inventory_paths)
         raise ModelError(f"plan source coverage mismatch: missing={missing}, extra={extra}")
     known_work_units = {unit.work_unit_id for unit in plan.work_units}
     planned_work_units = [unit for batch in plan.batches for unit in batch.work_unit_ids]
@@ -565,6 +609,7 @@ def amend_plan(
         handoffs=tuple(handoffs),
         boundary_edges=base_plan.boundary_edges,
         omitted_empty_component_ids=base_plan.omitted_empty_component_ids,
+        path_dispositions=base_plan.path_dispositions,
     )
 
     new_batches_by_work_unit = {

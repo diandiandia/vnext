@@ -44,7 +44,7 @@ from .handoffs import HandoffResolver
 from .inventory import build_inventory
 from .knowledge import create_category_audit_plans
 from .knowledge_catalog import KnowledgeCatalog, default_knowledge_root
-from .plan_models import BoundaryEdge, WorkUnit
+from .plan_models import BoundaryEdge, PlanPathDisposition, PlanPathState, WorkUnit
 from .planning import (
     amend_plan, create_audit_plan, discovery_output_floor_bytes, forecast_plan_cost,
 )
@@ -160,6 +160,13 @@ def _parser() -> argparse.ArgumentParser:
         ),
     )
     plan.add_argument("--boundaries")
+    plan.add_argument(
+        "--path-dispositions",
+        help=(
+            "JSON array of per-path state records; paths omitted from the array "
+            "default to INCLUDED"
+        ),
+    )
     plan.add_argument("--max-work-unit-files", type=int, default=1000)
     plan.add_argument("--max-batch-files", type=int, default=2000)
     plan.add_argument("--max-batch-work-units", type=int, default=4)
@@ -650,6 +657,16 @@ def main(argv: list[str] | None = None) -> int:
                 if not isinstance(boundary_value, list):
                     raise ValueError("boundaries must be a JSON array")
                 boundaries = [BoundaryEdge.from_dict(item) for item in boundary_value]
+            path_dispositions = []
+            if arguments.path_dispositions:
+                path_value = json.loads(
+                    Path(arguments.path_dispositions).read_text(encoding="utf-8")
+                )
+                if not isinstance(path_value, list):
+                    raise ValueError("path dispositions must be a JSON array")
+                path_dispositions = [
+                    PlanPathDisposition.from_dict(item) for item in path_value
+                ]
             with CampaignManager(arguments.target, arguments.state_dir) as manager:
                 inventory = manager.load_inventory(arguments.campaign_id)
                 graph = manager.load_component_graph(arguments.campaign_id)
@@ -658,6 +675,7 @@ def main(argv: list[str] | None = None) -> int:
                     inventory=inventory,
                     category_families=arguments.categories.split(","),
                     boundary_edges=[*graph.edges, *boundaries],
+                    path_dispositions=path_dispositions,
                     max_source_files_per_work_unit=arguments.max_work_unit_files,
                     max_source_files_per_batch=arguments.max_batch_files,
                     max_work_units_per_batch=arguments.max_batch_work_units,
@@ -696,6 +714,12 @@ def main(argv: list[str] | None = None) -> int:
                     "plan_id": plan.plan_id,
                     "work_units": len(plan.work_units),
                     "omitted_empty_components": list(plan.omitted_empty_component_ids),
+                    "path_scope_counts": {
+                        state.value: sum(
+                            item.state is state for item in plan.path_dispositions
+                        )
+                        for state in PlanPathState
+                    },
                     "batches": len(plan.batches),
                     "handoffs": len(plan.handoffs),
                     "output_ceiling_bytes": TASK_OUTPUT_MAX_BYTES,

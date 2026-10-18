@@ -33,6 +33,7 @@ from reachable_audit.experiments.harness_catalog import HarnessCatalog
 from reachable_audit.models import ModelError
 from reachable_audit.experiments.runner import run_harness
 from test_category_runs import _card, _ready_for_r4
+from reachable_audit.plan_models import PlanPathDisposition
 from test_refutation import _reachable_workflow
 from reachable_audit.knowledge import create_category_audit_plans
 from conftest import execution_configuration_fixture
@@ -58,11 +59,13 @@ def _ready_for_r5(
     static_hypothesis: bool = False,
     surface_without_hypothesis: bool = False,
     screening_work_unit: bool = False,
+    path_dispositions: tuple[PlanPathDisposition, ...] = (),
 ):  # type: ignore[no-untyped-def]
     manager, workflow, plan = _ready_for_r4(
         tmp_path, static_hypothesis=static_hypothesis,
         surface_without_hypothesis=surface_without_hypothesis,
         screening_work_unit=screening_work_unit,
+        path_dispositions=path_dispositions,
     )
     category_plan = create_category_audit_plans(plan.work_units, [_card()], budget={})[0]
     workflow.record_category_audit_plan([category_plan])

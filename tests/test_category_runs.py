@@ -32,6 +32,7 @@ from reachable_audit.knowledge import create_category_audit_plans
 from reachable_audit.knowledge_catalog import KnowledgeCatalog, default_knowledge_root
 from reachable_audit.models import ModelError
 from reachable_audit.planning import create_audit_plan
+from reachable_audit.plan_models import PlanPathDisposition
 from conftest import axis_runs_from_evidence
 from conftest import execution_configuration_fixture
 
@@ -42,11 +43,13 @@ def _ready_for_r4(
     static_hypothesis: bool = False,
     surface_without_hypothesis: bool = False,
     screening_work_unit: bool = False,
+    path_dispositions: tuple[PlanPathDisposition, ...] = (),
 ):  # type: ignore[no-untyped-def]
     (tmp_path / "state.py").write_text("STATE = {}\n", encoding="utf-8")
     inventory = build_inventory(tmp_path, "fixture:r4")
     plan = create_audit_plan(
-        campaign_id="CMP-r4", inventory=inventory, category_families=["STATE"]
+        campaign_id="CMP-r4", inventory=inventory, category_families=["STATE"],
+        path_dispositions=path_dispositions,
     )
     manager = CampaignManager(tmp_path)
     manager.create_campaign(campaign_id="CMP-r4", snapshot_id="fixture:r4")

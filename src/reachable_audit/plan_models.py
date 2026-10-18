@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Any, Mapping
+
+from .models import ModelError
 
 
 @dataclass(frozen=True)
@@ -20,6 +23,49 @@ class SourceFile:
             str(value["language"]),
             str(value["component_id"]),
             str(value.get("language_status", "portfolio")),
+        )
+
+
+class PlanPathState(StrEnum):
+    INCLUDED = "INCLUDED"
+    EXCLUDED = "EXCLUDED"
+    DEFERRED = "DEFERRED"
+
+
+@dataclass(frozen=True)
+class PlanPathDisposition:
+    path: str
+    state: PlanPathState
+    rationale: str
+    approved_by: str = ""
+    evidence_refs: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.state, PlanPathState):
+            raise ModelError("plan path disposition has an invalid state")
+        if not self.path.strip() or not self.rationale.strip():
+            raise ModelError("plan path disposition requires path and rationale")
+        if self.state is not PlanPathState.INCLUDED and not all((
+            self.approved_by.strip(),
+            self.evidence_refs,
+            all(ref.strip() for ref in self.evidence_refs),
+        )):
+            raise ModelError(
+                "excluded/deferred paths require approver and evidence refs"
+            )
+
+    @classmethod
+    def from_dict(cls, value: Mapping[str, Any]) -> "PlanPathDisposition":
+        state = PlanPathState(str(value["state"]))
+        return cls(
+            path=str(value["path"]),
+            state=state,
+            rationale=str(value.get(
+                "rationale",
+                "Included by operator." if state is PlanPathState.INCLUDED else "",
+            )),
+            approved_by=str(value.get("approved_by", "")),
+            evidence_refs=tuple(str(item) for item in value.get("evidence_refs", [])),
         )
 
 
@@ -245,9 +291,22 @@ class AuditPlan:
     handoffs: tuple[Handoff, ...]
     boundary_edges: tuple[BoundaryEdge, ...]
     omitted_empty_component_ids: tuple[str, ...] = ()
+    path_dispositions: tuple[PlanPathDisposition, ...] = ()
 
     @classmethod
     def from_dict(cls, value: Mapping[str, Any]) -> "AuditPlan":
+        work_units = tuple(WorkUnit.from_dict(item) for item in value["work_units"])
+        path_dispositions = tuple(
+            PlanPathDisposition.from_dict(item)
+            for item in value.get("path_dispositions", [])
+        )
+        if "path_dispositions" not in value:
+            path_dispositions = tuple(
+                PlanPathDisposition(path, PlanPathState.INCLUDED, "Included by legacy plan.")
+                for path in sorted({
+                    path for unit in work_units for path in unit.source_files
+                })
+            )
         return cls(
             schema_version=str(value["schema_version"]),
             plan_id=str(value["plan_id"]),
@@ -256,7 +315,7 @@ class AuditPlan:
             inventory_digest=str(value["inventory_digest"]),
             category_families=tuple(str(item) for item in value["category_families"]),
             discovery_axes=tuple(str(item) for item in value["discovery_axes"]),
-            work_units=tuple(WorkUnit.from_dict(item) for item in value["work_units"]),
+            work_units=work_units,
             batches=tuple(PlannedBatch.from_dict(item) for item in value["batches"]),
             handoffs=tuple(Handoff.from_dict(item) for item in value["handoffs"]),
             boundary_edges=tuple(
@@ -265,6 +324,7 @@ class AuditPlan:
             omitted_empty_component_ids=tuple(
                 str(item) for item in value.get("omitted_empty_component_ids", [])
             ),
+            path_dispositions=path_dispositions,
         )
 
 

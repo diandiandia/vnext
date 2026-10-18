@@ -165,9 +165,11 @@ build manifest. Handoffs support an evidence-backed `NOT_SECURITY_BOUNDARY` disp
 separate from `NEEDS_REVIEW`; unresolved boundaries remain open and block any finding
 whose proof depends on them, while unrelated work may continue.
 
-Closure-level declared unreviewed scope retains snapshot, evidence, rationale, approver,
-and EXCLUDED/DEFERRED disposition. It does not remove inventoried files or change plan
-ownership and is not a path-by-path exclusion or review ledger.
+The Plan classifies every inventory path as INCLUDED, EXCLUDED, or DEFERRED. Only
+INCLUDED paths are assigned to Work Units; other paths remain visible in Campaign
+coverage and reports. Exclusions/deferments require rationale, evidence refs, and an
+approver declaration that is not authenticated identity. Closure-level declared
+unreviewed scope remains a separate broader decision and does not rewrite Plan ownership.
 
 Closure classifies a Work Unit as screening-only when all planned axes are
 NOT_APPLICABLE and it has no hypotheses; any APPLICABLE axis contributes to the

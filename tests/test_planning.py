@@ -6,7 +6,12 @@ import pytest
 from reachable_audit.campaign import CampaignManager
 from reachable_audit.inventory import build_inventory
 from reachable_audit.models import ModelError
-from reachable_audit.plan_models import BoundaryEdge, Component
+from reachable_audit.plan_models import (
+    BoundaryEdge,
+    Component,
+    PlanPathDisposition,
+    PlanPathState,
+)
 from reachable_audit.planning import create_audit_plan, forecast_plan_cost
 
 
@@ -209,6 +214,54 @@ def test_plan_has_exact_ownership_limits_and_cross_batch_handoff(tmp_path: Path)
     assert plan.discovery_axes == (
         "surface", "mechanism", "state", "fix_variant", "boundary", "differential"
     )
+
+
+@pytest.mark.parametrize(
+    "scope_state", (PlanPathState.EXCLUDED, PlanPathState.DEFERRED),
+)
+def test_plan_retains_nonincluded_path_without_work_unit_assignment(
+    tmp_path: Path, scope_state: PlanPathState,
+) -> None:
+    target = tmp_path / "scope"
+    target.mkdir()
+    _write(target / "included.py", "print('in')\n")
+    _write(target / "excluded.py", "print('out')\n")
+    inventory = build_inventory(target, "fixture:path-scope")
+    plan = create_audit_plan(
+        campaign_id="CMP-path-scope",
+        inventory=inventory,
+        category_families=["STATE"],
+        path_dispositions=[PlanPathDisposition(
+            path="excluded.py",
+            state=scope_state,
+            rationale="outside the approved audit boundary",
+            approved_by="scope-owner",
+            evidence_refs=("LOC-included.py:1",),
+        )],
+    )
+
+    assert {item.path: item.state for item in plan.path_dispositions} == {
+        "excluded.py": scope_state,
+        "included.py": PlanPathState.INCLUDED,
+    }
+    assert [
+        path for unit in plan.work_units for path in unit.source_files
+    ] == ["included.py"]
+
+
+@pytest.mark.parametrize("extra_fields", (
+    {"rationale": "outside scope"},
+    {"approved_by": "scope-owner", "evidence_refs": ["LOC-private.py:1"]},
+))
+def test_plan_path_exclusion_requires_reason_approver_and_evidence(
+    extra_fields: dict[str, object],
+) -> None:
+    with pytest.raises(ModelError):
+        PlanPathDisposition.from_dict({
+            "path": "private.py",
+            "state": "EXCLUDED",
+            **extra_fields,
+        })
 
 
 def test_inventory_and_plan_are_persistent_and_idempotent(tmp_path: Path) -> None:

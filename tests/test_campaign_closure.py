@@ -31,6 +31,7 @@ from reachable_audit.execution import (
 from conftest import execution_configuration_fixture
 from reachable_audit.graph import build_component_graph
 from reachable_audit.models import CampaignAuditMode, CampaignStatus, ModelError
+from reachable_audit.plan_models import PlanPathDisposition, PlanPathState
 from reachable_audit.resource_cleanup import (
     create_campaign_temp_directory,
     register_process_group,
@@ -41,12 +42,14 @@ from test_experiments_metrics import _ready_for_r5
 def _closable_campaign(
     tmp_path: Path, *, surface_without_hypothesis: bool = False,
     screening_work_unit: bool = False, not_feasible: bool = False,
+    path_dispositions: tuple[PlanPathDisposition, ...] = (),
 ):  # type: ignore[no-untyped-def]
     manager, workflow = _ready_for_r5(
         tmp_path,
         static_hypothesis=not_feasible,
         surface_without_hypothesis=surface_without_hypothesis,
         screening_work_unit=screening_work_unit,
+        path_dispositions=path_dispositions,
     )
     inventory = manager.load_inventory("CMP-r4")
     manager.record_component_graph(
@@ -479,6 +482,66 @@ def test_campaign_closure_waits_for_amended_r6_task_projection(tmp_path: Path) -
         coordinator.commit_r6()
         report = closer.close(closure)
         assert report["gates"]["CG1"]["pass"] is True
+    finally:
+        manager.close()
+
+
+def test_campaign_report_preserves_excluded_path_scope(tmp_path: Path) -> None:
+    manager, plan = _closable_campaign(
+        tmp_path,
+        path_dispositions=(PlanPathDisposition(
+            path="state.py",
+            state=PlanPathState.EXCLUDED,
+            rationale="outside the approved audit boundary",
+            approved_by="scope-owner",
+            evidence_refs=("LOC-state.py:1",),
+        ),),
+    )
+    try:
+        report = CampaignCloser(manager, "CMP-r4", plan).close(CampaignClosure(
+            architecture_overview="One component with an explicitly excluded path.",
+            unreviewed_scope=(), residual_risks=(), limitations=(),
+            lessons=(), knowledge_nominations=(), skill_issues=(),
+        ))
+
+        assert report["gates"]["CG2"]["pass"] is True
+        assert report["coverage"]["inventory_source_files"] == 1
+        assert report["coverage"]["included_source_files"] == 0
+        assert report["coverage"]["excluded_source_files"] == 1
+        assert report["path_scope_counts"]["EXCLUDED"] == 1
+        assert report["path_scope_dispositions"] == [{
+            "path": "state.py",
+            "state": "EXCLUDED",
+            "rationale": "outside the approved audit boundary",
+            "approved_by": "scope-owner",
+            "evidence_refs": ["LOC-state.py:1"],
+        }]
+        markdown = (
+            manager.state_dir / "campaigns" / "CMP-r4" / "report" / "report.md"
+        ).read_text(encoding="utf-8")
+        assert "**EXCLUDED** `state.py`" in markdown
+    finally:
+        manager.close()
+
+
+def test_campaign_closure_rejects_invalid_path_scope_evidence(tmp_path: Path) -> None:
+    manager, plan = _closable_campaign(
+        tmp_path,
+        path_dispositions=(PlanPathDisposition(
+            path="state.py",
+            state=PlanPathState.DEFERRED,
+            rationale="source could not be reviewed",
+            approved_by="scope-owner",
+            evidence_refs=("LOC-state.py:100",),
+        ),),
+    )
+    try:
+        with pytest.raises(ModelError, match="CG2"):
+            CampaignCloser(manager, "CMP-r4", plan).close(CampaignClosure(
+                architecture_overview="One component with a deferred path.",
+                unreviewed_scope=(), residual_risks=(), limitations=(),
+                lessons=(), knowledge_nominations=(), skill_issues=(),
+            ))
     finally:
         manager.close()
 
