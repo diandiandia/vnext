@@ -135,6 +135,13 @@ class ReviewAltitude(StrEnum):
     NOT_RECORDED = "NOT_RECORDED"
 
 
+class PathRiskTier(StrEnum):
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
+    UNASSESSED = "UNASSESSED"
+
+
 class FindingSeverity(StrEnum):
     CRITICAL = "CRITICAL"
     HIGH = "HIGH"

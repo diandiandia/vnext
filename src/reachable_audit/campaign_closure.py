@@ -11,6 +11,7 @@ from typing import Any, Mapping
 from .analysis_models import (
     CampaignClosure,
     DiscoveryAxis,
+    PathRiskTier,
     R5Disposition,
     ReviewAltitude,
     ScopeDispositionKind,
@@ -372,6 +373,9 @@ class CampaignCloser:
                         path = str(item.get("path", ""))
                         claim = str(item.get("claim", ""))
                         altitude = str(item.get("altitude", "NOT_RECORDED"))
+                        risk_tier = str(item.get(
+                            "risk_tier", PathRiskTier.UNASSESSED.value
+                        ))
                         key = (work_unit_id, path)
                         if claim != "AGENT_DECLARED_REVIEWED":
                             path_review_claim_errors.append(
@@ -391,6 +395,10 @@ class CampaignCloser:
                             path_review_claim_errors.append(
                                 f"invalid path review altitude: {work_unit_id}/{path}"
                             )
+                        elif risk_tier not in {tier.value for tier in PathRiskTier}:
+                            path_review_claim_errors.append(
+                                f"invalid path risk tier: {work_unit_id}/{path}"
+                            )
                         elif key in seen_path_review_claims:
                             path_review_claim_errors.append(
                                 f"duplicate path review claim: {work_unit_id}/{path}"
@@ -403,6 +411,7 @@ class CampaignCloser:
                                 "path": path,
                                 "claim": claim,
                                 "altitude": altitude,
+                                "risk_tier": risk_tier,
                             })
                 elif event.event_type == "R2_COMPLETED":
                     hypotheses.extend(artifact["hypotheses"])
@@ -429,6 +438,10 @@ class CampaignCloser:
         path_review_altitude_counts = _counts(
             item["altitude"] for item in path_review_claims
         )
+        path_risk_tier_altitudes: dict[str, dict[str, int]] = {}
+        for item in path_review_claims:
+            tier_counts = path_risk_tier_altitudes.setdefault(item["risk_tier"], {})
+            tier_counts[item["altitude"]] = tier_counts.get(item["altitude"], 0) + 1
         discovery_axis_review_altitudes = {
             axis.value: _counts(
                 str(item.get("review_altitude", ReviewAltitude.NOT_RECORDED.value))
@@ -448,6 +461,53 @@ class CampaignCloser:
                 ))
                 counts = family_counts.setdefault(axis, {})
                 counts[altitude] = counts.get(altitude, 0) + 1
+        work_unit_by_path = {
+            path: unit.work_unit_id
+            for unit in self.plan.work_units
+            for path in unit.source_files
+        }
+        path_risk_tiers = {
+            item["path"]: item["risk_tier"] for item in path_review_claims
+        }
+        path_risk_tier_counts = _counts(
+            path_risk_tiers.get(path, PathRiskTier.UNASSESSED.value)
+            for path in included_source_files
+        )
+        risk_tier_discovery_axis_altitudes: dict[
+            str, dict[str, dict[str, int]]
+        ] = {}
+        for path in included_source_files:
+            work_unit_id = work_unit_by_path[path]
+            tier = path_risk_tiers.get(path, PathRiskTier.UNASSESSED.value)
+            tier_axes = risk_tier_discovery_axis_altitudes.setdefault(tier, {})
+            for run in discovery_axis_runs:
+                if str(run.get("work_unit_id", "")) != work_unit_id:
+                    continue
+                axis = str(run["axis"])
+                altitude = str(run.get(
+                    "review_altitude", ReviewAltitude.NOT_RECORDED.value
+                ))
+                counts = tier_axes.setdefault(axis, {})
+                counts[altitude] = counts.get(altitude, 0) + 1
+        risk_tier_category_axis_altitudes: dict[
+            str, dict[str, dict[str, dict[str, int]]]
+        ] = {}
+        for path in included_source_files:
+            work_unit_id = work_unit_by_path[path]
+            tier = path_risk_tiers.get(path, PathRiskTier.UNASSESSED.value)
+            for run in category_runs:
+                if str(run.get("work_unit_id", "")) != work_unit_id:
+                    continue
+                family = str(run["family"])
+                family_tiers = risk_tier_category_axis_altitudes.setdefault(family, {})
+                tier_axes = family_tiers.setdefault(tier, {})
+                for axis_run in run.get("axis_runs", []):
+                    axis = str(axis_run["axis"])
+                    altitude = str(axis_run.get(
+                        "review_altitude", ReviewAltitude.NOT_RECORDED.value
+                    ))
+                    counts = tier_axes.setdefault(axis, {})
+                    counts[altitude] = counts.get(altitude, 0) + 1
         surface_ids = [item["surface_id"] for item in surfaces]
         analyzed_surface_ids = {
             surface_id
@@ -836,10 +896,14 @@ class CampaignCloser:
                 "included_source_files": len(included_source_files),
                 "excluded_source_files": len(excluded_source_files),
                 "deferred_source_files": len(deferred_source_files),
+                "path_risk_tiers": path_risk_tier_counts,
                 "agent_declared_reviewed_paths": len({
                     item["path"] for item in path_review_claims
                 }),
                 "agent_declared_path_review_altitudes": path_review_altitude_counts,
+                "agent_declared_path_review_risk_tiers": _counts(
+                    item["risk_tier"] for item in path_review_claims
+                ),
                 "surfaces": len(surfaces),
                 "surface_review_dispositions": len(surface_review_dispositions),
                 "boundary_reviews": len(boundary_reviews),
@@ -917,8 +981,11 @@ class CampaignCloser:
             ],
             "path_review_claims": path_review_claims,
             "path_review_altitude_counts": path_review_altitude_counts,
+            "path_risk_tier_altitudes": path_risk_tier_altitudes,
             "discovery_axis_review_altitudes": discovery_axis_review_altitudes,
             "category_axis_review_altitudes": category_axis_review_altitudes,
+            "risk_tier_discovery_axis_altitudes": risk_tier_discovery_axis_altitudes,
+            "risk_tier_category_axis_altitudes": risk_tier_category_axis_altitudes,
             "residual_risks": list(closure.residual_risks),
             "limitations": list(closure.limitations),
             "lessons": list(closure.lessons),
@@ -1133,7 +1200,7 @@ class CampaignCloser:
             lines.extend(
                 f"- `{item['path']}` in `{item['batch_id']}` / "
                 f"`{item['work_unit_id']}`: `{item['claim']}` "
-                f"(`{item['altitude']}`)"
+                f"(`{item['altitude']}`, tier `{item['risk_tier']}`)"
                 for item in report["path_review_claims"]
             )
         else:
@@ -1148,6 +1215,23 @@ class CampaignCloser:
                     f"{altitude} {count}" for altitude, count in counts.items()
                 )
             )
+        lines.extend(["", "### Review Altitude by Risk Tier", ""])
+        lines.append("R1 risk tiers are review-priority declarations, not vulnerability severity.")
+        for tier, axes in report.get("risk_tier_discovery_axis_altitudes", {}).items():
+            for axis, counts in axes.items():
+                lines.append(
+                    f"- R2 `{tier}` / `{axis}`: " + ", ".join(
+                        f"{altitude} {count}" for altitude, count in counts.items()
+                    )
+                )
+        for family, tiers in report.get("risk_tier_category_axis_altitudes", {}).items():
+            for tier, axes in tiers.items():
+                for axis, counts in axes.items():
+                    lines.append(
+                        f"- R4 `{family}` / `{tier}` / `{axis}`: " + ", ".join(
+                            f"{altitude} {count}" for altitude, count in counts.items()
+                        )
+                    )
         lines.extend(["", "### Security Category Review Altitude", ""])
         for family, axes in report.get("category_axis_review_altitudes", {}).items():
             for axis, counts in axes.items():

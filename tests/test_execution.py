@@ -133,6 +133,10 @@ def test_collected_r1_output_can_be_amended_before_stage_commit(
             "schema_version": "1.0",
             "review_altitude": "INSPECTED",
             "reviewed_paths": list(plan.work_units[0].source_files),
+            "path_risk_tiers": [
+                {"path": path, "risk_tier": "HIGH"}
+                for path in plan.work_units[0].source_files
+            ],
             "surfaces": [],
             "boundary_reviews": [],
         })).artifact_id
@@ -155,6 +159,7 @@ def test_collected_r1_output_can_be_amended_before_stage_commit(
                 "path": path,
                 "claim": "AGENT_DECLARED_REVIEWED",
                 "altitude": "INSPECTED",
+                "risk_tier": "HIGH",
             }
             for path in plan.work_units[0].source_files
         ]
@@ -1168,6 +1173,17 @@ def test_r1_accepts_reviewed_scope_all_and_input_groups_files_by_directory(
         with pytest.raises(ModelError, match="excluded_paths is unsupported"):
             backend.collect(lease, TaskResult(
                 True, contradictory_ref, "contradictory scope",
+                {"agent_runs": 1, "wall_seconds": 1},
+            ))
+        invalid_risk_tier_ref = manager.artifacts.put_text(json.dumps({
+            "schema_version": "1.0", "reviewed_scope": "ALL_SOURCE_FILES",
+            "review_altitude": "INSPECTED",
+            "path_risk_tiers": [{"path": "app.py", "risk_tier": "URGENT"}],
+            "surfaces": [], "boundary_reviews": [],
+        })).artifact_id
+        with pytest.raises(ModelError, match="R1 path risk tier is invalid"):
+            backend.collect(lease, TaskResult(
+                True, invalid_risk_tier_ref, "unknown risk tier",
                 {"agent_runs": 1, "wall_seconds": 1},
             ))
         complete_ref = manager.artifacts.put_text(json.dumps({

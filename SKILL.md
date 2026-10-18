@@ -94,6 +94,11 @@ conditions. `task-commit-r1` preserves that Agent declaration as one path claim 
 each path in the validated Work Unit scope. Campaign reports count altitudes separately
 from Plan ownership and explicitly state that they are not host-observed reads. Invalid
 altitude or anchors leave the lease available for correction and resubmission.
+R1 may also return `path_risk_tiers` entries `{path, risk_tier}` using `LOW`, `MEDIUM`,
+`HIGH`, or `UNASSESSED`; omitted paths default to `UNASSESSED`. This is review-priority
+triage, not vulnerability severity or a safety verdict. Campaign reports join each
+Work Unit's R2/R4 altitude to its included paths' declared tiers; this is a
+Work-Unit-level attribution, not per-file inspection proof.
 Malformed or missing task scope fails closed. A rejection lists the gap (counts plus the
 first ten edge IDs/paths where applicable) and leaves the task leased so the same worker
 can resubmit the complete result.

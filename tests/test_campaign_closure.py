@@ -632,12 +632,14 @@ def test_campaign_report_separates_agent_path_review_claims(tmp_path: Path) -> N
             "path": "state.py",
             "claim": "AGENT_DECLARED_REVIEWED",
             "altitude": "INSPECTED",
+            "risk_tier": "HIGH",
         },
         {
             "work_unit_id": work_unit_id,
             "path": "other.py",
             "claim": "AGENT_DECLARED_REVIEWED",
             "altitude": "SCREENED",
+            "risk_tier": "LOW",
         },
     )
     manager, plan = _closable_campaign(
@@ -664,6 +666,17 @@ def test_campaign_report_separates_agent_path_review_claims(tmp_path: Path) -> N
         assert report["path_review_altitude_counts"] == {
             "INSPECTED": 1, "SCREENED": 1,
         }
+        assert report["path_risk_tier_altitudes"] == {
+            "HIGH": {"INSPECTED": 1},
+            "LOW": {"SCREENED": 1},
+        }
+        assert report["coverage"]["path_risk_tiers"] == {"HIGH": 1, "LOW": 1}
+        assert report["risk_tier_discovery_axis_altitudes"]["HIGH"]["surface"] == {
+            "SCREENED": 1,
+        }
+        assert report["risk_tier_discovery_axis_altitudes"]["LOW"]["mechanism"] == {
+            "INSPECTED": 1,
+        }
         assert report["discovery_axis_review_altitudes"]["surface"] == {
             "SCREENED": 1,
         }
@@ -677,15 +690,22 @@ def test_campaign_report_separates_agent_path_review_claims(tmp_path: Path) -> N
             "INSPECTED": 1,
         }
         assert {
-            item["path"]: item["altitude"] for item in report["path_review_claims"]
-        } == {"state.py": "INSPECTED", "other.py": "SCREENED"}
+            item["path"]: (item["altitude"], item["risk_tier"])
+            for item in report["path_review_claims"]
+        } == {
+            "state.py": ("INSPECTED", "HIGH"),
+            "other.py": ("SCREENED", "LOW"),
+        }
         markdown = (
             manager.state_dir / "campaigns" / "CMP-r4" / "report" / "report.md"
         ).read_text(encoding="utf-8")
         assert "Agent declarations, not host-observed file reads" in markdown
         assert "INSPECTED 1" in markdown
         assert "SCREENED 1" in markdown
+        assert "tier `HIGH`" in markdown
         assert "`mechanism`: INSPECTED 1" in markdown
+        assert "R2 `HIGH` / `surface`: SCREENED 1" in markdown
+        assert "R4 `STATE` / `LOW` / `mechanism`: INSPECTED 1" in markdown
     finally:
         manager.close()
 

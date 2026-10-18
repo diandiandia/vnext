@@ -24,6 +24,7 @@ from .analysis_models import (
     DiscoveryAxis,
     Experiment,
     Hypothesis,
+    PathRiskTier,
     R5Assessment,
     Refutation,
     ReviewAltitude,
@@ -603,6 +604,7 @@ class ManualExecutionBackend:
                         f"R1 task requires review_altitude SCREENED or INSPECTED: {task.task_id}"
                     ) from error
                 self._validate_surface_coverage(task, output)
+                self._validate_path_risk_tiers(output, work_unit, task.task_id)
             else:
                 self._validate_hypothesis_output(task, output)
         if task.required_output == "category-run-bundle/v1":
@@ -883,6 +885,29 @@ class ManualExecutionBackend:
             raise ModelError(
                 f"non-applicable axis must use NOT_RECORDED altitude: {task_id}"
             )
+
+    @staticmethod
+    def _validate_path_risk_tiers(
+        output: Mapping[str, Any], work_unit: Mapping[str, Any], task_id: str,
+    ) -> None:
+        records = output.get("path_risk_tiers", [])
+        if not isinstance(records, list):
+            raise ModelError(f"R1 path_risk_tiers must be an array: {task_id}")
+        allowed_paths = _expand_agent_work_unit_files(work_unit)
+        seen_paths = set()
+        for record in records:
+            if not isinstance(record, dict):
+                raise ModelError(f"R1 path risk tier record must be an object: {task_id}")
+            path = record.get("path")
+            if not isinstance(path, str) or path not in allowed_paths:
+                raise ModelError(f"R1 path risk tier is outside its Work Unit: {path}")
+            if path in seen_paths:
+                raise ModelError(f"R1 path risk tier is duplicated: {path}")
+            seen_paths.add(path)
+            try:
+                PathRiskTier(str(record["risk_tier"]))
+            except (KeyError, ValueError) as error:
+                raise ModelError(f"R1 path risk tier is invalid: {path}") from error
 
     def _task_work_unit(self, task: TaskSpec) -> Mapping[str, Any]:
         if not task.input_refs:
@@ -1214,7 +1239,10 @@ class DiscoveryCoordinator:
                     + " Declare review_altitude as SCREENED for bounded breadth triage "
                     "or INSPECTED for targeted source analysis of relevant entry paths "
                     "and security conditions. This is an Agent declaration, not a "
-                    "host-observed read or proof that the path is safe. "
+                    "host-observed read or proof that the path is safe. Optionally "
+                    "classify each path in path_risk_tiers as LOW/MEDIUM/HIGH using "
+                    "review priority only, not vulnerability severity; use UNASSESSED "
+                    "when evidence is insufficient. Omitted paths default to UNASSESSED. "
                     + " Review every supplied boundary edge as confirmed, rejected, or unresolved. "
                     "Return a BoundaryReview for each edge with evidence and rationale."
                 ),
@@ -1222,6 +1250,10 @@ class DiscoveryCoordinator:
                     "schema_version": "1.0",
                     "reviewed_scope": _REVIEWED_SCOPE_CONTRACT,
                     "review_altitude": "SCREENED or INSPECTED, an Agent-declared Work Unit review level",
+                    "path_risk_tiers": (
+                        "optional array<{path, risk_tier: LOW|MEDIUM|HIGH|UNASSESSED}>; "
+                        "omitted paths default to UNASSESSED"
+                    ),
                     "surfaces": "array<Surface>",
                     "boundary_reviews": (
                         "array<BoundaryReview>, exactly one per supplied edge, with this "
@@ -1259,11 +1291,39 @@ class DiscoveryCoordinator:
             reviewed_paths = value.get("reviewed_paths")
             if not isinstance(reviewed_paths, list):
                 reviewed_paths = work_unit.get("source_files", [])
+            raw_risk_tiers = value.get("path_risk_tiers", [])
+            if not isinstance(raw_risk_tiers, list):
+                raise ModelError(
+                    f"R1 path_risk_tiers must be an array: {view.task.task_id}"
+                )
+            risk_tiers_by_path = {}
+            for record in raw_risk_tiers:
+                if not isinstance(record, dict):
+                    raise ModelError(
+                        f"R1 path risk tier record must be an object: {view.task.task_id}"
+                    )
+                path = str(record.get("path", ""))
+                if path not in {str(item) for item in work_unit.get("source_files", [])}:
+                    raise ModelError(
+                        f"R1 path risk tier is outside its Work Unit: {path}"
+                    )
+                try:
+                    risk_tier = PathRiskTier(str(record.get("risk_tier", "")))
+                except ValueError as error:
+                    raise ModelError(
+                        f"R1 path risk tier is invalid: {path}"
+                    ) from error
+                if path in risk_tiers_by_path:
+                    raise ModelError(f"R1 path risk tier is duplicated: {path}")
+                risk_tiers_by_path[path] = risk_tier.value
             path_review_claims.extend({
                 "work_unit_id": str(work_unit["work_unit_id"]),
                 "path": str(path),
                 "claim": "AGENT_DECLARED_REVIEWED",
                 "altitude": str(value["review_altitude"]),
+                "risk_tier": risk_tiers_by_path.get(
+                    str(path), PathRiskTier.UNASSESSED.value
+                ),
             } for path in reviewed_paths)
             for item in value.get("surfaces", []):
                 surface = Surface.from_dict(item)

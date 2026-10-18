@@ -27,6 +27,7 @@ from .analysis_models import (
     Finding,
     FindingStatus,
     Hypothesis,
+    PathRiskTier,
     Refutation,
     R5Assessment,
     R5Disposition,
@@ -172,6 +173,7 @@ class BatchWorkflow:
             path = str(claim.get("path", ""))
             claim_state = str(claim.get("claim", ""))
             altitude = str(claim.get("altitude", ""))
+            risk_tier = str(claim.get("risk_tier", PathRiskTier.UNASSESSED.value))
             work_unit = work_units.get(work_unit_id)
             if work_unit is None or path not in {
                 str(item) for item in work_unit.get("source_files", [])
@@ -185,6 +187,12 @@ class BatchWorkflow:
                 raise ModelError(
                     "R1 path review claim requires SCREENED or INSPECTED altitude"
                 ) from error
+            try:
+                PathRiskTier(risk_tier)
+            except ValueError as error:
+                raise ModelError(
+                    "R1 path review claim has an invalid risk tier"
+                ) from error
             key = (work_unit_id, path)
             if key in seen_path_review_claims:
                 raise ModelError("R1 contains duplicate path review claims")
@@ -194,6 +202,7 @@ class BatchWorkflow:
                 "path": path,
                 "claim": claim_state,
                 "altitude": altitude,
+                "risk_tier": risk_tier,
             })
         line_count_cache: dict[str, tuple[int, frozenset[int]]] = {}
         boundary_edges = {edge.edge_id: edge for edge in plan.boundary_edges}
