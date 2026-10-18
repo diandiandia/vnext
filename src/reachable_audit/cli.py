@@ -84,6 +84,10 @@ def _parser() -> argparse.ArgumentParser:
         "--max-screening-fraction", type=float,
         help="predeclare the maximum fraction of Work Units allowed as screening-only (0..1)",
     )
+    init.add_argument(
+        "--require-host-worker-attestation", action="store_true",
+        help="require task-result HMAC attestations from the host wrapper",
+    )
 
     status = subparsers.add_parser("status", help="show Campaign and Batch state")
     status.add_argument("target")
@@ -482,16 +486,16 @@ def main(argv: list[str] | None = None) -> int:
                 0 <= arguments.max_screening_fraction <= 1
             ):
                 raise ValueError("max-screening-fraction must be between 0 and 1")
-            budget = (
-                {"max_screening_fraction": arguments.max_screening_fraction}
-                if arguments.max_screening_fraction is not None
-                else None
-            )
+            budget = {}
+            if arguments.max_screening_fraction is not None:
+                budget["max_screening_fraction"] = arguments.max_screening_fraction
+            if arguments.require_host_worker_attestation:
+                budget["require_host_worker_attestation"] = True
             with CampaignManager(arguments.target, arguments.state_dir) as manager:
                 campaign = manager.create_campaign(
                     snapshot_id=snapshot_id,
                     campaign_id=arguments.campaign_id,
-                    budget=budget,
+                    budget=budget or None,
                     audit_mode=CampaignAuditMode(arguments.audit_mode),
                     history_source_campaign_ids=tuple(arguments.history_source),
                 )

@@ -176,6 +176,10 @@ class AuditStore(AbstractContextManager["AuditStore"]):
             or not 0 <= screening_fraction <= 1
         ):
             raise ValueError("max_screening_fraction must be a number between 0 and 1")
+        if "require_host_worker_attestation" in (budget or {}) and type(
+            (budget or {})["require_host_worker_attestation"]
+        ) is not bool:
+            raise ValueError("require_host_worker_attestation must be boolean")
         now = _utc_now()
         budget_json = _json(dict(budget or {}))
         constraints_json = _json(list(constraints or ()))

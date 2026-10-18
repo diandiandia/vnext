@@ -39,6 +39,19 @@ def test_cli_freezes_max_screening_fraction_at_campaign_init(
     assert campaign["budget"]["max_screening_fraction"] == 0.2
 
 
+def test_cli_can_require_host_worker_attestation_at_campaign_init(
+    tmp_path: Path, capsys: object,
+) -> None:
+    target = tmp_path / "attested-campaign"
+    target.mkdir()
+    assert main([
+        "init", str(target), "--snapshot-id", "fixture:attested-init",
+        "--campaign-id", "CMP-attested-init", "--require-host-worker-attestation",
+    ]) == 0
+    campaign = json.loads(capsys.readouterr().out)  # type: ignore[attr-defined]
+    assert campaign["budget"]["require_host_worker_attestation"] is True
+
+
 def test_cli_runs_registered_language_toolchain_probe(capsys: object) -> None:
     assert main(["toolchain-probe", "python"]) == 0
     result = json.loads(capsys.readouterr().out)  # type: ignore[attr-defined]

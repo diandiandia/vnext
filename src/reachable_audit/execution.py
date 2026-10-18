@@ -6,7 +6,9 @@ from dataclasses import asdict, dataclass, field, replace
 import datetime as dt
 from enum import StrEnum
 import hashlib
+import hmac
 import json
+import os
 from pathlib import Path
 import re
 from typing import Any, Callable, Mapping, Sequence
@@ -275,6 +277,9 @@ class TaskResult:
             raise ModelError(
                 "successful execution task requires positive agent_runs and wall_seconds"
             )
+        delegated_agent_runs = self.measurements.get("delegated_agent_runs", 0)
+        if delegated_agent_runs > self.measurements["agent_runs"]:
+            raise ModelError("delegated_agent_runs cannot exceed total agent_runs")
         if any(not str(key).strip() or not str(value).strip() for key, value in self.configuration.items()):
             raise ModelError("execution configuration attestations cannot be empty")
         host_policy_digest = self.configuration.get("host_tool_policy_digest")
@@ -454,6 +459,14 @@ class ManualExecutionBackend:
     def collect(self, lease: TaskLease, result: TaskResult) -> TaskView:
         if lease.task.campaign_id != self.campaign_id:
             raise ModelError("execution lease belongs to another Campaign")
+        self._validate_host_worker_attestation(lease, result)
+        if (
+            "delegated_agent_runs" in lease.task.budget
+            and "delegated_agent_runs" not in result.measurements
+        ):
+            raise ModelError(
+                "execution result is missing budgeted delegated_agent_runs measurement"
+            )
         if result.succeeded and lease.task.required_output in _TASK_OUTPUT_REQUIRED_FIELDS:
             if result.output_ref is None:
                 raise ModelError("successful execution task requires an output artifact")
@@ -483,6 +496,73 @@ class ManualExecutionBackend:
             now=self._now(),
         )
         return self.poll(lease.task.task_id)
+
+    def _validate_host_worker_attestation(
+        self, lease: TaskLease, result: TaskResult,
+    ) -> None:
+        campaign = self.manager.store.get_campaign(self.campaign_id)
+        if campaign.budget.get("require_host_worker_attestation") is not True:
+            return
+        secret = os.environ.get("VNA_HOST_WORKER_HMAC_KEY", "").encode("utf-8")
+        if len(secret) < 32:
+            raise ModelError(
+                "VNA_HOST_WORKER_HMAC_KEY must contain at least 32 bytes"
+            )
+        encoded_attestation = result.configuration.get("host_worker_attestation")
+        if not encoded_attestation:
+            raise ModelError("task result requires a signed host_worker_attestation")
+        try:
+            attestation = json.loads(encoded_attestation)
+        except (TypeError, ValueError, json.JSONDecodeError) as error:
+            raise ModelError("host_worker_attestation is not valid JSON") from error
+        required_fields = {
+            "schema_version", "campaign_id", "batch_id", "task_id", "attempt",
+            "lease_expires_at", "worker_id", "delegated_worker_ids",
+            "delegated_agent_runs", "signature",
+        }
+        if not isinstance(attestation, dict) or set(attestation) != required_fields:
+            raise ModelError("host_worker_attestation has an invalid schema")
+        signature = attestation["signature"]
+        if (
+            not isinstance(signature, dict)
+            or set(signature) != {"algorithm", "value"}
+            or signature.get("algorithm") != "hmac-sha256"
+        ):
+            raise ModelError("host_worker_attestation requires an HMAC-SHA256 signature")
+        unsigned = {key: value for key, value in attestation.items() if key != "signature"}
+        canonical = json.dumps(
+            unsigned, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        ).encode("utf-8")
+        expected_signature = hmac.new(secret, canonical, hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(str(signature.get("value", "")), expected_signature):
+            raise ModelError("host_worker_attestation signature is invalid")
+        if any((
+            attestation["schema_version"] != "1.0",
+            attestation["campaign_id"] != lease.task.campaign_id,
+            attestation["batch_id"] != lease.task.batch_id,
+            attestation["task_id"] != lease.task.task_id,
+            type(attestation["attempt"]) is not int,
+            attestation["attempt"] != lease.attempt,
+            attestation["lease_expires_at"] != lease.lease_expires_at,
+            attestation["worker_id"] != lease.worker_id,
+            type(attestation["delegated_agent_runs"]) is not int,
+            attestation["delegated_agent_runs"] != result.measurements.get(
+                "delegated_agent_runs", 0
+            ),
+        )):
+            raise ModelError("host_worker_attestation does not match the current task lease/result")
+        delegated_workers = attestation["delegated_worker_ids"]
+        if (
+            not isinstance(delegated_workers, list)
+            or any(not isinstance(item, str) or not item.strip() for item in delegated_workers)
+            or len(delegated_workers) != len(set(delegated_workers))
+            or lease.worker_id in delegated_workers
+        ):
+            raise ModelError("host_worker_attestation has invalid delegated worker identities")
+        if bool(attestation["delegated_agent_runs"]) != bool(delegated_workers):
+            raise ModelError(
+                "host_worker_attestation delegated identities do not match delegated_agent_runs"
+            )
 
     def amend_completed_output(
         self,

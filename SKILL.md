@@ -73,6 +73,12 @@ and `output_tokens` as integers on every terminal task attempt, including failed
 When a task declares `delegated_agent_runs` budget, also report that aggregate measurement;
 it must not exceed the task cap or total `agent_runs`. This is reported effort, not
 authenticated delegate identity or a provider-side reservation.
+For Campaigns initialized with `--require-host-worker-attestation`, `configuration` must
+include `host_worker_attestation` as a JSON string containing the task/attempt/lease,
+worker ID, delegated worker IDs, delegated run count, and an `hmac-sha256` signature.
+The host wrapper signs canonical JSON with `VNA_HOST_WORKER_HMAC_KEY`; never put that key
+in task input or worker context. This authenticates the wrapper assertion only, not a
+compromised host's truthfulness.
 Campaign reports derive success-only totals and separate attempt-level totals; any missing
 attempt usage makes the attempt cost report incomplete. Missing usage never blocks audit
 collection, but do not claim comparable or complete costs when `usage_complete` is false.
@@ -269,6 +275,8 @@ confirmation, or refutation.
 ```bash
 PYTHONPATH=<vnext>/src python3 -m reachable_audit init <target> --snapshot-id <id> \
   --audit-mode fresh --max-screening-fraction <0..1>
+PYTHONPATH=<vnext>/src python3 -m reachable_audit init <target> --snapshot-id <id> \
+  --require-host-worker-attestation
 PYTHONPATH=<vnext>/src python3 -m reachable_audit init <target> \
   --snapshot-id <id> --campaign-id <new-id> --audit-mode follow-up \
   --history-source <prior-campaign-id>

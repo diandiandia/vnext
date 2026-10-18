@@ -15,11 +15,13 @@ IMPLEMENTED_RELEASE_GATES = tuple(f"RG{index}" for index in range(1, 16))
 
 
 _POLICY: dict[str, Any] = {
-    "policy_version": "vnext-task-policy-29",
+    "policy_version": "vnext-task-policy-30",
     "task_collection": {
         "shell_execution_by_scheduler": False,
         "required_measurements": ["agent_runs", "wall_seconds"],
+        "delegated_agent_runs": "optional_measurement_required_when_task_budgeted_and_bounded_by_agent_runs",
         "successful_task_measurements_positive": True,
+        "host_worker_attestation": "campaign_opt_in_hmac_sha256_bound_to_task_attempt_lease_worker_and_delegates",
         "source_anchors_required": True,
         "evidence_artifacts_content_addressed": True,
         "held_out_knowledge_runtime_access": False,

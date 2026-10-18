@@ -1,5 +1,7 @@
 import datetime as dt
 from dataclasses import replace
+import hashlib
+import hmac
 import json
 from pathlib import Path
 
@@ -89,6 +91,179 @@ def test_manual_backend_leases_once_and_collects_idempotently(tmp_path: Path) ->
             if event.event_type == "TASK_COMPLETED"
         )
         assert completed.payload["configuration"]["model_id"] == "fixture-model"
+    finally:
+        manager.close()
+
+
+def test_budgeted_delegated_agent_runs_are_reported_and_bounded(
+    tmp_path: Path,
+) -> None:
+    manager, original = _setup(tmp_path)
+    task = replace(
+        original,
+        task_id="TASK-delegated-budget",
+        budget={"agent_runs": 3, "delegated_agent_runs": 1},
+    )
+    try:
+        backend = ManualExecutionBackend(manager, task.campaign_id)
+        backend.submit(task)
+        lease = backend.claim("worker")
+        assert lease is not None
+        output_ref = manager.artifacts.put_text(json.dumps({
+            "schema_version": "1.0",
+            "review_altitude": "INSPECTED",
+            "reviewed_paths": [],
+            "surfaces": [],
+            "boundary_reviews": [],
+        })).artifact_id
+
+        with pytest.raises(ModelError, match="missing budgeted delegated_agent_runs"):
+            backend.collect(lease, TaskResult(
+                True, output_ref, "missing delegated usage",
+                {"agent_runs": 2, "wall_seconds": 1},
+            ))
+        assert backend.poll(task.task_id).status is TaskStatus.LEASED
+
+        with pytest.raises(ModelError, match="exceeded budget"):
+            backend.collect(lease, TaskResult(
+                True, output_ref, "delegated usage over cap",
+                {"agent_runs": 2, "delegated_agent_runs": 2, "wall_seconds": 1},
+            ))
+        assert backend.poll(task.task_id).status is TaskStatus.LEASED
+
+        result = backend.collect(lease, TaskResult(
+            True, output_ref, "delegated usage recorded",
+            {"agent_runs": 2, "delegated_agent_runs": 1, "wall_seconds": 1},
+        ))
+        assert result.status is TaskStatus.SUCCEEDED
+    finally:
+        manager.close()
+
+
+def test_host_worker_attestation_is_bound_to_task_lease_and_delegates(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    target = tmp_path / "attested-target"
+    target.mkdir()
+    manager = CampaignManager(target)
+    secret = "test-host-worker-key-material-0123456789".encode()
+    monkeypatch.setenv("VNA_HOST_WORKER_HMAC_KEY", secret.decode())
+    try:
+        manager.create_campaign(
+            campaign_id="CMP-attested-worker",
+            snapshot_id="fixture:attested-worker",
+            budget={"require_host_worker_attestation": True},
+        )
+        manager.add_batch(
+            campaign_id="CMP-attested-worker",
+            batch_id="B-attested",
+            manifest={"work_unit_ids": ["WU-attested"]},
+        )
+        input_ref = manager.artifacts.put_text(json.dumps({
+            "work_unit": {"work_unit_id": "WU-attested", "source_files": []},
+            "boundary_edges": [],
+        })).artifact_id
+        task = TaskSpec(
+            task_id="TASK-attested",
+            campaign_id="CMP-attested-worker",
+            batch_id="B-attested",
+            work_unit_id="WU-attested",
+            operation="discover_surfaces",
+            input_refs=(input_ref,),
+            required_output="surface-set/v1",
+            budget={"agent_runs": 2, "delegated_agent_runs": 1},
+        )
+        backend = ManualExecutionBackend(manager, "CMP-attested-worker")
+        backend.submit(task)
+        lease = backend.claim("host-worker")
+        assert lease is not None
+        output_ref = manager.artifacts.put_text(json.dumps({
+            "schema_version": "1.0",
+            "review_altitude": "INSPECTED",
+            "reviewed_paths": [],
+            "surfaces": [],
+            "boundary_reviews": [],
+        })).artifact_id
+        measurements = {
+            "agent_runs": 2,
+            "delegated_agent_runs": 1,
+            "wall_seconds": 1,
+        }
+
+        def sign_attestation(worker_id: str, *, signature_value: str | None = None) -> str:
+            unsigned = {
+                "schema_version": "1.0",
+                "campaign_id": lease.task.campaign_id,
+                "batch_id": lease.task.batch_id,
+                "task_id": lease.task.task_id,
+                "attempt": lease.attempt,
+                "lease_expires_at": lease.lease_expires_at,
+                "worker_id": worker_id,
+                "delegated_worker_ids": ["delegate-1"],
+                "delegated_agent_runs": 1,
+            }
+            canonical = json.dumps(
+                unsigned, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+            ).encode("utf-8")
+            signature = signature_value or hmac.new(
+                secret, canonical, hashlib.sha256,
+            ).hexdigest()
+            return json.dumps({
+                **unsigned,
+                "signature": {"algorithm": "hmac-sha256", "value": signature},
+            })
+
+        with pytest.raises(ModelError, match="requires a signed host_worker_attestation"):
+            backend.collect(lease, TaskResult(
+                True, output_ref, "missing host attestation", measurements,
+            ))
+        with pytest.raises(ModelError, match="signature is invalid"):
+            backend.collect(lease, TaskResult(
+                True, output_ref, "invalid signature", measurements,
+                {"host_worker_attestation": sign_attestation(
+                    "host-worker", signature_value="0" * 64,
+                )},
+            ))
+        with pytest.raises(ModelError, match="does not match the current task lease"):
+            backend.collect(lease, TaskResult(
+                True, output_ref, "wrong worker binding", measurements,
+                {"host_worker_attestation": sign_attestation("different-worker")},
+            ))
+        unsigned = {
+            "schema_version": "1.0",
+            "campaign_id": lease.task.campaign_id,
+            "batch_id": lease.task.batch_id,
+            "task_id": lease.task.task_id,
+            "attempt": lease.attempt,
+            "lease_expires_at": lease.lease_expires_at,
+            "worker_id": "host-worker",
+            "delegated_worker_ids": [],
+            "delegated_agent_runs": 1,
+        }
+        canonical = json.dumps(
+            unsigned, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        ).encode("utf-8")
+        inconsistent_delegate_signature = hmac.new(
+            secret, canonical, hashlib.sha256,
+        ).hexdigest()
+        with pytest.raises(ModelError, match="do not match delegated_agent_runs"):
+            backend.collect(lease, TaskResult(
+                True, output_ref, "missing delegate identity", measurements,
+                {"host_worker_attestation": json.dumps({
+                    **unsigned,
+                    "signature": {
+                        "algorithm": "hmac-sha256",
+                        "value": inconsistent_delegate_signature,
+                    },
+                })},
+            ))
+        assert backend.poll(task.task_id).status is TaskStatus.LEASED
+
+        collected = backend.collect(lease, TaskResult(
+            True, output_ref, "verified host and delegated identities", measurements,
+            {"host_worker_attestation": sign_attestation("host-worker")},
+        ))
+        assert collected.status is TaskStatus.SUCCEEDED
     finally:
         manager.close()
 

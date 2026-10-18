@@ -357,7 +357,12 @@ or task ID and release an unstarted lease. Failed attempts remain visible; after
 configured retry budget is exhausted, an operator may append a reasoned
 `TASK_RETRY_AUTHORIZED` event for one bounded additional attempt. Success and cancellation
 remain terminal. Worker IDs identify queue actors but are not authenticated human/Agent
-identities without host attestation.
+identities without host attestation. Campaigns may opt into
+`require_host_worker_attestation`; collection then requires a host-wrapper HMAC-SHA256
+envelope signed with `VNA_HOST_WORKER_HMAC_KEY` and bound to Campaign, Batch, task,
+attempt, lease expiry, worker, delegated worker IDs, and delegated-run count. The key
+must remain in the host wrapper, not the worker. This verifies the host assertion, not
+the truth of an assertion made by a compromised host.
 
 Campaign budget may freeze `max_screening_fraction` in the range [0, 1] at init. Closure
 reports screened Work Unit IDs, count, fraction, ceiling status, and release eligibility.
