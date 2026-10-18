@@ -926,12 +926,62 @@ class ManualExecutionBackend:
         runs_value = output.get("category_runs")
         if not isinstance(items, list) or not isinstance(runs_value, list):
             raise ModelError(f"R4 bundle requires category_items and category_runs arrays: {task.task_id}")
+        wire_version = str(task_input.get("bundle_input_version", "1.0"))
         expected = {}
         allowed_hypothesis_ids = {}
+        task_contexts = task_input.get("task_contexts", [])
         for item in items:
-            if not isinstance(item, dict) or not isinstance(item.get("category_plan"), dict):
+            if not isinstance(item, dict):
                 raise ModelError(f"R4 bundle input has malformed category item: {task.task_id}")
-            category_plan = item["category_plan"]
+            if wire_version == "1.0":
+                category_plan = item.get("category_plan")
+                if not isinstance(category_plan, dict):
+                    raise ModelError(
+                        f"R4 v1 bundle item lacks category_plan: {task.task_id}"
+                    )
+            elif wire_version == "2.0":
+                axis_sets = task_input.get("discovery_axis_sets")
+                axis_set_id = item.get("discovery_axis_set_id")
+                context_id = item.get("task_context_id")
+                if (
+                    not isinstance(axis_sets, list)
+                    or not isinstance(axis_set_id, int)
+                    or not 0 <= axis_set_id < len(axis_sets)
+                    or not isinstance(axis_sets[axis_set_id], list)
+                ):
+                    raise ModelError(
+                        f"R4 v2 bundle item has an invalid discovery axis set: {task.task_id}"
+                    )
+                if (
+                    not isinstance(task_contexts, list)
+                    or not isinstance(context_id, int)
+                    or not 0 <= context_id < len(task_contexts)
+                    or not isinstance(task_contexts[context_id], dict)
+                ):
+                    raise ModelError(
+                        f"R4 v2 bundle item has an invalid task context reference: {task.task_id}"
+                    )
+                context = task_contexts[context_id]
+                if (
+                    not isinstance(context.get("language_adapters"), list)
+                    or not isinstance(context.get("knowledge_context"), dict)
+                ):
+                    raise ModelError(
+                        f"R4 v2 bundle task context is malformed: {task.task_id}"
+                    )
+                category_plan = {
+                    "category_plan_id": item.get("category_plan_id"),
+                    "work_unit_id": item.get("work_unit_id"),
+                    "family": task_input.get("family"),
+                    "mechanism_variants": item.get("mechanism_variants", []),
+                    "seed_card_ids": item.get("seed_card_ids", []),
+                    "discovery_axes": axis_sets[axis_set_id],
+                    "budget": item.get("budget", {}),
+                }
+            else:
+                raise ModelError(
+                    f"unsupported R4 bundle input version {wire_version}: {task.task_id}"
+                )
             plan_id = str(category_plan.get("category_plan_id", ""))
             if not plan_id or plan_id in expected:
                 raise ModelError(f"R4 bundle input has duplicate or missing plan IDs: {task.task_id}")
@@ -2514,30 +2564,79 @@ class DiscoveryCoordinator:
         category_plans: Sequence[Mapping[str, Any]],
         work_units: Mapping[str, Mapping[str, Any]],
         hypotheses_by_work_unit: Mapping[str, Sequence[Mapping[str, Any]]],
+        *,
+        wire_version: str = "2.0",
     ) -> dict[str, Any]:
-        items = []
+        if wire_version not in {"1.0", "2.0"}:
+            raise ModelError(f"unsupported R4 bundle input version: {wire_version}")
+        legacy_items = []
+        compact_items = []
+        discovery_axis_sets = []
+        axis_set_ids = {}
+        task_contexts = []
+        task_context_ids = {}
         shared_card_ids: set[str] = set()
         for category_plan in category_plans:
-            work_unit = work_units[str(category_plan["work_unit_id"])]
+            work_unit_id = str(category_plan["work_unit_id"])
+            work_unit = work_units[work_unit_id]
             card_ids = tuple(str(item) for item in category_plan["seed_card_ids"])
             shared_card_ids.update(card_ids)
-            items.append({
+            allowed_hypothesis_ids = [
+                str(item["hypothesis_id"])
+                for item in hypotheses_by_work_unit.get(work_unit_id, [])
+                if str(item["mechanism"]["family"]) == family
+            ]
+            knowledge_context = self.knowledge_catalog.task_context(
+                work_unit.get("languages", []),
+                families=[family],
+                max_entries=10,
+            ).to_dict()
+            language_adapters = self._language_adapter_context(work_unit)
+            task_context = {
+                "language_adapters": language_adapters,
+                "knowledge_context": knowledge_context,
+            }
+            task_context_key = json.dumps(
+                task_context,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            if task_context_key not in task_context_ids:
+                task_context_ids[task_context_key] = len(task_contexts)
+                task_contexts.append(task_context)
+            task_context_id = task_context_ids[task_context_key]
+            work_unit_view = _agent_work_unit(work_unit)
+            legacy_items.append({
                 "category_plan": category_plan,
-                "work_unit": _agent_work_unit(work_unit),
-                "language_adapters": self._language_adapter_context(work_unit),
-                "knowledge_context": self.knowledge_catalog.task_context(
-                    work_unit.get("languages", []),
-                    families=[family],
-                    max_entries=10,
-                ).to_dict(),
-                "allowed_hypothesis_ids": [
-                    str(item["hypothesis_id"])
-                    for item in hypotheses_by_work_unit.get(str(work_unit["work_unit_id"]), [])
-                    if str(item["mechanism"]["family"]) == family
-                ],
+                "work_unit": work_unit_view,
+                "language_adapters": language_adapters,
+                "knowledge_context": knowledge_context,
+                "allowed_hypothesis_ids": allowed_hypothesis_ids,
             })
-        return {
+            axes = tuple(str(axis) for axis in category_plan["discovery_axes"])
+            if axes not in axis_set_ids:
+                axis_set_ids[axes] = len(discovery_axis_sets)
+                discovery_axis_sets.append(list(axes))
+            compact_items.append({
+                "category_plan_id": str(category_plan["category_plan_id"]),
+                "work_unit_id": work_unit_id,
+                "discovery_axis_set_id": axis_set_ids[axes],
+                "mechanism_variants": list(category_plan["mechanism_variants"]),
+                "seed_card_ids": list(card_ids),
+                "budget": dict(category_plan.get("budget", {})),
+                "task_context_id": task_context_id,
+                "work_unit": {
+                    key: value for key, value in work_unit_view.items()
+                    if key not in {
+                        "work_unit_id", "category_families", "discovery_axes",
+                    }
+                },
+                "allowed_hypothesis_ids": allowed_hypothesis_ids,
+            })
+        value = {
             "schema_version": "1.0",
+            "bundle_input_version": wire_version,
             "operation": "run_category_audit_bundle",
             "snapshot_id": self.workflow.campaign.snapshot_id,
             "family": family,
@@ -2545,11 +2644,12 @@ class DiscoveryCoordinator:
                 self.knowledge_catalog.cards[card_id]
                 for card_id in sorted(shared_card_ids)
             ],
-            "category_items": items,
+            "category_items": legacy_items if wire_version == "1.0" else compact_items,
             "analysis_contract": (
                 "Review each category_item independently within its Work Unit. Definitions "
                 "are shared at bundle scope: each item may use only cards in its "
-                "category_plan.seed_card_ids. Do not transfer evidence or conclusions "
+                f"{'category_plan.seed_card_ids' if wire_version == '1.0' else 'seed_card_ids'}. "
+                "Do not transfer evidence or conclusions "
                 "across Work Units. "
                 "Return exactly one "
                 "CategoryRun for every listed category_plan_id; preserve each Work Unit ID. "
@@ -2571,6 +2671,16 @@ class DiscoveryCoordinator:
                 ),
             },
         }
+        if wire_version == "2.0":
+            value["discovery_axis_sets"] = discovery_axis_sets
+            value["task_contexts"] = task_contexts
+            value["analysis_contract"] += (
+                " This is compact R4 bundle input v2: discovery_axis_set_id resolves "
+                "through discovery_axis_sets, task_context_id resolves through "
+                "task_contexts, and category items inherit family from the "
+                "bundle, and Work Unit category_families/discovery_axes are omitted."
+            )
+        return value
 
     def commit_r4(self) -> str:
         plan_event = self._require_stage("CATEGORY_AUDIT_PLAN_RECORDED")

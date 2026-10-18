@@ -393,7 +393,9 @@ def test_r4_category_plan_runs_as_durable_task(
         manager.close()
 
 
-def test_r4_bundle_schedules_two_work_units_and_commits_each_plan(tmp_path: Path) -> None:
+def test_r4_bundle_schedules_two_work_units_and_commits_each_plan(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
     files = {
         tmp_path / "services" / "api" / "pyproject.toml": "[project]\nname='api'\n",
         tmp_path / "services" / "api" / "api.py": "def handle(): pass\n",
@@ -472,16 +474,43 @@ def test_r4_bundle_schedules_two_work_units_and_commits_each_plan(tmp_path: Path
         }
         task_input = json.loads(manager.artifacts.get_bytes(tasks[0].task.input_refs[0]))
         assert len(task_input["category_items"]) == 2
+        assert task_input["bundle_input_version"] == "2.0"
+        assert task_input["family"] == "STATE"
+        assert len(task_input["discovery_axis_sets"]) == 1
         assert all(
-            item["category_plan"]["seed_card_ids"] == [state_card["mechanism_id"]]
+            item["seed_card_ids"] == [state_card["mechanism_id"]]
             for item in task_input["category_items"]
         )
+        assert all("category_plan" not in item for item in task_input["category_items"])
+        assert all(
+            "category_families" not in item["work_unit"]
+            and "discovery_axes" not in item["work_unit"]
+            for item in task_input["category_items"]
+        )
+        assert {item["discovery_axis_set_id"] for item in task_input["category_items"]} == {0}
         assert task_input["mechanism_cards"] == [state_card]
+        work_units_by_id = {
+            str(item["work_unit_id"]): item
+            for item in workflow.batch.manifest["work_units"]
+        }
+        legacy_task_input = coordinator._r4_bundle_input(
+            "STATE",
+            [asdict(item) for item in category_plans],
+            work_units_by_id,
+            {},
+            wire_version="1.0",
+        )
+        compact_size = len(json.dumps(
+            task_input, sort_keys=True, separators=(",", ":")
+        ).encode("utf-8"))
+        legacy_size = len(json.dumps(
+            legacy_task_input, sort_keys=True, separators=(",", ":")
+        ).encode("utf-8"))
+        assert compact_size < legacy_size
         expanded_payload = {
             **task_input,
             "mechanism_cards": [state_card, state_card],
         }
-        compact_size = len(json.dumps(task_input, separators=(",", ":")).encode("utf-8"))
         expanded_size = len(json.dumps(expanded_payload, separators=(",", ":")).encode("utf-8"))
         assert compact_size < expanded_size
         assert all(item["allowed_hypothesis_ids"] == [] for item in task_input["category_items"])
@@ -511,6 +540,48 @@ def test_r4_bundle_schedules_two_work_units_and_commits_each_plan(tmp_path: Path
                 finding_ids=(),
             )) for category_plan in category_plans],
         })).artifact_id
+        backend._validate_category_run_bundle(
+            replace(tasks[0].task, input_refs=(manager.artifacts.put_text(
+                json.dumps(legacy_task_input)
+            ).artifact_id,)),
+            json.loads(manager.artifacts.get_bytes(output_ref)),
+        )
+        original_get_bytes = manager.artifacts.get_bytes
+
+        def corrupt_bundle_context(artifact_id: str) -> bytes:
+            value = original_get_bytes(artifact_id)
+            if artifact_id == tasks[0].task.input_refs[0]:
+                malformed_input = json.loads(value)
+                malformed_input["category_items"][0]["task_context_id"] = 999
+                return json.dumps(malformed_input).encode("utf-8")
+            return value
+
+        with monkeypatch.context() as patch:
+            patch.setattr(manager.artifacts, "get_bytes", corrupt_bundle_context)
+            with pytest.raises(ModelError, match="invalid task context reference"):
+                backend.collect(lease, TaskResult(
+                    True, output_ref, "invalid v2 task context reference",
+                    {"agent_runs": 1, "wall_seconds": 1},
+                ))
+        assert backend.poll(lease.task.task_id).status.value == "LEASED"
+
+        def corrupt_bundle_axis_set(artifact_id: str) -> bytes:
+            value = original_get_bytes(artifact_id)
+            if artifact_id == tasks[0].task.input_refs[0]:
+                malformed_input = json.loads(value)
+                malformed_input["category_items"][0]["discovery_axis_set_id"] = 999
+                return json.dumps(malformed_input).encode("utf-8")
+            return value
+
+        with monkeypatch.context() as patch:
+            patch.setattr(manager.artifacts, "get_bytes", corrupt_bundle_axis_set)
+            with pytest.raises(ModelError, match="invalid discovery axis set"):
+                backend.collect(lease, TaskResult(
+                    True, output_ref, "invalid v2 axis set reference",
+                    {"agent_runs": 1, "wall_seconds": 1},
+                ))
+        assert backend.poll(lease.task.task_id).status.value == "LEASED"
+
         invalid_bundle = json.loads(manager.artifacts.get_bytes(output_ref))
         invalid_bundle["category_runs"][0]["hypothesis_ids"] = ["invented-slug"]
         invalid_ref = manager.artifacts.put_text(json.dumps(invalid_bundle)).artifact_id

@@ -38,9 +38,11 @@ projections are recommitted. Existing terminal R6 behavior remains intact.
 
 Status: **LOCAL WIRE SLICE COMPLETE**. R4 AxisRun Work Unit IDs may be omitted and are
 inherited from the parent CategoryRun; explicit mismatches fail, and canonical stage
-artifacts retain the complete ID. Bundled mechanism-card definitions are serialized
-once at bundle scope while each item retains its seed-card allowlist. Broader payload
-reduction and measured real-project bundle-size acceptance remain open.
+artifacts retain the complete ID. Bundled mechanism-card definitions and repeated
+language/knowledge contexts are serialized once at bundle scope; v2 category items
+inherit family and reference shared axis sets while retaining per-item plan, Work Unit,
+card allowlist, budget, and hypothesis scope. The v1 bundle parser remains supported.
+Broader payload reduction and measured real-project bundle-size qualification remain open.
 
 Reduce repeated Work Unit/category/axis fields in bundled R4 inputs without weakening
 per-item identity, allowed-hypothesis, altitude, or coverage validation. Keep one
@@ -118,15 +120,16 @@ are external evidence; local synthetic tests cannot mark these gates complete.
 ## Current Test Gates
 
 The latest full local verification after stage provenance, invalidation, revision-bound
-tasks, R3.5 ledger replay, closure ancestry, and commit-boundary recovery tests is
-**319 passed, 1 skipped**; compatibility-scan passes with no findings (49 Python files,
-167 knowledge files, 1 prompt file). Phase 1's local acceptance tests pass; its real-host
-behavior remains unverified until release qualification.
+tasks, R3.5 ledger replay, closure ancestry, commit-boundary recovery, and compact R4 v2
+wire tests is **319 passed, 1 skipped**; compatibility-scan passes with no findings
+(49 Python files, 167 knowledge files, 1 prompt file). Phase 1's local acceptance tests
+pass; its real-host behavior remains unverified until release qualification.
 
-Before closing Phase 2, retain old-form compatibility, add compact multi-item round-trip
-and measured byte-reduction tests, verify rejected task output remains repairable, and
-prove reports are unchanged. Before closing Phase 3, test forgery, expiry, replay, identity
-binding, budget overrun, and concurrent reservation contention. Before closing Phase 4,
+Phase 2 local gates now cover v1 compatibility, v2 compact multi-item serialization,
+measured byte reduction, repairability after invalid references, and canonical R4 reports.
+Before closing Phase 2, measure representative large-project bundle sizes. Before closing
+Phase 3, test forgery, expiry, replay, identity binding, budget overrun, and concurrent
+reservation contention. Before closing Phase 4,
 test invalid signatures/scope/digests and trace valid provenance through R5, closure, and
 release output. Before closing Phase 5, test each extracted command/gate and confirm
 canonical output/error behavior is unchanged. Before closing Phase 6, run synthetic
