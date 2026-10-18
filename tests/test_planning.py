@@ -249,6 +249,13 @@ def test_validate_plan_checks_batch_source_file_count(tmp_path: Path) -> None:
     with pytest.raises(ModelError, match="source_file_count does not match"):
         validate_plan(incorrect_count, inventory)
 
+    incorrect_stages = replace(
+        plan,
+        batches=(replace(batch, required_stages=("R0", "R1")), *plan.batches[1:]),
+    )
+    with pytest.raises(ModelError, match="required_stages do not match"):
+        validate_plan(incorrect_stages, inventory)
+
 
 def test_worktree_footprint_excludes_symlinks_and_runtime_state(tmp_path: Path) -> None:
     (tmp_path / "payload.txt").write_text("abc", encoding="utf-8")

@@ -634,6 +634,10 @@ def validate_plan(plan: AuditPlan, inventory: ProjectInventory) -> None:
         raise ModelError("batch work unit coverage mismatch")
     work_units_by_id = {unit.work_unit_id: unit for unit in plan.work_units}
     for batch in plan.batches:
+        if batch.required_stages != REQUIRED_STAGES:
+            raise ModelError(
+                f"Batch required_stages do not match the supported workflow: {batch.batch_id}"
+            )
         expected_source_count = sum(
             len(work_units_by_id[work_unit_id].source_files)
             for work_unit_id in batch.work_unit_ids
