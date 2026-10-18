@@ -111,6 +111,39 @@ def test_validate_plan_binds_plan_to_inventory_snapshot_and_digest(
         validate_plan(plan, other_snapshot)
 
 
+def test_validate_plan_binds_work_unit_paths_to_component_owners(
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "work-unit-owners"
+    target.mkdir()
+    _fixture_monorepo(target)
+    inventory = build_inventory(target, "fixture:work-unit-owners")
+    plan = create_audit_plan(
+        campaign_id="CMP-work-unit-owners",
+        inventory=inventory,
+        category_families=["STATE"],
+    )
+    first_unit, second_unit = plan.work_units[:2]
+    swapped_owners = replace(
+        plan,
+        work_units=tuple(
+            replace(unit, component_id=(
+                second_unit.component_id
+                if unit.work_unit_id == first_unit.work_unit_id
+                else first_unit.component_id
+            ))
+            if unit.work_unit_id in {
+                first_unit.work_unit_id, second_unit.work_unit_id,
+            }
+            else unit
+            for unit in plan.work_units
+        ),
+    )
+
+    with pytest.raises(ModelError, match="source paths are not owned by its component"):
+        validate_plan(swapped_owners, inventory)
+
+
 def test_worktree_footprint_excludes_symlinks_and_runtime_state(tmp_path: Path) -> None:
     (tmp_path / "payload.txt").write_text("abc", encoding="utf-8")
     (tmp_path / "shortcut").symlink_to("payload.txt")

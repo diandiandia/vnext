@@ -568,6 +568,9 @@ def validate_plan(plan: AuditPlan, inventory: ProjectInventory) -> None:
         source.path for source in inventory.source_files
         if path_state_by_path[source.path] is PlanPathState.INCLUDED
     }
+    source_owner_by_path = {
+        source.path: source.component_id for source in inventory.source_files
+    }
     planned_paths = [path for unit in plan.work_units for path in unit.source_files]
     if len(planned_paths) != len(set(planned_paths)):
         raise ModelError("a source file is owned by multiple work units")
@@ -575,6 +578,17 @@ def validate_plan(plan: AuditPlan, inventory: ProjectInventory) -> None:
         missing = sorted(inventory_paths - set(planned_paths))
         extra = sorted(set(planned_paths) - inventory_paths)
         raise ModelError(f"plan source coverage mismatch: missing={missing}, extra={extra}")
+    for unit in plan.work_units:
+        if unit.component_id not in components:
+            raise ModelError(f"Work Unit references an unknown component: {unit.work_unit_id}")
+        wrong_owner_paths = [
+            path for path in unit.source_files
+            if source_owner_by_path.get(path) != unit.component_id
+        ]
+        if wrong_owner_paths:
+            raise ModelError(
+                f"Work Unit source paths are not owned by its component: {sorted(wrong_owner_paths)}"
+            )
     known_work_units = {unit.work_unit_id for unit in plan.work_units}
     planned_work_units = [unit for batch in plan.batches for unit in batch.work_unit_ids]
     if len(planned_work_units) != len(set(planned_work_units)):
