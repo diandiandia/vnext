@@ -162,6 +162,24 @@ def test_amendment_rejects_forged_preservation_and_batch_mapping(
                 inventory=inventory,
             )
 
+        with pytest.raises(ValueError, match="reason is required"):
+            manager.record_plan_amendment(
+                campaign_id="CMP-amend-mapping",
+                base_plan=base_plan,
+                amended_plan=amended_plan,
+                amendment=replace(amendment, reason="   "),
+                inventory=inventory,
+            )
+
+        with pytest.raises(ValueError, match="ID does not match its content"):
+            manager.record_plan_amendment(
+                campaign_id="CMP-amend-mapping",
+                base_plan=base_plan,
+                amended_plan=amended_plan,
+                amendment=replace(amendment, amendment_id="AMD-forged"),
+                inventory=inventory,
+            )
+
         forged_replacements = replace(
             amendment,
             batch_replacements=(BatchReplacement(

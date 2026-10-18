@@ -759,6 +759,20 @@ def validate_plan_amendment(
 ) -> None:
     if amendment.base_plan_id != base_plan.plan_id or amendment.amended_plan_id != amended_plan.plan_id:
         raise ModelError("Plan Amendment IDs do not match the supplied Plans")
+    normalized_reason = amendment.reason.strip()
+    if not normalized_reason:
+        raise ModelError("Plan Amendment reason is required")
+    if amendment.reason != normalized_reason:
+        raise ModelError("Plan Amendment reason must be normalized")
+    expected_amendment_id = _stable_id(
+        "AMD", base_plan.plan_id, amended_plan.plan_id, normalized_reason,
+    )
+    if amendment.amendment_id != expected_amendment_id:
+        raise ModelError("Plan Amendment ID does not match its content")
+    if amendment.campaign_id != base_plan.campaign_id or amendment.campaign_id != amended_plan.campaign_id:
+        raise ModelError("Plan Amendment Campaign does not match the supplied Plans")
+    if amendment.schema_version != "1.0":
+        raise ModelError("unsupported Plan Amendment schema version")
     immutable_fields = (
         "schema_version", "campaign_id", "snapshot_id", "inventory_digest",
         "category_families", "discovery_axes", "work_units", "boundary_edges",
