@@ -54,15 +54,18 @@ while the task remains repairable; R4 reports remain unchanged.
 
 ### 3. Host Identity and Delegated Budgets
 
-Status: **PARTIAL**. Tasks can require and cap an aggregate `delegated_agent_runs`
-measurement bounded by `agent_runs`; Campaigns can opt into a host-wrapper HMAC envelope
-bound to task/attempt/lease/worker/delegate fields. Host identity trust, key custody, and
-pre-dispatch/provider-side reservations remain open.
+Status: **LOCAL RESERVATION MECHANICS IMPLEMENTED; IDENTITY ACCEPTANCE PARTIAL**. A
+Campaign may set `max_delegated_agent_runs`; SQLite atomically reserves task-declared
+delegated usage with each lease, counts completed/failed usage, frees released/expired
+reservations, and excludes stale-revision tasks. Task reservations must fit within
+`agent_runs`, and positive delegated results require an explicit reservation. Campaigns
+can also opt into a host-wrapper HMAC bound to task/attempt/lease/worker/delegate fields.
+Host identity trust, key custody, and provider-side enforcement remain external.
 
-Add runtime mechanics for host-attested worker/reviewer identities and explicit delegated
-budget reservations. Runtime claims must bind to a signed or host-verified identity and
-budget envelope; labels alone must never count as authentication. Keep provider hard
-limits distinct from estimates.
+Complete host-verified worker/reviewer identity integration and provider-side hard budget
+reservations. Runtime claims must bind to a signed or host-verified identity and budget
+envelope; labels alone must never count as authentication. Keep provider hard limits
+distinct from estimates.
 
 Acceptance: forged, expired, replayed, over-budget, or unbound attestations fail before
 dispatch/finalization; concurrent workers cannot oversubscribe reserved budgets. Actual
@@ -120,16 +123,18 @@ are external evidence; local synthetic tests cannot mark these gates complete.
 ## Current Test Gates
 
 The latest full local verification after stage provenance, invalidation, revision-bound
-tasks, R3.5 ledger replay, closure ancestry, commit-boundary recovery, and compact R4 v2
-wire tests is **319 passed, 1 skipped**; compatibility-scan passes with no findings
-(49 Python files, 167 knowledge files, 1 prompt file). Phase 1's local acceptance tests
-pass; its real-host behavior remains unverified until release qualification.
+tasks, closure ancestry, compact R4 v2 wire, and delegated-budget reservation mechanics is
+**322 passed, 1 skipped**; compatibility-scan passes with no findings (49 Python files,
+167 knowledge files, 1 prompt file). Phase 1's local acceptance tests pass; its real-host
+behavior remains unverified until release qualification.
 
 Phase 2 local gates now cover v1 compatibility, v2 compact multi-item serialization,
 measured byte reduction, repairability after invalid references, and canonical R4 reports.
-Before closing Phase 2, measure representative large-project bundle sizes. Before closing
-Phase 3, test forgery, expiry, replay, identity binding, budget overrun, and concurrent
-reservation contention. Before closing Phase 4,
+Before closing Phase 2, measure representative large-project bundle sizes. Phase 3 local
+tests cover forged/unbound HMAC envelopes, concurrent oversubscription, release/expiry
+reclaim, failed-use accounting, reservation bounds, and stale-task exclusion; host identity
+trust/key custody and provider hard limits require integration evidence. Before closing
+Phase 4,
 test invalid signatures/scope/digests and trace valid provenance through R5, closure, and
 release output. Before closing Phase 5, test each extracted command/gate and confirm
 canonical output/error behavior is unchanged. Before closing Phase 6, run synthetic
