@@ -60,6 +60,8 @@ delegated usage with each lease, counts completed/failed usage, frees released/e
 reservations, and excludes stale-revision tasks. Task reservations must fit within
 `agent_runs`, and positive delegated results require an explicit reservation. Campaigns
 can also opt into a host-wrapper HMAC bound to task/attempt/lease/worker/delegate fields.
+Forged signatures, lease/worker mismatch, expired leases, replay across attempts,
+over-reservation, unreserved delegated use, and concurrent over-allocation are rejected.
 Host identity trust, key custody, and provider-side enforcement remain external.
 
 Complete host-verified worker/reviewer identity integration and provider-side hard budget
@@ -123,18 +125,19 @@ are external evidence; local synthetic tests cannot mark these gates complete.
 ## Current Test Gates
 
 The latest full local verification after stage provenance, invalidation, revision-bound
-tasks, closure ancestry, compact R4 v2 wire, and delegated-budget reservation mechanics is
-**322 passed, 1 skipped**; compatibility-scan passes with no findings (49 Python files,
+tasks, closure ancestry, compact R4 v2 wire, delegated-budget reservations, and host
+attestation expiry/replay checks is **323 passed, 1 skipped**; compatibility-scan passes
+with no findings (49 Python files,
 167 knowledge files, 1 prompt file). Phase 1's local acceptance tests pass; its real-host
 behavior remains unverified until release qualification.
 
 Phase 2 local gates now cover v1 compatibility, v2 compact multi-item serialization,
 measured byte reduction, repairability after invalid references, and canonical R4 reports.
 Before closing Phase 2, measure representative large-project bundle sizes. Phase 3 local
-tests cover forged/unbound HMAC envelopes, concurrent oversubscription, release/expiry
-reclaim, failed-use accounting, reservation bounds, and stale-task exclusion; host identity
-trust/key custody and provider hard limits require integration evidence. Before closing
-Phase 4,
+tests cover forged/unbound HMAC envelopes, expiry, replay, concurrent oversubscription,
+release/expiry reclaim, failed-use accounting, reservation bounds, and stale-task exclusion.
+Only host identity trust/key custody and provider hard limits require integration evidence.
+Before closing Phase 4,
 test invalid signatures/scope/digests and trace valid provenance through R5, closure, and
 release output. Before closing Phase 5, test each extracted command/gate and confirm
 canonical output/error behavior is unchanged. Before closing Phase 6, run synthetic
