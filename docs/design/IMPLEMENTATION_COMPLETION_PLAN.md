@@ -36,17 +36,17 @@ projections are recommitted. Existing terminal R6 behavior remains intact.
 
 ### 2. Compact R4 Task Payloads
 
-Status: **LOCAL WIRE SLICE COMPLETE**. R4 AxisRun Work Unit IDs may be omitted and are
-inherited from the parent CategoryRun; explicit mismatches fail, and canonical stage
-artifacts retain the complete ID. Bundled mechanism-card definitions and repeated
-language/knowledge contexts are serialized once at bundle scope; v2 category items
-inherit family and reference shared axis sets while retaining per-item plan, Work Unit,
-card allowlist, budget, and hypothesis scope. The v1 bundle parser remains supported.
-Broader payload reduction and measured real-project bundle-size qualification remain open.
+Status: **LOCAL WIRE AND SYNTHETIC ACCEPTANCE COMPLETE**. R4 AxisRun Work Unit IDs may
+be omitted and are inherited from the parent CategoryRun; explicit mismatches fail, and
+canonical stage artifacts retain the complete ID. Bundled mechanism-card definitions and
+repeated language/knowledge contexts are serialized once at bundle scope; v2 category
+items inherit family and reference shared axis sets while retaining per-item plan, Work
+Unit, card allowlist, budget, and hypothesis scope. The v1 bundle parser remains
+supported. No additional local schema change is planned without representative size data;
+real-project bundle-size qualification remains external.
 
-Reduce repeated Work Unit/category/axis fields in bundled R4 inputs without weakening
-per-item identity, allowed-hypothesis, altitude, or coverage validation. Keep one
-canonical persisted CategoryRun per CategoryAuditPlan.
+Keep one canonical persisted CategoryRun per CategoryAuditPlan and preserve per-item
+identity, allowed-hypothesis, altitude, and coverage validation across both wire versions.
 
 Acceptance: old and compact forms have an explicit versioned contract; round-trip tests
 prove byte-size reduction on multi-item bundles; omitted or mismatched references fail
@@ -75,8 +75,8 @@ identity and provider enforcement require a host integration acceptance run.
 
 ### 4. R5 Out-of-Band Evidence Provenance
 
-Status: **LOCAL PROVENANCE PATH IMPLEMENTED; AUTHORITY ACCEPTANCE EXTERNAL**.
-`r5-observation-register` verifies a host-authority HMAC and binds an observation to
+Status: **LOCAL PROVENANCE PATH AND SYNTHETIC ACCEPTANCE COMPLETE; AUTHORITY ACCEPTANCE
+EXTERNAL**. `r5-observation-register` verifies a host-authority HMAC and binds an observation to
 Campaign/snapshot/Batch/hypothesis, observer/method/time, and Campaign-owned artifact
 digests. Registration is evidence-only and cannot upgrade R5; matching observations enter
 R5 task context, assessments may cite them without promotion, and citations plus signed
@@ -84,9 +84,9 @@ payloads survive Campaign closure and release evidence output. Authority key cus
 independently trusted observer identity, and real accept-path qualification remain
 external.
 
-Support authorized external observations without treating a string reference as proof.
-Bind evidence to hypothesis, snapshot, target, observer identity, method, timestamp,
-artifact digests, and an authority signature. Keep it distinct from managed harness
+The external accept-path must continue treating a string reference as non-proof and bind
+observations to hypothesis, snapshot, target, observer identity, method, timestamp,
+artifact digests, and an authority signature. Keep them distinct from managed harness
 confirmation unless policy explicitly accepts the signed evidence class.
 
 Acceptance: missing/invalid signatures, wrong snapshot/target/hypothesis, digest changes,
