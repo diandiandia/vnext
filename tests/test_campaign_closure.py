@@ -25,6 +25,7 @@ from reachable_audit.analysis_models import (
 from reachable_audit.campaign_closure import (
     CampaignCloser,
     _derive_category_coverage_gate,
+    _derive_batch_completion_gate,
     _derive_closure_content_gate,
     _derive_discovery_coverage_gate,
     _derive_finding_report_gate,
@@ -1086,6 +1087,19 @@ def test_closure_content_gate_reports_blank_indexes_and_scope_errors() -> None:
     )
     assert passed["pass"] is True
     assert passed["detail"]["blank_items"] == {}
+
+
+def test_batch_completion_gate_requires_all_batches_and_work_units() -> None:
+    assert _derive_batch_completion_gate([], {"WU-1", "WU-2"}, {"WU-1", "WU-2"}) == {
+        "pass": True,
+        "detail": {"incomplete_batches": [], "missing_work_units": []},
+    }
+    assert _derive_batch_completion_gate(
+        ["B-2"], {"WU-1", "WU-2"}, {"WU-1"},
+    ) == {
+        "pass": False,
+        "detail": {"incomplete_batches": ["B-2"], "missing_work_units": ["WU-2"]},
+    }
 
 
 def test_discovery_coverage_gate_reports_surface_axis_and_verdict_gaps() -> None:

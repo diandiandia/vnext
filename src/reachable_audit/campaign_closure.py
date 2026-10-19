@@ -309,6 +309,20 @@ def _derive_path_scope_gate(
     }
 
 
+def _derive_batch_completion_gate(
+    incomplete_batches: Sequence[str],
+    plan_work_units: set[str],
+    completed_work_units: set[str],
+) -> dict[str, Any]:
+    return {
+        "pass": not incomplete_batches and completed_work_units == plan_work_units,
+        "detail": {
+            "incomplete_batches": list(incomplete_batches),
+            "missing_work_units": sorted(plan_work_units - completed_work_units),
+        },
+    }
+
+
 class CampaignCloser:
     def __init__(
         self, manager: CampaignManager, campaign_id: str, plan: AuditPlan
@@ -538,13 +552,9 @@ class CampaignCloser:
             for work_unit_id in batches[batch_id].manifest.get("work_unit_ids", [])
         }
         gates: dict[str, dict[str, Any]] = {
-            "CG1": {
-                "pass": not incomplete_batches and completed_work_units == plan_work_units,
-                "detail": {
-                    "incomplete_batches": incomplete_batches,
-                    "missing_work_units": sorted(plan_work_units - completed_work_units),
-                },
-            }
+            "CG1": _derive_batch_completion_gate(
+                incomplete_batches, plan_work_units, completed_work_units
+            )
         }
 
         inventory = self.manager.load_inventory(self.campaign_id)
