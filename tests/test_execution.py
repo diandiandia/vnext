@@ -5,6 +5,7 @@ import hashlib
 import hmac
 import json
 from pathlib import Path
+from time import perf_counter
 
 import pytest
 
@@ -1385,12 +1386,15 @@ def test_zero_hypothesis_r35_stages_short_circuit_without_task_listing(
 
         monkeypatch.setattr(backend, "list_tasks", unexpected_list_tasks)
         monkeypatch.setattr(manager.store, "list_events", unexpected_campaign_scan)
+        started = perf_counter()
         assert coordinator.schedule_r35_refutations() == ()
         assert coordinator.commit_r35_refutations() == ()
         assert coordinator.schedule_r35_adjudications() == ()
         assert coordinator.commit_r35_adjudications() == ()
         assert coordinator.schedule_r35_revivals() == ()
         coordinator.commit_r35_revivals()
+        elapsed_seconds = perf_counter() - started
+        assert elapsed_seconds < 2.0
         assert workflow._require_stage("R3_5_COMPLETED") is not None
     finally:
         manager.close()
