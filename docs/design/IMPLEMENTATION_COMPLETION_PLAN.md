@@ -100,11 +100,12 @@ Status: **IN PROGRESS**. Campaign screening/substantive classification and ceili
 are isolated in a pure helper with direct boundary-case tests. CLI initialization, status,
 skill review/backlog, resources, Inventory, ComponentGraph, Plan/amend, R0-R3, Handoff,
 harness, execution tasks, Campaign close/abort, shadow evaluation, toolchain probe, and
-compatibility scan dispatch through focused handlers. CG5 Handoff evaluation is isolated
-with direct pass/fail coverage. Campaign closure also validates stale stage markers and
-upstream revision ancestry. R4 AxisRun IDs and bundled mechanism-card definitions are
-compacted at the wire. Remaining work includes R3.5/R4/R5/Finding CLI groups, other
-CampaignCloser gates, further R4 repetition, and selective exception narrowing.
+compatibility scan and R3.5 dispatch through focused handlers. CG5 Handoff evaluation is
+isolated with direct pass/fail coverage. Campaign closure also validates stale stage
+markers and upstream revision ancestry. R4 AxisRun IDs and bundled mechanism-card
+definitions are compacted at the wire. Remaining work includes category-plan/R4, R5, and
+Finding CLI groups, other CampaignCloser gates, further R4 repetition, and selective
+exception narrowing.
 
 Deduplicate repeated R4 schema fields where safe. Split the CLI dispatcher and
 CampaignCloser gate evaluation into bounded helpers only with behavior-pinned tests.
