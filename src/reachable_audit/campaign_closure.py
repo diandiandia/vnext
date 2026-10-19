@@ -125,6 +125,190 @@ def _derive_handoff_gate(
     }
 
 
+def _derive_category_coverage_gate(
+    expected_coverage: set[tuple[str, str]],
+    category_runs: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    actual_coverage = {
+        (str(item["work_unit_id"]), str(item["family"]))
+        for item in category_runs
+    }
+    return {
+        "pass": expected_coverage == actual_coverage,
+        "detail": {
+            "missing": sorted(expected_coverage - actual_coverage),
+        },
+    }
+
+
+def _derive_finding_deduplication_gate(
+    findings: Sequence[Mapping[str, Any]],
+    merged_findings: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    root_causes = {str(item["root_cause_key"]) for item in merged_findings}
+    return {
+        "pass": len(root_causes) == len(merged_findings),
+        "detail": {
+            "batch_findings": len(findings),
+            "root_causes": len(merged_findings),
+        },
+    }
+
+
+def _derive_r5_strength_gate(
+    assessments: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    allowed_dispositions = {
+        R5Disposition.EMPIRICALLY_CONFIRMED.value,
+        R5Disposition.REFUTED.value,
+        R5Disposition.NEEDS_REVIEW.value,
+        R5Disposition.NOT_FEASIBLE.value,
+    }
+    invalid = [
+        str(item["hypothesis_id"])
+        for item in assessments
+        if item["experiment_required"]
+        and item["disposition"] not in allowed_dispositions
+    ]
+    return {"pass": not invalid, "detail": {"invalid_strong_claims": invalid}}
+
+
+def _derive_snapshot_drift_gate(events: Sequence[Any]) -> dict[str, Any]:
+    resolved = {
+        str(event.payload["drift_event_id"])
+        for event in events
+        if event.event_type == "SNAPSHOT_DRIFT_RESOLVED"
+    }
+    unresolved = [
+        event.event_id for event in events
+        if event.event_type == "SNAPSHOT_DRIFT" and event.event_id not in resolved
+    ]
+    return {
+        "pass": not unresolved,
+        "detail": {"snapshot_drift_events": unresolved},
+    }
+
+
+def _derive_finding_report_gate(
+    batch_reports: Sequence[Mapping[str, Any]],
+    findings: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    report_finding_ids = {
+        str(finding["finding_id"])
+        for report in batch_reports
+        for finding in report["findings"]
+    }
+    event_finding_ids = {str(item["finding_id"]) for item in findings}
+    return {
+        "pass": report_finding_ids == event_finding_ids,
+        "detail": {
+            "missing_from_reports": sorted(event_finding_ids - report_finding_ids),
+            "missing_from_events": sorted(report_finding_ids - event_finding_ids),
+        },
+    }
+
+
+def _derive_closure_content_gate(
+    closure_statements: Mapping[str, Sequence[str]],
+    scope_errors: Sequence[str],
+    scope_dispositions: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    blank_items = {
+        name: [index for index, item in enumerate(items) if not item.strip()]
+        for name, items in closure_statements.items()
+        if any(not item.strip() for item in items)
+    }
+    return {
+        "pass": not blank_items and not scope_errors,
+        "detail": {
+            "blank_items": blank_items,
+            "scope_disposition_errors": list(scope_errors),
+            **{name: list(items) for name, items in closure_statements.items()},
+            "scope_dispositions": list(scope_dispositions),
+        },
+    }
+
+
+def _derive_discovery_coverage_gate(
+    surface_ids: Sequence[str],
+    surface_work_units: set[str],
+    work_unit_ids: set[str],
+    analyzed_surface_ids: set[str],
+    reviewed_surface_work_units: set[str],
+    expected_axis_coverage: set[tuple[str, str]],
+    actual_axis_coverage: set[tuple[str, str]],
+    hypothesis_ids: set[str],
+    verdict_hypothesis_ids: set[str],
+) -> dict[str, Any]:
+    unknown_surface_refs = sorted(analyzed_surface_ids - set(surface_ids))
+    surfaces_without_review = sorted(surface_work_units - reviewed_surface_work_units)
+    return {
+        "pass": len(surface_ids) == len(set(surface_ids))
+        and surface_work_units.issubset(work_unit_ids)
+        and not surfaces_without_review
+        and actual_axis_coverage == expected_axis_coverage
+        and not unknown_surface_refs
+        and hypothesis_ids == verdict_hypothesis_ids,
+        "detail": {
+            "surface_count": len(surface_ids),
+            "surfaces_without_hypothesis": sorted(set(surface_ids) - analyzed_surface_ids),
+            "surfaces_without_work_unit_review": surfaces_without_review,
+            "missing_axis_reviews": sorted(expected_axis_coverage - actual_axis_coverage),
+            "unexpected_axis_reviews": sorted(actual_axis_coverage - expected_axis_coverage),
+            "unknown_surface_refs": unknown_surface_refs,
+            "hypotheses_without_verdict": sorted(hypothesis_ids - verdict_hypothesis_ids),
+        },
+    }
+
+
+def _derive_path_scope_gate(
+    required_components: set[str],
+    owned_components: set[str],
+    build_components: set[str],
+    inventory_source_files: set[str],
+    path_state_by_path: Mapping[str, PlanPathState],
+    included_source_files: set[str],
+    planned_source_files: set[str],
+    excluded_source_files: set[str],
+    deferred_source_files: set[str],
+    path_scope_coverage_valid: bool,
+    path_scope_evidence_errors: Sequence[str],
+    duplicate_source_files: Sequence[str],
+    path_review_claim_errors: Sequence[str],
+) -> dict[str, Any]:
+    detail = {
+        "unowned_components": sorted(required_components - owned_components),
+        "unowned_build_units": sorted(build_components - owned_components),
+        "unclassified_source_files": sorted(
+            inventory_source_files - set(path_state_by_path)
+        ),
+        "unknown_scope_paths": sorted(
+            set(path_state_by_path) - inventory_source_files
+        ),
+        "included_paths_without_work_unit": sorted(
+            included_source_files - planned_source_files
+        ),
+        "work_unit_paths_not_included": sorted(
+            planned_source_files - included_source_files
+        ),
+        "excluded_source_files": sorted(excluded_source_files),
+        "deferred_source_files": sorted(deferred_source_files),
+        "path_scope_evidence_errors": list(path_scope_evidence_errors),
+        "duplicate_source_files": sorted(duplicate_source_files),
+    }
+    if path_review_claim_errors:
+        detail["path_review_claim_errors"] = list(path_review_claim_errors)
+    return {
+        "pass": required_components.issubset(owned_components)
+        and path_scope_coverage_valid
+        and not path_scope_evidence_errors
+        and not path_review_claim_errors
+        and included_source_files == planned_source_files
+        and not duplicate_source_files,
+        "detail": detail,
+    }
+
+
 class CampaignCloser:
     def __init__(
         self, manager: CampaignManager, campaign_id: str, plan: AuditPlan
@@ -416,34 +600,6 @@ class CampaignCloser:
         path_scope_evidence_errors = self._path_scope_evidence_errors(
             inventory_source_files
         )
-        gates["CG2"] = {
-            "pass": required_components.issubset(owned_components)
-            and path_scope_coverage_valid
-            and not path_scope_evidence_errors
-            and included_source_files == planned_source_file_set
-            and not duplicate_source_files,
-            "detail": {
-                "unowned_components": sorted(required_components - owned_components),
-                "unowned_build_units": sorted(build_components - owned_components),
-                "unclassified_source_files": sorted(
-                    inventory_source_files - set(path_state_by_path)
-                ),
-                "unknown_scope_paths": sorted(
-                    set(path_state_by_path) - inventory_source_files
-                ),
-                "included_paths_without_work_unit": sorted(
-                    included_source_files - planned_source_file_set
-                ),
-                "work_unit_paths_not_included": sorted(
-                    planned_source_file_set - included_source_files
-                ),
-                "excluded_source_files": sorted(excluded_source_files),
-                "deferred_source_files": sorted(deferred_source_files),
-                "path_scope_evidence_errors": path_scope_evidence_errors,
-                "duplicate_source_files": duplicate_source_files,
-            },
-        }
-
         surfaces = []
         boundary_reviews = []
         discovery_axis_runs = []
@@ -685,49 +841,43 @@ class CampaignCloser:
             (str(item.get("work_unit_id", "")), str(item["axis"]))
             for item in discovery_axis_runs
         }
-        unknown_surface_refs = sorted(analyzed_surface_ids - set(surface_ids))
-        surfaces_without_review = sorted(surface_work_units - reviewed_surface_work_units)
         hypothesis_ids = {item["hypothesis_id"] for item in hypotheses}
         verdict_hypothesis_ids = {item["hypothesis_id"] for item in verdicts}
-        gates["CG3"] = {
-            "pass": len(surface_ids) == len(set(surface_ids))
-            and surface_work_units.issubset(work_unit_ids)
-            and not surfaces_without_review
-            and actual_axis_coverage == expected_axis_coverage
-            and not unknown_surface_refs
-            and hypothesis_ids == verdict_hypothesis_ids,
-            "detail": {
-                "surface_count": len(surface_ids),
-                "surfaces_without_hypothesis": sorted(set(surface_ids) - analyzed_surface_ids),
-                "surfaces_without_work_unit_review": surfaces_without_review,
-                "missing_axis_reviews": sorted(expected_axis_coverage - actual_axis_coverage),
-                "unexpected_axis_reviews": sorted(actual_axis_coverage - expected_axis_coverage),
-                "unknown_surface_refs": unknown_surface_refs,
-                "hypotheses_without_verdict": sorted(
-                    hypothesis_ids - verdict_hypothesis_ids
-                ),
-            },
-        }
-        if path_review_claim_errors:
-            gates["CG2"]["pass"] = False
-            gates["CG2"]["detail"]["path_review_claim_errors"] = (
-                path_review_claim_errors
-            )
+        gates["CG3"] = _derive_discovery_coverage_gate(
+            surface_ids,
+            surface_work_units,
+            work_unit_ids,
+            analyzed_surface_ids,
+            reviewed_surface_work_units,
+            expected_axis_coverage,
+            actual_axis_coverage,
+            hypothesis_ids,
+            verdict_hypothesis_ids,
+        )
+        gates["CG2"] = _derive_path_scope_gate(
+            required_components,
+            owned_components,
+            build_components,
+            inventory_source_files,
+            path_state_by_path,
+            included_source_files,
+            planned_source_file_set,
+            excluded_source_files,
+            deferred_source_files,
+            path_scope_coverage_valid,
+            path_scope_evidence_errors,
+            duplicate_source_files,
+            path_review_claim_errors,
+        )
 
         expected_category_coverage = {
             (unit.work_unit_id, family)
             for unit in self.plan.work_units
             for family in unit.category_families
         }
-        actual_category_coverage = {
-            (item["work_unit_id"], item["family"]) for item in category_runs
-        }
-        gates["CG4"] = {
-            "pass": expected_category_coverage == actual_category_coverage,
-            "detail": {
-                "missing": sorted(expected_category_coverage - actual_category_coverage),
-            },
-        }
+        gates["CG4"] = _derive_category_coverage_gate(
+            expected_category_coverage, category_runs
+        )
 
         resolution_outcomes = {
             event.entity_id: str(event.payload.get("outcome", ""))
@@ -871,59 +1021,13 @@ class CampaignCloser:
             round(cache_read_total / (cache_read_total + input_total), 4)
             if cache_read_total + input_total else None
         )
-        gates["CG6"] = {
-            "pass": len({item["root_cause_key"] for item in merged_findings})
-            == len(merged_findings),
-            "detail": {
-                "batch_findings": len(findings),
-                "root_causes": len(merged_findings),
-            },
-        }
+        gates["CG6"] = _derive_finding_deduplication_gate(
+            findings, merged_findings
+        )
 
-        invalid_strong_claims = [
-            item["hypothesis_id"]
-            for item in r5_assessments
-            if item["experiment_required"]
-            and item["disposition"]
-            not in {
-                R5Disposition.EMPIRICALLY_CONFIRMED.value,
-                R5Disposition.REFUTED.value,
-                R5Disposition.NEEDS_REVIEW.value,
-                R5Disposition.NOT_FEASIBLE.value,
-            }
-        ]
-        gates["CG7"] = {
-            "pass": not invalid_strong_claims,
-            "detail": {"invalid_strong_claims": invalid_strong_claims},
-        }
-        resolved_drift_ids = {
-            str(event.payload["drift_event_id"])
-            for event in events
-            if event.event_type == "SNAPSHOT_DRIFT_RESOLVED"
-        }
-        unresolved_drift = [
-            event.event_id
-            for event in events
-            if event.event_type == "SNAPSHOT_DRIFT"
-            and event.event_id not in resolved_drift_ids
-        ]
-        gates["CG8"] = {
-            "pass": not unresolved_drift,
-            "detail": {"snapshot_drift_events": unresolved_drift},
-        }
-        r6_finding_ids = {
-            finding["finding_id"]
-            for report in batch_reports
-            for finding in report["findings"]
-        }
-        event_finding_ids = {item["finding_id"] for item in findings}
-        gates["CG9"] = {
-            "pass": r6_finding_ids == event_finding_ids,
-            "detail": {
-                "missing_from_reports": sorted(event_finding_ids - r6_finding_ids),
-                "missing_from_events": sorted(r6_finding_ids - event_finding_ids),
-            },
-        }
+        gates["CG7"] = _derive_r5_strength_gate(r5_assessments)
+        gates["CG8"] = _derive_snapshot_drift_gate(events)
+        gates["CG9"] = _derive_finding_report_gate(batch_reports, findings)
         closure_statements = {
             "unreviewed_scope": closure.unreviewed_scope,
             "residual_risks": closure.residual_risks,
@@ -931,35 +1035,22 @@ class CampaignCloser:
             "lessons": closure.lessons,
             "knowledge_nominations": closure.knowledge_nominations,
         }
-        blank_closure_items = {
-            name: [index for index, item in enumerate(items) if not item.strip()]
-            for name, items in closure_statements.items()
-            if any(not item.strip() for item in items)
-        }
         scope_errors = self._scope_disposition_errors(
             closure,
             inventory_source_files={source.path for source in inventory.source_files},
         )
-        gates["CG10"] = {
-            "pass": not blank_closure_items and not scope_errors,
-            "detail": {
-                "blank_items": blank_closure_items,
-                "scope_disposition_errors": scope_errors,
-                **{name: list(items) for name, items in closure_statements.items()},
-                "scope_dispositions": [
-                    {
-                        "scope_ref": item.scope_ref,
-                        "disposition": item.disposition.value,
-                        "snapshot_id": item.snapshot_id,
-                        "rationale": item.rationale,
-                        "approved_by": item.approved_by,
-                        "evidence_refs": list(item.evidence_refs),
-                        "history_source_campaign_id": item.history_source_campaign_id,
-                    }
-                    for item in closure.scope_dispositions
-                ],
-            },
-        }
+        scope_disposition_records = [{
+            "scope_ref": item.scope_ref,
+            "disposition": item.disposition.value,
+            "snapshot_id": item.snapshot_id,
+            "rationale": item.rationale,
+            "approved_by": item.approved_by,
+            "evidence_refs": list(item.evidence_refs),
+            "history_source_campaign_id": item.history_source_campaign_id,
+        } for item in closure.scope_dispositions]
+        gates["CG10"] = _derive_closure_content_gate(
+            closure_statements, scope_errors, scope_disposition_records
+        )
 
         failed = [gate_id for gate_id, gate in gates.items() if not gate["pass"]]
         if failed:

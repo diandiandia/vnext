@@ -6,6 +6,7 @@ from pathlib import Path
 import signal
 import subprocess
 import sys
+from types import SimpleNamespace
 
 import pytest
 
@@ -23,8 +24,16 @@ from reachable_audit.analysis_models import (
 )
 from reachable_audit.campaign_closure import (
     CampaignCloser,
+    _derive_category_coverage_gate,
+    _derive_closure_content_gate,
+    _derive_discovery_coverage_gate,
+    _derive_finding_report_gate,
+    _derive_finding_deduplication_gate,
     _derive_handoff_gate,
+    _derive_path_scope_gate,
+    _derive_r5_strength_gate,
     _derive_screening_coverage,
+    _derive_snapshot_drift_gate,
 )
 from reachable_audit.cli import main
 from reachable_audit.campaign import CampaignManager
@@ -968,6 +977,182 @@ def test_handoff_gate_requires_resolution_and_proven_edge_integration() -> None:
         "pass": True,
         "detail": {"unresolved": [], "unintegrated_edge_proven": []},
     }
+
+
+def test_category_coverage_gate_reports_missing_pairs_and_rejects_extras() -> None:
+    expected = {("WU-1", "STATE"), ("WU-2", "INJECTION")}
+    assert _derive_category_coverage_gate(expected, [
+        {"work_unit_id": "WU-1", "family": "STATE"},
+        {"work_unit_id": "WU-2", "family": "INJECTION"},
+    ]) == {"pass": True, "detail": {"missing": []}}
+    assert _derive_category_coverage_gate(expected, [
+        {"work_unit_id": "WU-1", "family": "STATE"},
+        {"work_unit_id": "WU-extra", "family": "STATE"},
+    ]) == {
+        "pass": False,
+        "detail": {"missing": [("WU-2", "INJECTION")]},
+    }
+
+
+def test_finding_gate_rejects_duplicate_root_causes() -> None:
+    findings = [
+        {"finding_id": "F-1", "root_cause_key": "RC-1"},
+        {"finding_id": "F-2", "root_cause_key": "RC-1"},
+    ]
+    assert _derive_finding_deduplication_gate(findings, findings) == {
+        "pass": False,
+        "detail": {"batch_findings": 2, "root_causes": 2},
+    }
+    assert _derive_finding_deduplication_gate(findings, [findings[0]]) == {
+        "pass": True,
+        "detail": {"batch_findings": 2, "root_causes": 1},
+    }
+
+
+def test_r5_strength_and_snapshot_drift_gates_report_exact_blockers() -> None:
+    assert _derive_r5_strength_gate([
+        {
+            "hypothesis_id": "HYP-1",
+            "experiment_required": True,
+            "disposition": R5Disposition.NOT_FEASIBLE.value,
+        },
+    ]) == {"pass": True, "detail": {"invalid_strong_claims": []}}
+    assert _derive_r5_strength_gate([
+        {
+            "hypothesis_id": "HYP-2",
+            "experiment_required": True,
+            "disposition": R5Disposition.STATIC_VERDICT_RETAINED.value,
+        },
+    ]) == {"pass": False, "detail": {"invalid_strong_claims": ["HYP-2"]}}
+
+    drift = SimpleNamespace(event_id="EVT-drift", event_type="SNAPSHOT_DRIFT", payload={})
+    resolution = SimpleNamespace(
+        event_id="EVT-resolved",
+        event_type="SNAPSHOT_DRIFT_RESOLVED",
+        payload={"drift_event_id": "EVT-drift"},
+    )
+    assert _derive_snapshot_drift_gate([drift]) == {
+        "pass": False,
+        "detail": {"snapshot_drift_events": ["EVT-drift"]},
+    }
+    assert _derive_snapshot_drift_gate([drift, resolution]) == {
+        "pass": True,
+        "detail": {"snapshot_drift_events": []},
+    }
+
+
+def test_finding_report_gate_reconciles_batch_and_event_ids() -> None:
+    assert _derive_finding_report_gate(
+        [{"findings": [{"finding_id": "F-1"}]}],
+        [{"finding_id": "F-1"}],
+    ) == {
+        "pass": True,
+        "detail": {"missing_from_reports": [], "missing_from_events": []},
+    }
+    assert _derive_finding_report_gate(
+        [{"findings": [{"finding_id": "F-report"}]}],
+        [{"finding_id": "F-event"}],
+    ) == {
+        "pass": False,
+        "detail": {
+            "missing_from_reports": ["F-event"],
+            "missing_from_events": ["F-report"],
+        },
+    }
+
+
+def test_closure_content_gate_reports_blank_indexes_and_scope_errors() -> None:
+    statements = {
+        "unreviewed_scope": [],
+        "residual_risks": ["risk"],
+        "limitations": [""],
+        "lessons": ["lesson"],
+        "knowledge_nominations": [],
+    }
+    blocked = _derive_closure_content_gate(
+        statements, ["invalid scope evidence"], [],
+    )
+    assert blocked == {
+        "pass": False,
+        "detail": {
+            "blank_items": {"limitations": [0]},
+            "scope_disposition_errors": ["invalid scope evidence"],
+            **statements,
+            "scope_dispositions": [],
+        },
+    }
+    passed = _derive_closure_content_gate(
+        {**statements, "limitations": ["known limit"]}, [], [],
+    )
+    assert passed["pass"] is True
+    assert passed["detail"]["blank_items"] == {}
+
+
+def test_discovery_coverage_gate_reports_surface_axis_and_verdict_gaps() -> None:
+    gate = _derive_discovery_coverage_gate(
+        surface_ids=["SURF-1", "SURF-2"],
+        surface_work_units={"WU-1", "WU-2"},
+        work_unit_ids={"WU-1", "WU-2"},
+        analyzed_surface_ids={"SURF-1", "SURF-unknown"},
+        reviewed_surface_work_units={"WU-1"},
+        expected_axis_coverage={("WU-1", "surface"), ("WU-2", "surface")},
+        actual_axis_coverage={("WU-1", "surface")},
+        hypothesis_ids={"HYP-1"},
+        verdict_hypothesis_ids=set(),
+    )
+
+    assert gate == {
+        "pass": False,
+        "detail": {
+            "surface_count": 2,
+            "surfaces_without_hypothesis": ["SURF-2"],
+            "surfaces_without_work_unit_review": ["WU-2"],
+            "missing_axis_reviews": [("WU-2", "surface")],
+            "unexpected_axis_reviews": [],
+            "unknown_surface_refs": ["SURF-unknown"],
+            "hypotheses_without_verdict": ["HYP-1"],
+        },
+    }
+
+
+def test_path_scope_gate_reports_component_path_and_evidence_blockers() -> None:
+    passing = _derive_path_scope_gate(
+        required_components={"COMP-1"},
+        owned_components={"COMP-1"},
+        build_components={"COMP-1"},
+        inventory_source_files={"src/a.py"},
+        path_state_by_path={"src/a.py": PlanPathState.INCLUDED},
+        included_source_files={"src/a.py"},
+        planned_source_files={"src/a.py"},
+        excluded_source_files=set(),
+        deferred_source_files=set(),
+        path_scope_coverage_valid=True,
+        path_scope_evidence_errors=(),
+        duplicate_source_files=(),
+        path_review_claim_errors=(),
+    )
+    assert passing["pass"] is True
+    assert passing["detail"]["unowned_components"] == []
+
+    blocked = _derive_path_scope_gate(
+        required_components={"COMP-1", "COMP-2"},
+        owned_components={"COMP-1"},
+        build_components={"COMP-1", "COMP-2"},
+        inventory_source_files={"src/a.py"},
+        path_state_by_path={},
+        included_source_files={"src/a.py"},
+        planned_source_files=set(),
+        excluded_source_files=set(),
+        deferred_source_files=set(),
+        path_scope_coverage_valid=False,
+        path_scope_evidence_errors=("invalid path evidence",),
+        duplicate_source_files=("src/a.py",),
+        path_review_claim_errors=("missing review claim",),
+    )
+    assert blocked["pass"] is False
+    assert blocked["detail"]["unowned_components"] == ["COMP-2"]
+    assert blocked["detail"]["path_scope_evidence_errors"] == ["invalid path evidence"]
+    assert blocked["detail"]["path_review_claim_errors"] == ["missing review claim"]
 
 
 def test_campaign_final_report_is_idempotent_but_immutable(tmp_path: Path) -> None:
