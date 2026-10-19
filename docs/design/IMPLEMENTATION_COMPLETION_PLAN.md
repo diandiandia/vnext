@@ -96,23 +96,20 @@ external prerequisites.
 
 ### 5. Output Density and Structural Debt
 
-Status: **IN PROGRESS**. Campaign screening/substantive classification and ceiling state
-are isolated in a pure helper with direct boundary-case tests. CLI initialization, status,
-skill review/backlog, resources, Inventory, ComponentGraph, Plan/amend, R0-R3, Handoff,
-harness, execution tasks, Campaign close/abort, shadow evaluation, toolchain probe, and
-compatibility scan and R3.5 dispatch through focused handlers. CG5 Handoff evaluation is
-isolated with direct pass/fail coverage. Campaign closure also validates stale stage
-markers and upstream revision ancestry. R4 AxisRun IDs and bundled mechanism-card
-definitions are compacted at the wire. Remaining work includes category-plan/R4, R5, and
-Finding CLI groups, other CampaignCloser gates, further R4 repetition, and selective
-exception narrowing.
+Status: **LOCAL IMPLEMENTATION AND SYNTHETIC ACCEPTANCE COMPLETE**. Campaign
+screening/substantive classification and ceiling state are pure and boundary-tested. All
+CLI command families dispatch through focused handlers, including R3.5, R4/R5, Finding,
+R6, signed observation registration, drift resolution, and Batch addition. CampaignCloser
+gate decisions CG1-CG10 are decomposed into bounded helpers or explicit stale/ancestry
+checks with direct behavior tests. R4 v2 removes repeated Work Unit/category/axis and
+language/knowledge context fields while preserving v1 parsing and canonical reports.
+Scoped CLI and CampaignCloser code has no catch-all Exception/BaseException handlers.
 
-Deduplicate repeated R4 schema fields where safe. Split the CLI dispatcher and
-CampaignCloser gate evaluation into bounded helpers only with behavior-pinned tests.
-Narrow broad exception handling only where rollback/cleanup semantics are explicit.
+No additional local Phase 5 implementation remains. Real-project bundle sizing belongs to
+Phase 2 qualification; synthetic scale and signed release runs belong to Phase 6.
 
-Acceptance: same canonical reports and failure behavior; focused unit tests per helper;
-no widened exception swallowing; measured R4 bundle input reduction.
+Acceptance: preserved CLI reports/errors; direct tests per handler/gate; no widened
+exception swallowing; byte reduction measured on multi-item bundles.
 
 ### 6. Scale and Release Qualification
 
@@ -129,10 +126,10 @@ are external evidence; local synthetic tests cannot mark these gates complete.
 
 The latest full local verification after stage provenance, invalidation, revision-bound
 tasks, closure ancestry, compact R4 v2 wire, delegated-budget reservations, host
-attestation expiry/replay, and R5 report provenance is **323 passed, 1 skipped**;
-compatibility-scan passes with no findings (49 Python files, 167 knowledge files, 1 prompt
-file). Phase 1's local acceptance tests pass; its real-host
-behavior remains unverified until release qualification.
+attestation expiry/replay, R5 report provenance, and Phase 5 CLI/gate decomposition is
+**337 passed, 1 skipped**; compatibility-scan passes with no findings (49 Python files,
+167 knowledge files, 1 prompt file). Phase 1 and Phase 5 local acceptance tests pass;
+real-host behavior remains unverified until release qualification.
 
 Phase 2 local gates now cover v1 compatibility, v2 compact multi-item serialization,
 measured byte reduction, repairability after invalid references, and canonical R4 reports.
@@ -142,8 +139,7 @@ release/expiry reclaim, failed-use accounting, reservation bounds, and stale-tas
 Only host identity trust/key custody and provider hard limits require integration evidence.
 Before closing Phase 4,
 test invalid signatures/scope/digests and trace valid provenance through R5, closure, and
-release output. Before closing Phase 5, test each extracted command/gate and confirm
-canonical output/error behavior is unchanged. Before closing Phase 6, run synthetic
+release output. Phase 5 local command/gate acceptance passes. Before closing Phase 6, run synthetic
 scale budgets locally and attach the required signed real-run evidence separately.
 
 External waiting items are host trust/key custody, provider-side hard budget reservation,
