@@ -512,6 +512,58 @@ def test_r0_r3_slice_records_canonical_verdict_and_partial_report(tmp_path: Path
         manager.close()
 
 
+def test_r1_r3_validate_one_thousand_source_files(tmp_path: Path) -> None:
+    for index in range(999):
+        (tmp_path / f"scale_{index:04}.py").write_text(
+            f"VALUE_{index} = {index}\n", encoding="utf-8"
+        )
+    manager, workflow, plan = _workflow(tmp_path, "CMP-1k-r1-r3")
+    try:
+        work_unit = plan.work_units[0]
+        assert len(work_unit.source_files) == 1000
+        workflow.run_r0()
+        workflow.record_r1(
+            [Surface(
+                "SURF-scale", work_unit.work_unit_id, work_unit.component_id,
+                "function_entry", "app.py", "handle", "remote",
+                ("LOC-app.py:1",),
+            )],
+            path_review_claims=[{
+                "work_unit_id": work_unit.work_unit_id,
+                "path": path,
+                "claim": "AGENT_DECLARED_REVIEWED",
+                "altitude": "SCREENED",
+                "risk_tier": "UNASSESSED",
+            } for path in work_unit.source_files],
+        )
+        r1 = workflow._read_artifact(workflow._require_stage("R1_COMPLETED").payload_ref)
+        assert len(r1["path_review_claims"]) == 1000
+
+        evidence = {
+            axis.value: (f"EVID-{axis.value}",) for axis in DiscoveryAxis
+        }
+        workflow.record_r2([Hypothesis(
+            "HYP-scale", work_unit.work_unit_id, "surface", ("SURF-scale",),
+            ("SURF-scale",), Mechanism("INJECTION", "large-inventory"),
+            "candidate path is blocked by a guard", HypothesisStatus.NEW,
+        )], axis_evidence=evidence, axis_runs=axis_runs_from_evidence(evidence))
+        workflow.record_r3([VerdictSubmission(
+            "HYP-scale", VerdictKind.UNREACHABLE, EvidenceGrade.STATIC_ONLY,
+            "remote", (), (), (), ("LOC-app.py:1",), (),
+            "the reviewed entry guard blocks the candidate path",
+        )])
+
+        r3 = workflow._read_artifact(workflow._require_stage("R3_COMPLETED").payload_ref)
+        assert [item["hypothesis_id"] for item in r3["verdicts"]] == ["HYP-scale"]
+        report = workflow.build_r0_r3_report()
+        assert report["status"] == "PASS"
+        assert report["surface_count"] == 1
+        assert report["hypothesis_count"] == 1
+        assert report["verdict_counts"] == {"UNREACHABLE": 1}
+    finally:
+        manager.close()
+
+
 def test_r3_partial_commit_rejects_conflict_and_recovers_exact_retry(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:

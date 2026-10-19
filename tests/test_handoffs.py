@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 from dataclasses import replace
 
@@ -90,13 +91,16 @@ def test_resolve_many_reconciles_30k_handoffs(tmp_path: Path) -> None:
             "payload_ref": None,
         } for batch in plan.batches])
 
+        large_evidence_ref = manager.artifacts.put_text(
+            "synthetic external Handoff evidence\n" + "x" * 1_000_000
+        ).artifact_id
         resolutions = tuple(HandoffResolution(
             handoff_id=handoff.handoff_id,
             owner_batch_id=handoff.owner_batch,
             outcome=HandoffOutcome.NEEDS_REVIEW,
             chain_suffix=(),
-            evidence_refs=(f"EVID-scale-{index}",),
-            rationale="synthetic Handoff reconciliation scale fixture",
+            evidence_refs=(large_evidence_ref, f"EVID-scale-{index}"),
+            rationale="synthetic Handoff reconciliation scale fixture " + "r" * 1024,
         ) for index, handoff in enumerate(plan.handoffs))
         artifact_ids = HandoffResolver(
             manager, "CMP-handoff-scale", plan,
@@ -110,6 +114,12 @@ def test_resolve_many_reconciles_30k_handoffs(tmp_path: Path) -> None:
         assert {event.entity_id for event in resolved_events} == {
             handoff.handoff_id for handoff in plan.handoffs
         }
+        first_resolution = json.loads(
+            manager.artifacts.get_bytes(resolved_events[0].payload_ref)
+        )
+        assert large_evidence_ref in first_resolution["evidence_refs"]
+        assert len(manager.artifacts.get_bytes(large_evidence_ref)) >= 1_000_000
+        assert len(manager.artifacts.get_bytes(resolved_events[0].payload_ref)) >= 1_000
 
 
 def test_resolved_handoff_merges_a_cross_batch_call_chain(tmp_path: Path) -> None:
