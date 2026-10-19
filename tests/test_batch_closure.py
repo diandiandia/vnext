@@ -25,6 +25,8 @@ from reachable_audit.analysis_models import (
     SurfaceReviewState,
 )
 from reachable_audit.campaign_closure import CampaignCloser
+from reachable_audit.cli import main
+from reachable_audit.campaign import CampaignManager
 from reachable_audit.execution import (
     DiscoveryCoordinator,
     ManualExecutionBackend,
@@ -116,6 +118,102 @@ def test_r6_closes_clean_batch_with_all_eight_gates(tmp_path: Path) -> None:
         ).status is BatchStatus.COMPLETE
     finally:
         manager.close()
+
+
+def test_r5_cli_records_empty_coverage_for_zero_hypothesis_batch(
+    tmp_path: Path, capsys: object,
+) -> None:
+    manager, workflow = _ready_for_r5(tmp_path)
+    target = manager.target_root
+    batch_id = workflow.batch_id
+    manager.close()
+    input_path = tmp_path / "r5.json"
+    input_path.write_text(json.dumps({"experiments": [], "assessments": []}), encoding="utf-8")
+
+    assert main([
+        "r5", str(target), "CMP-r4", batch_id, "--input", str(input_path),
+    ]) == 0
+    result = json.loads(capsys.readouterr().out)  # type: ignore[attr-defined]
+    with CampaignManager(target) as reopened:
+        event = reopened.store.list_batch_events(
+            "CMP-r4", batch_id, event_type="R5_COMPLETED",
+        )[0]
+    assert result["artifact_id"] == event.payload_ref
+
+    assert main([
+        "metrics", str(target), "CMP-r4", batch_id,
+    ]) == 0
+    metrics = json.loads(capsys.readouterr().out)  # type: ignore[attr-defined]
+    assert metrics["batch_id"] == batch_id
+    assert metrics["gate_effect"] == "NONE"
+
+
+def test_r6_cli_closes_ready_batch_and_returns_pass_report(
+    tmp_path: Path, capsys: object,
+) -> None:
+    manager, workflow = _ready_for_r5(tmp_path)
+    workflow.record_r5([], [])
+    target = manager.target_root
+    batch_id = workflow.batch_id
+    manager.close()
+    input_path = tmp_path / "r6.json"
+    input_path.write_text(json.dumps(asdict(BatchClosure(
+        budget_used={"agent_runs": 1},
+        constraints_observed=(),
+        unreviewed_scope=(),
+        residual_risks=(),
+        lessons=(),
+    ))), encoding="utf-8")
+
+    assert main([
+        "r6", str(target), "CMP-r4", batch_id, "--input", str(input_path),
+    ]) == 0
+    report = json.loads(capsys.readouterr().out)  # type: ignore[attr-defined]
+    assert report["status"] == "PASS"
+    with CampaignManager(target) as reopened:
+        assert reopened.store.get_batch("CMP-r4", batch_id).status is BatchStatus.COMPLETE
+
+
+def test_finding_cli_records_non_confirming_finding(tmp_path: Path, capsys: object) -> None:
+    manager, workflow = _ready_for_r5(tmp_path, static_hypothesis=True)
+    work_unit = workflow.batch.manifest["work_units"][0]
+    workflow.record_r5([], [R5Assessment(
+        hypothesis_id="HYP-static",
+        experiment_required=False,
+        experiment_id=None,
+        disposition=R5Disposition.STATIC_VERDICT_RETAINED,
+        evidence_refs=("EVID-static",),
+        rationale="static evidence is retained for review",
+    )])
+    target = manager.target_root
+    batch_id = workflow.batch_id
+    manager.close()
+    input_path = tmp_path / "finding.json"
+    input_path.write_text(json.dumps(asdict(Finding(
+        finding_id="FND-needs-review",
+        root_cause_key="static-only-review",
+        mechanism=Mechanism("STATE", "static-state-transition"),
+        hypothesis_ids=("HYP-static",),
+        affected_component_ids=(str(work_unit["component_id"]),),
+        severity=FindingSeverity.MEDIUM,
+        evidence_grade=EvidenceGrade.STATIC_ONLY,
+        status=FindingStatus.NEEDS_REVIEW,
+        evidence_refs=("EVID-static",),
+        title="Static-only candidate retained for review",
+    ))), encoding="utf-8")
+
+    assert main([
+        "finding", str(target), "CMP-r4", batch_id,
+        "--input", str(input_path),
+    ]) == 0
+    result = json.loads(capsys.readouterr().out)  # type: ignore[attr-defined]
+    with CampaignManager(target) as reopened:
+        event = reopened.store.list_batch_events(
+            "CMP-r4", batch_id, event_type="FINDING_RECORDED",
+        )[0]
+        finding = json.loads(reopened.artifacts.get_bytes(event.payload_ref))
+    assert result["artifact_id"] == event.payload_ref
+    assert finding["status"] == FindingStatus.NEEDS_REVIEW.value
 
 
 def test_r6_defaults_missing_surface_dispositions_to_unreviewed(tmp_path: Path) -> None:

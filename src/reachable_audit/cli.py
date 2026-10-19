@@ -531,6 +531,42 @@ def _handle_category_plan_or_r4(arguments: argparse.Namespace) -> int:
     return 0
 
 
+def _handle_r5_or_metrics(arguments: argparse.Namespace) -> int:
+    with CampaignManager(arguments.target, arguments.state_dir) as manager:
+        workflow = BatchWorkflow(
+            manager, arguments.campaign_id, arguments.batch_id
+        )
+        if arguments.command == "metrics":
+            _print(workflow.build_transmission_metrics())
+        else:
+            value = json.loads(Path(arguments.input).read_text(encoding="utf-8"))
+            if not isinstance(value, dict):
+                raise ValueError("R5 input must be a JSON object")
+            artifact_id = workflow.record_r5(
+                [Experiment.from_dict(item) for item in value.get("experiments", [])],
+                [R5Assessment.from_dict(item) for item in value.get("assessments", [])],
+            )
+            _print({"artifact_id": artifact_id})
+    return 0
+
+
+def _handle_finding_or_r6(arguments: argparse.Namespace) -> int:
+    value = json.loads(Path(arguments.input).read_text(encoding="utf-8"))
+    if not isinstance(value, dict):
+        raise ValueError("Finding/R6 input must be a JSON object")
+    with CampaignManager(arguments.target, arguments.state_dir) as manager:
+        workflow = BatchWorkflow(
+            manager, arguments.campaign_id, arguments.batch_id
+        )
+        if arguments.command == "finding":
+            _print({
+                "artifact_id": workflow.record_finding(Finding.from_dict(value))
+            })
+        else:
+            _print(workflow.close_r6(BatchClosure.from_dict(value)))
+    return 0
+
+
 def _handle_campaign_abort(arguments: argparse.Namespace) -> int:
     value = json.loads(Path(arguments.input).read_text(encoding="utf-8"))
     if not isinstance(value, dict) or not isinstance(value.get("skill_issues"), list):
@@ -1209,30 +1245,7 @@ def main(argv: list[str] | None = None) -> int:
             return _handle_category_plan_or_r4(arguments)
 
         if arguments.command in {"r5", "metrics"}:
-            with CampaignManager(arguments.target, arguments.state_dir) as manager:
-                workflow = BatchWorkflow(
-                    manager, arguments.campaign_id, arguments.batch_id
-                )
-                if arguments.command == "metrics":
-                    _print(workflow.build_transmission_metrics())
-                else:
-                    value = json.loads(
-                        Path(arguments.input).read_text(encoding="utf-8")
-                    )
-                    if not isinstance(value, dict):
-                        raise ValueError("R5 input must be a JSON object")
-                    artifact_id = workflow.record_r5(
-                        [
-                            Experiment.from_dict(item)
-                            for item in value.get("experiments", [])
-                        ],
-                        [
-                            R5Assessment.from_dict(item)
-                            for item in value.get("assessments", [])
-                        ],
-                    )
-                    _print({"artifact_id": artifact_id})
-            return 0
+            return _handle_r5_or_metrics(arguments)
 
         if arguments.command == "r5-observation-register":
             value = json.loads(Path(arguments.input).read_text(encoding="utf-8"))
@@ -1247,20 +1260,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         if arguments.command in {"finding", "r6"}:
-            value = json.loads(Path(arguments.input).read_text(encoding="utf-8"))
-            if not isinstance(value, dict):
-                raise ValueError("Finding/R6 input must be a JSON object")
-            with CampaignManager(arguments.target, arguments.state_dir) as manager:
-                workflow = BatchWorkflow(
-                    manager, arguments.campaign_id, arguments.batch_id
-                )
-                if arguments.command == "finding":
-                    _print({
-                        "artifact_id": workflow.record_finding(Finding.from_dict(value))
-                    })
-                else:
-                    _print(workflow.close_r6(BatchClosure.from_dict(value)))
-            return 0
+            return _handle_finding_or_r6(arguments)
 
         if arguments.command == "campaign-close":
             return _handle_campaign_close(arguments)
