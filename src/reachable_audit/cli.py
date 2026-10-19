@@ -567,6 +567,48 @@ def _handle_finding_or_r6(arguments: argparse.Namespace) -> int:
     return 0
 
 
+def _handle_r5_observation_register(arguments: argparse.Namespace) -> int:
+    value = json.loads(Path(arguments.input).read_text(encoding="utf-8"))
+    with CampaignManager(arguments.target, arguments.state_dir) as manager:
+        artifact_id = manager.record_external_observation(
+            ExternalObservation.from_dict(value)
+        )
+        _print({
+            "artifact_id": artifact_id,
+            "effect": "EVIDENCE_ONLY_NOT_CONFIRMING",
+        })
+    return 0
+
+
+def _handle_drift_resolve(arguments: argparse.Namespace) -> int:
+    value = json.loads(Path(arguments.input).read_text(encoding="utf-8"))
+    if not isinstance(value, dict):
+        raise ValueError("drift resolution input must be a JSON object")
+    with CampaignManager(arguments.target, arguments.state_dir) as manager:
+        event_id = resolve_snapshot_drift(
+            manager,
+            campaign_id=arguments.campaign_id,
+            drift_event_id=arguments.drift_event_id,
+            evidence_refs=tuple(str(item) for item in value.get("evidence_refs", [])),
+        )
+        _print({"event_id": event_id})
+    return 0
+
+
+def _handle_batch_add(arguments: argparse.Namespace) -> int:
+    manifest = json.loads(Path(arguments.manifest).read_text(encoding="utf-8"))
+    if not isinstance(manifest, dict):
+        raise ValueError("batch manifest must be a JSON object")
+    with CampaignManager(arguments.target, arguments.state_dir) as manager:
+        batch = manager.add_batch(
+            campaign_id=arguments.campaign_id,
+            batch_id=arguments.batch_id,
+            manifest=manifest,
+        )
+        _print(asdict(batch))
+    return 0
+
+
 def _handle_campaign_abort(arguments: argparse.Namespace) -> int:
     value = json.loads(Path(arguments.input).read_text(encoding="utf-8"))
     if not isinstance(value, dict) or not isinstance(value.get("skill_issues"), list):
@@ -1248,16 +1290,7 @@ def main(argv: list[str] | None = None) -> int:
             return _handle_r5_or_metrics(arguments)
 
         if arguments.command == "r5-observation-register":
-            value = json.loads(Path(arguments.input).read_text(encoding="utf-8"))
-            with CampaignManager(arguments.target, arguments.state_dir) as manager:
-                artifact_id = manager.record_external_observation(
-                    ExternalObservation.from_dict(value)
-                )
-                _print({
-                    "artifact_id": artifact_id,
-                    "effect": "EVIDENCE_ONLY_NOT_CONFIRMING",
-                })
-            return 0
+            return _handle_r5_observation_register(arguments)
 
         if arguments.command in {"finding", "r6"}:
             return _handle_finding_or_r6(arguments)
@@ -1275,31 +1308,10 @@ def main(argv: list[str] | None = None) -> int:
             return _handle_task(arguments)
 
         if arguments.command == "drift-resolve":
-            value = json.loads(Path(arguments.input).read_text(encoding="utf-8"))
-            if not isinstance(value, dict):
-                raise ValueError("drift resolution input must be a JSON object")
-            with CampaignManager(arguments.target, arguments.state_dir) as manager:
-                _print({"event_id": resolve_snapshot_drift(
-                    manager,
-                    campaign_id=arguments.campaign_id,
-                    drift_event_id=arguments.drift_event_id,
-                    evidence_refs=tuple(
-                        str(item) for item in value.get("evidence_refs", [])
-                    ),
-                )})
-            return 0
+            return _handle_drift_resolve(arguments)
 
-        manifest = json.loads(Path(arguments.manifest).read_text(encoding="utf-8"))
-        if not isinstance(manifest, dict):
-            raise ValueError("batch manifest must be a JSON object")
-        with CampaignManager(arguments.target, arguments.state_dir) as manager:
-            batch = manager.add_batch(
-                campaign_id=arguments.campaign_id,
-                batch_id=arguments.batch_id,
-                manifest=manifest,
-            )
-            _print(asdict(batch))
-        return 0
+        if arguments.command == "batch-add":
+            return _handle_batch_add(arguments)
     except (OSError, ValueError, RuntimeError, json.JSONDecodeError, SnapshotError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 2

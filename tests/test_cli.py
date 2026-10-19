@@ -25,6 +25,29 @@ def test_cli_initializes_and_reports_campaign(tmp_path: Path, capsys: object) ->
     assert status_output["campaigns"][0]["campaign_id"] == init_output["campaign_id"]
 
 
+def test_cli_adds_batch_from_manifest_file(tmp_path: Path, capsys: object) -> None:
+    target = tmp_path / "batch-add-target"
+    target.mkdir()
+    assert main([
+        "init", str(target), "--snapshot-id", "fixture:batch-add",
+        "--campaign-id", "CMP-batch-add",
+    ]) == 0
+    capsys.readouterr()  # type: ignore[attr-defined]
+    manifest_path = tmp_path / "batch-manifest.json"
+    manifest_path.write_text(json.dumps({
+        "work_unit_ids": ["WU-batch-add"],
+        "source_file_count": 0,
+    }), encoding="utf-8")
+
+    assert main([
+        "batch-add", str(target), "CMP-batch-add", "B-batch-add",
+        "--manifest", str(manifest_path),
+    ]) == 0
+    batch = json.loads(capsys.readouterr().out)  # type: ignore[attr-defined]
+    assert batch["batch_id"] == "B-batch-add"
+    assert batch["manifest"]["work_unit_ids"] == ["WU-batch-add"]
+
+
 def test_cli_freezes_max_screening_fraction_at_campaign_init(
     tmp_path: Path, capsys: object
 ) -> None:

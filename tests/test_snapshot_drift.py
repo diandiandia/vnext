@@ -4,6 +4,7 @@ import pytest
 
 from reachable_audit.batch_workflow import BatchWorkflow
 from reachable_audit.campaign import CampaignManager
+from reachable_audit.cli import main
 from reachable_audit.drift import resolve_snapshot_drift
 from reachable_audit.graph import build_component_graph
 from reachable_audit.inventory import build_inventory
@@ -11,7 +12,9 @@ from reachable_audit.models import BatchStatus, ModelError
 from reachable_audit.planning import create_audit_plan
 
 
-def test_r0_drift_invalidates_reverse_dependencies_only(tmp_path: Path) -> None:
+def test_r0_drift_invalidates_reverse_dependencies_only(
+    tmp_path: Path, capsys: object,
+) -> None:
     (tmp_path / "pyproject.toml").write_text(
         "[project]\nname='app'\ndependencies=['lib @ file:./lib']\n",
         encoding="utf-8",
@@ -81,12 +84,15 @@ def test_r0_drift_invalidates_reverse_dependencies_only(tmp_path: Path) -> None:
                 evidence_refs=("EVID-recheck",),
             )
         (tmp_path / "lib" / "lib.py").write_text("value = 1\n", encoding="utf-8")
-        resolve_snapshot_drift(
-            manager,
-            campaign_id="CMP-drift",
-            drift_event_id=drift_event.event_id,
-            evidence_refs=("EVID-source-restored",),
+        resolution_path = tmp_path / "drift-resolution.json"
+        resolution_path.write_text(
+            '{"evidence_refs":["EVID-source-restored"]}', encoding="utf-8"
         )
+        assert main([
+            "drift-resolve", str(tmp_path), "CMP-drift", drift_event.event_id,
+            "--input", str(resolution_path),
+        ]) == 0
+        assert '"event_id"' in capsys.readouterr().out  # type: ignore[attr-defined]
         assert manager.store.get_batch(
             "CMP-drift", lib_batch.batch_id
         ).status is BatchStatus.PLANNED
