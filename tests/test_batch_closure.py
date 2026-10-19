@@ -9,6 +9,7 @@ import pytest
 
 from reachable_audit.analysis_models import (
     BatchClosure,
+    CampaignClosure,
     Experiment,
     ExperimentFidelity,
     ExperimentResult,
@@ -23,12 +24,14 @@ from reachable_audit.analysis_models import (
     SurfaceReviewDisposition,
     SurfaceReviewState,
 )
+from reachable_audit.campaign_closure import CampaignCloser
 from reachable_audit.execution import (
     DiscoveryCoordinator,
     ManualExecutionBackend,
     TaskResult,
 )
 from reachable_audit.models import BatchStatus, CampaignStatus, ModelError
+from reachable_audit.graph import build_component_graph
 from test_experiments_metrics import _ready_for_r5
 from reachable_audit.experiments.runner import run_harness
 from conftest import execution_configuration_fixture
@@ -303,6 +306,39 @@ def test_signed_external_observation_is_registered_without_r5_upgrade(
         r5_event = workflow._require_stage("R5_COMPLETED")
         r5 = json.loads(manager.artifacts.get_bytes(r5_event.payload_ref))
         assert r5["assessments"][0]["disposition"] == R5Disposition.NEEDS_REVIEW.value
+
+        workflow.close_r6(BatchClosure(
+            budget_used={"agent_runs": 1},
+            constraints_observed=(),
+            unreviewed_scope=(),
+            residual_risks=("external observation is not managed confirmation",),
+            lessons=("preserve external observation provenance",),
+        ))
+        plan_id = str(workflow.batch.manifest["plan_id"])
+        plan = manager.load_audit_plan(workflow.campaign_id, plan_id)
+        inventory = manager.load_inventory(workflow.campaign_id)
+        manager.record_component_graph(
+            campaign_id=workflow.campaign_id,
+            graph=build_component_graph(tmp_path, inventory),
+        )
+        report = CampaignCloser(manager, workflow.campaign_id, plan).close(CampaignClosure(
+            architecture_overview="One component with one static-only hypothesis.",
+            unreviewed_scope=(),
+            residual_risks=(),
+            limitations=(),
+            lessons=(),
+            knowledge_nominations=(),
+            skill_issues=(),
+        ))
+        assert report["r5_external_observation_citations"] == [{
+            "hypothesis_id": "HYP-static",
+            "disposition": R5Disposition.NEEDS_REVIEW.value,
+            "artifact_refs": [observation_ref],
+        }]
+        assert report["external_observations"] == [{
+            "artifact_id": observation_ref,
+            "observation": asdict(signed()),
+        }]
     finally:
         manager.close()
 

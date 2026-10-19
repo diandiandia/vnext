@@ -820,6 +820,7 @@ def evaluate_release(
         "implemented_subset_status": "PASS" if subset_passed else "BLOCKED",
         "unimplemented_gates": unimplemented_gates,
         "failed_gates": failed_gates,
+        "verified_evidence_refs": sorted(verified_evidence_refs),
         "gates": gates,
         "policy": {
             "release_policy_version": RELEASE_POLICY_VERSION,

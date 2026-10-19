@@ -11,6 +11,7 @@ from typing import Any, Mapping, Sequence
 from .analysis_models import (
     CampaignClosure,
     DiscoveryAxis,
+    ExternalObservation,
     PathRiskTier,
     R5Disposition,
     ReviewAltitude,
@@ -450,6 +451,7 @@ class CampaignCloser:
         verdicts = []
         category_runs = []
         r5_assessments = []
+        external_observations_by_ref: dict[str, dict[str, Any]] = {}
         batch_reports_by_id: dict[str, Mapping[str, Any]] = {}
         metrics = []
         path_review_claims: list[dict[str, str]] = []
@@ -466,6 +468,23 @@ class CampaignCloser:
         invalidated_event_ids = invalidated_stage_event_ids(events)
         for batch_id in planned_batch_ids:
             for event in event_by_batch.get(batch_id, []):
+                if (
+                    event.event_type == "OUT_OF_BAND_OBSERVATION_RECORDED"
+                    and event.payload_ref is not None
+                ):
+                    observation = ExternalObservation.from_dict(json.loads(
+                        self.manager.artifacts.get_bytes(event.payload_ref)
+                    ))
+                    if (
+                        observation.observation_id != event.entity_id
+                        or observation.campaign_id != self.campaign_id
+                        or observation.batch_id != batch_id
+                        or observation.snapshot_id != self.campaign.snapshot_id
+                    ):
+                        raise ModelError(
+                            "Campaign closure external observation event scope mismatch"
+                        )
+                    external_observations_by_ref[event.payload_ref] = asdict(observation)
                 if (
                     event.event_id in invalidated_event_ids
                     or event.payload_ref is None
@@ -951,6 +970,30 @@ class CampaignCloser:
         resource_cleanup = cleanup_campaign_resources(
             self.manager, self.campaign_id
         )
+        external_observation_citations = []
+        cited_observation_refs = set()
+        for assessment in r5_assessments:
+            references = [
+                str(reference)
+                for reference in assessment.get("external_observation_refs", [])
+            ]
+            if not references:
+                continue
+            for reference in references:
+                observation = external_observations_by_ref.get(reference)
+                if (
+                    observation is None
+                    or observation.get("hypothesis_id") != assessment["hypothesis_id"]
+                ):
+                    raise ModelError(
+                        "Campaign closure R5 external observation provenance is missing"
+                    )
+                cited_observation_refs.add(reference)
+            external_observation_citations.append({
+                "hypothesis_id": assessment["hypothesis_id"],
+                "disposition": assessment["disposition"],
+                "artifact_refs": sorted(references),
+            })
         report = {
             "schema_version": "1.0",
             "campaign_id": self.campaign_id,
@@ -1028,6 +1071,14 @@ class CampaignCloser:
                 for item in r5_assessments
                 if item["disposition"] == R5Disposition.NOT_FEASIBLE.value
             ),
+            "r5_external_observation_citations": external_observation_citations,
+            "external_observations": [
+                {
+                    "artifact_id": reference,
+                    "observation": external_observations_by_ref[reference],
+                }
+                for reference in sorted(cited_observation_refs)
+            ],
             "boundary_reviews": boundary_reviews,
             "batches": [
                 {"batch_id": batch_id, "status": batches[batch_id].status.value}

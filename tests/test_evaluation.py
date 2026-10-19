@@ -258,12 +258,14 @@ def _rewrite_measurement_artifact(
 
 
 def test_release_accepts_when_all_implemented_gate_evidence_is_valid() -> None:
-    report = evaluate_release(_manifest(), signing_key=_TEST_SIGNING_KEY)
+    manifest = _manifest()
+    report = evaluate_release(manifest, signing_key=_TEST_SIGNING_KEY)
     assert report["status"] == "ACCEPTED"
     assert report["eligible_for_promotion"] is True
     assert report["implemented_subset_status"] == "PASS"
     assert report["unimplemented_gates"] == []
     assert report["failed_gates"] == []
+    assert report["verified_evidence_refs"] == sorted(manifest["evidence_artifacts"])
     assert set(report["gates"]) == {f"RG{index}" for index in range(1, 16)}
     assert report["policy"]["release_policy_version"] == "vnext-release-policy-6"
     assert report["gates"]["RG6"]["pass"] is True
