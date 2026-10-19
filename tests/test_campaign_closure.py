@@ -27,6 +27,7 @@ from reachable_audit.campaign_closure import (
     _derive_screening_coverage,
 )
 from reachable_audit.cli import main
+from reachable_audit.campaign import CampaignManager
 from reachable_audit.execution import (
     DiscoveryCoordinator,
     ManualExecutionBackend,
@@ -1019,6 +1020,24 @@ def test_campaign_close_cli_loads_plan_and_writes_final_report(
     report = json.loads(capsys.readouterr().out)  # type: ignore[attr-defined]
     assert report["campaign_id"] == "CMP-r4"
     assert report["status"] == "PASS"
+
+
+def test_r35_complete_cli_replays_the_durable_stage_event(
+    tmp_path: Path, capsys: object,
+) -> None:
+    manager, plan = _closable_campaign(tmp_path)
+    batch_id = plan.batches[0].batch_id
+    manager.close()
+
+    assert main([
+        "r35-complete", str(tmp_path), "CMP-r4", batch_id,
+    ]) == 0
+    result = json.loads(capsys.readouterr().out)  # type: ignore[attr-defined]
+    with CampaignManager(tmp_path) as reopened:
+        event = reopened.store.list_batch_events(
+            "CMP-r4", batch_id, event_type="R3_5_COMPLETED",
+        )[0]
+    assert result["artifact_id"] == event.payload_ref
 
 
 def test_campaign_closure_rejects_unrecommitted_stale_projection(

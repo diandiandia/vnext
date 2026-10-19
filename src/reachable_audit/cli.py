@@ -455,6 +455,39 @@ def _handle_handoff(arguments: argparse.Namespace) -> int:
     return 0
 
 
+def _handle_r35(arguments: argparse.Namespace) -> int:
+    with CampaignManager(arguments.target, arguments.state_dir) as manager:
+        workflow = BatchWorkflow(
+            manager, arguments.campaign_id, arguments.batch_id
+        )
+        if arguments.command == "r35-complete":
+            artifact_id = workflow.complete_r35()
+        else:
+            value = json.loads(Path(arguments.input).read_text(encoding="utf-8"))
+            if not isinstance(value, dict):
+                raise ValueError("R3.5 input must be a JSON object")
+            if arguments.command == "r35-refute":
+                artifact_id = workflow.record_refutation(
+                    Refutation.from_dict(value)
+                )
+            elif arguments.command == "r35-adjudicate":
+                artifact_id = workflow.record_adjudication(
+                    Adjudication.from_dict(value)
+                )
+            elif arguments.command == "r35-revival-review":
+                artifact_id = workflow.record_revival_review(
+                    RevivalReview.from_dict(value)
+                )
+            else:
+                artifact_id = workflow.record_revival_selection(
+                    value.get("hypothesis_ids", []),
+                    rationale=str(value.get("rationale", "")),
+                    evidence_refs=value.get("evidence_refs", []),
+                )
+        _print({"artifact_id": artifact_id})
+    return 0
+
+
 def _handle_campaign_abort(arguments: argparse.Namespace) -> int:
     value = json.loads(Path(arguments.input).read_text(encoding="utf-8"))
     if not isinstance(value, dict) or not isinstance(value.get("skill_issues"), list):
@@ -1127,38 +1160,7 @@ def main(argv: list[str] | None = None) -> int:
             return _handle_handoff(arguments)
 
         if arguments.command.startswith("r35-"):
-            with CampaignManager(arguments.target, arguments.state_dir) as manager:
-                workflow = BatchWorkflow(
-                    manager, arguments.campaign_id, arguments.batch_id
-                )
-                if arguments.command == "r35-complete":
-                    artifact_id = workflow.complete_r35()
-                else:
-                    value = json.loads(
-                        Path(arguments.input).read_text(encoding="utf-8")
-                    )
-                    if not isinstance(value, dict):
-                        raise ValueError("R3.5 input must be a JSON object")
-                    if arguments.command == "r35-refute":
-                        artifact_id = workflow.record_refutation(
-                            Refutation.from_dict(value)
-                        )
-                    elif arguments.command == "r35-adjudicate":
-                        artifact_id = workflow.record_adjudication(
-                            Adjudication.from_dict(value)
-                        )
-                    elif arguments.command == "r35-revival-review":
-                        artifact_id = workflow.record_revival_review(
-                            RevivalReview.from_dict(value)
-                        )
-                    else:
-                        artifact_id = workflow.record_revival_selection(
-                            value.get("hypothesis_ids", []),
-                            rationale=str(value.get("rationale", "")),
-                            evidence_refs=value.get("evidence_refs", []),
-                        )
-                _print({"artifact_id": artifact_id})
-            return 0
+            return _handle_r35(arguments)
 
         if arguments.command in {"category-plan", "r4"}:
             value = json.loads(Path(arguments.input).read_text(encoding="utf-8"))
