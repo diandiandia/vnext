@@ -75,12 +75,14 @@ identity and provider enforcement require a host integration acceptance run.
 
 ### 4. R5 Out-of-Band Evidence Provenance
 
-Status: **PARTIAL MECHANICS IMPLEMENTED**. `r5-observation-register` verifies a
-host-authority HMAC and binds an observation to Campaign/snapshot/Batch/hypothesis,
-observer/method/time, and Campaign-owned artifact digests. Registration is evidence-only
-and cannot upgrade R5; R5 task context exposes matching observations and assessments may
-cite them without promotion. Authority key custody, observer identity trust, and
-independent accept-path qualification remain external.
+Status: **LOCAL PROVENANCE PATH IMPLEMENTED; AUTHORITY ACCEPTANCE EXTERNAL**.
+`r5-observation-register` verifies a host-authority HMAC and binds an observation to
+Campaign/snapshot/Batch/hypothesis, observer/method/time, and Campaign-owned artifact
+digests. Registration is evidence-only and cannot upgrade R5; matching observations enter
+R5 task context, assessments may cite them without promotion, and citations plus signed
+payloads survive Campaign closure and release evidence output. Authority key custody,
+independently trusted observer identity, and real accept-path qualification remain
+external.
 
 Support authorized external observations without treating a string reference as proof.
 Bind evidence to hypothesis, snapshot, target, observer identity, method, timestamp,
@@ -125,10 +127,10 @@ are external evidence; local synthetic tests cannot mark these gates complete.
 ## Current Test Gates
 
 The latest full local verification after stage provenance, invalidation, revision-bound
-tasks, closure ancestry, compact R4 v2 wire, delegated-budget reservations, and host
-attestation expiry/replay checks is **323 passed, 1 skipped**; compatibility-scan passes
-with no findings (49 Python files,
-167 knowledge files, 1 prompt file). Phase 1's local acceptance tests pass; its real-host
+tasks, closure ancestry, compact R4 v2 wire, delegated-budget reservations, host
+attestation expiry/replay, and R5 report provenance is **323 passed, 1 skipped**;
+compatibility-scan passes with no findings (49 Python files, 167 knowledge files, 1 prompt
+file). Phase 1's local acceptance tests pass; its real-host
 behavior remains unverified until release qualification.
 
 Phase 2 local gates now cover v1 compatibility, v2 compact multi-item serialization,
