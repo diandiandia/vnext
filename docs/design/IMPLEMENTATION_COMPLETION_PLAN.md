@@ -113,23 +113,25 @@ exception swallowing; byte reduction measured on multi-item bundles.
 
 ### 6. Scale and Release Qualification
 
-Complete the remaining synthetic scale measurements and signed real-run acceptance:
-30k Handoffs with large artifacts, atomic failure/recovery, task ordering, zero-target
-latency budgets, 1k-file R1/R3 validation, all supported language strata, held-out mixed
-language campaigns, and large-repository runs.
+Status: **LOCAL SYNTHETIC ACCEPTANCE COMPLETE; REAL-RUN QUALIFICATION EXTERNAL**. Local
+tests cover 30k Handoffs with large evidence artifacts, 30k atomic rollback, oldest-first
+task ordering, zero-target R3.5 latency under 2 seconds with 30k unrelated events, 1k-file
+R1/R3 validation, all supported language strata, held-out mixed-language fixture gates,
+and a large-campaign evidence fixture.
 
-Acceptance: measured budgets and reproducible harness/fixtures. Real project access,
-held-out labels, evaluator authority signatures, host-read proof, and large-run capacity
-are external evidence; local synthetic tests cannot mark these gates complete.
+Remaining work is signed real-run acceptance using representative repositories and
+independent held-out labels. Real project access, evaluator authority signatures,
+host-read proof, and large-run capacity are external evidence; local synthetic tests cannot
+mark these gates complete.
 
 ## Current Test Gates
 
 The latest full local verification after stage provenance, invalidation, revision-bound
 tasks, closure ancestry, compact R4 v2 wire, delegated-budget reservations, host
-attestation expiry/replay, R5 report provenance, and Phase 5 CLI/gate decomposition is
-**337 passed, 1 skipped**; compatibility-scan passes with no findings (49 Python files,
-167 knowledge files, 1 prompt file). Phase 1 and Phase 5 local acceptance tests pass;
-real-host behavior remains unverified until release qualification.
+attestation expiry/replay, R5 report provenance, Phase 5 CLI/gate decomposition, and Phase
+6 synthetic scale fixtures is **338 passed, 1 skipped**; compatibility-scan passes with no
+findings (49 Python files, 167 knowledge files, 1 prompt file). Phase 1 and Phase 5 local
+acceptance tests pass; real-host behavior remains unverified until release qualification.
 
 Phase 2 local gates now cover v1 compatibility, v2 compact multi-item serialization,
 measured byte reduction, repairability after invalid references, and canonical R4 reports.
@@ -139,8 +141,8 @@ release/expiry reclaim, failed-use accounting, reservation bounds, and stale-tas
 Only host identity trust/key custody and provider hard limits require integration evidence.
 Before closing Phase 4,
 test invalid signatures/scope/digests and trace valid provenance through R5, closure, and
-release output. Phase 5 local command/gate acceptance passes. Before closing Phase 6, run synthetic
-scale budgets locally and attach the required signed real-run evidence separately.
+release output. Phase 5 and Phase 6 local synthetic acceptance tests pass; Phase 6 still
+requires signed real-run evidence separately.
 
 External waiting items are host trust/key custody, provider-side hard budget reservation,
 authority-held R5 signing keys, independently trusted observer identity, target-read
