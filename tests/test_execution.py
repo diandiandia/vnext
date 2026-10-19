@@ -453,6 +453,97 @@ def test_host_worker_attestation_is_bound_to_task_lease_and_delegates(
         manager.close()
 
 
+def test_host_worker_attestation_expires_with_lease_and_cannot_be_replayed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    target = tmp_path / "attestation-expiry"
+    target.mkdir()
+    manager = CampaignManager(target)
+    secret = "test-expiry-key-material-012345678901234".encode("utf-8")
+    monkeypatch.setenv("VNA_HOST_WORKER_HMAC_KEY", secret.decode("utf-8"))
+    now = [dt.datetime(2026, 10, 19, tzinfo=dt.UTC)]
+    try:
+        manager.create_campaign(
+            campaign_id="CMP-attestation-expiry",
+            snapshot_id="fixture:attestation-expiry",
+            budget={"require_host_worker_attestation": True},
+        )
+        manager.add_batch(
+            campaign_id="CMP-attestation-expiry",
+            batch_id="B-attestation-expiry",
+            manifest={"work_unit_ids": ["WU-attestation-expiry"]},
+        )
+        input_ref = manager.artifacts.put_text(json.dumps({
+            "work_unit": {"work_unit_id": "WU-attestation-expiry", "source_files": []},
+            "boundary_edges": [],
+        })).artifact_id
+        task = TaskSpec(
+            task_id="TASK-attestation-expiry",
+            campaign_id="CMP-attestation-expiry",
+            batch_id="B-attestation-expiry",
+            work_unit_id="WU-attestation-expiry",
+            operation="discover_surfaces",
+            input_refs=(input_ref,),
+            required_output="surface-set/v1",
+            budget={"agent_runs": 1},
+        )
+        backend = ManualExecutionBackend(
+            manager, task.campaign_id, clock=lambda: now[0]
+        )
+        backend.submit(task)
+        first_lease = backend.claim("trusted-worker", lease_seconds=1)
+        assert first_lease is not None
+        unsigned = {
+            "schema_version": "1.0",
+            "campaign_id": first_lease.task.campaign_id,
+            "batch_id": first_lease.task.batch_id,
+            "task_id": first_lease.task.task_id,
+            "attempt": first_lease.attempt,
+            "lease_expires_at": first_lease.lease_expires_at,
+            "worker_id": first_lease.worker_id,
+            "delegated_worker_ids": [],
+            "delegated_agent_runs": 0,
+        }
+        signature = hmac.new(
+            secret,
+            json.dumps(
+                unsigned, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+            ).encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+        attestation = json.dumps({
+            **unsigned,
+            "signature": {"algorithm": "hmac-sha256", "value": signature},
+        })
+        output_ref = manager.artifacts.put_text(json.dumps({
+            "schema_version": "1.0",
+            "review_altitude": "INSPECTED",
+            "reviewed_paths": [],
+            "surfaces": [],
+            "boundary_reviews": [],
+        })).artifact_id
+        now[0] += dt.timedelta(seconds=2)
+        with pytest.raises(ConflictError, match="lease expired"):
+            backend.collect(first_lease, TaskResult(
+                True, output_ref, "expired signed lease",
+                {"agent_runs": 1, "wall_seconds": 1},
+                {"host_worker_attestation": attestation},
+            ))
+
+        second_lease = backend.claim("trusted-worker", lease_seconds=30)
+        assert second_lease is not None
+        assert second_lease.attempt == first_lease.attempt + 1
+        with pytest.raises(ModelError, match="does not match the current task lease"):
+            backend.collect(second_lease, TaskResult(
+                True, output_ref, "replayed prior attestation",
+                {"agent_runs": 1, "wall_seconds": 1},
+                {"host_worker_attestation": attestation},
+            ))
+        assert backend.poll(task.task_id).status is TaskStatus.LEASED
+    finally:
+        manager.close()
+
+
 def test_r1_schedule_blocks_oversized_boundary_review_floor(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
