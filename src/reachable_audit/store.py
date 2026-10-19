@@ -180,6 +180,11 @@ class AuditStore(AbstractContextManager["AuditStore"]):
             (budget or {})["require_host_worker_attestation"]
         ) is not bool:
             raise ValueError("require_host_worker_attestation must be boolean")
+        delegated_cap = (budget or {}).get("max_delegated_agent_runs")
+        if delegated_cap is not None and (
+            type(delegated_cap) is not int or delegated_cap < 0
+        ):
+            raise ValueError("max_delegated_agent_runs must be a non-negative integer")
         now = _utc_now()
         budget_json = _json(dict(budget or {}))
         constraints_json = _json(list(constraints or ()))
@@ -631,6 +636,26 @@ class AuditStore(AbstractContextManager["AuditStore"]):
                 owners.setdefault(row["payload_ref"], set()).add(row["campaign_id"])
         return owners
 
+    def _task_inputs_invalidated(self, submission: EventRecord) -> bool:
+        revisions = submission.payload.get("stage_revision_ids", {})
+        if not isinstance(revisions, dict) or not revisions or submission.batch_id is None:
+            return False
+        rows = self._connection.execute(
+            """
+            SELECT payload_json FROM events
+            WHERE campaign_id = ? AND batch_id = ?
+                AND event_type = 'STAGE_PROJECTION_INVALIDATED'
+            """,
+            (submission.campaign_id, submission.batch_id),
+        ).fetchall()
+        for row in rows:
+            payload = json.loads(row["payload_json"])
+            target_stage = str(payload.get("target_stage", ""))
+            target_revision_id = str(payload.get("target_revision_id", ""))
+            if revisions.get(target_stage) == target_revision_id:
+                return True
+        return False
+
     def claim_task(
         self,
         *,
@@ -655,6 +680,9 @@ class AuditStore(AbstractContextManager["AuditStore"]):
             if not rows:
                 raise NotFoundError(f"execution task not found: {task_id}")
             events = [self._event_from_row(row) for row in rows]
+            if self._task_inputs_invalidated(events[0]):
+                self._connection.rollback()
+                return None
             claims = [event for event in events if event.event_type == "TASK_CLAIMED"]
             state_events = [event for event in events if event.event_type in {
                 "TASK_CLAIMED", "TASK_LEASE_RELEASED", "TASK_COMPLETED",
@@ -681,6 +709,79 @@ class AuditStore(AbstractContextManager["AuditStore"]):
             ):
                 self._connection.rollback()
                 return None
+            campaign_row = self._connection.execute(
+                "SELECT budget_json FROM campaigns WHERE campaign_id = ?",
+                (campaign_id,),
+            ).fetchone()
+            if campaign_row is None:
+                raise NotFoundError(f"campaign not found: {campaign_id}")
+            campaign_budget = json.loads(campaign_row["budget_json"])
+            delegated_cap = campaign_budget.get("max_delegated_agent_runs")
+            if delegated_cap is not None:
+                campaign_task_rows = self._connection.execute(
+                    """
+                    SELECT * FROM events
+                    WHERE campaign_id = ? AND entity_type = 'execution_task'
+                    ORDER BY sequence
+                    """,
+                    (campaign_id,),
+                ).fetchall()
+                events_by_task: dict[str, list[EventRecord]] = {}
+                for row in campaign_task_rows:
+                    event = self._event_from_row(row)
+                    events_by_task.setdefault(event.entity_id, []).append(event)
+                used = 0
+                reserved = 0
+                for existing_task_id, task_events in events_by_task.items():
+                    submission = next(
+                        (event for event in task_events if event.event_type == "TASK_SUBMITTED"),
+                        None,
+                    )
+                    if submission is None:
+                        continue
+                    task_budget = submission.payload.get("budget", {})
+                    if not isinstance(task_budget, dict):
+                        task_budget = {}
+                    task_cap = task_budget.get("delegated_agent_runs", 0)
+                    if type(task_cap) is not int or task_cap < 0:
+                        raise StoreError(
+                            f"execution task has invalid delegated reservation: {existing_task_id}"
+                        )
+                    used += sum(
+                        int(event.payload.get("measurements", {}).get(
+                            "delegated_agent_runs", 0
+                        ))
+                        for event in task_events
+                        if event.event_type in {"TASK_COMPLETED", "TASK_FAILED"}
+                    )
+                    task_state_events = [
+                        event for event in task_events
+                        if event.event_type in {
+                            "TASK_CLAIMED", "TASK_LEASE_RELEASED", "TASK_COMPLETED",
+                            "TASK_FAILED", "TASK_RETRY_AUTHORIZED", "TASK_CANCELLED",
+                        }
+                    ]
+                    current_state = task_state_events[-1] if task_state_events else None
+                    if (
+                        existing_task_id != task_id
+                        and current_state is not None
+                        and current_state.event_type == "TASK_CLAIMED"
+                        and str(current_state.payload.get("lease_expires_at", "")) > now
+                        and not self._task_inputs_invalidated(submission)
+                    ):
+                        reserved += task_cap
+                candidate_budget = events[0].payload.get("budget", {})
+                candidate_reservation = (
+                    candidate_budget.get("delegated_agent_runs", 0)
+                    if isinstance(candidate_budget, dict) else 0
+                )
+                if (
+                    type(candidate_reservation) is not int
+                    or candidate_reservation < 0
+                    or used + reserved + candidate_reservation > delegated_cap
+                ):
+                    self._connection.rollback()
+                    return None
             result = self._append_event_tx(
                 campaign_id=campaign_id,
                 batch_id=events[0].batch_id,
@@ -736,6 +837,10 @@ class AuditStore(AbstractContextManager["AuditStore"]):
             if not rows:
                 raise NotFoundError(f"execution task not found: {task_id}")
             events = [self._event_from_row(row) for row in rows]
+            if self._task_inputs_invalidated(events[0]):
+                raise ConflictError(
+                    f"execution task inputs refer to an invalidated stage revision: {task_id}"
+                )
             claims = [event for event in events if event.event_type == "TASK_CLAIMED"]
             if not claims:
                 raise ConflictError(f"execution task has no active lease: {task_id}")

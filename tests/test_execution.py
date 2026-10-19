@@ -1,5 +1,6 @@
 import datetime as dt
 from dataclasses import asdict, replace
+from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import hmac
 import json
@@ -24,6 +25,7 @@ from reachable_audit.campaign import CampaignManager
 from reachable_audit.execution import (
     DiscoveryCoordinator,
     ManualExecutionBackend,
+    TaskLease,
     TaskResult,
     TaskSpec,
     TaskStatus,
@@ -84,6 +86,8 @@ def test_task_spec_round_trips_stage_revisions_and_reads_legacy_specs() -> None:
 
     legacy = {key: value for key, value in serialized.items() if key != "stage_revision_ids"}
     assert TaskSpec.from_dict(legacy).stage_revision_ids == {}
+    with pytest.raises(ModelError, match="budget values must be integers"):
+        TaskSpec.from_dict({**serialized, "budget": {"agent_runs": 1.5}})
     with pytest.raises(ModelError, match="stage_revision_ids"):
         TaskSpec.from_dict({**serialized, "stage_revision_ids": {"R1_COMPLETED": ""}})
 
@@ -163,6 +167,160 @@ def test_budgeted_delegated_agent_runs_are_reported_and_bounded(
             {"agent_runs": 2, "delegated_agent_runs": 1, "wall_seconds": 1},
         ))
         assert result.status is TaskStatus.SUCCEEDED
+
+        overreserved = replace(
+            original,
+            task_id="TASK-overreserved-delegates",
+            budget={"agent_runs": 1, "delegated_agent_runs": 2},
+        )
+        with pytest.raises(ModelError, match="cannot exceed agent_runs"):
+            backend.submit(overreserved)
+
+        unreserved = replace(
+            original,
+            task_id="TASK-unreserved-delegates",
+            budget={"agent_runs": 1},
+        )
+        backend.submit(unreserved)
+        unreserved_lease = backend.claim("unreserved-worker")
+        assert unreserved_lease is not None
+        with pytest.raises(ModelError, match="did not reserve delegated_agent_runs"):
+            backend.collect(unreserved_lease, TaskResult(
+                True, output_ref, "unreserved delegated usage",
+                {"agent_runs": 1, "delegated_agent_runs": 1, "wall_seconds": 1},
+            ))
+        assert backend.poll(unreserved.task_id).status is TaskStatus.LEASED
+    finally:
+        manager.close()
+
+
+def test_campaign_delegated_reservations_prevent_concurrent_oversubscription(
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "reserved-target"
+    target.mkdir()
+    manager = CampaignManager(target)
+    manager.create_campaign(
+        campaign_id="CMP-reserved-delegates",
+        snapshot_id="fixture:reserved-delegates",
+        budget={"max_delegated_agent_runs": 1},
+    )
+    manager.add_batch(
+        campaign_id="CMP-reserved-delegates",
+        batch_id="B-reserved-delegates",
+        manifest={"work_unit_ids": ["WU-reserved"]},
+    )
+    input_ref = manager.artifacts.put_text('{"operation":"reserved-fixture"}').artifact_id
+    task_ids = ("TASK-reserved-one", "TASK-reserved-two")
+    backend = ManualExecutionBackend(manager, "CMP-reserved-delegates")
+    for task_id in task_ids:
+        backend.submit(TaskSpec(
+            task_id=task_id,
+            campaign_id="CMP-reserved-delegates",
+            batch_id="B-reserved-delegates",
+            work_unit_id="WU-reserved",
+            operation="reserved-fixture",
+            input_refs=(input_ref,),
+            required_output="opaque/v1",
+            budget={"agent_runs": 1, "delegated_agent_runs": 1},
+        ))
+    manager.close()
+
+    def claim_in_own_connection(task_id: str) -> object:
+        connection = CampaignManager(target)
+        try:
+            return ManualExecutionBackend(
+                connection, "CMP-reserved-delegates"
+            ).claim(f"worker-{task_id}", task_id_filter=task_id)
+        finally:
+            connection.close()
+
+    with ThreadPoolExecutor(max_workers=2) as workers:
+        leases = list(workers.map(claim_in_own_connection, task_ids))
+    claimed = [lease for lease in leases if lease is not None]
+    assert len(claimed) == 1
+    winner = claimed[0]
+    assert isinstance(winner, TaskLease)
+    loser_task_id = next(task_id for task_id, lease in zip(task_ids, leases) if lease is None)
+
+    manager = CampaignManager(target)
+    try:
+        backend = ManualExecutionBackend(manager, "CMP-reserved-delegates")
+        assert backend.claim("another-worker", task_id_filter=loser_task_id) is None
+        backend.release(winner, reason="release delegated reservation")
+        replacement_lease = backend.claim(
+            "replacement-worker", task_id_filter=loser_task_id
+        )
+        assert replacement_lease is not None
+        output_ref = manager.artifacts.put_text("{}").artifact_id
+        backend.collect(replacement_lease, TaskResult(
+            True,
+            output_ref,
+            "delegated agent run completed",
+            {"agent_runs": 1, "delegated_agent_runs": 1, "wall_seconds": 1},
+        ))
+        assert backend.claim(
+            "after-completion", task_id_filter=winner.task.task_id
+        ) is None
+    finally:
+        manager.close()
+
+
+def test_delegated_reservation_expires_and_failed_usage_remains_charged(
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "delegated-reservation-expiry"
+    target.mkdir()
+    manager = CampaignManager(target)
+    manager.create_campaign(
+        campaign_id="CMP-delegated-expiry",
+        snapshot_id="fixture:delegated-expiry",
+        budget={"max_delegated_agent_runs": 1},
+    )
+    manager.add_batch(
+        campaign_id="CMP-delegated-expiry",
+        batch_id="B-delegated-expiry",
+        manifest={"work_unit_ids": ["WU-delegated-expiry"]},
+    )
+    input_ref = manager.artifacts.put_text('{"operation":"reservation-fixture"}').artifact_id
+    first_task = TaskSpec(
+        task_id="TASK-delegated-expiring",
+        campaign_id="CMP-delegated-expiry",
+        batch_id="B-delegated-expiry",
+        work_unit_id="WU-delegated-expiry",
+        operation="reservation-fixture",
+        input_refs=(input_ref,),
+        required_output="opaque/v1",
+        budget={"agent_runs": 1, "delegated_agent_runs": 1},
+    )
+    second_task = replace(first_task, task_id="TASK-delegated-failure")
+    backend = ManualExecutionBackend(manager, "CMP-delegated-expiry")
+    backend.submit(first_task)
+    backend.submit(second_task)
+    now = [dt.datetime(2026, 10, 19, tzinfo=dt.UTC)]
+    backend = ManualExecutionBackend(
+        manager, "CMP-delegated-expiry", clock=lambda: now[0]
+    )
+    try:
+        expired_lease = backend.claim(
+            "first-worker", lease_seconds=1,
+            task_id_filter=first_task.task_id,
+        )
+        assert expired_lease is not None
+        now[0] += dt.timedelta(seconds=2)
+        second_lease = backend.claim(
+            "second-worker", task_id_filter=second_task.task_id,
+        )
+        assert second_lease is not None
+        backend.collect(second_lease, TaskResult(
+            False,
+            None,
+            "delegated attempt failed after consuming its reserved run",
+            {"agent_runs": 1, "delegated_agent_runs": 1, "wall_seconds": 1},
+        ))
+        assert backend.claim(
+            "after-failure", task_id_filter=first_task.task_id,
+        ) is None
     finally:
         manager.close()
 
@@ -584,6 +742,10 @@ def test_collected_r1_output_can_be_amended_before_stage_commit(
         ]
         first_r2_tasks = coordinator.schedule_r2_compact()
         assert len(first_r2_tasks) == 1
+        stale_r2_lease = backend.claim(
+            "old-r2-worker", task_id_filter=first_r2_tasks[0].task.task_id
+        )
+        assert stale_r2_lease is not None
         prior_r1_event = workflow._require_stage("R1_COMPLETED")
         post_commit_ref = manager.artifacts.put_text(json.dumps({
             "schema_version": "1.0",
@@ -648,6 +810,28 @@ def test_collected_r1_output_can_be_amended_before_stage_commit(
                 evidence_refs=(corrected_ref, post_commit_ref),
             )
         assert workflow._stage_event("R1_COMPLETED") is None
+        stale_result_ref = manager.artifacts.put_text("{}").artifact_id
+        with pytest.raises(ModelError, match="invalidated stage revision"):
+            backend.collect(stale_r2_lease, TaskResult(
+                True, stale_result_ref, "late stale R2 output",
+                {"agent_runs": 1, "wall_seconds": 1},
+            ))
+        assert backend.poll(stale_r2_lease.task.task_id).status is TaskStatus.LEASED
+        with monkeypatch.context() as patch:
+            patch.setattr(backend, "_task_revision_is_stale", lambda *_args: False)
+            patch.setattr(backend, "_validate_task_output", lambda *_args: {})
+            with pytest.raises(ConflictError, match="invalidated stage revision"):
+                backend.collect(stale_r2_lease, TaskResult(
+                    True, stale_result_ref, "raced stale R2 output",
+                    {"agent_runs": 1, "wall_seconds": 1},
+                ))
+        backend.release(stale_r2_lease, reason="release stale revision lease")
+        with monkeypatch.context() as patch:
+            patch.setattr(backend, "_task_revision_is_stale", lambda *_args: False)
+            assert backend.claim(
+                "stale-reclaim-worker",
+                task_id_filter=stale_r2_lease.task.task_id,
+            ) is None
         invalidation = next(
             event for event in manager.store.list_batch_events(
                 workflow.campaign_id, workflow.batch_id,
@@ -1206,6 +1390,11 @@ def test_successful_task_requires_positive_agent_and_wall_measurements() -> None
         TaskResult(
             True, "sha256:" + "a" * 64, "done",
             {"agent_runs": 1, "wall_seconds": 0},
+        )
+    with pytest.raises(ModelError, match="measurements must be integers"):
+        TaskResult(
+            True, "sha256:" + "a" * 64, "fractional usage",
+            {"agent_runs": 1.5, "wall_seconds": 1},
         )
     failed = TaskResult(
         False, None, "worker failed before execution",

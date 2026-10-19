@@ -211,6 +211,11 @@ class TaskSpec:
 
     @classmethod
     def from_dict(cls, value: Mapping[str, Any]) -> "TaskSpec":
+        budget_value = value.get("budget", {})
+        if not isinstance(budget_value, Mapping) or any(
+            type(amount) is not int for amount in budget_value.values()
+        ):
+            raise ModelError("execution task budget values must be integers")
         task = cls(
             task_id=str(value["task_id"]),
             campaign_id=str(value["campaign_id"]),
@@ -219,7 +224,7 @@ class TaskSpec:
             operation=str(value["operation"]),
             input_refs=tuple(str(item) for item in value.get("input_refs", [])),
             required_output=str(value["required_output"]),
-            budget={str(key): int(amount) for key, amount in value.get("budget", {}).items()},
+            budget={str(key): amount for key, amount in budget_value.items()},
             max_attempts=int(value.get("max_attempts", 3)),
             work_unit_ids=tuple(str(item) for item in value.get("work_unit_ids", [])),
             bundle_item_ids=tuple(str(item) for item in value.get("bundle_item_ids", [])),
@@ -241,6 +246,10 @@ class TaskSpec:
             raise ModelError("execution task requires artifact input references")
         if any(amount < 0 for amount in task.budget.values()):
             raise ModelError("execution task budget cannot be negative")
+        delegated_budget = task.budget.get("delegated_agent_runs")
+        agent_budget = task.budget.get("agent_runs")
+        if delegated_budget is not None and agent_budget is not None and delegated_budget > agent_budget:
+            raise ModelError("delegated_agent_runs reservation cannot exceed agent_runs")
         if task.max_attempts < 1:
             raise ModelError("execution task max_attempts must be positive")
         if len(task.work_unit_ids) != len(set(task.work_unit_ids)):
@@ -275,6 +284,8 @@ class TaskResult:
             raise ModelError("successful execution task requires an output artifact")
         if not self.summary.strip():
             raise ModelError("execution task result requires a summary")
+        if any(type(amount) is not int for amount in self.measurements.values()):
+            raise ModelError("execution task measurements must be integers")
         if any(amount < 0 for amount in self.measurements.values()):
             raise ModelError("execution task measurements cannot be negative")
         required_measurements = {"agent_runs", "wall_seconds"}
@@ -329,6 +340,7 @@ class ManualExecutionBackend:
 
 
     def submit(self, task: TaskSpec) -> TaskView:
+        task = TaskSpec.from_dict(asdict(task))
         if task.campaign_id != self.campaign_id:
             raise ModelError("execution task belongs to another Campaign")
         self.manager.store.get_batch(task.campaign_id, task.batch_id)
@@ -374,6 +386,8 @@ class ManualExecutionBackend:
                 "work_unit_id": task.work_unit_id,
                 "operation": task.operation,
                 "required_output": task.required_output,
+                "budget": dict(task.budget),
+                "stage_revision_ids": dict(task.stage_revision_ids),
                 "max_attempts": task.max_attempts,
             },
             payload_ref=artifact.artifact_id,
@@ -448,6 +462,8 @@ class ManualExecutionBackend:
                 continue
             if batch_id is not None and view.task.batch_id != batch_id:
                 continue
+            if self._task_revision_is_stale(view.task):
+                continue
             event = self.manager.store.claim_task(
                 campaign_id=self.campaign_id,
                 task_id=candidate_task_id,
@@ -471,6 +487,8 @@ class ManualExecutionBackend:
     def collect(self, lease: TaskLease, result: TaskResult) -> TaskView:
         if lease.task.campaign_id != self.campaign_id:
             raise ModelError("execution lease belongs to another Campaign")
+        if self._task_revision_is_stale(lease.task):
+            raise ModelError("execution task inputs refer to an invalidated stage revision")
         self._validate_host_worker_attestation(lease, result)
         if (
             "delegated_agent_runs" in lease.task.budget
@@ -478,6 +496,13 @@ class ManualExecutionBackend:
         ):
             raise ModelError(
                 "execution result is missing budgeted delegated_agent_runs measurement"
+            )
+        if (
+            result.measurements.get("delegated_agent_runs", 0) > 0
+            and "delegated_agent_runs" not in lease.task.budget
+        ):
+            raise ModelError(
+                "execution task did not reserve delegated_agent_runs"
             )
         if result.succeeded and lease.task.required_output in _TASK_OUTPUT_REQUIRED_FIELDS:
             if result.output_ref is None:
@@ -508,6 +533,25 @@ class ManualExecutionBackend:
             now=self._now(),
         )
         return self.poll(lease.task.task_id)
+
+    def _task_revision_is_stale(self, task: TaskSpec) -> bool:
+        if not task.stage_revision_ids:
+            return False
+        markers = self.manager.store.list_batch_events(
+            self.campaign_id,
+            task.batch_id,
+            event_type="STAGE_PROJECTION_INVALIDATED",
+        )
+        invalidated = {
+            (str(event.payload.get("target_stage", "")), str(
+                event.payload.get("target_revision_id", "")
+            ))
+            for event in markers
+        }
+        return any(
+            (stage, revision_id) in invalidated
+            for stage, revision_id in task.stage_revision_ids.items()
+        )
 
     def _validate_host_worker_attestation(
         self, lease: TaskLease, result: TaskResult,

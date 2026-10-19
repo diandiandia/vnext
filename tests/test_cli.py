@@ -39,6 +39,28 @@ def test_cli_freezes_max_screening_fraction_at_campaign_init(
     assert campaign["budget"]["max_screening_fraction"] == 0.2
 
 
+def test_cli_freezes_delegated_agent_run_cap_at_campaign_init(
+    tmp_path: Path, capsys: object,
+) -> None:
+    target = tmp_path / "delegated-budget"
+    target.mkdir()
+    assert main([
+        "init", str(target), "--snapshot-id", "fixture:delegated-budget",
+        "--campaign-id", "CMP-delegated-budget",
+        "--max-delegated-agent-runs", "3",
+    ]) == 0
+    campaign = json.loads(capsys.readouterr().out)  # type: ignore[attr-defined]
+    assert campaign["budget"]["max_delegated_agent_runs"] == 3
+
+    invalid_target = tmp_path / "negative-delegated-budget"
+    invalid_target.mkdir()
+    assert main([
+        "init", str(invalid_target), "--snapshot-id", "fixture:negative-budget",
+        "--max-delegated-agent-runs", "-1",
+    ]) == 2
+    assert "non-negative" in capsys.readouterr().err  # type: ignore[attr-defined]
+
+
 def test_cli_can_require_host_worker_attestation_at_campaign_init(
     tmp_path: Path, capsys: object,
 ) -> None:

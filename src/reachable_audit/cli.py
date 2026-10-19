@@ -70,9 +70,16 @@ def _handle_init(arguments: argparse.Namespace) -> int:
         0 <= arguments.max_screening_fraction <= 1
     ):
         raise ValueError("max-screening-fraction must be between 0 and 1")
+    if (
+        arguments.max_delegated_agent_runs is not None
+        and arguments.max_delegated_agent_runs < 0
+    ):
+        raise ValueError("max-delegated-agent-runs must be non-negative")
     budget = {}
     if arguments.max_screening_fraction is not None:
         budget["max_screening_fraction"] = arguments.max_screening_fraction
+    if arguments.max_delegated_agent_runs is not None:
+        budget["max_delegated_agent_runs"] = arguments.max_delegated_agent_runs
     if arguments.require_host_worker_attestation:
         budget["require_host_worker_attestation"] = True
     with CampaignManager(arguments.target, arguments.state_dir) as manager:
@@ -661,6 +668,10 @@ def _parser() -> argparse.ArgumentParser:
     init.add_argument(
         "--max-screening-fraction", type=float,
         help="predeclare the maximum fraction of Work Units allowed as screening-only (0..1)",
+    )
+    init.add_argument(
+        "--max-delegated-agent-runs", type=int,
+        help="reserve no more than this many delegated agent runs across the Campaign",
     )
     init.add_argument(
         "--require-host-worker-attestation", action="store_true",
