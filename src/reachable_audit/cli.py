@@ -488,6 +488,49 @@ def _handle_r35(arguments: argparse.Namespace) -> int:
     return 0
 
 
+def _handle_category_plan_or_r4(arguments: argparse.Namespace) -> int:
+    value = json.loads(Path(arguments.input).read_text(encoding="utf-8"))
+    if not isinstance(value, dict):
+        raise ValueError("R4 input must be a JSON object")
+    with CampaignManager(arguments.target, arguments.state_dir) as manager:
+        workflow = BatchWorkflow(
+            manager, arguments.campaign_id, arguments.batch_id
+        )
+        if arguments.command == "category-plan":
+            work_units = [
+                WorkUnit.from_dict(item)
+                for item in workflow.batch.manifest.get("work_units", [])
+            ]
+            if "cards" in value:
+                raise ValueError(
+                    "category-plan accepts approved card_ids, not inline card definitions"
+                )
+            catalog = KnowledgeCatalog.load(default_knowledge_root())
+            card_ids = set(str(item) for item in value.get("card_ids", []))
+            if card_ids:
+                unknown_cards = card_ids - set(catalog.cards)
+                if unknown_cards:
+                    raise ValueError(
+                        f"unknown approved Mechanism Card IDs: {sorted(unknown_cards)}"
+                    )
+                selected_cards = [catalog.cards[item] for item in sorted(card_ids)]
+            else:
+                selected_cards = list(catalog.cards.values())
+            plans = create_category_audit_plans(
+                work_units,
+                [MechanismCard.from_dict(item) for item in selected_cards],
+                budget=value.get("budget", {}),
+            )
+            artifact_id = workflow.record_category_audit_plan(plans)
+        else:
+            artifact_id = workflow.record_r4([
+                CategoryRun.from_dict(item)
+                for item in value.get("category_runs", [])
+            ])
+        _print({"artifact_id": artifact_id})
+    return 0
+
+
 def _handle_campaign_abort(arguments: argparse.Namespace) -> int:
     value = json.loads(Path(arguments.input).read_text(encoding="utf-8"))
     if not isinstance(value, dict) or not isinstance(value.get("skill_issues"), list):
@@ -1163,49 +1206,7 @@ def main(argv: list[str] | None = None) -> int:
             return _handle_r35(arguments)
 
         if arguments.command in {"category-plan", "r4"}:
-            value = json.loads(Path(arguments.input).read_text(encoding="utf-8"))
-            if not isinstance(value, dict):
-                raise ValueError("R4 input must be a JSON object")
-            with CampaignManager(arguments.target, arguments.state_dir) as manager:
-                workflow = BatchWorkflow(
-                    manager, arguments.campaign_id, arguments.batch_id
-                )
-                if arguments.command == "category-plan":
-                    work_units = [
-                        WorkUnit.from_dict(item)
-                        for item in workflow.batch.manifest.get("work_units", [])
-                    ]
-                    if "cards" in value:
-                        raise ValueError(
-                            "category-plan accepts approved card_ids, not inline card definitions"
-                        )
-                    catalog = KnowledgeCatalog.load(default_knowledge_root())
-                    card_ids = set(str(item) for item in value.get("card_ids", []))
-                    if card_ids:
-                        unknown_cards = card_ids - set(catalog.cards)
-                        if unknown_cards:
-                            raise ValueError(
-                                f"unknown approved Mechanism Card IDs: {sorted(unknown_cards)}"
-                            )
-                        selected_cards = [catalog.cards[item] for item in sorted(card_ids)]
-                    else:
-                        selected_cards = list(catalog.cards.values())
-                    plans = create_category_audit_plans(
-                        work_units,
-                        [
-                            MechanismCard.from_dict(item)
-                            for item in selected_cards
-                        ],
-                        budget=value.get("budget", {}),
-                    )
-                    artifact_id = workflow.record_category_audit_plan(plans)
-                else:
-                    artifact_id = workflow.record_r4([
-                        CategoryRun.from_dict(item)
-                        for item in value.get("category_runs", [])
-                    ])
-                _print({"artifact_id": artifact_id})
-            return 0
+            return _handle_category_plan_or_r4(arguments)
 
         if arguments.command in {"r5", "metrics"}:
             with CampaignManager(arguments.target, arguments.state_dir) as manager:

@@ -23,6 +23,7 @@ from reachable_audit.analysis_models import (
 )
 from reachable_audit.batch_workflow import BatchWorkflow
 from reachable_audit.campaign import CampaignManager
+from reachable_audit.cli import main
 from reachable_audit.execution import (
     DiscoveryCoordinator,
     ManualExecutionBackend,
@@ -203,6 +204,41 @@ def test_r4_rejects_missing_discovery_axis(tmp_path: Path) -> None:
                 (), Applicability.APPLICABLE, CategoryRunStatus.COMPLETE,
                 ("EVID-review",), "axes missing", (), (),
             )])
+    finally:
+        manager.close()
+
+
+def test_category_plan_cli_records_only_approved_catalog_cards(
+    tmp_path: Path, capsys: object,
+) -> None:
+    manager, workflow, plan = _ready_for_r4(tmp_path)
+    try:
+        catalog = KnowledgeCatalog.load(default_knowledge_root())
+        approved_card = next(
+            card for card in catalog.cards.values()
+            if card["family"] == "STATE"
+            and "python" in card["language_applicability"]
+        )
+        input_path = tmp_path / "category-plan.json"
+        input_path.write_text(json.dumps({
+            "card_ids": [approved_card["mechanism_id"]],
+            "budget": {"agent_runs": 2},
+        }), encoding="utf-8")
+
+        assert main([
+            "category-plan", str(tmp_path), workflow.campaign_id,
+            workflow.batch_id, "--input", str(input_path),
+        ]) == 0
+        result = json.loads(capsys.readouterr().out)  # type: ignore[attr-defined]
+        event = workflow._require_stage("CATEGORY_AUDIT_PLAN_RECORDED")
+        artifact = json.loads(manager.artifacts.get_bytes(event.payload_ref))
+        assert result["artifact_id"] == event.payload_ref
+        assert len(artifact["category_plans"]) == 1
+        category_plan = artifact["category_plans"][0]
+        assert category_plan["work_unit_id"] == plan.work_units[0].work_unit_id
+        assert category_plan["family"] == "STATE"
+        assert category_plan["seed_card_ids"] == [approved_card["mechanism_id"]]
+        assert category_plan["budget"] == {"agent_runs": 2}
     finally:
         manager.close()
 
