@@ -5,6 +5,8 @@
 Finish repository-owned design requirements before treating representative-project
 audits as the only remaining work. Synthetic tests establish implementation behavior;
 they do not substitute for host attestation, held-out campaigns, or release qualification.
+The executable test requirements and evidence rules are in
+[TEST_PLAN_VNEXT.md](TEST_PLAN_VNEXT.md).
 
 ## Ordered Work
 
