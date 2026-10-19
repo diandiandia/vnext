@@ -139,10 +139,10 @@ Before closing Phase 2, measure representative large-project bundle sizes. Phase
 tests cover forged/unbound HMAC envelopes, expiry, replay, concurrent oversubscription,
 release/expiry reclaim, failed-use accounting, reservation bounds, and stale-task exclusion.
 Only host identity trust/key custody and provider hard limits require integration evidence.
-Before closing Phase 4,
-test invalid signatures/scope/digests and trace valid provenance through R5, closure, and
-release output. Phase 5 and Phase 6 local synthetic acceptance tests pass; Phase 6 still
-requires signed real-run evidence separately.
+Phase 4 local tests cover invalid signatures/scope/digests and trace valid provenance
+through R5, closure, and release output. Only authority-held keys, independently trusted
+observer identity, and the real accept path remain external. Phase 5 and Phase 6 local
+synthetic acceptance tests pass; Phase 6 still requires signed real-run evidence.
 
 External waiting items are host trust/key custody, provider-side hard budget reservation,
 authority-held R5 signing keys, independently trusted observer identity, target-read
