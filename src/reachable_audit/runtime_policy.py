@@ -15,7 +15,7 @@ IMPLEMENTED_RELEASE_GATES = tuple(f"RG{index}" for index in range(1, 16))
 
 
 _POLICY: dict[str, Any] = {
-    "policy_version": "vnext-task-policy-32",
+    "policy_version": "vnext-task-policy-34",
     "task_collection": {
         "shell_execution_by_scheduler": False,
         "required_measurements": ["agent_runs", "wall_seconds"],
@@ -25,6 +25,9 @@ _POLICY: dict[str, Any] = {
         "source_anchors_required": True,
         "evidence_artifacts_content_addressed": True,
         "held_out_knowledge_runtime_access": False,
+        "knowledge_guidance": "conditional_target_evidence_not_expected_findings_or_exhaustive_checklist",
+        "r2_axis_heuristics": "source_evidenced_six_axis_triggers_conditional_history_no_candidate_does_not_imply_inapplicable",
+        "r35_revival_guidance": "independent_guard_bypass_and_boundary_contract_review_preserve_valid_counterevidence",
         "max_output_bytes": TASK_OUTPUT_MAX_BYTES,
         "soft_output_target_bytes": TASK_OUTPUT_TARGET_BYTES,
         "review_scope_sentinel": "ALL_SOURCE_FILES",
@@ -47,7 +50,7 @@ _POLICY: dict[str, Any] = {
         "r5_not_feasible": "required_blocker_evidence_null_experiment_id_needs_review_no_attempted_run",
         "r5_external_observation": "host_hmac_campaign_snapshot_batch_hypothesis_observer_method_time_campaign_owned_artifacts_evidence_only_non_confirming",
         "r5_external_observation_refs": "optional_assessment_refs_must_name_registered_same_batch_hypothesis_observation;never_confirms_or_refutes",
-        "late_stage_amendment": "r5_r6_precommit_and_terminal_r6_postcommit_before_campaign_close",
+        "late_stage_amendment": "r1_r6_precommit_r1_r5_postcommit_atomic_dependent_invalidation_and_terminal_r6_recommit_before_campaign_close",
         "r5_empirical_contract": "host_registered_harness_for_same_hypothesis_and_snapshot",
         "experiment_recipe_prerequisites": "optional_tooling_scoped_to_memory_safety_and_numeric_families",
         "r6_evidence_context": "canonical_stage_artifacts_not_work_unit_source_inventory",
@@ -62,6 +65,7 @@ _POLICY: dict[str, Any] = {
         "r1_review_altitude": "required_screened_or_inspected_agent_declaration_per_work_unit",
         "r1_path_risk_tiers": "optional_rubric_v1_high_direct_security_boundary_or_sensitive_operation_medium_supporting_logic_low_only_evidenced_no_security_role_unassessed_insufficient_evidence;not_severity_or_safety;omitted_unassessed",
         "r1_low_path_risk_tier": "requires_inspected_work_unit_altitude",
+        "r1_high_path_risk_tier": "requires_inspected_work_unit_altitude_agent_declaration_not_observed_reads",
         "r2_review_altitude": "applicable_axis_requires_screened_or_inspected;_non_applicable_not_recorded",
         "r4_review_altitude": "applicable_category_axis_requires_screened_or_inspected;_non_applicable_not_recorded",
             "handoff_edge_proven": "typed_edge_endpoint_direction_principal_premise_and_data_mapping_proof",

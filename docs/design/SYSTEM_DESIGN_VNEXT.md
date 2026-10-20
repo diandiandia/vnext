@@ -5,6 +5,13 @@ Status: as-implemented architecture baseline, reviewed 2026-10-17 against commit
 hosts or demonstrated audit capability. Roadmap items are not current contracts;
 documenting a known defect does not resolve it.
 
+Current-contract update (2026-10-20): stage revision, recovery, delegated reservations,
+and optional signed evidence mechanisms now supersede the older repair boundaries.
+See [implementation completion](IMPLEMENTATION_COMPLETION_PLAN.md) and the
+[current generality review](GENERALITY_REVIEW_VNEXT.md). Development audits and
+release qualification are distinct; release trust/held-out prerequisites do not
+block authorized development audits.
+
 ## 1. Purpose
 
 vNext is an experimental reachable-vulnerability audit workflow for mixed-language
@@ -81,9 +88,12 @@ Successfully collected R1, per-axis/compact R2, R3, R4, R5, and R6 task outputs 
 their stage commits, retaining prior/replacement artifacts, reason, actor, and evidence.
 Terminal R6 task output may also be amended after Batch commit while the Campaign is not
 COMPLETE; the R6 projection must be recommitted, and Campaign closure rejects a pending
-R6 amendment until a newer projection exists. R1-R5 post-commit amendment, general
-dependent-stage recomputation, and amendments after Campaign completion remain absent;
-idempotent stage submission is not a general correction path.
+R6 amendment until a newer projection exists. Supported R1-R5 task amendments after
+commit atomically append replacement and invalidation events. Stage revisions pin
+upstream revisions and source task outputs; affected downstream work must be rescheduled
+and recommitted, and stale ancestry blocks closure. This is supported Batch-stage
+recovery, not automatic recomputation of arbitrary host inputs or a late-candidate
+insertion API. Amendments after Campaign completion remain rejected.
 
 ### 3.5 Runtime knowledge and evaluation answers are isolated
 
@@ -222,7 +232,8 @@ In-process `BatchClosure` projection materializes absent records as `UNREVIEWED`
 as reviewed. This is not host-observed reading evidence or proof that a Surface is safe. CG3 still
 reconciles Surface identity/ownership, Work Unit axis review, planned axis coverage,
 references, and hypothesis/verdict identity. A Surface without a hypothesis remains
-allowed; path roles/exclusions and general accepted-R3 verdict amendment remain absent.
+allowed. Plan path roles retain exclusions/deferments; supported R3 task amendments
+use the stage revision/invalidation contract described above.
 
 R2 schedules all six axes, either separately or in one compact task per Work Unit:
 surface, mechanism, state/lifecycle, fix variant, boundary, and differential behavior.

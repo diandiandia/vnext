@@ -151,8 +151,9 @@ def test_active_projection_rejects_mismatched_upstream_revision_pin() -> None:
     assert "active revision is REV-r1-new" in errors[0]
 
 
-def test_r1_direct_claim_requires_inspected_altitude_for_low_tier(
-    tmp_path: Path,
+@pytest.mark.parametrize("risk_tier", ["LOW", "HIGH"])
+def test_r1_direct_claim_requires_inspected_altitude_for_risk_tier(
+    tmp_path: Path, risk_tier: str,
 ) -> None:
     manager, workflow, plan = _workflow(tmp_path, "CMP-low-tier-altitude")
     work_unit = plan.work_units[0]
@@ -163,10 +164,10 @@ def test_r1_direct_claim_requires_inspected_altitude_for_low_tier(
             "path": work_unit.source_files[0],
             "claim": "AGENT_DECLARED_REVIEWED",
             "altitude": "SCREENED",
-            "risk_tier": "LOW",
+            "risk_tier": risk_tier,
         }
         with pytest.raises(
-            ModelError, match="LOW path risk tier requires INSPECTED review altitude",
+            ModelError, match=f"{risk_tier} path risk tier requires INSPECTED review altitude",
         ):
             workflow.record_r1([], path_review_claims=[claim])
         assert workflow._stage_event("R1_COMPLETED") is None

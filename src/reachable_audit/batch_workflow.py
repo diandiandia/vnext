@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import asdict, replace
 import hashlib
 import json
-from pathlib import Path, PurePosixPath
+from pathlib import PurePosixPath
 from typing import Any, Mapping, Sequence
 
 from .analysis_models import (
@@ -204,11 +204,11 @@ class BatchWorkflow:
                     "R1 path review claim has an invalid risk tier"
                 ) from error
             if (
-                risk_tier_state is PathRiskTier.LOW
+                risk_tier_state in {PathRiskTier.LOW, PathRiskTier.HIGH}
                 and altitude_state is not ReviewAltitude.INSPECTED
             ):
                 raise ModelError(
-                    f"LOW path risk tier requires INSPECTED review altitude: {path}"
+                    f"{risk_tier_state.value} path risk tier requires INSPECTED review altitude: {path}"
                 )
             key = (work_unit_id, path)
             if key in seen_path_review_claims:

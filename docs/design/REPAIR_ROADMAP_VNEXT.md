@@ -1,6 +1,13 @@
 # vNext Repair Roadmap
 
-Status: ordered implementation plan, reviewed 2026-10-17 against commit `beaef3b` plus working-tree repairs. System/software design and requirements document current contracts; this roadmap retains missing targets and defects. A completed code milestone does not imply improved vulnerability recall until acceptance criteria are measured. The [quality reassessment](QUALITY_REASSESSMENT_VNEXT.md) records this review's findings and limits.
+Status: historical ordered repair plan, reviewed 2026-10-17 against commit `beaef3b`
+plus working-tree repairs. This register retains original issue descriptions, not a
+current open-defect list. Later local completions (stage revision/recovery, delegated
+reservations, optional signed observations, scale fixtures, and CLI/gate decomposition)
+supersede the corresponding open statuses below. See
+[implementation completion](IMPLEMENTATION_COMPLETION_PLAN.md) and
+[current generality review](GENERALITY_REVIEW_VNEXT.md) before scheduling work.
+A completed code milestone does not imply improved vulnerability recall.
 
 ## Baseline
 

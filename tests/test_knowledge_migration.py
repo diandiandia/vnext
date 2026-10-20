@@ -162,6 +162,12 @@ def test_migration_builds_complete_reviewed_catalog_without_project_tokens(
         "INV-go-016", "INV-go-017",
     } <= go_source_ids
     assert any(issue["weakness_refs"] == ["CWE-918"] for issue in go_profile["entries"])
+    trust_issue = next(
+        issue for issue in go_profile["entries"]
+        if go_provenance[issue["provenance_refs"][0]]["source_record_id"] == "INV-go-017"
+    )
+    assert trust_issue["title"] == "Untrusted trust material installed across a privilege boundary"
+    assert "neither root execution, Linux" in " ".join(trust_issue["counterevidence"])
     c_source_ids = {
         catalog.provenance[issue["provenance_refs"][0]]["source_record_id"]
         for issue in catalog.profiles["c"]["entries"]

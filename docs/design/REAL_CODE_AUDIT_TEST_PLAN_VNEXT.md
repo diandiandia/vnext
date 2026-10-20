@@ -14,7 +14,10 @@ This plan complements [TEST_PLAN_VNEXT.md](TEST_PLAN_VNEXT.md),
 
 ## 1. Required Inputs and Responsibilities
 
-Do not start a target run until every required input below is recorded and approved.
+Sections 1 and 2 list the full **host-integration/release qualification** requirements.
+For a development real-target audit, use the development pilot layer below instead;
+do not apply authority/key/held-out prerequisites to an audit that makes no such claims.
+Record and approve all inputs applicable to the chosen run level before execution.
 
 | Input | Required value/evidence | Owner |
 |---|---|---|
@@ -37,7 +40,9 @@ a trusted identity.
 
 ## 2. Entry Gates
 
-All entry gates are binary and must be recorded as PASS before discovery begins.
+For host-integration/release qualification, all applicable entry gates must be PASS
+before the qualifying run. Development pilots use only their explicitly listed entry
+requirements below and record untested qualification controls as NOT ASSESSED or BLOCKED.
 
 1. **Authorization:** exact target, commit, scope and allowed commands are approved.
 2. **Clean-room state:** a fresh Campaign has no prior target reports, findings, scope
@@ -58,7 +63,7 @@ All entry gates are binary and must be recorded as PASS before discovery begins.
    Campaign and preserve state without deleting evidence.
 
 If an entry gate is unavailable, record **BLOCKED** with the owner and missing artifact;
-do not substitute a mock and call it a real run.
+do not substitute a mock and call it a qualified host or release run.
 
 ### Development pilot layer (workflow/skill validation)
 
@@ -110,7 +115,11 @@ are reported; token/time/budget usage reconciles with host records. A run execut
 the development pilot layer is labeled development-only; host and release gates are not
 implied.
 
-### C. Real External Evidence Path
+### C. Real External Evidence Path (signed-feature qualification only)
+
+This step is not required for a development audit that does not exercise signed
+external observations. Record it as NOT ASSESSED in that case; normal managed R5
+evidence requirements and unresolved dispositions still apply.
 
 For one eligible hypothesis, have an independently authenticated observer produce an
 out-of-band observation. The authority signs the exact Campaign, target snapshot, Batch,
@@ -151,6 +160,11 @@ synthetic or follow-up data as held-out.
 
 ## 4. Stop Conditions
 
+Apply identity/key/provider conditions when the run uses or claims those controls.
+Their absence is not an automatic stop for a development pilot that never claimed
+them. Authorization, scope, configured resource limits, evidence integrity, and safe
+cleanup remain mandatory at every run level.
+
 Pause claims immediately if authorization/scope changes, the target snapshot drifts, a
 worker identity or key is revoked, a provider cap is unavailable, usage becomes
 unreconcilable, a task exceeds limits, evidence digest/signature fails, stale output can
@@ -162,7 +176,9 @@ abort or cleanup.
 
 ## 5. Required Run Record
 
-For every pilot/qualification run, produce a redacted record containing:
+For every pilot/qualification run, produce a redacted record containing the applicable
+items below. Mark unexercised qualification-only controls NOT ASSESSED; do not invent
+worker identity attestations, independent review, signatures, or held-out evidence.
 
 - Engine commit, worktree state, test/compatibility baseline and target commit/snapshot.
 - Authorization reference, scope digest, languages/categories, path dispositions and Plan IDs.
@@ -179,7 +195,10 @@ only redacted metadata or non-sensitive test-fixture references.
 
 ## 6. Inputs Needed to Start a Real Pilot
 
-The operator/target owner must provide these non-secret inputs before execution:
+For a development pilot, provide items 1-4 and an evidence-retention location and stop
+owner before execution. Record unavailable provider monetary enforcement as a limitation,
+never as a verified hard cap; enforce the declared local limits and host policy.
+Items 5-6 add the trust/independence prerequisites for qualification:
 
 1. Authorized disposable target path and immutable commit/snapshot.
 2. Approved language, category, component/path scope and prohibited actions.
@@ -190,4 +209,5 @@ The operator/target owner must provide these non-secret inputs before execution:
 6. Independent reviewer and evidence-retention location.
 
 Secrets are configured directly by the trusted host; never paste them into this document
-or the conversation. Without these inputs, real-target testing is **BLOCKED**, not passed.
+or the conversation. Missing development inputs block the development pilot; missing
+qualification inputs block the corresponding qualification only.

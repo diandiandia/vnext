@@ -1,8 +1,16 @@
 # vNext Quality Reassessment
 
-Status: local engineering reassessment of commit `beaef3b` plus uncommitted repairs,
+Status: historical local engineering reassessment of commit `beaef3b` plus uncommitted repairs,
 2026-10-17. Not release acceptance, a certification, or a new target audit. The installed
 skill, historical audit results, and external worker driver were not changed.
+
+**Superseded implementation status:** the findings and Campaign observations below
+are a 2026-10-17 snapshot, not a current defect list. Stage invalidation/recovery,
+delegated reservations, signed R5 registration, local scale fixtures, and CLI/gate
+decomposition were subsequently implemented. Use
+[implementation completion](IMPLEMENTATION_COMPLETION_PLAN.md) for those local gates
+and [current generality review](GENERALITY_REVIEW_VNEXT.md) for the 2026-10-20 review.
+Historical experiments remain historical evidence, not fresh discovery inputs.
 
 ## 1. Decision
 

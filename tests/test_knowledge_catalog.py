@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from reachable_audit.knowledge_catalog import KnowledgeCatalog
+from reachable_audit.knowledge_catalog import KnowledgeCatalog, default_knowledge_root
 from reachable_audit.models import ModelError
 
 
@@ -119,6 +119,39 @@ def test_task_context_balances_languages_and_resolves_cards(tmp_path: Path) -> N
         "ISSUE-lang-01-5", "ISSUE-lang-01-7", "ISSUE-lang-01-9",
     ]
     assert context["unsupported_languages"] == []
+
+
+def test_shipped_catalog_preserves_portfolio_without_deployment_assumptions() -> None:
+    catalog = KnowledgeCatalog.load(default_knowledge_root())
+    context = catalog.task_context(["go"], families=["DATA-INTEGRITY"]).to_dict()
+    card = next(
+        card for card in context["mechanism_cards"]
+        if card["mechanism_id"] == "MECH-go-09"
+    )
+
+    assert len(catalog.languages) == 15
+    assert sum(len(profile["entries"]) for profile in catalog.profiles.values()) == 150
+    assert "neither root execution, Linux" in " ".join(card["counterevidence"])
+    guidance = json.dumps(context["issue_entries"]) + json.dumps(card)
+    assert "root.crt" not in guidance
+    assert "truststore.Install" not in guidance
+    assert "target evidence" in context["guidance"]
+    assert "not expected findings" in context["guidance"]
+    assert "provenance" not in context
+
+
+def test_java_tasks_receive_java_top_ten_not_all_fifteen_languages() -> None:
+    catalog = KnowledgeCatalog.load(default_knowledge_root())
+    context = catalog.task_context(["java"]).to_dict()
+
+    assert context["languages"] == ["java"]
+    assert len(context["issue_entries"]) == 10
+    assert {entry["language_id"] for entry in context["issue_entries"]} == {"java"}
+    assert context["omitted_issue_ids"] == []
+    assert all(
+        "java" in card["language_applicability"] or "any" in card["language_applicability"]
+        for card in context["mechanism_cards"]
+    )
 
 
 def test_catalog_rejects_a_missing_language_profile(tmp_path: Path) -> None:

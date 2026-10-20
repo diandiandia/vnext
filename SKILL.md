@@ -1,13 +1,21 @@
 ---
 name: vnext
-description: "Experimental campaign-scale reachable vulnerability audit skill. Use when explicitly testing or developing the vNext Campaign/Batch workflow for large repositories; replacement of v3 requires representative shadow-run acceptance."
+description: "Audit authorized source repositories for reachable security vulnerabilities across a versioned Top15-language / Top10-issue portfolio. Use for large, very large, and mixed-language projects, resumable Campaign/Batch audits, and development pilots that identify skill or workflow defects. Experimental; release certification is separate."
 ---
 
 # Reachable Critical Audit vNext
 
 ## Current Capability
 
-This is an experimental replacement candidate for v3. The current build provides
+This skill targets the approved Top15-language / Top10-issue portfolio for large,
+very large, and mixed-language projects. The roster is a versioned product scope,
+not a claim of a universal popularity ranking; the ten issues per language are
+prioritized review guidance, not a quota of findings or an exhaustive checklist.
+Establish framework, platform, privilege, and deployment preconditions from the
+current target. Training provenance is not evidence about that target. Test
+counterevidence and preserve source-evidenced candidates outside the catalog.
+
+This is an experimental audit workflow. The current build provides
 Campaign and Batch state management, idempotent events, artifacts, recovery, component
 inventory, deterministic Work Unit planning, cross-Batch Handoffs, R0-R6 execution,
 CG1-CG10 Campaign closure, durable Agent task leases, source-slice drift invalidation,
@@ -16,6 +24,24 @@ CG1-CG10 Campaign closure, durable Agent task leases, source-slice drift invalid
 experimental shadow candidate until RG1-RG15 acceptance is completed on representative
 projects, including all 15 language certifications, a mixed-language Campaign, and a
 20GB+ Campaign. See `docs/design/ACCEPTANCE_PLAN_VNEXT.md`.
+
+## Audit Use Versus Release Qualification
+
+- **Development real-target audit:** use an authorized frozen snapshot, a fresh
+  disposable copy and Campaign, declared scope, host permissions, resource/effort
+  limits, stop conditions, and retained task/evidence logs. Exercise the normal
+  R0-R6 workflow and record skill defects separately from vulnerability hypotheses.
+  Do not require HMAC key custody, held-out labels, paired v3 runs, or portfolio-wide
+  release certification merely to test the skill on real source.
+- **Host integration / release qualification:** separately test any claimed trusted
+  identities, signed external observations, provider hard caps, independent review,
+  held-out discovery quality, and large-run capacity. Missing evidence blocks those
+  claims or promotion, not an otherwise authorized development audit. Signing keys
+  are needed only for the signed features being exercised.
+
+This distinction never bypasses task validators, stage requirements, source scope,
+or host safety policy. A successful development audit is not release certification;
+a fresh copy does not erase an operator's prior knowledge of the target.
 
 ## Hard Rules
 
@@ -46,6 +72,13 @@ projects, including all 15 language certifications, a mixed-language Campaign, a
   authorized by the host and within the declared resource policy.
 
 ## Host Agent Loop
+
+Use the [orchestrator runbook](./docs/ORCHESTRATOR_RUNBOOK.md) for the lifecycle
+matrix, fresh task-local worker contexts, six-axis deep-review questions, restart
+procedure and bounded recovery decisions. Keep the coordinator focused on compact
+state; use fresh source-analysis workers when the host supports isolated contexts.
+This is host behavior, not engine-enforced physical context isolation or a guarantee
+of attention quality. Preserve task-local context only for same-lease repairs.
 
 Start independent audits with `init` (default `--audit-mode fresh`). Do not inspect or
 load prior Campaign artifacts while planning or generating hypotheses. A follow-up must
@@ -113,6 +146,8 @@ validation, transformation, state, or resource logic plausibly connected to
 security-relevant behavior without a direct boundary or sensitive operation; `LOW` is
 allowed only with `INSPECTED` Work Unit altitude and evidence showing no plausible
 security-sensitive role in the path. Use `UNASSESSED` when evidence is insufficient.
+`HIGH` also requires `INSPECTED` at R1 collection; a HIGH/SCREENED result is rejected
+while its lease remains repairable. This validates declared depth, not observed reads.
 This rubric does not assert
 vulnerability severity, exploitability, or safety. Campaign reports join each
 Work Unit's R2/R4 altitude to its included paths' declared tiers; this is a
@@ -271,6 +306,12 @@ rationale. If an attempt ran but was inconclusive, attach its experiment and use
 confirmation, or refutation.
 
 ## Commands
+
+The examples below are argument templates, not literal shell scripts. For runnable
+commands without `PYTHONPATH` setup, use `python3 /path/to/vnext/tools/vnext.py`
+with the same arguments, as shown in the
+[runbook](./docs/ORCHESTRATOR_RUNBOOK.md). The launcher reopens existing state; it
+does not automatically retry, dispatch Agents, or certify completion.
 
 ```bash
 PYTHONPATH=<vnext>/src python3 -m reachable_audit init <target> --snapshot-id <id> \

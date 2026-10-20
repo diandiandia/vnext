@@ -5,6 +5,13 @@ plus the working-tree contract repairs.
 This supersedes the target package/schema descriptions in the previous revision.
 Missing capabilities and known defects below are not supported contracts.
 
+Current-contract update (2026-10-20): use
+[implementation completion](IMPLEMENTATION_COMPLETION_PLAN.md) for the later local
+acceptance matrix and [generality review](GENERALITY_REVIEW_VNEXT.md) for this
+review's scope and remaining limits. Authorized development audits do not require
+release certification, authority keys, or held-out labels unless exercising those
+specific features.
+
 ## 1. Scope and Compatibility
 
 This design extends the existing vNext Python package and its canonical Campaign,
@@ -240,17 +247,22 @@ artifact only when each edge maps to an explicit entry in that artifact.
 R6 reports and skill reviews support append-only revisions. Collected R1, per-axis/compact R2,
 R3, individual/bundled R4, R5, and R6 task outputs can be amended before their stage commits;
 events retain prior/replacement refs, reason, actor, and resolvable artifact evidence.
-Readers select the amended task output. Other post-commit amendments are rejected;
-general R1-R5 post-commit amendments and in-place downstream invalidation/recomputation
-are absent. A quiescent Plan Amendment can supersede completed Batches with fresh IDs and
+Readers select the amended task output. Supported committed R1-R5 task amendments
+atomically append the amendment and affected stage invalidation markers. Revision-bound
+tasks and upstream pins prevent stale downstream acceptance; affected stages must be
+rescheduled and recommitted before closure. This is not an arbitrary input dependency
+graph or automatic late-candidate reopening. A quiescent Plan Amendment can supersede completed Batches with fresh IDs and
 replay all R0-R6 stages; unfinished tasks block this full-Batch replay, and old evidence
 remains immutable history.
 Terminal R6 task output may be amended while the Campaign is open; R6 must be recommitted
 and Campaign closure rejects a pending amendment until that newer projection exists.
 Campaign-complete amendments are rejected.
 
-All six `generate_hypotheses:<axis>` operations support pre-commit correction.
-Failed-commit recovery remains limited to implemented operations/stages, not universal.
+All six `generate_hypotheses:<axis>` operations support correction through this contract.
+Fault-injection tests cover R1-R5 projection boundaries, R3 partial adjudications,
+R4 screening, atomic amendment/invalidation, and R6 completion recovery. Exact retries
+recover the supported projections; this is not a universal transaction across the host
+and filesystem.
 
 ### 3.8 Inventory Footprint and Execution Attestations
 
@@ -657,8 +669,9 @@ external container or VM.
   source/build scope; supporting-evidence anchors may reference any frozen in-repository
   file. Both must point to non-blank lines. A snapshot path registry and stage-local
   line caches exist; cross-task line-count caching is absent. Collection does not
-  preflight every anchor, so collected output can still fail commit. General post-commit
-  verdict amendment and dependent recomputation are absent.
+  preflight every anchor, so collected output can still fail commit. A supported
+  committed R3 task amendment invalidates its affected downstream projections;
+  it does not automatically perform new verification or adjudication.
 - **R3.5:** required refuters are distinct task identities and do not receive one another's
   conclusions. Adjudication records the disputed claim, evidence for and against, actor,
   and final disposition. Revival reopens the hypothesis and invalidates dependent terminal

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict
 import hashlib
 from pathlib import Path, PurePosixPath
 

@@ -20,6 +20,7 @@ The plan complements [IMPLEMENTATION_COMPLETION_PLAN.md](IMPLEMENTATION_COMPLETI
 | Integration | Campaign/Batch lifecycle, artifacts, task/store transactions, CLI | Focused pytest module and durable event/artifact assertions | Repository-owned behavior |
 | Fault injection | Failure between artifact, event, transition, and cleanup writes | Injected failure, unchanged/recoverable state, exact retry result | Recovery requirement |
 | Synthetic scale | Large deterministic fixtures, concurrency, latency budget | Fixture parameters, wall time, counts, profiler or query budget | Local capacity bound only |
+| Development real-target audit | Authorized frozen real source, normal R0-R6 execution, skill/workflow feedback | Scope/permission record, fresh Campaign, isolation, resource limits, task logs and source-backed results | Development workflow findings only; no trusted-host or release claim |
 | Host integration | HMAC custody, identity verification, provider reservation, target-read proof | Host logs, policy/config digests, signed attestations | Host mechanics only |
 | Release qualification | Held-out labels, paired representative runs, supported languages, large projects | Authority-signed evidence bundle and independent review | Release gates in RG1-RG15 |
 
@@ -142,6 +143,12 @@ all CG1-CG10 decisions, stage stale/ancestry gates, and durable artifacts.
 **Required tests:** `test_cli.py`, `test_campaign_closure.py`, `test_batch_closure.py`, and
 `test_snapshot_drift.py` pin output, exit codes, cleanup, report idempotence, gate details,
 and correction/retry paths.
+
+`test_cli_launcher.py` verifies the checkout CLI entry from another working directory,
+target paths containing spaces, durable state reopening and propagated errors.
+`test_execution.py` and `test_batch_workflow.py` verify HIGH/LOW inspection-altitude
+checks and repair behavior; prompt and full-revival selection tests establish contracts,
+not real recall or physical worker-context isolation.
 
 **Pass:** extracted helpers preserve existing report fields, ordering, exit behavior, and
 failure semantics; no broad exception handling hides state or cleanup failures.

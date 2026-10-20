@@ -1034,6 +1034,45 @@ def test_r1_blank_anchor_is_rejected_before_collection(tmp_path: Path) -> None:
         manager.close()
 
 
+@pytest.mark.parametrize("risk_tier", ["HIGH", "LOW"])
+def test_r1_risk_tiers_require_inspection_and_allow_same_lease_repair(
+    tmp_path: Path, risk_tier: str,
+) -> None:
+    manager, workflow, _ = _workflow(tmp_path, "CMP-risk-inspection")
+    try:
+        workflow.run_r0()
+        backend = ManualExecutionBackend(manager, workflow.campaign_id)
+        coordinator = DiscoveryCoordinator(workflow, backend)
+        task = coordinator.schedule_r1()[0].task
+        lease = backend.claim("risk-worker", task_id_filter=task.task_id)
+        assert lease is not None
+        output = {
+            "schema_version": "1.0",
+            "reviewed_scope": "ALL_SOURCE_FILES",
+            "review_altitude": "SCREENED",
+            "path_risk_tiers": [{"path": "app.py", "risk_tier": risk_tier}],
+            "surfaces": [],
+            "boundary_reviews": [],
+        }
+        output_ref = manager.artifacts.put_text(json.dumps(output)).artifact_id
+        with pytest.raises(
+            ModelError, match=f"{risk_tier} path risk tier requires INSPECTED",
+        ):
+            backend.collect(lease, TaskResult(
+                True, output_ref, "insufficient depth",
+                {"agent_runs": 1, "wall_seconds": 1},
+            ))
+        assert backend.poll(task.task_id).status is TaskStatus.LEASED
+        output["review_altitude"] = "INSPECTED"
+        corrected_ref = manager.artifacts.put_text(json.dumps(output)).artifact_id
+        assert backend.collect(lease, TaskResult(
+            True, corrected_ref, "inspected risk path",
+            {"agent_runs": 1, "wall_seconds": 1},
+        )).status is TaskStatus.SUCCEEDED
+    finally:
+        manager.close()
+
+
 @pytest.mark.parametrize("axis", list(DiscoveryAxis))
 def test_per_axis_r2_output_can_be_amended(tmp_path: Path, axis: DiscoveryAxis) -> None:
     manager, workflow, plan = _workflow(tmp_path, "CMP-axis-amend")
@@ -1886,6 +1925,8 @@ def test_revival_task_accepts_worker_not_prebound_to_reviewer_id(tmp_path: Path)
         tasks = coordinator.schedule_r35_revivals()
         assert len(tasks) == 1
         task_input = json.loads(manager.artifacts.get_bytes(tasks[0].task.input_refs[0]))
+        assert "regex anchoring" in task_input["analysis_contract"]
+        assert "Preserve rejection when counterevidence holds" in task_input["analysis_contract"]
         lease = backend.claim("available-reviewer")
         assert lease is not None
         assert lease.task.task_id == tasks[0].task.task_id
@@ -1910,6 +1951,59 @@ def test_revival_task_accepts_worker_not_prebound_to_reviewer_id(tmp_path: Path)
             event.event_type == "R3_5_COMPLETED"
             for event in manager.store.list_events(workflow.campaign_id)
         )
+    finally:
+        manager.close()
+
+
+def test_default_revival_reviews_all_initial_unreachable_candidates(tmp_path: Path) -> None:
+    manager, workflow, plan = _workflow(tmp_path, "CMP-revival-all")
+    unit = plan.work_units[0]
+    try:
+        workflow.run_r0()
+        workflow.record_r1([Surface(
+            "SURF-all", unit.work_unit_id, unit.component_id,
+            "function_entry", "app.py", "handle", "remote", ("LOC-app.py:1",),
+        )])
+        hypotheses = [
+            Hypothesis(
+                f"HYP-{index}", unit.work_unit_id, "surface",
+                ("SURF-all",), ("SURF-all",),
+                Mechanism("INJECTION", "candidate"),
+                "requires guard verification", HypothesisStatus.NEW,
+            )
+            for index in range(3)
+        ]
+        evidence = {axis.value: ("LOC-app.py:1",) for axis in DiscoveryAxis}
+        workflow.record_r2(
+            hypotheses, axis_evidence=evidence,
+            axis_runs=axis_runs_from_evidence(evidence),
+        )
+        workflow.record_r3([
+            VerdictSubmission(
+                hypothesis.hypothesis_id, VerdictKind.UNREACHABLE,
+                EvidenceGrade.STATIC_ONLY, "remote", (), (), (),
+                ("LOC-app.py:1",), (), "blocking guard claimed",
+            )
+            for hypothesis in hypotheses
+        ])
+        backend = ManualExecutionBackend(manager, workflow.campaign_id)
+        coordinator = DiscoveryCoordinator(workflow, backend)
+        views = coordinator.schedule_r35_revivals()
+        assert len(views) == 3
+        assert {
+            json.loads(manager.artifacts.get_bytes(view.task.input_refs[0]))[
+                "hypothesis"
+            ]["hypothesis_id"]
+            for view in views
+        } == {hypothesis.hypothesis_id for hypothesis in hypotheses}
+        selected = workflow._require_stage("REVIVAL_SAMPLE_SELECTED")
+        assert selected.payload_ref is not None
+        assert json.loads(manager.artifacts.get_bytes(selected.payload_ref))[
+            "hypothesis_ids"
+        ] == ["HYP-0", "HYP-1", "HYP-2"]
+        assert {view.task.task_id for view in coordinator.schedule_r35_revivals()} == {
+            view.task.task_id for view in views
+        }
     finally:
         manager.close()
 
@@ -1947,6 +2041,14 @@ def test_compact_r2_runs_all_axes_in_one_task_per_work_unit(tmp_path: Path) -> N
         assert all(
             "SCREENED" in task_input["analysis_contract"][axis.value]
             for axis in DiscoveryAxis
+        )
+        assert "TOCTOU" in task_input["analysis_contract"]["state"]
+        assert "same frozen snapshot" in task_input["analysis_contract"]["fix_variant"]
+        assert "production/debug" in task_input["analysis_contract"]["differential"]
+        assert "serialization" in task_input["analysis_contract"]["boundary"]
+        assert all(
+            "not evidence of non-applicability" in contract
+            for contract in task_input["analysis_contract"].values()
         )
         assert "review_altitude" in task_input["output_contract"]["axis_runs"]
         assert task_input["hotspot_report"]["provider_id"] == "python-ast-hotspots-v1"

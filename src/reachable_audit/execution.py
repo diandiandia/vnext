@@ -9,7 +9,6 @@ import hashlib
 import hmac
 import json
 import os
-from pathlib import Path
 import re
 from typing import Any, Callable, Mapping, Sequence
 
@@ -64,22 +63,39 @@ _SURFACE_INSTRUCTIONS = (
 
 _AXIS_INSTRUCTIONS = {
     DiscoveryAxis.SURFACE.value: (
-        "Trace each Surface toward sensitive operations and record plausible unguarded paths."
+        "Trace each Surface toward sensitive operations and record plausible unguarded paths. "
+        "Identify input control, effective principal, authorization order, decoding and "
+        "validation boundaries; follow error and alternate entry paths, not just public handlers."
     ),
     DiscoveryAxis.MECHANISM.value: (
-        "Apply each planned mechanism family to the scoped code, including guards and counterevidence."
+        "Apply each planned mechanism family to the scoped code, including guards and counterevidence. "
+        "Trace concrete sources, transformations and sinks; verify guard semantics and ordering. "
+        "Cards and API matches are leads, not verdicts or an exhaustive checklist."
     ),
     DiscoveryAxis.STATE.value: (
-        "Inspect lifecycle, ownership, authorization, concurrency, and transition invariants."
+        "Inspect lifecycle, ownership, authorization, concurrency, and transition invariants. "
+        "Check TOCTOU check/use gaps, shared mutable state and lock coverage, cancellation, "
+        "reload/rollback, exceptional exits, provisional resources and ownership transfer. "
+        "Resource retention is security relevant only with an evidenced control and impact path."
     ),
     DiscoveryAxis.FIX_VARIANT.value: (
-        "Look for incomplete fixes, sibling implementations, aliases, and alternate call paths."
+        "Look for incomplete fixes, sibling implementations, aliases, and alternate call paths "
+        "within the same frozen snapshot. Compare equivalent guards and duplicated parsers. "
+        "Consult repository commit history only when explicitly authorized and available; "
+        "do not import prior Campaign findings, expected answers, or unapproved versions. "
+        "Missing history does not make current-source variant review inapplicable."
     ),
     DiscoveryAxis.BOUNDARY.value: (
-        "Inspect trust changes across module, process, RPC, IPC, FFI, serialization, and storage edges."
+        "Inspect trust changes across module, process, RPC, IPC, FFI, serialization, and storage edges. "
+        "Trace JNI/CGO/native adapters, queues and persisted messages where present; identify "
+        "both endpoint contracts, principal changes, type/length conversions and data mapping. "
+        "Use a Handoff for out-of-Work-Unit ownership; an import edge is not security-path proof."
     ),
     DiscoveryAxis.DIFFERENTIAL.value: (
-        "Compare modes, configurations, implementations, versions, and error paths for divergent security behavior."
+        "Compare modes, configurations, implementations, versions, and error paths for divergent security behavior. "
+        "Where present compare production/debug, platform or build branches, strict/permissive "
+        "configuration, fallback behavior and parser disagreement using frozen source. "
+        "Do not assume POSIX/Windows branches or a debug mode exist, or execute unapproved configurations."
     ),
 }
 
@@ -87,7 +103,10 @@ _R2_ALTITUDE_CONTRACT = (
     "For an APPLICABLE axis, declare review_altitude as SCREENED for bounded breadth "
     "triage or INSPECTED for targeted source analysis relevant to that axis. For "
     "NOT_APPLICABLE or DEFERRED axes use NOT_RECORDED. This is an Agent declaration, "
-    "not host-observed reading or proof of safety."
+    "not host-observed reading or proof of safety. A lack of candidates is not evidence "
+    "of non-applicability. For NOT_APPLICABLE cite source evidence for the absent "
+    "precondition; for DEFERRED identify the blocker and remaining review. "
+    "Do not replace difficult analysis with an unsupported applicability label."
 )
 
 _VERIFICATION_INSTRUCTIONS = (
@@ -1170,9 +1189,12 @@ class ManualExecutionBackend:
                 risk_tier = PathRiskTier(str(record["risk_tier"]))
             except (KeyError, ValueError) as error:
                 raise ModelError(f"R1 path risk tier is invalid: {path}") from error
-            if risk_tier is PathRiskTier.LOW and altitude is not ReviewAltitude.INSPECTED:
+            if (
+                risk_tier in {PathRiskTier.LOW, PathRiskTier.HIGH}
+                and altitude is not ReviewAltitude.INSPECTED
+            ):
                 raise ModelError(
-                    f"LOW path risk tier requires INSPECTED review altitude: {path}"
+                    f"{risk_tier.value} path risk tier requires INSPECTED review altitude: {path}"
                 )
 
     def _task_work_unit(self, task: TaskSpec) -> Mapping[str, Any]:
@@ -1576,6 +1598,9 @@ class DiscoveryCoordinator:
                     "security-sensitive role in the path. Use UNASSESSED when evidence is "
                     "insufficient. This is not vulnerability severity, exploitability, or "
                     "a safety verdict. Omitted paths default to UNASSESSED. "
+                    "HIGH paths require INSPECTED altitude: trace relevant entry, guard, "
+                    "state and sink logic with source anchors; SCREENED is not enough. "
+                    "LOW also requires inspected evidence, not a filename or DTO label. "
                     + " Review every supplied boundary edge as confirmed, rejected, or unresolved. "
                     "Return a BoundaryReview for each edge with evidence and rationale."
                 ),
@@ -1585,7 +1610,7 @@ class DiscoveryCoordinator:
                     "review_altitude": "SCREENED or INSPECTED, an Agent-declared Work Unit review level",
                     "path_risk_tiers": (
                         "optional array<{path, risk_tier: LOW|MEDIUM|HIGH|UNASSESSED}>; "
-                        "omitted paths default to UNASSESSED"
+                        "omitted paths default to UNASSESSED; HIGH and LOW require INSPECTED"
                     ),
                     "surfaces": "array<Surface>",
                     "boundary_reviews": (
@@ -2229,7 +2254,12 @@ class DiscoveryCoordinator:
                 "verifier_verdict": verdicts[hypothesis_id],
                 "analysis_contract": (
                     "Attempt to revive the rejected hypothesis using an alternate path, "
-                    "principal, configuration, or deployment premise."
+                    "principal, configuration, or deployment premise. Independently check "
+                    "whether each blocking guard dominates every relevant path and handles "
+                    "decoding, regex anchoring, string slicing, canonicalization and error cases. "
+                    "For cross-language or serialization boundaries verify both endpoint "
+                    "contracts and type/length conversions. Treat high-impact labels as "
+                    "review priorities, not proof. Preserve rejection when counterevidence holds."
                 ),
                 "output_contract": {
                     "schema_version": "1.0",

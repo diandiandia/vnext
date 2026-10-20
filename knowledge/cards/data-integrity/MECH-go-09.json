@@ -4,32 +4,32 @@
   "review_status": "approved",
   "mechanism_id": "MECH-go-09",
   "family": "DATA-INTEGRITY",
-  "title": "高权进程无交互静默安装预置 CA 至系统信任库",
+  "title": "Untrusted trust material installed across a privilege boundary",
   "preconditions": [
-    "存储中既有 root.crt/root.key 原样采纳无来源校验 + 自动信任安装 = 主机级 MITM 基础"
+    "An untrusted principal can supply or replace certificate material consumed by a more privileged trust-store update"
   ],
   "dangerous_transitions": [
-    "存储中既有 root.crt/root.key 原样采纳无来源校验 + 自动信任安装 = 主机级 MITM 基础"
+    "An untrusted principal can supply or replace certificate material consumed by a more privileged trust-store update"
   ],
   "sink_semantics": [
-    "truststore.Install 于 app Start 无条件执行 (root 无人工门)"
+    "system or application trust-store installation or update"
   ],
   "counterevidence": [
-    "A guard dominates the sensitive operation for every relevant path.",
-    "The effective principal cannot control the source or the impact is not security relevant.",
-    "'交互确认是人工门'的 drop 论据在 root+Linux 无交互场景不成立——按部署形态复核门的存在性"
+    "Trust material and its storage are authenticated and inaccessible to the untrusted principal.",
+    "An enforced approval or provenance check dominates every trust-store update.",
+    "Establish actual platform, privileges, source ownership, and approval behavior; neither root execution, Linux, nor a missing interactive gate may be assumed."
   ],
   "language_applicability": [
     "go"
   ],
   "verification_recipe": [
-    "Trace the relevant source cue to the truststore.Install 于 app Start 无条件执行 (root 无人工门) operation.",
-    "Establish attacker control, effective principal, guards, and security impact.",
-    "Test the listed counterevidence and record source anchors for every edge."
+    "Trace the language-specific source cue to system or application trust-store installation or update.",
+    "Establish attacker control, effective principal, guarding order, and security impact.",
+    "Test the stated language-specific counterevidence against source and runtime behavior."
   ],
   "provenance": [
-    "PROV-go-09-3c66e3ba5e52"
+    "PROV-go-09-274674214e47"
   ],
   "evaluation_partition": "training",
-  "evidence_state": "battle_observed"
+  "evidence_state": "seeded"
 }

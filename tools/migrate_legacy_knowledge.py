@@ -73,6 +73,20 @@ _SOURCE_REFINEMENTS = {
         "sink_hint": "listener/server/goroutine lifecycle cleanup on failed reload paths",
         "pitfall": "This is resource lifecycle cleanup, not use-after-free; trace every provisional start to rollback/shutdown.",
     },
+    ("go", "INV-go-017"): {
+        "refinement_id": "go-trust-material-boundary-v1",
+        "title": "Untrusted trust material installed across a privilege boundary",
+        "family": "DATA-INTEGRITY",
+        "cwe": ["CWE-20"],
+        "pattern": "An untrusted principal can supply or replace certificate material consumed by a more privileged trust-store update",
+        "sink_hint": "system or application trust-store installation or update",
+        "pitfall": "Establish actual platform, privileges, source ownership, and approval behavior; neither root execution, Linux, nor a missing interactive gate may be assumed.",
+        "counterevidence": [
+            "Trust material and its storage are authenticated and inaccessible to the untrusted principal.",
+            "An enforced approval or provenance check dominates every trust-store update.",
+            "Establish actual platform, privileges, source ownership, and approval behavior; neither root execution, Linux, nor a missing interactive gate may be assumed.",
+        ],
+    },
 }
 _SHELL_EXCLUSIONS = {
     "INV-shell-003": "generic no-shell command-injection row overlaps shell-native interpreter injection; replaced by an explicitly seeded shell word-splitting mechanism",
@@ -485,7 +499,7 @@ def _issue_and_card(
             "Establish attacker control, effective principal, guarding order, and security impact.",
             "Test the stated language-specific counterevidence against source and runtime behavior.",
         ]
-        counterevidence = [pitfall]
+        counterevidence = list(entry.get("counterevidence", [pitfall]))
         dangerous_transitions = [pattern]
     issue = {
         "issue_id": issue_id,

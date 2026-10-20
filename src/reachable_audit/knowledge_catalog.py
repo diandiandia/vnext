@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections import Counter
 from dataclasses import dataclass
 import hashlib
 import json
@@ -55,6 +54,14 @@ class KnowledgeTaskContext:
         return {
             "schema_version": "1.0",
             "knowledge_version": self.knowledge_version,
+            "guidance": (
+                "These ranked patterns are review leads, not expected findings or "
+                "an exhaustive security checklist. Establish applicability from target evidence "
+                "before assuming a framework, platform, privilege, API, or deployment mode. "
+                "Historical evidence states describe training provenance, not this target. "
+                "Test counterevidence; absent preconditions may justify NOT_APPLICABLE. "
+                "Do not force a finding or discard source-evidenced mechanisms outside these entries."
+            ),
             "languages": list(self.languages),
             "issue_entries": [dict(item) for item in self.issue_entries],
             "mechanism_cards": [dict(item) for item in self.mechanism_cards],

@@ -141,7 +141,9 @@ mark these gates complete.
 The latest full local verification after stage provenance, invalidation, revision-bound
 tasks, closure ancestry, compact R4 v2 wire, delegated-budget reservations, host
 attestation expiry/replay, R5 report provenance, Phase 5 CLI/gate decomposition, and Phase
-6 synthetic scale fixtures is **341 passed, 1 skipped**; compatibility-scan passes with no
+6 synthetic scale fixtures, generality/knowledge repairs, and recall/runbook regression
+changes is **349 passed, 1 skipped** on `a3b969c` plus the 2026-10-20 review changes;
+compatibility-scan passes with no
 findings (49 Python files, 167 knowledge files, 1 prompt file). Phase 1 and Phase 5 local
 acceptance tests pass; real-host behavior remains unverified until release qualification.
 

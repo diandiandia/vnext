@@ -66,9 +66,28 @@ follow-up history must be declared and remains context, not proof.
 
 ## Quick Start
 
+The product objective is a versioned Top15-language portfolio with ten prioritized
+security issues per language, including large, very large, and mixed-language
+repositories. These are coverage goals, not expected findings or an exhaustive
+checklist; the fixed roster is not a claim of an independently measured popularity
+ranking. Catalog structure and synthetic scale tests do not prove real audit quality.
+
+Ordinary authorized audits and development pilots do not require release certification,
+HMAC key custody, or protected held-out labels. Signed host/external-evidence features
+and promotion have separate prerequisites. Start with the
+[development pilot requirements](docs/design/REAL_CODE_AUDIT_TEST_PLAN_VNEXT.md);
+retain permissions, isolation, resource limits, and logs without inventing attestations.
+
 Requirements: Python 3.11 or newer. The runtime has no third-party Python dependencies;
 pytest is required for development tests. A host Agent and model/runtime are required to
 perform the audit work.
+
+For a working-directory-independent CLI, use
+`python3 /path/to/vnext/tools/vnext.py --help` without setting `PYTHONPATH`.
+The [orchestrator runbook](docs/ORCHESTRATOR_RUNBOOK.md) covers fresh task-local
+workers, stage progression, restart, source-backed depth and bounded recovery.
+Fresh worker contexts and sandbox enforcement are host responsibilities, not
+guaranteed by the launcher.
 
 From the repository root, set the target and Campaign ID, then initialize a Campaign.
 Automatic snapshot detection accepts only a clean Git worktree; otherwise provide an
@@ -128,6 +147,7 @@ that no historical bias or project-specific guidance remains.
 - [Repair roadmap](docs/design/REPAIR_ROADMAP_VNEXT.md)
 - [ISO/IEC/IEEE 12207 lifecycle self-assessment](docs/design/LIFECYCLE_CONFORMANCE_VNEXT.md)
 - [Quality reassessment and remaining acceptance gaps](docs/design/QUALITY_REASSESSMENT_VNEXT.md)
+- [Current generality and architecture review](docs/design/GENERALITY_REVIEW_VNEXT.md)
 
 The lifecycle document is a preliminary engineering self-assessment, not an ISO/IEC/IEEE
 12207 conformity claim or certification. Formal assessment requires an authorized,
