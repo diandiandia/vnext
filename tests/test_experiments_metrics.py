@@ -112,6 +112,36 @@ def test_r5_equivalent_confirmation_requires_equivalence_evidence(tmp_path: Path
         })
 
 
+def test_inconclusive_proposed_experiment_may_omit_observations() -> None:
+    experiment = Experiment.from_dict({
+        "experiment_id": "EXP-proposed",
+        "hypothesis_id": "HYP-1",
+        "fidelity": "real_target",
+        "result": "inconclusive",
+        "target_ref": "LOC-quickjs.c:1",
+        "command_refs": ["proposed: run the harness after host approval"],
+        "observation_refs": [],
+        "rationale": "static-only round; execution awaits separate approval",
+    })
+    assert experiment.observation_refs == ()
+    assert experiment.supports_empirical_upgrade is False
+
+
+def test_confirmed_or_refuted_experiment_requires_observations() -> None:
+    base = {
+        "experiment_id": "EXP-result",
+        "hypothesis_id": "HYP-1",
+        "fidelity": "real_target",
+        "target_ref": "LOC-quickjs.c:1",
+        "command_refs": ["CMD-1"],
+        "observation_refs": [],
+        "rationale": "claimed result without observed evidence",
+    }
+    for result in ("confirmed", "refuted"):
+        with pytest.raises(ModelError, match="requires observation evidence"):
+            Experiment.from_dict({**base, "result": result})
+
+
 def test_mechanism_experiment_cannot_empirically_upgrade(tmp_path: Path) -> None:
     experiment = Experiment(
         "EXP-mechanism", "HYP-x", ExperimentFidelity.MECHANISM,

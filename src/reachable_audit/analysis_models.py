@@ -815,10 +815,21 @@ class Experiment:
             experiment.hypothesis_id,
             experiment.target_ref,
             experiment.command_refs,
-            experiment.observation_refs,
             experiment.rationale,
         )):
-            raise ModelError("experiment identity, target, evidence, and rationale are required")
+            raise ModelError(
+                "experiment identity, target, command, and rationale are required"
+            )
+        if (
+            experiment.result in {
+                ExperimentResult.CONFIRMED,
+                ExperimentResult.REFUTED,
+            }
+            and not experiment.observation_refs
+        ):
+            raise ModelError(
+                "a confirmed or refuted experiment requires observation evidence"
+            )
         if (
             experiment.fidelity is ExperimentFidelity.EQUIVALENT
             and not experiment.equivalence_evidence_refs
