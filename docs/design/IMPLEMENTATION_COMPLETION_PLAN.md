@@ -7,6 +7,8 @@ audits as the only remaining work. Synthetic tests establish implementation beha
 they do not substitute for host attestation, held-out campaigns, or release qualification.
 The executable test requirements and evidence rules are in
 [TEST_PLAN_VNEXT.md](TEST_PLAN_VNEXT.md).
+The real-target pilot and release qualification procedure is in
+[REAL_CODE_AUDIT_TEST_PLAN_VNEXT.md](REAL_CODE_AUDIT_TEST_PLAN_VNEXT.md).
 
 ## Ordered Work
 

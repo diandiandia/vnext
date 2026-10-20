@@ -8,7 +8,9 @@ behavior only. It does not establish real audit capability, trusted identity, pr
 budget enforcement, or release eligibility.
 
 The plan complements [IMPLEMENTATION_COMPLETION_PLAN.md](IMPLEMENTATION_COMPLETION_PLAN.md),
-[ACCEPTANCE_PLAN_VNEXT.md](ACCEPTANCE_PLAN_VNEXT.md), and [LOCAL_TEST_HANDOFF.md](../LOCAL_TEST_HANDOFF.md).
+[ACCEPTANCE_PLAN_VNEXT.md](ACCEPTANCE_PLAN_VNEXT.md),
+[REAL_CODE_AUDIT_TEST_PLAN_VNEXT.md](REAL_CODE_AUDIT_TEST_PLAN_VNEXT.md), and
+[LOCAL_TEST_HANDOFF.md](../LOCAL_TEST_HANDOFF.md).
 
 ## 2. Verification Levels
 
