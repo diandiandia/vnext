@@ -98,6 +98,14 @@ and unauthorized evidence classes fail; valid evidence preserves provenance thro
 R5, closure, and release reports. A real authority-held key and accept-path retest are
 external prerequisites.
 
+Local regression coverage now includes the negative registration matrix (snapshot,
+target, Batch, hypothesis scope, evidence ownership, missing versus tampered digest,
+and forged signature; each rejection leaves no observation event), post-Campaign-close
+registration rejection with evidence retention and citation after reopen, refusal to
+upgrade `NEEDS_REVIEW` to empirical confirmation from an observation alone, and
+release-evaluation citation plus digest/manifest-signature validation of signed
+observation evidence (`tests/test_batch_closure.py`, `tests/test_evaluation.py`).
+
 ### 5. Output Density and Structural Debt
 
 Status: **LOCAL IMPLEMENTATION AND SYNTHETIC ACCEPTANCE COMPLETE**. Campaign
@@ -133,7 +141,7 @@ mark these gates complete.
 The latest full local verification after stage provenance, invalidation, revision-bound
 tasks, closure ancestry, compact R4 v2 wire, delegated-budget reservations, host
 attestation expiry/replay, R5 report provenance, Phase 5 CLI/gate decomposition, and Phase
-6 synthetic scale fixtures is **338 passed, 1 skipped**; compatibility-scan passes with no
+6 synthetic scale fixtures is **341 passed, 1 skipped**; compatibility-scan passes with no
 findings (49 Python files, 167 knowledge files, 1 prompt file). Phase 1 and Phase 5 local
 acceptance tests pass; real-host behavior remains unverified until release qualification.
 

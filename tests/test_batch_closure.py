@@ -437,6 +437,217 @@ def test_signed_external_observation_is_registered_without_r5_upgrade(
             "artifact_id": observation_ref,
             "observation": asdict(signed()),
         }]
+
+        assert manager.store.get_campaign(
+            workflow.campaign_id
+        ).status is CampaignStatus.COMPLETE
+        post_close_payload = json.loads(json.dumps(asdict(signed())))
+        post_close_payload["observation_id"] = "OBS-host-002"
+        post_close_payload.pop("signature")
+        canonical = json.dumps(
+            post_close_payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"),
+        ).encode("utf-8")
+        post_close = ExternalObservation.from_dict({
+            **post_close_payload,
+            "signature": hmac.new(secret, canonical, hashlib.sha256).hexdigest(),
+        })
+        with pytest.raises(
+            ValueError, match="cannot be registered after Campaign completion",
+        ):
+            manager.record_external_observation(post_close)
+        assert len(manager.store.list_events(
+            workflow.campaign_id,
+            entity_type="external_observation",
+            event_type="OUT_OF_BAND_OBSERVATION_RECORDED",
+        )) == 1
+
+        reopened = CampaignManager(tmp_path)
+        try:
+            stored = json.loads(reopened.artifacts.get_bytes(observation_ref))
+            assert stored["observation_id"] == "OBS-host-001"
+            assert stored["signature"] == asdict(signed())["signature"]
+            assert reopened.store.get_campaign(
+                workflow.campaign_id
+            ).status is CampaignStatus.COMPLETE
+            report_file = (
+                tmp_path / ".audit_vnext" / "campaigns"
+                / workflow.campaign_id / "report" / "report.json"
+            )
+            persisted = json.loads(report_file.read_text(encoding="utf-8"))
+            assert persisted["external_observations"][0]["artifact_id"] == observation_ref
+            assert persisted["r5_external_observation_citations"] == (
+                report["r5_external_observation_citations"]
+            )
+            assert len(reopened.store.list_events(
+                workflow.campaign_id,
+                entity_type="external_observation",
+                event_type="OUT_OF_BAND_OBSERVATION_RECORDED",
+            )) == 1
+        finally:
+            reopened.close()
+    finally:
+        manager.close()
+
+
+def _observation_payload(workflow, manager) -> dict[str, object]:
+    r2_event = workflow._require_stage("R2_COMPLETED")
+    assert r2_event.payload_ref is not None
+    campaign = manager.store.get_campaign(workflow.campaign_id)
+    return {
+        "schema_version": "1.0",
+        "observation_id": "OBS-host-negative-001",
+        "campaign_id": workflow.campaign_id,
+        "batch_id": workflow.batch_id,
+        "snapshot_id": campaign.snapshot_id,
+        "hypothesis_id": "HYP-static",
+        "target_ref": campaign.target_root,
+        "observer_id": "independent-observer-001",
+        "method": "manual runtime observation",
+        "observed_at": "2026-10-20T12:00:00Z",
+        "evidence_refs": [r2_event.payload_ref],
+    }
+
+
+def _sign_observation(
+    payload: dict[str, object], secret: bytes, *, signature: str | None = None,
+    **overrides: object,
+) -> ExternalObservation:
+    value = {**payload, **overrides}
+    if signature is None:
+        canonical = json.dumps(
+            value, ensure_ascii=False, sort_keys=True, separators=(",", ":"),
+        ).encode("utf-8")
+        signature = hmac.new(secret, canonical, hashlib.sha256).hexdigest()
+    return ExternalObservation.from_dict({**value, "signature": signature})
+
+
+def test_external_observation_rejects_invalid_scope_digest_and_ownership(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manager, workflow = _ready_for_r5(tmp_path, static_hypothesis=True)
+    secret = b"external-observation-negative-key-2026"
+    monkeypatch.setenv("VNA_R5_EXTERNAL_OBSERVATION_HMAC_KEY", secret.decode())
+    try:
+        payload = _observation_payload(workflow, manager)
+
+        def assert_no_observation() -> None:
+            assert not manager.store.list_events(
+                workflow.campaign_id,
+                entity_type="external_observation",
+                event_type="OUT_OF_BAND_OBSERVATION_RECORDED",
+            )
+
+        for match, overrides in (
+            ("snapshot does not match Campaign", {"snapshot_id": "git:other"}),
+            ("target does not match Campaign", {"target_ref": str(tmp_path) + "-other"}),
+            ("hypothesis is outside its Batch R2 scope", {"hypothesis_id": "HYP-outside"}),
+        ):
+            with pytest.raises(ValueError, match=match):
+                manager.record_external_observation(
+                    _sign_observation(payload, secret, **overrides)
+                )
+            assert_no_observation()
+
+        with pytest.raises(RuntimeError, match="batch not found"):
+            manager.record_external_observation(
+                _sign_observation(payload, secret, batch_id="B-does-not-exist")
+            )
+        assert_no_observation()
+
+        unowned = manager.artifacts.put_text("unowned evidence").artifact_id
+        with pytest.raises(ValueError, match="is not owned by this Campaign"):
+            manager.record_external_observation(
+                _sign_observation(payload, secret, evidence_refs=[unowned])
+            )
+        assert_no_observation()
+        with pytest.raises(ValueError, match="must use Campaign artifact refs"):
+            manager.record_external_observation(
+                _sign_observation(payload, secret, evidence_refs=["EVID-not-an-artifact"])
+            )
+        assert_no_observation()
+
+        missing_ref = "sha256:" + "0" * 64
+        with pytest.raises(ValueError, match="evidence artifact is missing"):
+            manager.record_external_observation(
+                _sign_observation(payload, secret, evidence_refs=[missing_ref])
+            )
+        assert_no_observation()
+
+        # A known digest whose stored bytes were changed is a different failure
+        # class from a digest that was never stored.
+        evidence_ref = str(payload["evidence_refs"][0])
+        digest = evidence_ref.split(":", 1)[1]
+        artifact_path = manager.artifacts.root / digest[:2] / digest
+        original_bytes = artifact_path.read_bytes()
+        artifact_path.write_bytes(original_bytes + b"\ntampered\n")
+        try:
+            with pytest.raises(RuntimeError, match="artifact digest mismatch"):
+                manager.artifacts.get_bytes(evidence_ref)
+            with pytest.raises(RuntimeError, match="artifact digest mismatch"):
+                manager.record_external_observation(
+                    _sign_observation(payload, secret)
+                )
+            assert_no_observation()
+        finally:
+            artifact_path.write_bytes(original_bytes)
+
+        with pytest.raises(ValueError, match="signature is invalid"):
+            manager.record_external_observation(
+                _sign_observation(payload, secret, signature="0" * 64)
+            )
+        assert_no_observation()
+
+        observation_ref = manager.record_external_observation(
+            _sign_observation(payload, secret)
+        )
+        events = manager.store.list_events(
+            workflow.campaign_id,
+            entity_type="external_observation",
+            event_type="OUT_OF_BAND_OBSERVATION_RECORDED",
+        )
+        assert [event.payload_ref for event in events] == [observation_ref]
+    finally:
+        manager.close()
+
+
+def test_external_observation_cannot_upgrade_needs_review(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manager, workflow = _ready_for_r5(tmp_path, static_hypothesis=True)
+    secret = b"external-observation-negative-key-2026"
+    monkeypatch.setenv("VNA_R5_EXTERNAL_OBSERVATION_HMAC_KEY", secret.decode())
+    try:
+        payload = _observation_payload(workflow, manager)
+        observation_ref = manager.record_external_observation(
+            _sign_observation(payload, secret)
+        )
+        with pytest.raises(
+            ModelError,
+            match="empirical upgrade requires a confirmed real-target or equivalent experiment",
+        ):
+            workflow.record_r5([], [R5Assessment(
+                hypothesis_id="HYP-static",
+                experiment_required=False,
+                experiment_id=None,
+                disposition=R5Disposition.EMPIRICALLY_CONFIRMED,
+                evidence_refs=(observation_ref,),
+                rationale="a signed observation alone cannot confirm the hypothesis",
+                external_observation_refs=(observation_ref,),
+            )])
+        assert workflow._stage_event("R5_COMPLETED") is None
+
+        workflow.record_r5([], [R5Assessment(
+            hypothesis_id="HYP-static",
+            experiment_required=False,
+            experiment_id=None,
+            disposition=R5Disposition.NEEDS_REVIEW,
+            evidence_refs=(observation_ref,),
+            rationale="signed observation is retained as evidence only",
+            external_observation_refs=(observation_ref,),
+        )])
+        r5_event = workflow._require_stage("R5_COMPLETED")
+        r5 = json.loads(manager.artifacts.get_bytes(r5_event.payload_ref))
+        assert r5["assessments"][0]["disposition"] == R5Disposition.NEEDS_REVIEW.value
     finally:
         manager.close()
 

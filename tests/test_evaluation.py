@@ -1,5 +1,6 @@
 import pytest
 import hashlib
+import hmac
 import json
 
 from reachable_audit.evaluation import ShadowRun, evaluate_release, sign_manifest
@@ -489,6 +490,73 @@ def test_release_rejects_tampered_evidence_digest() -> None:
 
     with pytest.raises(ModelError, match="digest mismatch"):
         evaluate_release(manifest, signing_key=_TEST_SIGNING_KEY)
+
+
+def _signed_observation_artifact() -> dict[str, object]:
+    payload = {
+        "schema_version": "1.0",
+        "observation_id": "OBS-release-001",
+        "campaign_id": "campaign-project-native",
+        "batch_id": "B-release-0001",
+        "snapshot_id": "git:project-native",
+        "hypothesis_id": "HYP-release",
+        "target_ref": "/authorized/target",
+        "observer_id": "independent-observer-001",
+        "method": "manual runtime observation",
+        "observed_at": "2026-10-20T12:00:00Z",
+        "evidence_refs": ["sha256:" + "c" * 64],
+    }
+    canonical = json.dumps(
+        payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"),
+    ).encode("utf-8")
+    return {
+        **payload,
+        "signature": hmac.new(
+            b"observation-authority-test-key", canonical, hashlib.sha256,
+        ).hexdigest(),
+    }
+
+
+def test_release_cites_signed_observation_evidence_and_rejects_tampering() -> None:
+    manifest = _manifest()
+    observation_ref = "ART-external-observation"
+    run = next(
+        item for item in manifest["runs"]  # type: ignore[union-attr]
+        if item["engine"] == "vnext" and item["project_class"] == "native"
+    )
+    run["evidence_refs"].append(observation_ref)  # type: ignore[union-attr]
+    observation = _signed_observation_artifact()
+    manifest["evidence_artifacts"][observation_ref] = {  # type: ignore[index]
+        "content": observation,
+        "sha256": hashlib.sha256(json.dumps(
+            observation, ensure_ascii=False, sort_keys=True, separators=(",", ":"),
+        ).encode("utf-8")).hexdigest(),
+    }
+    report = evaluate_release(_resign(manifest), signing_key=_TEST_SIGNING_KEY)
+    assert report["status"] == "ACCEPTED"
+    assert observation_ref in report["verified_evidence_refs"]
+    assert manifest["evidence_artifacts"][observation_ref]["content"]["signature"] == (  # type: ignore[index]
+        observation["signature"]
+    )
+
+    tampered = json.loads(json.dumps(manifest))
+    tampered["evidence_artifacts"][observation_ref]["content"]["signature"] = "0" * 64
+    with pytest.raises(ModelError, match="evidence artifact digest mismatch"):
+        evaluate_release(_resign(tampered), signing_key=_TEST_SIGNING_KEY)
+
+    missing = json.loads(json.dumps(manifest))
+    del missing["evidence_artifacts"][observation_ref]
+    with pytest.raises(ModelError, match="unresolved"):
+        evaluate_release(_resign(missing), signing_key=_TEST_SIGNING_KEY)
+
+    forged = json.loads(json.dumps(manifest))
+    forged["evidence_artifacts"][observation_ref]["content"]["method"] = "altered method"
+    forged["evidence_artifacts"][observation_ref]["sha256"] = hashlib.sha256(json.dumps(
+        forged["evidence_artifacts"][observation_ref]["content"],
+        ensure_ascii=False, sort_keys=True, separators=(",", ":"),
+    ).encode("utf-8")).hexdigest()
+    with pytest.raises(ModelError, match="release manifest signature is invalid"):
+        evaluate_release(forged, signing_key=_TEST_SIGNING_KEY)
 
 
 def test_release_requires_all_fifteen_languages() -> None:

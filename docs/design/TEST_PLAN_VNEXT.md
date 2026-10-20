@@ -120,10 +120,11 @@ signed by an untrusted local worker does not authenticate that worker.
 observer, method, timestamp, artifact ownership and digest validation; evidence-only
 semantics; citation through R5, closure, and release evaluation.
 
-**Required tests:** `test_batch_closure.py`, `test_campaign_closure.py`, and
-`test_evaluation.py` verify invalid signatures/scope, valid same-Batch citation,
-non-promotion of NEEDS_REVIEW, signed payload preservation, and concrete verified refs in
-release output.
+**Required tests:** `test_batch_closure.py` covers registration, the negative
+scope/ownership/digest/signature matrix, non-promotion of NEEDS_REVIEW, post-close
+retention, and campaign-report citation; `test_campaign_closure.py` covers campaign
+closure gates/reporting; `test_evaluation.py` covers release-evidence citation and
+digest/manifest-signature rejection.
 
 **Pass:** unsigned, wrong-scope, changed-digest or unauthorized references fail; valid
 observations retain signature and artifact references while never upgrading an R5
