@@ -1,9 +1,12 @@
 # Real Code Audit Pilot and Qualification Plan
 
-Status: **NOT STARTED**. This plan defines the prerequisites and evidence needed to
-run vNext against an authorized, frozen real repository. A successful pilot validates
-workflow integration only; it is not release certification or proof of general audit
-capability.
+Status: **DEVELOPMENT PILOT LAYER ACTIVE — NOT RELEASE CERTIFICATION.** A development
+real-target pilot may proceed when the target/scope authorization, frozen snapshot, a
+fresh disposable clone and Campaign, isolation, resource caps and logs are recorded.
+Host-verified identity, key custody, provider hard limits, authority-signed external
+evidence, independent review and release gates remain required for host integration
+and release qualification and must stay BLOCKED unless separately evidenced. This
+layer validates workflow and skill behavior only.
 
 This plan complements [TEST_PLAN_VNEXT.md](TEST_PLAN_VNEXT.md),
 [ACCEPTANCE_PLAN_VNEXT.md](ACCEPTANCE_PLAN_VNEXT.md), and the operator steps in
@@ -57,6 +60,25 @@ All entry gates are binary and must be recorded as PASS before discovery begins.
 If an entry gate is unavailable, record **BLOCKED** with the owner and missing artifact;
 do not substitute a mock and call it a real run.
 
+### Development pilot layer (workflow/skill validation)
+
+A development pilot explicitly labeled **“development real-target pilot, not release
+certification”** may start with only the following recorded inputs:
+
+- written target/scope authorization and prohibited actions;
+- a frozen target snapshot and a fresh disposable clone with a fresh Campaign (no
+  prior target reports, findings, lessons, regression backlog, or reused Campaign
+  state in R1/R2 inputs);
+- isolation and resource caps (filesystem, network, process, wall-clock and token
+  limits) and complete logs;
+- task inputs, prompts, outputs, usage and campaign state retained for review.
+
+It must not claim host-verified identity, key custody, provider-side hard limits,
+authority-signed observations, independent review, held-out labels, or release
+eligibility. Those remain BLOCKED for host integration and release qualification under
+the sections above. Operator familiarity with the target is recorded as a limitation:
+a fresh clone is not a strict blind independent evaluation.
+
 ## 3. Run Sequence
 
 ### A. Preflight
@@ -84,7 +106,9 @@ recommit. Preserve the original Campaign and artifacts.
 
 **Pass:** all task outputs meet contracts; exact retries are idempotent; invalid outputs
 remain repairable; no stale stage reaches closure; resource cleanup is complete or failures
-are reported; token/time/budget usage reconciles with host records.
+are reported; token/time/budget usage reconciles with host records. A run executed under
+the development pilot layer is labeled development-only; host and release gates are not
+implied.
 
 ### C. Real External Evidence Path
 
