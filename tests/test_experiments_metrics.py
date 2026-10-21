@@ -93,7 +93,8 @@ def _ready_for_r5(
         ) for axis in category_plan.discovery_axes),
         Applicability.NOT_APPLICABLE if screening_work_unit else Applicability.APPLICABLE,
         CategoryRunStatus.COMPLETE,
-        ("EVID-r4",), "all planned coverage executed", (), (),
+        ("EVID-r4",), "all planned coverage executed",
+        ("HYP-static",) if static_hypothesis else (), (),
     )])
     return manager, workflow
 
