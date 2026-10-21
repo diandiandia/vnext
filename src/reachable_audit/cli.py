@@ -774,6 +774,28 @@ def _handle_task(arguments: argparse.Namespace) -> int:
                 ]})
             elif arguments.command == "task-commit-r35-adjudications":
                 _print({"artifact_ids": list(coordinator.commit_r35_adjudications())})
+            elif arguments.command == "task-approve-r35-adjudication":
+                value = json.loads(Path(arguments.input).read_text(encoding="utf-8"))
+                if (
+                    not isinstance(value, dict)
+                    or not isinstance(value.get("evidence_refs"), list)
+                    or not all(isinstance(ref, str) for ref in value["evidence_refs"])
+                    or not all(
+                        isinstance(value.get(key), str)
+                        for key in ("output_ref", "reviewer", "rationale")
+                    )
+                ):
+                    raise ValueError(
+                        "human review requires output_ref, reviewer, rationale strings "
+                        "and an evidence_refs array"
+                    )
+                _print({"artifact_id": coordinator.approve_r35_adjudication(
+                    arguments.task_id,
+                    output_ref=str(value.get("output_ref", "")),
+                    reviewer=str(value.get("reviewer", "")),
+                    rationale=str(value.get("rationale", "")),
+                    evidence_refs=tuple(value.get("evidence_refs", [])),
+                )})
             elif arguments.command == "task-schedule-r35-revivals":
                 _print({"tasks": [
                     asdict(view) for view in coordinator.schedule_r35_revivals()
@@ -1130,6 +1152,7 @@ def _parser() -> argparse.ArgumentParser:
         ("task-commit-r35-refutations", "commit independent refutation results"),
         ("task-schedule-r35-adjudications", "schedule refutation adjudications"),
         ("task-commit-r35-adjudications", "commit refutation adjudications"),
+        ("task-approve-r35-adjudication", "operator assertion of actual human output review"),
         ("task-schedule-r35-revivals", "schedule rejected-hypothesis reviews"),
         ("task-commit-r35-revivals", "commit reviews and complete R3.5"),
         ("task-schedule-r4", "schedule CategoryAuditPlan execution tasks"),
@@ -1146,6 +1169,9 @@ def _parser() -> argparse.ArgumentParser:
         task_stage.add_argument("--state-dir", default=".audit_vnext")
 
     task_schedule_r4 = subparsers.choices["task-schedule-r4"]
+    human_review = subparsers.choices["task-approve-r35-adjudication"]
+    human_review.add_argument("task_id")
+    human_review.add_argument("--input", required=True)
     task_schedule_r4.add_argument(
         "--bundle-work-units", type=int, default=1,
         help="opt-in: bundle this many same-family Work Units per R4 agent task",

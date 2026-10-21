@@ -928,6 +928,14 @@ class ManualExecutionBackend:
             allowed_hypothesis_ids
         ):
             raise ModelError(f"R4 hypothesis_ids must use allowed_hypothesis_ids: {task_id}")
+        if allowed_hypothesis_ids is not None and (
+            set(run.hypothesis_ids) != set(allowed_hypothesis_ids)
+            or len(run.hypothesis_ids) != len(set(run.hypothesis_ids))
+        ):
+            raise ModelError(
+                f"R4 hypothesis_ids must reconcile every allowed_hypothesis_ids entry "
+                f"exactly once, including rejected or unresolved candidates: {task_id}"
+            )
         expected_axes = tuple(str(item) for item in category_plan.get("discovery_axes", []))
         actual_axes = tuple(axis_run.axis.value for axis_run in run.axis_runs)
         if len(actual_axes) != len(set(actual_axes)) or set(actual_axes) != set(expected_axes):
@@ -2150,7 +2158,11 @@ class DiscoveryCoordinator:
                 "refutations": refutations,
                 "analysis_contract": (
                     "Resolve the verifier/refuter evidence. Use actor AUTO only when the "
-                    "refuter verdicts agree; a split decision requires a human:* worker."
+                    "refuter verdicts agree; a split decision requires actual human review. "
+                    "A human:* worker label or standing delegation is not review evidence. "
+                    "Agent output with actor human is only a proposal until the operator "
+                    "records task-approve-r35-adjudication for the exact output artifact. "
+                    "Do not invoke that approval command as a Worker."
                 ),
                 "output_contract": {
                     "schema_version": "1.0",
@@ -2171,6 +2183,48 @@ class DiscoveryCoordinator:
                 stage_revision_ids=stage_revision_ids,
             )))
         return tuple(views)
+
+    def approve_r35_adjudication(
+        self, task_id: str, *, output_ref: str, reviewer: str,
+        rationale: str, evidence_refs: Sequence[str],
+    ) -> str:
+        """Record an operator's review assertion, not a verified human identity."""
+        if not reviewer.strip() or not rationale.strip() or not evidence_refs:
+            raise ModelError("human review requires reviewer, rationale, and evidence refs")
+        view = self.backend.poll(task_id)
+        if (
+            view.task.batch_id != self.workflow.batch_id
+            or view.task.operation != "adjudicate_refutations"
+            or view.status is not TaskStatus.SUCCEEDED
+            or view.output_ref != output_ref
+        ):
+            raise ModelError("human review must bind the current successful adjudication output")
+        adjudication = Adjudication.from_dict(self._read_output(view)["adjudication"])
+        if adjudication.actor is not AdjudicationActor.HUMAN:
+            raise ModelError("human approval requires an actor human adjudication proposal")
+        for reference in evidence_refs:
+            try:
+                self.workflow.manager.artifacts.get_bytes(reference)
+            except (OSError, ValueError) as error:
+                raise ModelError(
+                    f"human review evidence artifact cannot be resolved: {reference}"
+                ) from error
+        approval_ref = self._put_json({
+            "task_id": task_id, "output_ref": output_ref,
+            "reviewer": reviewer, "rationale": rationale,
+            "evidence_refs": list(evidence_refs),
+            "identity_assurance": "operator_assertion_not_host_verified",
+        })
+        self.workflow.manager.store.append_event(
+            campaign_id=self.workflow.campaign_id, batch_id=self.workflow.batch_id,
+            entity_type="task", entity_id=task_id,
+            event_type="HUMAN_ADJUDICATION_APPROVED",
+            idempotency_key=f"human-adjudication:{task_id}:{output_ref}",
+            actor=reviewer,
+            payload={"output_ref": output_ref},
+            payload_ref=approval_ref,
+        )
+        return approval_ref
 
     def commit_r35_adjudications(self) -> tuple[str, ...]:
         revision_parts = self._stage_revision_parts("R3_COMPLETED")
@@ -2202,6 +2256,19 @@ class DiscoveryCoordinator:
             if adjudication.actor is AdjudicationActor.HUMAN:
                 if view.worker_id is None or not view.worker_id.startswith("human:"):
                     raise ModelError("human adjudication requires a human:* worker")
+                approvals = self.workflow.manager.store.list_events(
+                    self.workflow.campaign_id,
+                    entity_type="task", entity_id=view.task.task_id,
+                    event_type="HUMAN_ADJUDICATION_APPROVED",
+                )
+                if not any(
+                    event.payload.get("output_ref") == view.output_ref
+                    for event in approvals
+                ):
+                    raise ModelError(
+                        "human adjudication requires explicit operator review of the "
+                        "exact output via task-approve-r35-adjudication"
+                    )
             elif view.worker_id in refuter_ids:
                 raise ModelError("a refuter cannot adjudicate its own R3.5 result")
             artifact_ids.append(self.workflow.record_adjudication(adjudication))
@@ -2429,8 +2496,11 @@ class DiscoveryCoordinator:
                     "Omit work_unit_id from each AxisRun; it is inherited from the "
                     "parent CategoryRun. If supplied, it must match. "
                     "evidence for positive and zero-finding outcomes; do not omit an axis. "
-                    "hypothesis_ids may reference only allowed_hypothesis_ids; use [] when "
-                    "none apply. Never invent IDs for late candidates; report them as "
+                    "hypothesis_ids must include every allowed_hypothesis_ids entry exactly "
+                    "once, including rejected or unresolved candidates; explain their "
+                    "disposition in rationale. Use [] only when the allowlist is empty. "
+                    "These are reconciliation links, not claims of a vulnerability. "
+                    "Never invent IDs for late candidates; report them as "
                     "unresolved risks for explicit follow-up."
                 ),
                 "output_contract": {
@@ -2732,8 +2802,11 @@ class DiscoveryCoordinator:
                 "Declare SCREENED/INSPECTED altitude on each APPLICABLE AxisRun and "
                 "NOT_RECORDED for NOT_APPLICABLE/DEFERRED. These are Agent claims, not "
                 "host-observed reads. "
-                "Each run's hypothesis_ids must come from that category_item's "
-                "allowed_hypothesis_ids; use [] when none apply. Never invent IDs for "
+                "Each run's hypothesis_ids must include every entry of that category_item's "
+                "allowed_hypothesis_ids exactly once, including rejected or unresolved "
+                "candidates; explain their disposition in rationale. Use [] only when the "
+                "allowlist is empty. These are reconciliation links, not vulnerability "
+                "claims. Never invent IDs for "
                 "late candidates; report them as unresolved risks for explicit follow-up."
             ),
             "output_contract": {
@@ -2948,6 +3021,11 @@ class DiscoveryCoordinator:
                     "evidence. Do not use it for a run that started; an inconclusive attempt "
                     "uses NEEDS_REVIEW with its experiment. NOT_FEASIBLE is unresolved, not "
                     "evidence of safety, confirmation, or refutation. "
+                    "A proposed but unexecuted experiment uses result=inconclusive, "
+                    "observation_refs=[], and assessment disposition NEEDS_REVIEW; retain "
+                    "experiment identity, target_ref, proposed command_refs and rationale. "
+                    "Do not execute a proposal without host approval or invent observations. "
+                    "Confirmed or refuted experiments require observation evidence. "
                     "Use JSON null for experiment_id when there is no experiment; never an "
                     "empty string. A non-null ID must match experiments in this task output."
                 ),

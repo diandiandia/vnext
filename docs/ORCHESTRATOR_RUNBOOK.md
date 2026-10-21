@@ -120,6 +120,46 @@ Retries and amendments must preserve old history. Committed R1-R5 amendments
 invalidate affected descendants: reschedule and recommit current revisions.
 After Campaign completion do not amend history; use a declared new Campaign.
 
+### Human adjudication is a separate operator action
+
+A split refutation requires actual human review. A Worker must not turn itself into
+a human by choosing `actor=human`, a `human:*` worker ID, or a standing-delegation
+label. The human worker label remains necessary for the existing task path but is
+not sufficient to commit. Pause and show the exact proposal and source evidence to
+the operator; never automate the approval as part of the Worker driver.
+
+After review, the operator supplies an approval JSON object containing `output_ref`
+(the exact successful task output artifact), `reviewer`, `rationale`, and a nonempty
+`evidence_refs` array of stored review-evidence artifacts. Record the actual review
+notes as an artifact, not a fabricated observation.
+
+```bash
+vnext task-approve-r35-adjudication "$TARGET" "$CAMPAIGN_ID" "$BATCH_ID" "$TASK_ID" \
+  --input /path/to/operator-review.json
+vnext task-commit-r35-adjudications "$TARGET" "$CAMPAIGN_ID" "$BATCH_ID"
+```
+
+Approval is bound to the current task output digest; approval of another artifact
+cannot authorize it. It is an explicit operator assertion, not authenticated human
+identity or an OS permission boundary. A host that lets a Worker issue arbitrary
+operator commands still needs to restrict that access. Existing completed Campaign
+history is not rewritten by this check.
+
+### R4 reconciliation and static-only R5
+
+Each CategoryRun must link every supplied Work Unit/family `allowed_hypothesis_ids`
+entry exactly once, including rejected and unresolved candidates. Explain the
+dispositions in the run rationale; these links do not claim that every candidate
+is a vulnerability. An empty list is valid only when there are no scoped candidates.
+The same rule applies to bundled tasks and direct R4 submission. Late candidates
+remain explicit unresolved follow-up items, not invented IDs.
+
+For a proposed but unexecuted R5 experiment, retain identity, target, proposed
+command and rationale; use `result=inconclusive`, `observation_refs=[]`, and
+assessment disposition `NEEDS_REVIEW`. Do not execute it without authorization or
+invent observation artifacts. Confirmed/refuted results still require observations;
+empirical upgrades still require the registered evidence described above.
+
 ## 4. Six-Axis Deep Review
 
 All triggers are conditional on current source evidence. For Java, consult the

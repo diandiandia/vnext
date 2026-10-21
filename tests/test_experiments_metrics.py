@@ -342,6 +342,9 @@ def test_r5_assessment_runs_as_durable_task(
         assert "NOT_FEASIBLE only when an experiment is required" in task_input["analysis_contract"]
         assert "not evidence of safety, confirmation, or refutation" in task_input["analysis_contract"]
         assert "JSON null" in task_input["analysis_contract"]
+        assert "proposed but unexecuted" in task_input["analysis_contract"]
+        assert "observation_refs=[]" in task_input["analysis_contract"]
+        assert "disposition NEEDS_REVIEW" in task_input["analysis_contract"]
         lease = backend.claim("experiment-reviewer")
         assert lease is not None
         output = {

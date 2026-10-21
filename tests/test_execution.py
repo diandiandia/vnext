@@ -2758,3 +2758,84 @@ def test_discovery_coordinator_runs_independent_r35_refutations(
         assert sum(event.event_type == "R3_5_COMPLETED" for event in events) == 1
     finally:
         manager.close()
+
+
+def test_human_label_requires_separate_exact_output_review(tmp_path: Path) -> None:
+    manager, workflow, plan = _workflow(tmp_path, "CMP-human-review")
+    try:
+        unit = plan.work_units[0]
+        workflow.run_r0()
+        workflow.record_r1([Surface(
+            "SURF-human", unit.work_unit_id, unit.component_id,
+            "function_entry", "app.py", "handle", "remote", ("LOC-app.py:1",),
+        )])
+        evidence = {axis.value: ("LOC-app.py:1",) for axis in DiscoveryAxis}
+        workflow.record_r2([Hypothesis(
+            "HYP-human", unit.work_unit_id, "surface", ("SURF-human",),
+            ("SURF-human",), Mechanism("INJECTION", "candidate"),
+            "candidate", HypothesisStatus.NEW,
+        )], axis_evidence=evidence, axis_runs=axis_runs_from_evidence(evidence))
+        proof = manager.artifacts.put_text("edge proof").artifact_id
+        workflow.record_r3([VerdictSubmission(
+            "HYP-human", VerdictKind.REACHABLE, EvidenceGrade.EDGE_PROVEN,
+            "remote", (), ("LOC-app.py:1",), (proof,), (), (), "edge supported",
+        )])
+        for angle, verdict in (
+            (AttackAngle.CALL_CHAIN, VerdictKind.REACHABLE),
+            (AttackAngle.PRINCIPAL, VerdictKind.NEEDS_REVIEW),
+        ):
+            workflow.record_refutation(Refutation(
+                f"REF-{angle.value}", "HYP-human", f"reviewer-{angle.value}",
+                verdict, angle, ("LOC-app.py:1",), "source reviewed",
+            ))
+        backend = ManualExecutionBackend(manager, workflow.campaign_id)
+        coordinator = DiscoveryCoordinator(workflow, backend)
+        view, = coordinator.schedule_r35_adjudications()
+        lease = backend.claim("human:standing-delegation:model")
+        assert lease is not None
+        output = {
+            "schema_version": "1.0",
+            "adjudication": {
+                "adjudication_id": "ADJ-human", "hypothesis_id": "HYP-human",
+                "refutation_ids": ["REF-call_chain", "REF-principal"],
+                "final_verdict": "NEEDS_REVIEW", "actor": "human",
+                "source_verifications": [], "rationale": "human review required",
+            },
+        }
+        output_ref = manager.artifacts.put_text(json.dumps(output)).artifact_id
+        backend.collect(lease, TaskResult(
+            True, output_ref, "proposal", {"agent_runs": 1, "wall_seconds": 1},
+            execution_configuration_fixture(),
+        ))
+        with pytest.raises(ModelError, match="explicit operator review"):
+            coordinator.commit_r35_adjudications()
+        assert workflow._active_events(event_type="ADJUDICATION_DECIDED") == []
+        with pytest.raises(ModelError, match="current successful"):
+            coordinator.approve_r35_adjudication(
+                view.task.task_id, output_ref=proof, reviewer="operator",
+                rationale="reviewed", evidence_refs=(proof,),
+            )
+        manager.store.append_event(
+            campaign_id=workflow.campaign_id, batch_id=workflow.batch_id,
+            entity_type="task", entity_id=view.task.task_id,
+            event_type="HUMAN_ADJUDICATION_APPROVED",
+            idempotency_key="fixture-stale-human-review", actor="operator",
+            payload={"output_ref": proof}, payload_ref=proof,
+        )
+        with pytest.raises(ModelError, match="explicit operator review"):
+            coordinator.commit_r35_adjudications()
+        from reachable_audit.cli import main
+
+        approval = tmp_path / "human-review.json"
+        approval.write_text(json.dumps({
+            "output_ref": output_ref, "reviewer": "operator",
+            "rationale": "reviewed this exact proposal", "evidence_refs": [proof],
+        }), encoding="utf-8")
+        assert main([
+            "task-approve-r35-adjudication", str(manager.target_root),
+            workflow.campaign_id, workflow.batch_id, view.task.task_id,
+            "--input", str(approval),
+        ]) == 0
+        assert len(coordinator.commit_r35_adjudications()) == 1
+    finally:
+        manager.close()

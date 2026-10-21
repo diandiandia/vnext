@@ -15,7 +15,7 @@ IMPLEMENTED_RELEASE_GATES = tuple(f"RG{index}" for index in range(1, 16))
 
 
 _POLICY: dict[str, Any] = {
-    "policy_version": "vnext-task-policy-34",
+    "policy_version": "vnext-task-policy-35",
     "task_collection": {
         "shell_execution_by_scheduler": False,
         "required_measurements": ["agent_runs", "wall_seconds"],
@@ -28,6 +28,7 @@ _POLICY: dict[str, Any] = {
         "knowledge_guidance": "conditional_target_evidence_not_expected_findings_or_exhaustive_checklist",
         "r2_axis_heuristics": "source_evidenced_six_axis_triggers_conditional_history_no_candidate_does_not_imply_inapplicable",
         "r35_revival_guidance": "independent_guard_bypass_and_boundary_contract_review_preserve_valid_counterevidence",
+        "r35_human_review": "explicit_operator_approval_bound_to_current_output_digest_not_worker_label_or_verified_identity",
         "max_output_bytes": TASK_OUTPUT_MAX_BYTES,
         "soft_output_target_bytes": TASK_OUTPUT_TARGET_BYTES,
         "review_scope_sentinel": "ALL_SOURCE_FILES",
@@ -56,7 +57,8 @@ _POLICY: dict[str, Any] = {
         "r6_evidence_context": "canonical_stage_artifacts_not_work_unit_source_inventory",
         "r6_surface_dispositions": "collect_exact_one_per_r1_surface_projection_defaults_missing_to_unreviewed_agent_reported",
         "plan_path_scope": "inventory_exact_path_states_only_included_paths_assigned_exclusions_deferments_visible",
-        "r4_hypothesis_references": "task_input_work_unit_and_family_allowlist_at_collect",
+        "r4_hypothesis_references": "exactly_once_reconciliation_of_task_input_work_unit_family_allowlist_at_collect",
+        "r5_proposed_experiment": "unexecuted_inconclusive_empty_observations_needs_review_no_empirical_upgrade",
         "r1_surface_anchors": "collect_entry_path_and_nonblank_source_line",
         "r1_surface_identity": "collect_unique_id_task_work_unit_and_component_match",
         "r1_oversize_work_unit_guard": "block_scheduling_when_minimum_valid_output_exceeds_hard_limit",

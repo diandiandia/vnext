@@ -960,6 +960,19 @@ class BatchWorkflow:
                     raise ModelError(
                         f"CategoryRun hypothesis is outside its scope: {hypothesis_id}"
                     )
+            expected_hypotheses = {
+                hypothesis_id for hypothesis_id, hypothesis in hypotheses.items()
+                if hypothesis["work_unit_id"] == run.work_unit_id
+                and hypothesis["mechanism"]["family"] == run.family
+            }
+            if (
+                set(run.hypothesis_ids) != expected_hypotheses
+                or len(run.hypothesis_ids) != len(set(run.hypothesis_ids))
+            ):
+                raise ModelError(
+                    "CategoryRun must reconcile every scoped hypothesis exactly once: "
+                    f"{run.category_run_id}"
+                )
             if not set(run.finding_ids).issubset(recorded_findings):
                 raise ModelError(
                     f"CategoryRun references unrecorded findings: {run.category_run_id}"

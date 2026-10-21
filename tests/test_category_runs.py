@@ -269,7 +269,8 @@ def test_r4_category_plan_runs_as_durable_task(
                 review_altitude=ReviewAltitude.INSPECTED,
             ) for axis in category_plan.discovery_axes),
             Applicability.APPLICABLE, CategoryRunStatus.COMPLETE,
-            ("EVID-category-review",), "all planned checks completed", (), (),
+            ("EVID-category-review",), "all planned checks completed",
+            ("HYP-static",) if static_hypothesis else (), (),
         )
         backend = ManualExecutionBackend(manager, "CMP-r4")
         coordinator = DiscoveryCoordinator(workflow, backend)
@@ -285,6 +286,20 @@ def test_r4_category_plan_runs_as_durable_task(
         assert bool(task_input["allowed_hypothesis_ids"]) is static_hypothesis
         lease = backend.claim("category-auditor")
         assert lease is not None
+        if static_hypothesis:
+            for ids in ([], ["HYP-static", "HYP-static"]):
+                with pytest.raises(ModelError, match="reconcile every scoped"):
+                    workflow.record_r4([replace(run, hypothesis_ids=tuple(ids))])
+                missing_links = {**asdict(run), "hypothesis_ids": ids}
+                missing_links_ref = manager.artifacts.put_text(json.dumps({
+                    "schema_version": "1.0", "category_run": missing_links,
+                })).artifact_id
+                with pytest.raises(ModelError, match="reconcile every"):
+                    backend.collect(lease, TaskResult(
+                        True, missing_links_ref, "lost or duplicated reconciliation links",
+                        {"agent_runs": 1, "wall_seconds": 1},
+                    ))
+            assert backend.poll(lease.task.task_id).status.value == "LEASED"
         missing_altitude = asdict(run)
         missing_altitude["axis_runs"][0]["review_altitude"] = "NOT_RECORDED"
         missing_altitude_ref = manager.artifacts.put_text(json.dumps({
