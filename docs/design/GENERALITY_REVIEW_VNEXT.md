@@ -1,6 +1,7 @@
 # Generality and Engineering Review
 
-Date: 2026-10-20. Base: `a3b969c` plus this review's uncommitted changes.
+Initial review: 2026-10-20. Base: `a3b969c` plus that review's uncommitted changes.
+Current reassessment addendum: 2026-10-22, against the present working tree.
 This is a bounded engineering review and repair record, not a security certification,
 exhaustive dead-code proof, Google internal approval, or ISO conformity assessment.
 The historical [quality reassessment](QUALITY_REASSESSMENT_VNEXT.md) is retained as
@@ -81,9 +82,10 @@ silently replacing knowledge in an in-flight audit.
    `campaign_closure.py`. Size alone is not dead code. Extract cohesive components
    only against measured maintenance problems and behavior tests, not an unverified
    wholesale rewrite during an audit.
-6. The main skill is a long operating contract. Progressive loading and a measured
-   host-loop ergonomics study remain useful; this review does not establish prompt
-   cost or reasoning quality merely by changing discovery wording.
+6. The main skill remains an operating contract. Its command catalog and duplicated
+   successful R1/R2 payload examples have been removed in favor of CLI help, the
+   runbook, and each task's `output_contract`; the main file is now 453 lines.
+   Progressive-loading ergonomics and prompt-cost effects have not been measured.
 7. Universal strict parser behavior, arbitrary host-input dependency tracking,
    independently observed reads, trusted reviewer identity and provider hard caps
    remain bounded or external. Ordinary development audits must label untested
@@ -205,3 +207,170 @@ knowledge scope, shared compact R2 triggers, revived-worker guidance, HIGH/LOW
 depth rejection at collection and direct R1 commit, same-lease correction, launcher
 state reopening and propagated CLI errors. No real-target discovery comparison or
 24/72-hour endurance run was performed; these results do not establish those outcomes.
+
+## Acceptance Follow-up: Finding Classification Gate
+
+The 2026-10-21 acceptance package exposed a product-level false-positive risk:
+three behavior/robustness/hardening items were accepted by the finding command as
+`CONFIRMED` without recording security impact. The operator's review classified the
+three items as ordinary defect, ordinary defect, and hardening respectively; none
+was demonstrated to be a security vulnerability. The acceptance artifact checksums
+passed, but the gate behavior itself failed.
+
+The runtime now requires explicit Finding classification. Security-vulnerability
+records require structured attacker, boundary, asset, security-property, impact,
+severity-rationale, and evidence-reference fields. Reports separate those classes
+and count only confirmed security-vulnerability records as confirmed vulnerabilities.
+Focused regression coverage for finding recording/reporting and R4/R5 task contracts
+passes (91 tests). The structural gate does not establish semantic truth,
+exploitability, independent review, or severity correctness; those remain evidence and
+adjudication responsibilities.
+
+The same acceptance remains **partially unresolved**:
+
+- The R2 run on the approximately 1.9 MB / 60k-line source file did not complete
+  successfully within the observed 28-minute run, while a small slice was reviewable.
+  The planner now flags included individual files of at least 1 MiB for explicit
+  preflight; size lookup failures are surfaced rather than reported as zero bytes.
+  This is advisory, not a hard capacity limit, source slicer, physical-read observer,
+  or proof that all flagged work can be completed. The checkout has not demonstrated
+  bounded, complete R2 analysis for an indivisible oversized source file. Do not
+  increase the timeout and treat that as a fix; disclose/defer the affected path
+  explicitly or run an independently scoped partitioned follow-up whose coverage can
+  be reconciled. No 20GB+ recovery or balanced 15-language capability has been
+  established.
+- The acceptance R1 output omitted specialized iterator-helper entry points relevant
+  to the selected core subsystem. This is a measured discovery limitation, not
+  evidence that a parser/provider bug has been isolated or that an R2/R3 call chain
+  was proved. The next core-subsystem trial must predeclare helper-level recall checks
+  and inspect source-backed call/guard/sink evidence. A separate residual
+  use-after-free candidate in the fixed snapshot remains static-only and requires
+  dynamic confirmation or maintainer review; it is not a vNext defect fix or an
+  empirically confirmed result.
+- The acceptance summary reports T1 at commit `5d7dd33`, while its raw commit record
+  names `c6ff0b4`. The reported 352 passed / 1 skipped result is therefore not
+  attributable to one unambiguous source revision until the record is reconciled.
+
+The focused finding-gate/task-contract run passed **91 tests**; the CLI planning
+warning/stat-error regressions passed **26 tests**. Final local verification passed
+**355 tests with 1 skip**; the skip is the protected held-out acceptance test because
+no real manifest is configured. The compatibility scan passed with zero findings
+(49 Python, 167 knowledge, 1 prompt file), and `git diff --check` passed. These are
+local software regressions, not a rerun of the acceptance package, not confirmation
+of R2 large-file scalability, and not real-target or release qualification evidence.
+
+## 2026-10-22 Reassessment Addendum
+
+This addendum reassesses the current checkout; it does not replace historical evidence
+above. It covers active user-facing surfaces (`README.md`, `SKILL.md`, runbook), current
+system/software design and requirements, completion/test plans, and the lifecycle
+self-assessment. Target-specific names in explicitly historical engineering records
+remain historical documentation and are not shipped runtime task context.
+
+### Confirmed findings and repairs
+
+| Priority | Finding | Repair and verification boundary |
+|---|---|---|
+| P1 | The runtime skill contained a named historical large-source target and run result. Although factually relevant to prior engineering, it could prime a generic audit with a past project's identity and distract from target-independent capacity rules. | Removed the named example and retained only the general qualification rule. Added a regression that supplies the historical token to the runtime residue scanner and requires the active prompt surface to pass. |
+| P1 | The two documented R2 scheduling examples omitted `--entrypoint-checklist`, now a required CLI argument. The contract prose described fields but offered no valid file example. | Added the required argument to both command examples, documented exact keys and `[]`, and added a schema example using clearly illustrative IDs/anchors. Runtime CLI validation and R2 tests remain the executable authority. |
+| P1 | Current design text said R4 Finding attribution was optional and described external-observation registration as absent, contradicting enforced reconciliation and the implemented signed evidence-only registration path. | Updated the R2/R4/R6 stage contracts, R5 external-observation boundary, SYSR-034 and software design. Added SYSR-041 and mapped SWDR-047 to it; confirmed contiguous traceability IDs (41 SYSR and 47 SWDR). |
+| P2 | The runtime skill duplicated the full CLI command catalog and successful R1/R2 payload schemas, increasing maintenance and risking divergence from CLI/task contracts. | Replaced the catalog with a compact lifecycle entry point and pointers to CLI help/runbook; removed copied R1/R2 payloads in favor of each claimed task's `output_contract`. Added an explicit repository-audit applicability statement. The resulting `SKILL.md` is 457 lines; this is a readability change, not evidence of improved model performance. |
+| P1 | The first large real-target run produced structurally valid but semantically off-target R4 reasoning and security-impact classifications later questioned by its coordinator; no independent human review or dynamic experiment occurred. | Clarified that runtime vulnerability counts are Agent-declared, not independent validation; the README, Skill, software design, test plan, and real-target plan now require a recorded separate review before external or release-ready claims. This is an operating/process control, not an engine-enforced reviewer-identity gate. |
+| P1 | The offline knowledge migration utility embedded a fixed blacklist of historical target/project names, contradicting the stated caller-supplied residue policy and potentially biasing candidate exclusion. | Removed the built-in list. Migration now requires an explicit reviewer/evaluator token file and applies it to source filtering and generated-asset validation; updated SWDR-028 and added TR-12 tests for missing input, exclusion, and no token leakage. This remains pattern-based, not semantic portability proof. |
+
+### Updated assessment
+
+- **Generality:** The language/build/component separation and explicit limitations
+  remain suitable for a general-purpose audit workflow. The 15-language portfolio and
+  ten prioritized issue entries per language are explicit product scope, not a neutral
+  or independently measured universal ranking. The named-target residue is removed
+  from the active prompt, but no bounded residue scan can prove the absence of all
+  semantic historical influence.
+- **Bias and discovery quality:** The recent R2/R4/R6 gates improve declared recall
+  checks and reconciliation, but they do not observe source reads or validate semantic
+  evidence. Fixed counts, catalog provenance, and language adapters do not establish
+  balanced discovery quality. Unequal profile depth, omission of mechanisms outside the
+  prioritized ten, and operator/host context remain risks requiring predeclared,
+  independently adjudicated, equal-budget real-target studies.
+- **Dead code and redundancy:** No concrete dead-code deletion was justified by this
+  review. The runtime has substantial orchestration concentration (`execution.py`,
+  `batch_workflow.py`, and `campaign_closure.py`); this is maintainability debt, not
+  proof of dead code or duplicate behavior. CLI registries, adapter registration,
+  persisted schema compatibility, and event recovery make name-count heuristics
+  unreliable. No dedicated unused-code linter is configured in `pyproject.toml`.
+  Do not remove code or split these modules without a demonstrated unreachable path or
+  measured maintenance/behavior benefit.
+- **Documentation quality:** R2/R4/R6 structural contracts and requirement traceability
+  align at the reviewed surfaces. The current test plan and completion plan now separate
+  those structural checks from semantic quality and include the latest real-target
+  limitations. The repair roadmap remains a dated historical register; its table is not
+  the current implementation ledger.
+- **Google/internal criteria:** No controlled Google internal engineering or security
+  standard was supplied. Compliance cannot be evaluated or claimed from public coding
+  conventions, and this repository has no organizational approval evidence.
+- **ISO/IEC/IEEE 12207:** The lifecycle document is still only a preliminary process-
+  concept self-assessment. The new traceability row improves evidence organization but
+  is not clause-level conformity. No controlled edition, organizational tailoring,
+  process-owner approvals, audit evidence, or certification was supplied. These are
+  governance/evidence gaps, not repository defects that can be repaired by code.
+
+This review does not find grounds for a broad architectural rewrite. The product remains
+experimental: use an authorized development real-target audit to test behavior and
+collect skill defects; do not represent it as Google-approved, ISO-conformant, unbiased,
+dead-code-free, or release-qualified.
+
+### 2026-10-22 Real-Target Evidence Addendum
+
+The supplied real-target bundle passed its `SHA256SUMS` checks. Its recorded engine
+revision is `5d7dd33` plus TR-09 worktree changes and its task policy is
+`vnext-task-policy-37`; the current checkout reports `vnext-task-policy-38`.
+The run is therefore evidence about the earlier contract and is not a retest of the
+current R2/R4/R6 gates.
+
+The first Batch completed its planned stages and its R2 task finished in 532 seconds on
+an individual source file above the 1 MiB advisory threshold. That demonstrates one
+successful large-file task, not complete physical inspection, range coverage,
+whole-project coverage, or general capacity. The recorded Batch had 61 R1 Surfaces
+across 39 files, but only 17 files had a Surface reference; R2 evidence concentrated
+on seven files and R6 left 23 Surfaces UNREVIEWED. Predeclared helper checks identified
+missed iterator-helper, JSON, evaluation, and examples-boundary paths. The second Batch
+was not run.
+
+The same evidence records R4 reasoning that did not address its linked hypotheses and
+security-impact classifications later questioned by the coordinator. No independent
+human review was performed and no dynamic experiment ran. The machine-enforced checks
+validate identities, coverage, and reference shape; they cannot establish that a
+citation proves the stated claim. This is a confirmed limitation of the current
+assurance boundary, not a demonstrated vulnerability in the audited target.
+
+These observations motivated explicit R2 entrypoint checklists and R4/R6 Finding
+reconciliation in the current policy-38 contract. The policy-37 trial cannot establish
+whether those controls improve recall or semantic quality. The next authorized pilot
+must measure them directly, preserve unreviewed scope, and record qualified independent
+review of each security-impact declaration. One successful run cannot establish
+balanced language/issue coverage or remove sampling and operator bias.
+
+The active Skill, README, and runtime-eligible knowledge contain no matches for the
+checked historical target/helper identifiers. The migration tool now has no baked-in
+target-token blacklist; its caller-supplied input is mandatory. Historical names remain
+in dated test/evidence documents and are not runtime task context. The compatibility
+scan is still bounded pattern evidence; it does not prove semantic neutrality across
+all guidance or development/history records.
+
+### Addendum Verification
+
+| Check | Current result |
+|---|---|
+| Full test suite | After TR-12: **359 passed, 1 skipped in 42.96 s** with pytest plugin auto-loading disabled; the skip requires a protected held-out manifest not configured locally. Focused migration/CLI/experiment tests: **45 passed**. A default-plugin rerun was terminated by SIGKILL (137); the reduced-overhead rerun completed successfully. |
+| Runtime compatibility/residue scan | PASS, 0 findings; 49 Python, 167 knowledge, 1 prompt file |
+| Python syntax | `compileall` for `src` and `tools`, plus migration tool `py_compile`, passed |
+| R2 command contract | CLI help confirms `--entrypoint-checklist` is required |
+| Historical-residue regression | Runtime-prompt test passes with a caller-supplied residue token |
+| Migration residue policy | TR-12 caller-supplied token test and required CLI argument cover the offline migration path |
+| Skill length and quick-start | `SKILL.md` is 457 lines; launcher invocation and required command arguments match the runbook/CLI |
+| Documentation links | Local Markdown targets resolve across 15 user-facing/design documents |
+| Patch formatting | `git diff --check` passed |
+
+These checks establish local implementation and bounded residue-pattern behavior only.
+They do not establish semantic neutrality, dead-code absence, real-target recall,
+Google/internal compliance, ISO conformity, or release qualification.

@@ -12,6 +12,11 @@ See [implementation completion](IMPLEMENTATION_COMPLETION_PLAN.md) and the
 release qualification are distinct; release trust/held-out prerequisites do not
 block authorized development audits.
 
+Current-contract update (2026-10-22): R2 predeclared-entrypoint reviews, R4
+hypothesis/Finding reconciliation, and R6 Finding reviews are enforced at their
+documented structural boundaries. They improve traceability but do not establish
+semantic evidence relevance or independent human review.
+
 ## 1. Purpose
 
 vNext is an experimental reachable-vulnerability audit workflow for mixed-language
@@ -39,7 +44,7 @@ policy, not proof of certification or an architectural optimum.
 | G1 | Certify useful, balanced audit capability across 15 languages | Per-language held-out results, including budget-normalized recall and a worst-language view |
 | G2 | Guide discovery with portable, provenance-backed security knowledge | Runtime issue catalog and Mechanism Cards are consumed by analysis tasks and tested |
 | G3 | Audit a repository containing multiple languages in one Campaign | Inventory, planning, boundary ownership, and evidence integration cover the mixed-language scope |
-| G4 | Preserve evidence quality | Findings have source anchors, reachability evidence, counterevidence, and an honest evidence grade |
+| G4 | Preserve evidence quality | Findings have source anchors, reachability evidence, counterevidence, an honest evidence grade, and an explicit security-impact classification |
 | G5 | Scale to large repositories and recover from interruption | Campaign/Batch execution, durable events, bounded Work Units, drift invalidation, and handoffs pass real-project tests |
 | G6 | Avoid historical compatibility burden | vNext has one canonical schema and does not read or write v2/v3 runtime state |
 | G7 | Prove improvement rather than infer it from architecture | Paired, held-out shadow evaluation shows no unacceptable regression and measured improvement |
@@ -201,24 +206,26 @@ The existing R0-R6 semantics remain the workflow vocabulary, with one canonical 
 |---|---|---|
 | R0 | Compare scoped source digests with the Campaign baseline | Content-addressed digest receipt; no baseline signature |
 | R1 | Record surfaces, principals, components, supplied-boundary reviews, and path-review declarations | Source-anchored Surface/BoundaryReview records and, for task-coordinated R1, persisted Agent-declared path claims; Plan path roles determine which paths are assigned. Claims are not host-observed reads; final per-Surface states are recorded by R6. |
-| R2 | Generate and screen hypotheses using multiple discovery axes and approved knowledge | Falsifiable hypotheses with axis, language, mechanism, and seed provenance |
+| R2 | Generate and screen hypotheses using multiple discovery axes and approved knowledge | Falsifiable hypotheses with axis, language, mechanism, seed provenance, and exactly one source-anchored review per explicitly predeclared entrypoint |
 | R3 | Verify reachability and vulnerability mechanism | Call/dataflow evidence, counterevidence, and provisional verdict |
 | R3.5 | Independent refutation and adjudication | Reviewer evidence and explicit disposition |
-| R4 | Execute applicable security-category reviews against planned Work Units and hypotheses | CategoryRun records; zero findings is valid if review is evidenced |
+| R4 | Execute applicable security-category reviews against planned Work Units and hypotheses | CategoryRun records with one evidence-linked disposition per scoped hypothesis and exact attribution of existing applicable Findings; zero findings is valid if review is evidenced |
 | R5 | Record assessments and managed experiments | Fidelity-bound artifacts; STATIC_VERDICT_RETAINED, EMPIRICALLY_CONFIRMED, REFUTED, NEEDS_REVIEW, or NOT_FEASIBLE assessments |
-| R6 | Close the Batch and reconcile scope, evidence, and handoffs | Derived report and unresolved-risk statement |
+| R6 | Close the Batch and reconcile scope, evidence, and handoffs | Derived report, one review per recorded Finding, R3.5/R4 disagreement summary, and unresolved-risk statement |
 
 Campaign closure is separate from Batch closure. No Batch completion may be reported as
 whole-project completion. A finding cannot be promoted to reachable without an evidenced
 path from a declared principal to the affected operation. An unsupported strong impact
 claim must be downgraded or marked NEEDS_REVIEW.
 
-R4 CategoryRuns may optionally attribute already-recorded canonical Findings through
-`finding_ids`; this field is not a Finding creation channel. The canonical Batch finding
-count is derived from `FINDING_RECORDED` events, while R4 reports the distinct count of
-linked findings separately. A category review with no linked findings is not evidence
-that no issue exists beyond the hypotheses in scope; preserve any new candidate as an
-explicit unresolved risk or route it through the hypothesis workflow.
+R4 tasks receive the scoped hypotheses and already-recorded canonical Findings.
+CategoryRuns must review every scoped hypothesis exactly once and attribute each
+applicable existing Finding exactly once through `finding_ids`; this is not a Finding
+creation channel. The canonical Batch finding count is derived from `FINDING_RECORDED`
+events, while R4 reports distinct linked findings separately. A category review with no
+linked findings is not evidence that no issue exists beyond the hypotheses in scope;
+preserve any new candidate as an explicit unresolved risk or route it through the
+hypothesis workflow.
 
 For late candidates, the currently supported recovery is an explicitly declared
 follow-up Campaign with new hypothesis/verification/refutation records. Preserve the
@@ -235,12 +242,23 @@ references, and hypothesis/verdict identity. A Surface without a hypothesis rema
 allowed. Plan path roles retain exclusions/deferments; supported R3 task amendments
 use the stage revision/invalidation contract described above.
 
+R6 additionally receives the canonical recorded Finding set and requires one
+`CONSISTENT`, `CONFLICT`, or `NEEDS_REVIEW` declaration for each Finding. The closure
+report includes review-state counts and any disagreement between R3.5 adjudication
+verdicts and R4 hypothesis dispositions. These are Agent assertions checked for
+identity, coverage, and resolvable references; they are not independent human semantic
+validation.
+
 R2 schedules all six axes, either separately or in one compact task per Work Unit:
 surface, mechanism, state/lifecycle, fix variant, boundary, and differential behavior.
 AxisRun records require applicability, rationale, and evidence. Planning rejects axis
 subsets because they are not supported end to end. All-six execution remains policy,
 not a proven optimum for recall or cost.
 Six axes do not establish six independent line-by-line passes.
+Scheduling also requires an explicit predeclared-entrypoint checklist, with `[]` used
+to state that none are known. A checklist item is bound to one Work Unit, axis, and
+source anchor; the corresponding AxisRun must review it exactly once. This improves
+recall of known helpers but is not an exhaustive entrypoint census.
 
 Coverage summarizes axis-derived Work Unit counts, Plan path scope, and task-coordinated
 R1 path, R2 discovery-axis, and R4 family/axis Agent-declared SCREENED/INSPECTED claims.
@@ -263,9 +281,12 @@ Provider coverage and candidate quality are evaluated separately from Agent verd
 NOT_FEASIBLE is valid only when an experiment is required, no attempt was run, the
 experiment ID is null, and blocker evidence/rationale are supplied. An attempted but
 inconclusive experiment remains NEEDS_REVIEW with its experiment artifact. NOT_FEASIBLE
-is reported as unresolved and cannot confirm safety, vulnerability, or refutation. An
-authorized out-of-band observation registration contract remains absent; a reference
-string alone cannot satisfy managed-run empirical confirmation requirements.
+is reported as unresolved and cannot confirm safety, vulnerability, or refutation.
+External-observation registration verifies a host-authority HMAC and binds the
+observation to the Campaign, snapshot, Batch, hypothesis, and Campaign-owned artifact
+digests. It is evidence-only; authority key custody and independent observer trust
+remain external. A reference string alone cannot satisfy managed-run empirical
+confirmation requirements.
 
 ## 7. Security Knowledge Model
 

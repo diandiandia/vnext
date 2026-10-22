@@ -16,11 +16,15 @@ from reachable_audit.analysis_models import (
     EvidenceGrade,
     ExternalObservation,
     Finding,
+    FindingClassification,
+    FindingReview,
+    FindingReviewState,
     FindingSeverity,
     FindingStatus,
     Mechanism,
     R5Assessment,
     R5Disposition,
+    SecurityImpact,
     SurfaceReviewDisposition,
     SurfaceReviewState,
 )
@@ -86,6 +90,7 @@ def test_r5_confirmation_can_confirm_static_only_hypothesis(
             status=FindingStatus.CONFIRMED,
             evidence_refs=(str(observed["execution_artifact_id"]),),
             title="R5-confirmed static-only hypothesis",
+            classification=FindingClassification.ORDINARY_DEFECT,
         )
 
         artifact_id = workflow.record_finding(finding)
@@ -96,7 +101,83 @@ def test_r5_confirmation_can_confirm_static_only_hypothesis(
         manager.close()
 
 
-def test_r6_closes_clean_batch_with_all_eight_gates(tmp_path: Path) -> None:
+def test_confirmed_finding_requires_explicit_classification_and_impact(
+    tmp_path: Path,
+) -> None:
+    manager, workflow = _ready_for_r5(tmp_path, static_hypothesis=True)
+    try:
+        with pytest.raises(ModelError, match="classification"):
+            workflow.record_finding(Finding(
+                finding_id="FND-unclassified",
+                root_cause_key="behavior-only",
+                mechanism=Mechanism("STATE", "state-transition"),
+                hypothesis_ids=("HYP-static",),
+                affected_component_ids=(
+                    workflow.batch.manifest["work_units"][0]["component_id"],
+                ),
+                severity=FindingSeverity.HIGH,
+                evidence_grade=EvidenceGrade.EDGE_PROVEN,
+                status=FindingStatus.CONFIRMED,
+                evidence_refs=("LOC-state.py:1",),
+                title="A behavior anomaly without security classification",
+            ))
+        with pytest.raises(ModelError, match="requires security_impact"):
+            Finding.from_dict({
+                **asdict(Finding(
+                    finding_id="FND-no-impact",
+                    root_cause_key="behavior-only",
+                    mechanism=Mechanism("STATE", "state-transition"),
+                    hypothesis_ids=("HYP-static",),
+                    affected_component_ids=(
+                        workflow.batch.manifest["work_units"][0]["component_id"],
+                    ),
+                    severity=FindingSeverity.HIGH,
+                    evidence_grade=EvidenceGrade.EDGE_PROVEN,
+                    status=FindingStatus.CONFIRMED,
+                    evidence_refs=("LOC-state.py:1",),
+                    title="A security label without impact evidence",
+                    classification=FindingClassification.SECURITY_VULNERABILITY,
+                )),
+            })
+        finding = Finding(
+            finding_id="FND-security-review",
+            root_cause_key="security-impact-needs-review",
+            mechanism=Mechanism("STATE", "state-transition"),
+            hypothesis_ids=("HYP-static",),
+            affected_component_ids=(
+                workflow.batch.manifest["work_units"][0]["component_id"],
+            ),
+            severity=FindingSeverity.MEDIUM,
+            evidence_grade=EvidenceGrade.EDGE_PROVEN,
+            status=FindingStatus.NEEDS_REVIEW,
+            evidence_refs=("LOC-state.py:1",),
+            title="Security impact claim remains under review",
+            classification=FindingClassification.SECURITY_VULNERABILITY,
+            security_impact=SecurityImpact(
+                attacker_capability="untrusted caller controls the state input",
+                trust_boundary="untrusted API caller to service state",
+                protected_asset="tenant-owned state",
+                security_property="cross-tenant integrity",
+                impact="attacker may modify another tenant's state",
+                severity_rationale="impact is limited to integrity; reachability is unconfirmed",
+                evidence_refs=("LOC-state.py:1",),
+            ),
+        )
+        artifact_ref = workflow.record_finding(finding)
+        assert artifact_ref.startswith("sha256:")
+        with pytest.raises(ModelError, match="included in Finding evidence_refs"):
+            Finding.from_dict({
+                **asdict(finding),
+                "security_impact": {
+                    **asdict(finding.security_impact),
+                    "evidence_refs": ["sha256:" + "a" * 64],
+                },
+            })
+    finally:
+        manager.close()
+
+
+def test_r6_closes_clean_batch_with_all_nine_gates(tmp_path: Path) -> None:
     manager, workflow = _ready_for_r5(tmp_path)
     try:
         workflow.record_r5([], [])
@@ -110,12 +191,70 @@ def test_r6_closes_clean_batch_with_all_eight_gates(tmp_path: Path) -> None:
 
         assert report["status"] == "PASS"
         assert set(report["gates"]) == {
-            "BG1", "BG2", "BG3", "BG4", "BG5", "BG6", "BG7", "BG8"
+            "BG1", "BG2", "BG3", "BG4", "BG5", "BG6", "BG7", "BG8", "BG9"
         }
         assert all(gate["pass"] for gate in report["gates"].values())
         assert manager.store.get_batch(
             "CMP-r4", workflow.batch_id
         ).status is BatchStatus.COMPLETE
+    finally:
+        manager.close()
+
+
+def test_r6_requires_and_reports_explicit_finding_reconciliation(
+    tmp_path: Path,
+) -> None:
+    manager, workflow = _ready_for_r5(tmp_path, static_hypothesis=True)
+    try:
+        workflow.record_r5([], [R5Assessment(
+            hypothesis_id="HYP-static",
+            experiment_required=False,
+            experiment_id=None,
+            disposition=R5Disposition.STATIC_VERDICT_RETAINED,
+            evidence_refs=("EVID-r4",),
+            rationale="retain the static verdict without requesting an experiment",
+        )])
+        finding = Finding(
+            finding_id="FND-r6-review",
+            root_cause_key="r6-review-test",
+            mechanism=Mechanism("STATE", "state-transition"),
+            hypothesis_ids=("HYP-static",),
+            affected_component_ids=(
+                workflow.batch.manifest["work_units"][0]["component_id"],
+            ),
+            severity=FindingSeverity.MEDIUM,
+            evidence_grade=EvidenceGrade.EDGE_PROVEN,
+            status=FindingStatus.NEEDS_REVIEW,
+            evidence_refs=("LOC-state.py:1",),
+            title="Finding requiring R6 reconciliation",
+            classification=FindingClassification.ORDINARY_DEFECT,
+        )
+        workflow.record_finding(finding)
+        base_closure = {
+            "budget_used": {"agent_runs": 3},
+            "constraints_observed": [],
+            "unreviewed_scope": [],
+            "residual_risks": [],
+            "lessons": [],
+        }
+        with pytest.raises(ModelError, match="Finding reviews must exactly cover"):
+            workflow.close_r6(BatchClosure.from_dict(base_closure))
+
+        report = workflow.close_r6(BatchClosure.from_dict({
+            **base_closure,
+            "finding_reviews": [{
+                "finding_id": "FND-r6-review",
+                "state": "NEEDS_REVIEW",
+                "evidence_refs": [],
+                "rationale": "Classification and impact require independent review.",
+            }],
+        }))
+
+        assert report["gates"]["BG9"]["pass"] is True
+        assert report["finding_review_is_independent_human_review"] is False
+        assert report["finding_review_state_counts"] == {
+            "CONSISTENT": 0, "CONFLICT": 0, "NEEDS_REVIEW": 1,
+        }
     finally:
         manager.close()
 
@@ -200,6 +339,7 @@ def test_finding_cli_records_non_confirming_finding(tmp_path: Path, capsys: obje
         status=FindingStatus.NEEDS_REVIEW,
         evidence_refs=("EVID-static",),
         title="Static-only candidate retained for review",
+        classification=FindingClassification.ORDINARY_DEFECT,
     ))), encoding="utf-8")
 
     assert main([
@@ -681,6 +821,7 @@ def test_not_feasible_r5_is_required_unresolved_and_never_confirms(
                 status=FindingStatus.CONFIRMED,
                 evidence_refs=("EVID-missing-toolchain",),
                 title="infeasible experiment is not empirical confirmation",
+                classification=FindingClassification.ORDINARY_DEFECT,
             ))
 
         report = workflow.close_r6(BatchClosure(

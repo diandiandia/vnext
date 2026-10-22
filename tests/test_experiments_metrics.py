@@ -17,6 +17,8 @@ from reachable_audit.analysis_models import (
     Experiment,
     ExperimentFidelity,
     ExperimentResult,
+    HypothesisReview,
+    HypothesisReviewDisposition,
     Refutation,
     R5Assessment,
     R5Disposition,
@@ -95,6 +97,10 @@ def _ready_for_r5(
         CategoryRunStatus.COMPLETE,
         ("EVID-r4",), "all planned coverage executed",
         ("HYP-static",) if static_hypothesis else (), (),
+        (HypothesisReview(
+            "HYP-static", HypothesisReviewDisposition.NEEDS_REVIEW,
+            ("EVID-r4",), "retain the unresolved static hypothesis",
+        ),) if static_hypothesis else (),
     )])
     return manager, workflow
 
@@ -119,7 +125,7 @@ def test_inconclusive_proposed_experiment_may_omit_observations() -> None:
         "hypothesis_id": "HYP-1",
         "fidelity": "real_target",
         "result": "inconclusive",
-        "target_ref": "LOC-quickjs.c:1",
+        "target_ref": "LOC-src/example.c:1",
         "command_refs": ["proposed: run the harness after host approval"],
         "observation_refs": [],
         "rationale": "static-only round; execution awaits separate approval",
@@ -133,7 +139,7 @@ def test_confirmed_or_refuted_experiment_requires_observations() -> None:
         "experiment_id": "EXP-result",
         "hypothesis_id": "HYP-1",
         "fidelity": "real_target",
-        "target_ref": "LOC-quickjs.c:1",
+        "target_ref": "LOC-src/example.c:1",
         "command_refs": ["CMD-1"],
         "observation_refs": [],
         "rationale": "claimed result without observed evidence",
@@ -327,6 +333,10 @@ def test_r5_assessment_runs_as_durable_task(
             ) for axis in category_plan.discovery_axes),
             Applicability.APPLICABLE, CategoryRunStatus.COMPLETE,
             ("EVID-r4",), "all planned coverage executed", ("HYP-state",), (),
+            (HypothesisReview(
+                "HYP-state", HypothesisReviewDisposition.NEEDS_REVIEW,
+                ("EVID-r4",), "retain unresolved state candidate for R5",
+            ),),
         )])
         backend = ManualExecutionBackend(manager, "CMP-refute")
         coordinator = DiscoveryCoordinator(workflow, backend)

@@ -5,6 +5,10 @@ commit `beaef3b` plus working-tree repairs and `SYSTEM_DESIGN_VNEXT.md`. This re
 obligations with bounded current contracts. Missing target capabilities and known
 defects remain explicit; they have not been implemented or waived by this revision.
 
+Current traceability update (2026-10-22): SYSR-041 records the R2/R4/R6 cross-stage
+coverage contract and maps to SWDR-047. This update does not claim independent
+semantic validation or lifecycle-standard conformity.
+
 ## 1. Requirement Conventions
 
 - IDs `SYSR-###` are stable identifiers for this requirements baseline.
@@ -52,24 +56,27 @@ defects remain explicit; they have not been implemented or waived by this revisi
 | SYSR-031 | CG3 shall reconcile Surface identity/ownership, Work Unit axis review, references, and hypothesis/verdict IDs without requiring a hypothesis per Surface; R6 shall preserve a disposition for every R1 Surface. | §6 | SWDR-033 | Durable R6 collection requires exact one-to-one Surface-ID coverage; in-process closure projection defaults absent records to UNREVIEWED. R1 path claims and R6 Surface states are Agent declarations, not host-observed reading or safety evidence; path scope roles are stored separately in Plan. |
 | SYSR-032 | Supported task corrections and R6/skill-review revisions shall append history rather than overwrite artifacts; affected stage projections shall be recommitted before closure. | §3.4; §6 | SWDR-034 | R1-R6 pre-commit corrections and supported R1-R5 post-commit amendment/invalidation exist. Terminal R6 amendments require recommit while the Campaign is open. Revision-bound tasks and closure ancestry gates reject stale descendants; arbitrary host-input recomputation remains outside this contract. |
 | SYSR-033 | Workers shall claim filtered tasks, release leases, and use bounded retry authorization; collection shall validate supplied measurements against task budgets. | §3.4; §6 | SWDR-035 | Budgeted delegated-run counts and opt-in HMAC host-wrapper attestations are implemented. Host identity trust/key custody, provider-side reservation, and independent usage truth remain host/evaluator acceptance requirements. |
-| SYSR-034 | R5 shall use the implemented assessment states, retain infeasible required experiments as unresolved, and bind empirical upgrades to eligible managed-run artifacts. | §6 | SWDR-036 | NOT_FEASIBLE is recorded only for a required unattempted experiment with blocker evidence; it does not confirm or refute. Authorized external-observation registration and its independent provenance validation remain unimplemented. |
+| SYSR-034 | R5 shall use the implemented assessment states, retain infeasible required experiments as unresolved, and bind empirical upgrades to eligible managed-run artifacts. | §6 | SWDR-036 | NOT_FEASIBLE is recorded only for a required unattempted experiment with blocker evidence; it does not confirm or refute. External-observation registration verifies a host-authority HMAC and binds scope/artifact digests, but authority key custody and independent observer trust remain external. |
 | SYSR-035 | Handoffs shall support evidence-backed confirmation that a proposed edge is not a security boundary, distinct from unresolved review. | §5; §6 | SWDR-037 | Implemented |
 | SYSR-036 | Campaign closure lessons and skill-regression issues shall be separate, revisionable artifacts; writes shall never overwrite host-authored content without explicit replacement approval. | §3.4; §6 | SWDR-038 | Implemented |
 | SYSR-037 | Managed Campaign/state paths shall default to fresh history isolation and require explicit same-target follow-up sources. | §3.6; §6 | SWDR-039 | Managed history mode is enforced and RG13 checks signed provenance against task-input refs; actual host prompt/session isolation and independent verification of signer truth remain external. |
 | SYSR-038 | Closure shall derive screening/substantive Work Unit counts from axes/hypotheses and report an optional init-frozen screening ceiling. | §5; §6; §8 | SWDR-040 | RG14 validates digest-backed counts/fraction against the frozen ceiling and rejects overrides at release evaluation; Campaign closure does not block on a missing/exceeded ceiling. Agent-declared path risk tiers cross-tab Work Unit altitude but are not independently validated; authenticated override and host-observed inspection remain absent. |
 | SYSR-039 | R1/R3 stage validators shall distinguish call-chain/supporting anchors, check non-blank valid locations, and use indexed path lookup with stage-local line caches. | §3.3; §6 | SWDR-041 | R1 Surface and R3 location checks also run at collect. Not all stage-level semantic/reference checks run there; cross-task line caching and scale certification remain absent. |
 | SYSR-040 | Large Campaign event and Handoff processing shall provide indexed, batchable operations, preserve per-edge evidence/idempotency, and short-circuit zero-target stages without scanning unrelated work. | §3.4; §5; §9 | SWDR-042 | Partial; indexed queries, atomic bulk resolution, and empty-stage fast paths exist, but large-scale acceptance is outstanding |
+| SYSR-041 | R2 shall exactly reconcile source-anchored reviews for predeclared entrypoints; R4 shall review every scoped hypothesis and reconcile each existing applicable Finding; R6 shall review every recorded Finding and report R3.5/R4 disposition disagreements. | §6 | SWDR-047 | Implemented at identity, coverage, and reference scope. These are Agent assertions; evidence relevance, semantic correctness, and independent human review are not established. |
 
 ## 3. Software-Design Coverage Result
 
-Working-tree repairs on 2026-10-17 add fail-closed release policy, Campaign knowledge
-content binding, hotspot byte checks, latest-state cancellation, safe note revisions,
-and claim-complete usage accounting. The revised target contracts in software design
-section 1.1 still require full dependency invalidation, revision-aware late-candidate
-reopening, separated review/evidence coverage, and richer interface proofs. These are
-not waived by the narrower current contracts or the synthetic follow-up fixture.
+Working-tree repairs add fail-closed release policy, Campaign knowledge content binding,
+hotspot byte checks, latest-state cancellation, safe note revisions, claim-complete
+usage accounting, and revision-bound R1-R5 amendment invalidation. Broader targets in
+software design section 1.1 remain: automatic insertion/reopening of late candidates in
+committed stages; dependency invalidation for arbitrary host inputs beyond the managed
+task/stage revision graph; observed rather than Agent-declared reading evidence; and
+independent semantic validation of interface proofs. The narrower implemented contracts
+and synthetic follow-up fixture do not close those targets.
 
-All 40 IDs are retained and map to software requirements, which name software-design
+All 41 IDs are retained and map to software requirements, which name software-design
 sections and code/tests. This is document traceability, not complete verification or
 certification. Unchanged "Covered" entries indicate a mapped local mechanism, not a
 claim of real-project acceptance. The software requirements give implementation bounds.

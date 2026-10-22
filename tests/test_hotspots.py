@@ -73,6 +73,18 @@ def test_python_hotspot_provider_reports_empty_language_coverage(tmp_path: Path)
     assert report["candidate_count"] == 0
 
 
+def test_unimplemented_language_coverage_is_explicit(tmp_path: Path) -> None:
+    paths = ["Main.java", "main.go", "main.c", "main.cpp"]
+
+    report = scan_work_unit_hotspots(tmp_path, paths)
+
+    assert report["provider_status"] == "provider_unavailable"
+    assert report["scanned_paths"] == []
+    assert report["unsupported_paths"] == sorted(paths)
+    assert report["candidate_count"] == 0
+    assert report["included_count"] == 0
+
+
 def test_python_hotspots_ignore_unrelated_api_lookalikes(tmp_path: Path) -> None:
     (tmp_path / "app.py").write_text(
         "import logging\n"

@@ -12,6 +12,53 @@ The real-target pilot and release qualification procedure is in
 
 ## Ordered Work
 
+### 0. Repository-Owned Gaps and Evidence-First Work
+
+The following work is deliberately separated by what evidence can establish:
+
+| Work item | Current state | Next action |
+|---|---|---|
+| Offline migration residue policy | **Fixed in this iteration.** The migration tool no longer embeds a blacklist of historical project names; it requires a reviewer/evaluator-supplied token file and uses it for candidate exclusion and output validation. | Retain the explicit token input and pattern-based limitation; do not reintroduce project-specific defaults. Verify with TR-12. |
+| Finding classification gate and large-source preflight | **Locally implemented and covered by synthetic regression tests (TR-09).** The planner warns at the configured threshold; it does not measure R2 read coverage. A 2026-10-22 development audit completed one >1 MiB source-file R2 task, but also recorded helper-level recall gaps and Agent classifications that were not independently reviewed. | Do not treat structural Finding validation as semantic classification. In the next authorized pilot, predeclare helper entries under the current policy, reconcile actual R2/R6 dispositions, and independently review each security-impact declaration. Keep uncovered source explicitly unreviewed/deferred; do not infer line coverage from a completed task. |
+| Additional language hotspot providers (SWDR-031) | Python AST provider is active; other-language files are explicitly reported unsupported. | Before each provider is enabled, run the language-specific positive/negative/alias/malformed-source fixture matrix and review a representative held-out sample for candidate coverage and precision. Do not treat fixture success as real-target qualification. |
+| Large-source R2 slicing and completeness claims (N-6) | Preflight warning and bounded-read guidance exist; no line-range coverage ledger or automatic slicing contract exists. | First measure an authorized representative large file's task input size, runtime, context use, candidate/evidence distribution, and full-scope result. Then specify slices and reconciliation rules from observed failure modes; add regression tests before implementing them. |
+| Automatic cross-language boundary discovery (SWDR-010) | Typed boundary records, build/import proposals, owner review, and Handoff proof exist; automatic FFI/RPC/IPC/serialization discovery is incomplete. | First inventory real boundary mechanisms and observed misses in an authorized mixed-language target. Define framework-specific evidence and false-positive expectations before adding detectors. |
+| Host identity/key custody, provider-enforced hard limits, authority keys, and independent held-out release evidence | Repository mechanisms are partial or intentionally rely on external authorities. | Remain blocked on the named host, provider, or evaluation authority; repository-only code and mocks cannot close these items. |
+
+This table is the implementation decision: TR-09 is the locally implementable
+repository-owned work completed in this iteration; the remaining capability gaps either
+need target-specific evidence before their behavior can be specified safely or require
+external authority. Development-only pilots may proceed under
+[REAL_CODE_AUDIT_TEST_PLAN_VNEXT.md](REAL_CODE_AUDIT_TEST_PLAN_VNEXT.md) without claiming
+release qualification.
+
+#### Latest real-target evidence and version boundary
+
+The 2026-10-22 development audit evidence bundle is digest-verified and records
+engine `5d7dd33` plus the TR-09 worktree, policy `vnext-task-policy-37`, and one
+completed Batch from a larger mixed-language source snapshot. R2 completed in 532
+seconds on a source file larger than 1 MiB and emitted nine hypotheses. This is useful
+evidence that the advisory preflight can be followed by a successful task in one case;
+it does not establish complete file coverage, general large-file capacity, full-project
+coverage, or a 20GB+ recovery result.
+
+The same run recorded 61 R1 Surfaces across a 39-file Batch, but only 17 files had an
+R1 Surface; R2 evidence was concentrated in seven files, and R6 left 23 Surfaces
+UNREVIEWED. Predeclared helper checks found missed iterator-helper, JSON, evaluation,
+and examples boundary paths. R4 included a semantically off-target category rationale.
+The Finding structure accepted security-impact declarations whose classification was
+subsequently questioned; independent human review was not performed, and no dynamic
+experiment ran. The second Batch was not started. Treat these as explicit limitations,
+not full-audit success or proof that any finding is exploitable.
+
+This evidence predates the current `vnext-task-policy-38` R2/R4/R6 cross-stage
+traceability contract. Therefore it neither validates nor invalidates that newer
+contract. The next development pilot should execute `RTA-38-LARGE-01` from
+[REAL_CODE_AUDIT_TEST_PLAN_VNEXT.md](REAL_CODE_AUDIT_TEST_PLAN_VNEXT.md) against the
+current engine, with predeclared helper IDs, exact task outputs, reconciled unreviewed
+scope, measured per-Batch capacity, and separately recorded human review of
+security-impact claims.
+
 ### 1. Stage Revision, Invalidation, and Recovery
 
 Status: **LOCAL IMPLEMENTATION AND SYNTHETIC ACCEPTANCE COMPLETE**. R1-R5 projection
@@ -136,16 +183,37 @@ independent held-out labels. Real project access, evaluator authority signatures
 host-read proof, and large-run capacity are external evidence; local synthetic tests cannot
 mark these gates complete.
 
+### 7. Cross-Stage Coverage and Finding Reconciliation
+
+Status: **LOCAL CONTRACT AND SYNTHETIC REGRESSION TESTS IMPLEMENTED; SEMANTIC REVIEW
+REMAINS AGENT/OPERATOR WORK**. R2 scheduling requires an explicit JSON checklist for
+predeclared entrypoints, including an explicit empty array when none are known. Task
+collection and stage commit require exact per-axis reviews with source anchors. R4 task
+inputs include the scoped hypotheses and existing Findings; CategoryRuns must provide
+one evidence-linked disposition per hypothesis and reconcile each applicable Finding.
+R6 receives the canonical Finding set, requires one review per Finding, and reports
+R3.5/R4 disposition disagreements and review-state counts. Reports explicitly state
+that these reviews are Agent assertions, not independent human validation.
+
+Acceptance: compact and per-axis R2 reject missing/duplicate/extra checklist IDs and
+wrong source anchors; R4 individual and bundled tasks reject incomplete or cross-scope
+hypothesis/Finding reviews; R6 rejects incomplete or duplicate Finding reviews and
+preserves disagreement details in closure output. Evidence-reference and schema checks
+do not verify semantic relevance, exploitability, or the truth of Agent assertions.
+The host runner must deliver the task input and output contract unchanged; representative
+real-target recall and independent human review remain external evidence.
+
 ## Current Test Gates
 
-The latest full local verification after stage provenance, invalidation, revision-bound
-tasks, closure ancestry, compact R4 v2 wire, delegated-budget reservations, host
-attestation expiry/replay, R5 report provenance, Phase 5 CLI/gate decomposition, and Phase
-6 synthetic scale fixtures, generality/knowledge repairs, and recall/runbook regression
-changes is **349 passed, 1 skipped** on `a3b969c` plus the 2026-10-20 review changes;
-compatibility-scan passes with no
-findings (49 Python files, 167 knowledge files, 1 prompt file). Phase 1 and Phase 5 local
-acceptance tests pass; real-host behavior remains unverified until release qualification.
+After the TR-12 offline migration residue-policy change, the focused migration/CLI/
+experiment tests passed **45 tests** and the full suite passed **359 tests with 1
+skipped in 42.96 seconds** with pytest plugin auto-loading disabled to avoid shared-host
+memory pressure. A preceding default-plugin full-suite attempt was terminated by
+SIGKILL (exit 137); the successful rerun is the verification result. The skipped
+held-out test requires a protected manifest not configured locally. The latest
+compatibility scan passes with no findings (49 Python files, 167 knowledge files,
+1 prompt file); syntax, CLI help, Markdown links, and `git diff --check` pass. These
+are working-tree checks, not a clean-commit or real-host qualification.
 
 Phase 2 local gates now cover v1 compatibility, v2 compact multi-item serialization,
 measured byte reduction, repairability after invalid references, and canonical R4 reports.

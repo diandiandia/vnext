@@ -112,6 +112,13 @@ def test_cli_runs_runtime_compatibility_scan(capsys: object) -> None:
     assert report["findings"] == []
 
 
+def test_runtime_prompt_has_no_historical_target_example() -> None:
+    root = Path(__file__).resolve().parents[1]
+    report = scan_runtime_compatibility(root, ["HistoricalTarget"])
+
+    assert report["passed"] is True
+
+
 def test_runtime_deproject_scan_rejects_operator_supplied_token(tmp_path: Path) -> None:
     profile = tmp_path / "knowledge" / "profiles" / "sample.json"
     profile.parent.mkdir(parents=True)
@@ -452,6 +459,71 @@ def test_cli_plan_accepts_path_dispositions_and_reports_them(
     ] == ["included.py"]
 
 
+def test_cli_plan_flags_large_r2_source_files_without_silent_size_fallback(
+    tmp_path: Path, capsys: object,
+) -> None:
+    target = tmp_path / "large-source-target"
+    target.mkdir()
+    large_source = target / "large.c"
+    large_source.write_bytes(b"int value;\n" * ((1024 * 1024 // 11) + 2))
+
+    assert main([
+        "init", str(target), "--snapshot-id", "fixture:large-source",
+        "--campaign-id", "CMP-large-source",
+    ]) == 0
+    capsys.readouterr()  # type: ignore[attr-defined]
+    assert main(["inventory", str(target), "CMP-large-source"]) == 0
+    capsys.readouterr()  # type: ignore[attr-defined]
+    assert main(["graph", str(target), "CMP-large-source"]) == 0
+    capsys.readouterr()  # type: ignore[attr-defined]
+    assert main([
+        "plan", str(target), "CMP-large-source", "--categories", "MEMORY-SAFETY",
+    ]) == 0
+    result = json.loads(capsys.readouterr().out)  # type: ignore[attr-defined]
+
+    assert len(result["r2_large_source_files"]) == 1
+    warning = result["r2_large_source_files"][0]
+    assert warning["path"] == "large.c"
+    assert warning["size_bytes"] == large_source.stat().st_size
+    assert warning["work_unit_id"]
+    assert warning["warning_threshold_bytes"] == 1024 * 1024
+    assert "approved scope decision" in warning["action"]
+    assert result["batch_summaries"][0]["source_bytes"] == large_source.stat().st_size
+
+
+def test_cli_plan_surfaces_source_size_lookup_errors(
+    tmp_path: Path, capsys: object, monkeypatch: object,
+) -> None:
+    target = tmp_path / "unreadable-size-target"
+    target.mkdir()
+    source = target / "main.py"
+    source.write_text("print('ok')\n", encoding="utf-8")
+    assert main([
+        "init", str(target), "--snapshot-id", "fixture:size-error",
+        "--campaign-id", "CMP-size-error",
+    ]) == 0
+    capsys.readouterr()  # type: ignore[attr-defined]
+    assert main(["inventory", str(target), "CMP-size-error"]) == 0
+    capsys.readouterr()  # type: ignore[attr-defined]
+    assert main(["graph", str(target), "CMP-size-error"]) == 0
+    capsys.readouterr()  # type: ignore[attr-defined]
+
+    original_stat = Path.stat
+
+    def fail_source_stat(path: Path, *args: object, **kwargs: object):
+        if path == source:
+            raise OSError("injected stat failure")
+        return original_stat(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "stat", fail_source_stat)
+    assert main([
+        "plan", str(target), "CMP-size-error", "--categories", "STATE",
+    ]) == 2
+    assert "cannot measure planned source file size: main.py" in (
+        capsys.readouterr().err  # type: ignore[attr-defined]
+    )
+
+
 def test_cli_writes_shadow_evaluation_report(
     tmp_path: Path, capsys: object, monkeypatch: object
 ) -> None:
@@ -570,10 +642,12 @@ def test_default_r2_cli_schedules_one_compact_task_per_work_unit(
     workflow.run_r0()
     workflow.record_r1([])
     manager.close()
+    checklist = tmp_path / "entrypoint-checklist.json"
+    checklist.write_text("[]", encoding="utf-8")
 
     assert main([
         "task-schedule-r2", str(tmp_path), "CMP-r2-cli-compact",
-        plan.batches[0].batch_id,
+        plan.batches[0].batch_id, "--entrypoint-checklist", str(checklist),
     ]) == 0
     task_output = json.loads(capsys.readouterr().out)  # type: ignore[attr-defined]
 

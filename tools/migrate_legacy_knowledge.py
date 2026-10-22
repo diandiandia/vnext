@@ -9,7 +9,7 @@ import hashlib
 import json
 from pathlib import Path
 import re
-from typing import Any
+from typing import Any, Sequence
 
 
 LANGUAGES = (
@@ -26,16 +26,6 @@ _SEVERE_CWES = {
     "787", "125", "416", "415", "476", "190", "129", "843", "78",
     "94", "77", "502", "191",
 }
-_PROJECT_TOKENS = (
-    "gpac", "freetype", "s2n-tls", "nghttp2", "libarchive", "frameworks/av",
-    "nacos", "tomcat", "mbedtls", "jsrsasign", "puma", "elasticsearch",
-    "pillow", "flutter", "protobuf", "zookeeper", "kafka", "shardingsphere",
-    "aiohttp", "gson", "libpng", "libjpeg", "libvpx", "aom", "media3",
-    "quic-go", "pyjwt", "quarkus", "phpseclib", "cosign", "etcd", "sinatra",
-    "lighttpd", "django", "nestjs", "ktor", "actix", "webrick", "usb-storage",
-    "dummy_hcd", "nciemp", "quickjs", "qjs", "bjson", "awstats", "v8",
-    "webkit", "firefox", "chrome", "maintainwise", "cand-",
-)
 _SOURCE_REFINEMENTS = {
     ("cpp", "INV-cpp-003"): {
         "refinement_id": "cpp-async-lifetime-contract-v1",
@@ -284,12 +274,14 @@ def _source_digest_basis(entry: dict[str, Any]) -> dict[str, Any]:
     return {field: entry[field] for field in fields if field in entry}
 
 
-def _portable(entry: dict[str, Any]) -> bool:
+def _portable(entry: dict[str, Any], forbidden_tokens: Sequence[str]) -> bool:
     text = json.dumps({
         key: entry.get(key, "")
         for key in ("title", "pattern", "sink_hint", "pitfall", "family", "cwe")
     }, ensure_ascii=False).lower()
-    return not any(token in text for token in _PROJECT_TOKENS)
+    return not any(
+        token.strip().lower() in text for token in forbidden_tokens if token.strip()
+    )
 
 
 def _source_evidence(entry: dict[str, Any]) -> str:
@@ -547,14 +539,19 @@ def _issue_and_card(
     return issue, card, {provenance_id: provenance}
 
 
-def migrate(inventory: dict[str, Any], version: str, approved: bool) -> tuple[dict[str, Any], dict[str, Any]]:
+def migrate(
+    inventory: dict[str, Any],
+    version: str,
+    approved: bool,
+    forbidden_tokens: Sequence[str],
+) -> tuple[dict[str, Any], dict[str, Any]]:
     entries = inventory.get("entries")
     if not isinstance(entries, list):
         raise ValueError("source inventory has no entries array")
     by_language: dict[str, list[dict[str, Any]]] = {language: [] for language in _SOURCE_LANGUAGES}
     for entry in entries:
         language = str(entry.get("lang", ""))
-        if language in by_language and _portable(entry):
+        if language in by_language and _portable(entry, forbidden_tokens):
             prepared = _prepare_source_entry(language, entry)
             if prepared is not None:
                 by_language[language].append(prepared)
@@ -584,7 +581,7 @@ def migrate(inventory: dict[str, Any], version: str, approved: bool) -> tuple[di
         )
         excluded = [
             entry for entry in entries
-            if entry.get("lang") == language and not _portable(entry)
+            if entry.get("lang") == language and not _portable(entry, forbidden_tokens)
         ]
         if len(candidates) < 10:
             raise ValueError(
@@ -652,7 +649,7 @@ def migrate(inventory: dict[str, Any], version: str, approved: bool) -> tuple[di
         "evidence_states": {"seeded": len(ts_profile)},
         "excluded_for_project_tokens": [],
     }
-    _validate_runtime_payloads(draft)
+    _validate_runtime_payloads(draft, forbidden_tokens)
     return draft, report
 
 
@@ -660,11 +657,16 @@ def family_path(family: str) -> str:
     return family.lower().replace("_", "-")
 
 
-def _validate_runtime_payloads(files: dict[str, Any]) -> None:
+def _validate_runtime_payloads(
+    files: dict[str, Any], forbidden_tokens: Sequence[str],
+) -> None:
     approved = files["portfolio.json"]["approval_state"] == "approved"
     for path, value in files.items():
         encoded = json.dumps(value, ensure_ascii=False).lower()
-        if any(token in encoded for token in _PROJECT_TOKENS):
+        if any(
+            token.strip().lower() in encoded
+            for token in forbidden_tokens if token.strip()
+        ):
             raise ValueError(f"project-specific token remains in generated runtime asset: {path}")
         if not approved and "review_status" in value and value["review_status"] == "approved":
             raise ValueError("draft migration cannot create approved child assets")
@@ -697,6 +699,15 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--inventory", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument(
+        "--forbidden-tokens-file",
+        type=Path,
+        required=True,
+        help=(
+            "reviewer/evaluator-supplied residue tokens, one per line; "
+            "an empty file explicitly means no additional tokens"
+        ),
+    )
     parser.add_argument("--version", default="knowledge-v1")
     parser.add_argument(
         "--replace-existing-catalog", action="store_true",
@@ -720,7 +731,12 @@ def main() -> int:
                 f"{current_version!r} != {args.version!r}"
             )
     inventory = json.loads(args.inventory.read_text(encoding="utf-8"))
-    files, report = migrate(inventory, args.version, args.publish_reviewed)
+    forbidden_tokens = args.forbidden_tokens_file.read_text(
+        encoding="utf-8"
+    ).splitlines()
+    files, report = migrate(
+        inventory, args.version, args.publish_reviewed, forbidden_tokens
+    )
     if args.replace_existing_catalog:
         _remove_stale_generated_cards(args.output, files, list(LANGUAGES))
     for relative_path, value in files.items():

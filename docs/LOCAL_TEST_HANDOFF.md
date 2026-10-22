@@ -1,8 +1,13 @@
 # Local Debug and Test Handoff
 
-Prepared: 2026-10-17. This is a local repair-validation handoff, not release
-certification. Use the committed source checkout, not an older installed skill.
-No real target audit is started by these instructions automatically.
+Prepared: 2026-10-17. **Historical local repair-validation handoff**, not the current
+test plan or release certification. Its target-specific report references and local
+paths are retained as historical evidence only; they are not runtime audit guidance.
+For current verification requirements, use
+[TEST_PLAN_VNEXT.md](design/TEST_PLAN_VNEXT.md) and
+[IMPLEMENTATION_COMPLETION_PLAN.md](design/IMPLEMENTATION_COMPLETION_PLAN.md).
+Use the checked-out source, not an older installed skill. No real target audit is
+started by these instructions automatically.
 
 ## 1. Pin the Build
 

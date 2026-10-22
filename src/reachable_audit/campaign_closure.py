@@ -743,6 +743,16 @@ class CampaignCloser:
         surface_review_state_counts = _counts(
             item["state"] for item in surface_review_dispositions
         )
+        finding_review_state_counts = _counts(
+            str(item["state"])
+            for batch_report in batch_reports
+            for item in batch_report.get("finding_reviews", [])
+        )
+        r4_r3_disagreements = [
+            {"batch_id": batch_id, **item}
+            for batch_id, batch_report in sorted(batch_reports_by_id.items())
+            for item in batch_report.get("r4_r3_disagreements", [])
+        ]
         path_review_altitude_counts = _counts(
             item["altitude"] for item in path_review_claims
         )
@@ -1165,8 +1175,23 @@ class CampaignCloser:
                 for axis in sorted({item["axis"] for item in discovery_axis_runs})
             },
             "findings": merged_findings,
+            "finding_classification_counts": _counts(
+                str(item.get("classification", "INSUFFICIENT_EVIDENCE"))
+                for item in merged_findings
+            ),
+            "confirmed_security_vulnerability_count": sum(
+                item.get("classification") == "SECURITY_VULNERABILITY"
+                and item.get("status") == "CONFIRMED"
+                for item in merged_findings
+            ),
+            "finding_classification_basis": (
+                "Agent-declared structure and evidence links; not independent human "
+                "validation of impact, exploitability, or severity."
+            ),
             "surface_review_dispositions": surface_review_dispositions,
             "surface_review_state_counts": surface_review_state_counts,
+            "finding_review_state_counts": finding_review_state_counts,
+            "r4_r3_disagreements": r4_r3_disagreements,
             "not_feasible_experiment_hypothesis_ids": sorted(
                 item["hypothesis_id"]
                 for item in r5_assessments
@@ -1364,6 +1389,15 @@ class CampaignCloser:
         evidence_counts = _counts(
             str(finding.get("evidence_grade", "UNKNOWN")) for finding in findings
         )
+        classification_counts = _counts(
+            str(finding.get("classification", "INSUFFICIENT_EVIDENCE"))
+            for finding in findings
+        )
+        confirmed_security_vulnerability_count = sum(
+            finding.get("classification") == "SECURITY_VULNERABILITY"
+            and finding.get("status") == "CONFIRMED"
+            for finding in findings
+        )
         sorted_findings = sorted(
             findings,
             key=lambda finding: (
@@ -1397,8 +1431,16 @@ class CampaignCloser:
             f"{report.get('screening_coverage', {}).get('ceiling_status', 'not recorded')}",
             "",
             "## 1. Audit Summary", "",
-            f"- Findings: {len(findings)}",
-            "- Severity: " + ", ".join(
+            f"- Findings (all classifications): {len(findings)}",
+            f"- Agent-classified confirmed security vulnerabilities: "
+            f"{confirmed_security_vulnerability_count}",
+            "- Classification basis: Agent-declared structure and evidence links; "
+            "not independent human validation of impact, exploitability, or severity.",
+            "- Finding classification: " + ", ".join(
+                f"{classification} {count}"
+                for classification, count in sorted(classification_counts.items())
+            ) if classification_counts else "- Finding classification: None",
+            "- Agent-assessed severity (all classifications): " + ", ".join(
                 f"{severity} {severity_counts.get(severity, 0)}"
                 for severity in severity_order[:-1]
             ),
@@ -1414,6 +1456,22 @@ class CampaignCloser:
         lines.extend(
             f"- {name}: {count}" for name, count in coverage.items()
         )
+        if report.get("finding_review_state_counts"):
+            lines.extend([
+                "",
+                "### Finding Reconciliation",
+                "",
+                "- Batch closure records an Agent consistency check, not independent "
+                "human review.",
+                "- Review states: " + ", ".join(
+                    f"{state} {count}"
+                    for state, count in sorted(
+                        report["finding_review_state_counts"].items()
+                    )
+                ),
+                f"- R3.5/R4 disposition disagreements: "
+                f"{len(report.get('r4_r3_disagreements', []))}",
+            ])
         lines.extend([
             "",
             "### Declared Path Review",
@@ -1550,13 +1608,14 @@ class CampaignCloser:
         )
         lines.extend(["", "## 2. Findings Overview", ""])
         lines.extend([
-            "| Severity | Finding ID | Status | Issue | Root cause |",
-            "|---|---|---|---|---|",
+            "| Severity | Classification | Finding ID | Status | Issue | Root cause |",
+            "|---|---|---|---|---|---|",
         ])
         if sorted_findings:
             lines.extend(
                 "| " + " | ".join((
                     severity_of(finding),
+                    cell(finding.get("classification", "INSUFFICIENT_EVIDENCE")),
                     cell(finding.get("finding_id", "unknown")),
                     cell(finding.get("status", "UNKNOWN")),
                     cell(finding.get("title", "Untitled finding")),
@@ -1565,7 +1624,7 @@ class CampaignCloser:
                 for finding in sorted_findings
             )
         else:
-            lines.append("| - | - | - | No findings recorded. | - |")
+            lines.append("| - | - | - | - | No findings recorded. | - |")
 
         lines.extend(["", "## 3. Detailed Findings by Severity", ""])
         for severity in severity_order[:-1]:

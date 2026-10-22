@@ -841,6 +841,7 @@ def test_markdown_report_summarizes_and_details_findings_by_severity() -> None:
         "findings": [
             {
                 "finding_id": "FND-low",
+                "classification": "ORDINARY_DEFECT",
                 "severity": "LOW",
                 "status": "CONFIRMED",
                 "evidence_grade": "edge_proven",
@@ -854,6 +855,7 @@ def test_markdown_report_summarizes_and_details_findings_by_severity() -> None:
             },
             {
                 "finding_id": "FND-critical",
+                "classification": "SECURITY_VULNERABILITY",
                 "severity": "CRITICAL",
                 "status": "CONFIRMED",
                 "evidence_grade": "empirically_confirmed",
@@ -871,6 +873,7 @@ def test_markdown_report_summarizes_and_details_findings_by_severity() -> None:
             },
             {
                 "finding_id": "FND-high",
+                "classification": "INSUFFICIENT_EVIDENCE",
                 "severity": "HIGH",
                 "status": "NEEDS_REVIEW",
                 "evidence_grade": "edge_proven",
@@ -884,6 +887,7 @@ def test_markdown_report_summarizes_and_details_findings_by_severity() -> None:
             },
             {
                 "finding_id": "FND-medium",
+                "classification": "HARDENING",
                 "severity": "MEDIUM",
                 "status": "CONFIRMED",
                 "evidence_grade": "edge_proven",
@@ -906,12 +910,20 @@ def test_markdown_report_summarizes_and_details_findings_by_severity() -> None:
     }
 
     markdown = CampaignCloser._markdown(report)
+    assert "- Agent-classified confirmed security vulnerabilities: 1" in markdown
+    assert "not independent human validation" in markdown
+    assert "ORDINARY_DEFECT 1" in markdown
+    assert "HARDENING 1" in markdown
+    assert "INSUFFICIENT_EVIDENCE 1" in markdown
+    assert "Agent-assessed severity (all classifications)" in markdown
     details = markdown.split("## 3. Detailed Findings by Severity", 1)[1]
 
     assert "## 1. Audit Summary" in markdown
     assert "## 2. Findings Overview" in markdown
     assert "CRITICAL 1, HIGH 1, MEDIUM 1, LOW 1" in markdown
     assert "NEEDS_REVIEW 1" in markdown
+    assert "| CRITICAL | SECURITY_VULNERABILITY | FND-critical | CONFIRMED |" in markdown
+    assert "| LOW | ORDINARY_DEFECT | FND-low | CONFIRMED |" in markdown
     assert "Controlled input crosses the destination bound." in markdown
     assert "LOC-src/critical.c:42" in markdown
     assert details.index("### Critical") < details.index("### High")

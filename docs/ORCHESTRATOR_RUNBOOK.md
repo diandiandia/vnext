@@ -94,23 +94,24 @@ missing prerequisites or budget blocks.
 
 For every durable task stage: schedule, claim compatible tasks, perform real source
 analysis, collect each validated output, then commit. A task success is not a stage
-commit. Use `--help` for the exact arguments; the complete command catalog is in
-[the skill](../SKILL.md).
+commit. Use `vnext --help` for the exact CLI command arguments. The skill's
+[stage contracts](../SKILL.md#detailed-stage-contracts) describe host-side constraints;
+this runbook provides the lifecycle and recovery guide.
 
 | Stage | Prerequisite / purpose | Normal command pair | Completion / recovery |
 |---|---|---|---|
 | Preparation | Approved snapshot, inventory, graph and plan | `init`, `inventory`, `graph`, `plan` | Review included/excluded/deferred paths, languages, families, Work Units and Handoff ownership; do not narrow scope silently |
 | R0 | Planned Batch, frozen source | `r0` | Validate baseline; drift requires restoration or a new Campaign |
 | R1 | R0, scoped Work Units | `task-schedule-r1`, `task-commit-r1` | Exact source coverage, real Surface anchors, supplied boundary reviews, review altitude |
-| R2 | Current R1 | `task-schedule-r2`, `task-commit-r2` (compact) OR matching `-per-axis` pair | All six axes with evidenced applicability; do not mix scheduling modes |
+| R2 | Current R1 | `task-schedule-r2`, `task-commit-r2` (compact) OR matching `-per-axis` pair; schedule with `--entrypoint-checklist <json>` | All six axes with evidenced applicability and exact reviews of predeclared entrypoints; do not mix scheduling modes |
 | R3 | Current R2 hypotheses | `task-schedule-r3`, `task-commit-r3` | Source-backed reachability/blocking evidence; uncertain paths stay NEEDS_REVIEW |
 | R3.5 refutation | Eligible current R3 evidence | `task-schedule-r35-refutations`, `task-commit-r35-refutations` | Independent counteranalysis with actual evidence |
 | R3.5 adjudication | Collected refutations | `task-schedule-r35-adjudications`, `task-commit-r35-adjudications` | Reconcile claims and counterevidence, not reviewer labels alone |
 | R3.5 revival | Current R2/R3 and recorded selection | `task-schedule-r35-revivals`, `task-commit-r35-revivals` | Default selects every initial UNREACHABLE verdict unless selection was already recorded; preserve valid rejection |
-| R4 | Current required prior stages and category plans | `task-schedule-r4`, `task-commit-r4` | One canonical CategoryRun per plan, exact axes/variants; no finding quota |
+| R4 | Current required prior stages and category plans | `task-schedule-r4`, `task-commit-r4` | One canonical CategoryRun per plan, exact axes/variants, hypothesis-by-hypothesis dispositions and applicable Finding reconciliation; no finding quota |
 | R5 | Current verdicts and applicable experimental evidence | `task-schedule-r5`, `task-commit-r5` | Registered managed evidence for empirical upgrades; honest infeasibility/uncertainty |
 | Finding | Adjudicated evidence and required R5 support | Explicit finding commands from CLI help | Canonical finding workflow, not invented R4 finding IDs |
-| R6 | Required Batch artifacts and scope reconciliation | `task-schedule-r6`, `task-commit-r6` | Surface states, residual risks, actual coverage, skill issues and Batch gates |
+| R6 | Required Batch artifacts and scope reconciliation | `task-schedule-r6`, `task-commit-r6` | Surface states, one review per recorded Finding, residual risks, actual coverage, skill issues and Batch gates |
 | Handoffs | Declared boundary, source/receiver ownership and evidence | `handoff-resolve`, `handoff-integrate` | Both endpoint evidence and matching joins; report unresolved/undiscovered boundary limitations |
 | Campaign | All required Batches/Handoffs reconciled | `campaign-close` | CG1-CG10, explicit unreviewed dispositions and cleanup; not proof of exhaustive safety |
 
@@ -153,6 +154,20 @@ dispositions in the run rationale; these links do not claim that every candidate
 is a vulnerability. An empty list is valid only when there are no scoped candidates.
 The same rule applies to bundled tasks and direct R4 submission. Late candidates
 remain explicit unresolved follow-up items, not invented IDs.
+
+R2 compact and per-axis scheduling require an explicit JSON entrypoint checklist;
+use `[]` when no items were predeclared. Each checklist item binds an ID to one
+Work Unit, discovery axis, description and current-source anchor. The corresponding
+AxisRun must review each applicable ID exactly once and cite its declared anchor.
+This improves recall of known helpers; it is not an exhaustive entrypoint census.
+
+For every allowed R4 hypothesis, emit one `hypothesis_reviews` disposition with evidence
+and rationale. Also reconcile each previously recorded Finding exactly once in the
+applicable CategoryRun. At R6, provide one `finding_reviews` decision per canonical
+Finding. The closure report exposes findings needing review and R3.5/R4 disposition
+disagreements. These records are worker assertions enforced for identity/coverage and
+resolvable references; they are not independent human semantic validation. Inspect the
+referenced evidence before relying on the classification or reconciliation.
 
 For a proposed but unexecuted R5 experiment, retain identity, target, proposed
 command and rationale; use `result=inconclusive`, `observation_refs=[]`, and

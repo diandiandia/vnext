@@ -5,6 +5,10 @@ description: "Audit authorized source repositories for reachable security vulner
 
 # Reachable Critical Audit vNext
 
+Use this skill for authorized security audits of source repositories, especially
+large or mixed-language projects. It is not a general-purpose code review skill,
+standalone analyzer, or release certification.
+
 ## Current Capability
 
 This skill targets the approved Top15-language / Top10-issue portfolio for large,
@@ -177,6 +181,31 @@ task leased and return an actionable `ModelError` rather than failing later duri
 Each R2 hypothesis ID must be `HYP-<work_unit_id>-<origin_axis>-<positive ordinal>`;
 number ordinals independently within each Work Unit/axis. This makes IDs unique across
 R2 tasks without post-hoc renaming.
+Both R2 scheduling commands require `--entrypoint-checklist <json-file>`. The file is
+an array of predeclared checks with `entrypoint_id`, `work_unit_id`, `required_axis`,
+`description`, and one or more current-source `source_refs`; use `[]` to explicitly
+declare that there are no predeclared entrypoints. For every checklist entry, the matching
+R2 AxisRun must contain exactly one `entrypoint_reviews` item with the same ID, an
+`ANALYZED`, `NO_CANDIDATE`, `DEFERRED`, or `NOT_APPLICABLE` disposition, evidence refs
+including a declared source anchor, and a rationale. This is a recall checklist, not an
+exhaustive inventory or proof of file-read completeness.
+
+Example checklist item (use the actual Work Unit ID and source anchor from the current
+Campaign; do not copy these illustrative values):
+
+```json
+[
+  {
+    "entrypoint_id": "request-handler",
+    "work_unit_id": "WU-from-plan",
+    "required_axis": "surface",
+    "description": "Trace the request handler and its dispatch path",
+    "source_refs": ["LOC-src/example.py:42"]
+  }
+]
+```
+
+If the file contains no predeclared items, its complete contents are `[]`.
 `configuration` may report `model_id`, `runtime_version`, and
 `host_tool_policy_digest` (`sha256:<64 lowercase hex>`) when the host exposes them; never
 invent host values. The runtime always adds its own deterministic `vnext_policy_digest`.
@@ -184,39 +213,26 @@ Missing host metadata does not block task collection, but is recorded in the Cam
 report and prevents release certification until the evaluation authority supplies the
 attestation.
 
-Successful R1 output:
+Submit the exact wrapper and stage payload required by the claimed task's `output_contract`; that contract, not a copied example, is authoritative.
 
-```json
-{
-  "succeeded": true,
-  "summary": "reviewed every scoped source file",
-  "measurements": {"agent_runs": 1, "wall_seconds": 4},
-  "configuration": {
-    "model_id": "host-reported-model-id",
-    "runtime_version": "host-runtime-version",
-    "host_tool_policy_digest": "sha256:<64-lowercase-hex>"
-  },
-  "output": {
-    "schema_version": "1.0",
-    "reviewed_scope": "ALL_SOURCE_FILES",
-    "surfaces": [{
-      "surface_id": "SURF-stable-id",
-      "work_unit_id": "WU-from-task",
-      "component_id": "COMP-from-task",
-      "kind": "http_handler",
-      "entry_path": "src/example.py",
-      "entry_symbol": "handle",
-      "principal": "remote_unauthenticated",
-      "evidence_refs": ["LOC-src/example.py:42"]
-    }],
-    "boundary_reviews": []
-  }
-}
-```
+After `task-commit-r1`, use compact R2 by default for Work Units that fit the host's
+measured context and time budgets: one task per Work Unit contains all six discovery
+axes, reducing claim/collect round trips. For unusually large or long source files,
+prefer per-axis tasks and bounded line-range/symbol reads rather than a full-file dump;
+this isolates axis context but does not partition the source or guarantee scalability.
+The `plan` result flags individual included source files at or above 1 MiB in
+`r2_large_source_files`; this is a preflight warning, not a runtime-enforced capacity
+limit or proof that smaller files will fit. The runtime validates file-level
+declarations, not read ranges or complete physical inspection. If the host cannot
+inspect a Work Unit's source within its limits, do not claim that it reviewed the
+source. Stop and use an approved scope decision to defer the affected path, or record
+an explicit task blocker and arrange a separately reconciled follow-up. Do not create
+sliced copies and present them as the original snapshot. Large-source capability is
+not established by the preflight warning or by synthetic tests; consult the
+[real-target test plan](./docs/design/REAL_CODE_AUDIT_TEST_PLAN_VNEXT.md) for the
+required measurement and qualification boundary.
 
-After `task-commit-r1`, use compact R2 by default: one task per Work Unit contains all
-six discovery axes, reducing claim/collect round trips. Use the per-axis mode only when
-separate workers or context isolation materially helps. In either mode, every axis must
+In either R2 mode, every axis must
 return an evidenced `AxisRun` disposition (`APPLICABLE`, `NOT_APPLICABLE`, or `DEFERRED`);
 an inapplicable/deferred axis cannot emit hypotheses. Every hypothesis must use the task's
 Work Unit and origin axis, reference known
@@ -224,23 +240,7 @@ Surfaces when applicable, stay within planned mechanism families, and state a
 falsifiable security claim. Submit failures with `succeeded: false`, no `output`, and a
 specific summary; failed or missing tasks block commit.
 
-Successful compact R2 `output` (all six axes are required):
-
-```json
-{
-  "schema_version": "1.0",
-  "reviewed_scope": "ALL_SOURCE_FILES",
-  "axis_runs": [
-    {"axis":"surface","applicability":"NOT_APPLICABLE","evidence_refs":["LOC-src/example.py:1"],"rationale":"no additional surface-axis hypothesis in this scoped review"},
-    {"axis":"mechanism","applicability":"NOT_APPLICABLE","evidence_refs":["LOC-src/example.py:1"],"rationale":"no mechanism candidate in this scoped review"},
-    {"axis":"state","applicability":"APPLICABLE","evidence_refs":["LOC-src/example.py:60"],"rationale":"reviewed lifecycle and state transitions"},
-    {"axis":"fix_variant","applicability":"NOT_APPLICABLE","evidence_refs":["LOC-src/example.py:1"],"rationale":"no relevant fix variant in this scoped review"},
-    {"axis":"boundary","applicability":"NOT_APPLICABLE","evidence_refs":["LOC-src/example.py:1"],"rationale":"no additional trust boundary in this scoped review"},
-    {"axis":"differential","applicability":"NOT_APPLICABLE","evidence_refs":["LOC-src/example.py:1"],"rationale":"no relevant mode or implementation differential in this scoped review"}
-  ],
-  "hypotheses": []
-}
-```
+Compact R2 requires all six evidenced axis dispositions. Follow the claimed task's `output_contract` for the exact payload schema; do not infer or copy a schema from another task.
 
 Every R2 task input contains a pinned `knowledge_context` with issue-profile entries,
 approved Mechanism Cards, provenance IDs, and any guidance omitted by the task budget.
@@ -305,147 +305,50 @@ rationale. If an attempt ran but was inconclusive, attach its experiment and use
 `NEEDS_REVIEW`. `NOT_FEASIBLE` is an unresolved disposition, never evidence of safety,
 confirmation, or refutation.
 
-## Commands
+## Finding Classification
 
-The examples below are argument templates, not literal shell scripts. For runnable
-commands without `PYTHONPATH` setup, use `python3 /path/to/vnext/tools/vnext.py`
-with the same arguments, as shown in the
-[runbook](./docs/ORCHESTRATOR_RUNBOOK.md). The launcher reopens existing state; it
-does not automatically retry, dispatch Agents, or certify completion.
+Classify each reportable item explicitly; a reachable behavior defect is not
+automatically a security vulnerability:
 
-```bash
-PYTHONPATH=<vnext>/src python3 -m reachable_audit init <target> --snapshot-id <id> \
-  --audit-mode fresh --max-screening-fraction <0..1>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit init <target> --snapshot-id <id> \
-  --require-host-worker-attestation
-PYTHONPATH=<vnext>/src python3 -m reachable_audit init <target> \
-  --snapshot-id <id> --campaign-id <new-id> --audit-mode follow-up \
-  --history-source <prior-campaign-id>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit status <target>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit skill-backlog <target> <campaign-id>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit skill-review \
-  <target> <campaign-id> --input <skill-review.json>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit resource-register-process \
-  <target> <campaign-id> <process-group-id> --label <purpose>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit resource-create-temp \
-  <target> <campaign-id> --label <purpose>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit resource-cleanup \
-  <target> <campaign-id>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit campaign-abort \
-  <target> <campaign-id> --reason <reason> --input <skill-review.json>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit harness-run \
-  <target> <campaign-id> --input <harness-run.json>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit compatibility-scan \
-  [--forbidden-tokens-file <tokens.txt>]
-PYTHONPATH=<vnext>/src python3 -m reachable_audit batch-add <target> \
-  <campaign-id> <batch-id> --manifest <manifest.json>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit inventory <target> <campaign-id>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit toolchain-probe <language>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit graph <target> <campaign-id>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit plan <target> <campaign-id> \
-  --categories MEMORY-SAFETY,STATE,RESOURCE-DOS \
-  [--path-dispositions <path-scope.json>]
-PYTHONPATH=<vnext>/src python3 -m reachable_audit amend <target> \
-  <campaign-id> <plan-id> --reason <reason> \
-  --max-batch-files 500 --max-batch-work-units 2
-PYTHONPATH=<vnext>/src python3 -m reachable_audit r0 <target> <campaign-id> <batch-id>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit task-schedule-r1 \
-  <target> <campaign-id> <batch-id>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit task-claim \
-  <target> <campaign-id> <worker-id>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit task-list \
-  <target> <campaign-id> --batch-id <batch-id> --operation <operation>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit task-retry \
-  <target> <campaign-id> <task-id> --reason <operator-reason>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit task-release \
-  <target> <campaign-id> <task-id> <worker-id> --reason <reason>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit task-cancel \
-  <target> <campaign-id> <task-id> --reason <reason>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit task-amend \
-  <target> <campaign-id> <task-id> --input <amendment.json>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit task-collect \
-  <target> <campaign-id> <task-id> <worker-id> --input <result.json>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit task-commit-r1 \
-  <target> <campaign-id> <batch-id>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit task-schedule-r2 \
-  <target> <campaign-id> <batch-id>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit task-commit-r2 \
-  <target> <campaign-id> <batch-id>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit task-schedule-r2-per-axis \
-  <target> <campaign-id> <batch-id>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit task-commit-r2-per-axis \
-  <target> <campaign-id> <batch-id>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit task-schedule-r3 \
-  <target> <campaign-id> <batch-id>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit task-commit-r3 \
-  <target> <campaign-id> <batch-id>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit task-schedule-r35-refutations \
-  <target> <campaign-id> <batch-id>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit task-commit-r35-refutations \
-  <target> <campaign-id> <batch-id>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit task-schedule-r35-adjudications \
-  <target> <campaign-id> <batch-id>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit task-commit-r35-adjudications \
-  <target> <campaign-id> <batch-id>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit task-schedule-r35-revivals \
-  <target> <campaign-id> <batch-id>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit task-commit-r35-revivals \
-  <target> <campaign-id> <batch-id>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit task-schedule-r4 \
-  <target> <campaign-id> <batch-id> [--bundle-work-units <N>]
-PYTHONPATH=<vnext>/src python3 -m reachable_audit task-commit-r4 \
-  <target> <campaign-id> <batch-id>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit task-schedule-r5 \
-  <target> <campaign-id> <batch-id>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit task-commit-r5 \
-  <target> <campaign-id> <batch-id>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit task-schedule-r6 \
-  <target> <campaign-id> <batch-id>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit task-commit-r6 \
-  <target> <campaign-id> <batch-id>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit r1 <target> <campaign-id> <batch-id> \
-  --input <surfaces.json>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit r2 <target> <campaign-id> <batch-id> \
-  --input <hypotheses.json>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit r3 <target> <campaign-id> <batch-id> \
-  --input <verdicts.json>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit batch-report \
-  <target> <campaign-id> <batch-id>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit handoff-resolve \
-  <target> <campaign-id> <plan-id> --input <resolution.json>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit handoff-integrate \
-  <target> <campaign-id> <plan-id> <handoff-id> --input <chain-prefix.json>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit r35-refute \
-  <target> <campaign-id> <batch-id> --input <refutation.json>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit r35-adjudicate \
-  <target> <campaign-id> <batch-id> --input <adjudication.json>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit r35-revival-select \
-  <target> <campaign-id> <batch-id> --input <selection.json>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit r35-revival-review \
-  <target> <campaign-id> <batch-id> --input <revival-review.json>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit r35-complete \
-  <target> <campaign-id> <batch-id>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit category-plan \
-  <target> <campaign-id> <batch-id> --input <category-plan-options.json>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit r4 \
-  <target> <campaign-id> <batch-id> --input <category-runs.json>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit r5 \
-  <target> <campaign-id> <batch-id> --input <experiments.json>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit r5-observation-register \
-  <target> <campaign-id> --input <signed-observation.json>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit metrics \
-  <target> <campaign-id> <batch-id>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit finding \
-  <target> <campaign-id> <batch-id> --input <finding.json>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit r6 \
-  <target> <campaign-id> <batch-id> --input <closure.json>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit campaign-close \
-  <target> <campaign-id> <plan-id> --input <campaign-closure.json>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit drift-resolve \
-  <target> <campaign-id> <drift-event-id> --input <evidence.json>
-PYTHONPATH=<vnext>/src python3 -m reachable_audit shadow-evaluate \
-  --input <paired-runs.json> --output <acceptance-report.json>
-```
+- `SECURITY_VULNERABILITY` only when current-source evidence supports an attacker
+  capability, trust boundary, protected asset, affected security property, and
+  concrete security impact. Include a `security_impact` object with those fields,
+  a severity rationale, and evidence references drawn from the Finding's
+  `evidence_refs`.
+- `ORDINARY_DEFECT` for a functional, standards-conformance, or robustness defect
+  without demonstrated security impact.
+- `HARDENING` for a defense-in-depth recommendation without an evidenced
+  vulnerability.
+- `INSUFFICIENT_EVIDENCE` when classification cannot be supported. This is a
+  legacy-read compatibility value; the finding-recording command rejects it.
+
+Reachability, a confirmed R5 experiment, severity labels, a matching catalog card,
+or a structural boundary proof do not by themselves establish security impact.
+The Campaign report's confirmed-security-vulnerability count is an Agent-declared
+classification count, not an independently validated vulnerability count. The
+structured impact is an evidence-linked declaration validated for shape and
+references, not an automatic semantic or exploitability proof. Preserve uncertainty;
+before presenting a security-impact declaration as independently validated or
+release-ready, obtain a qualified independent review and retain its disposition.
+The runtime does not authenticate reviewer independence or enforce that review.
+
+## Quick Start and References
+
+For exact command arguments, use the relevant subcommand's CLI help (for example,
+`vnext task-schedule-r2 --help` after defining the launcher, or
+`python3 /path/to/vnext/tools/vnext.py task-schedule-r2 --help`). The launcher works without
+`PYTHONPATH`, forwards exit status, and does not dispatch Agents, authorize retries,
+or certify completion. Follow sections 1 and 3 of the
+[orchestrator runbook](./docs/ORCHESTRATOR_RUNBOOK.md) for executable setup, scope
+selection, and lifecycle progression; use its recovery section when resuming or
+repairing a run. In brief: initialize a fresh Campaign against an
+authorized frozen snapshot, inspect inventory and graph, select approved categories,
+plan, then start R0 for a returned Batch and follow the durable
+schedule/claim/collect/commit lifecycle. Use the
+[software design](./docs/design/SOFTWARE_DESIGN_VNEXT.md) for architecture and
+detailed contracts. Do not use direct stage-import paths to bypass task validation.
+
+## Detailed Stage Contracts
 
 `r5-observation-register` requires `VNA_R5_EXTERNAL_OBSERVATION_HMAC_KEY` in the host
 environment and a signed observation bound to the current Campaign, snapshot, Batch,
@@ -461,36 +364,7 @@ source/target evidence refs, and data mappings. Each mapping must cite evidence 
 both endpoint sets. The resolver verifies component ownership and that each LOC anchor
 or Campaign artifact resolves, but these Agent declarations do not prove semantic truth
 or complete boundary discovery. Other resolution outcomes cannot carry `boundary_proof`.
-An `EDGE_PROVEN` input has this shape (IDs, kind, and evidence must match the stored
-Plan and current Campaign):
-
-```json
-{
-  "handoff_id": "HO-id",
-  "owner_batch_id": "B-owner",
-  "outcome": "EDGE_PROVEN",
-  "chain_suffix": ["LOC-source.py:12", "LOC-target.py:34"],
-  "evidence_refs": ["sha256:campaign-artifact-digest"],
-  "rationale": "Describe the supported cross-boundary transfer.",
-  "boundary_proof": {
-    "edge_id": "EDGE-id",
-    "source_component_id": "COMP-source",
-    "target_component_id": "COMP-target",
-    "interface_kind": "call",
-    "direction": "SOURCE_TO_TARGET",
-    "principal": "remote client",
-    "premises": ["The principal can reach the source endpoint."],
-    "source_evidence_refs": ["LOC-source.py:12"],
-    "target_evidence_refs": ["LOC-target.py:34"],
-    "data_mappings": [{
-      "source_value": "request bytes",
-      "target_value": "parser input",
-      "meaning": "Untrusted bytes are passed to the target parser.",
-      "evidence_refs": ["LOC-source.py:12", "LOC-target.py:34"]
-    }]
-  }
-}
-```
+Use the schema and example in the [software design Handoff contract](./docs/design/SOFTWARE_DESIGN_VNEXT.md); copy only current Plan/Campaign IDs and resolvable evidence.
 
 `path-scope.json` is an array of `{path, state, rationale, approved_by,
 evidence_refs}` records. `state` is `INCLUDED`, `EXCLUDED`, or `DEFERRED`; paths
@@ -506,12 +380,15 @@ correct the result JSON and resubmit it with the same task/worker before the lea
 expires, or use `task-release` with a reason. Use `task-list --batch-id` to inspect a
 partial batch. If a successful task output must be corrected after collection but before
 its R1/R2/R3/R4/R5/R6 stage commits, use `task-amend` with a replacement output, reason, and
-content-addressed evidence refs. The prior output remains immutable. R1-R5 amendments
-after stage commit are rejected until downstream invalidation/recomputation is available.
-Terminal R6 output may be amended after its Batch projection while the Campaign is not
-`COMPLETE`; run `task-commit-r6` again and then `campaign-close` to rebuild projections.
-Campaign closure rejects an amended R6 task until a newer R6 projection exists, and
-amendments are rejected after Campaign completion.
+content-addressed evidence refs. The prior output remains immutable. A supported R1-R5
+amendment after stage commit appends the replacement and affected-descendant invalidation
+events; reschedule and recommit the invalidated downstream stages before closure. Stale
+tasks cannot satisfy the new revision. Terminal R6 output may be amended after its Batch
+projection while the Campaign is not `COMPLETE`; run `task-commit-r6` again and then
+`campaign-close` to rebuild projections. Campaign closure rejects an amended R6 task
+until a newer R6 projection exists, and amendments are rejected after Campaign
+completion. This does not provide automatic late-candidate insertion into committed
+stages; use an explicitly declared follow-up Campaign for that case.
 
 `shadow-evaluate` requires a valid HMAC-signed manifest and
 `VNA_EVALUATION_HMAC_KEY`; the key must be held only by the independent evaluation
@@ -528,15 +405,25 @@ array when none apply. New late candidates must remain unresolved follow-up risk
 not invented IDs. Omit `work_unit_id` from each R4 `AxisRun`; it is inherited from the
 parent `CategoryRun`. A supplied AxisRun ID must match that parent. Bundled R4 inputs
 carry shared `mechanism_cards` once at bundle scope; each item may use only its plan's
-`seed_card_ids`. R6 is a Batch closure task over canonical stage artifacts, not a
+`seed_card_ids`. Every scoped candidate needs exactly one `hypothesis_reviews` record
+with `SUPPORTED`, `REJECTED`, or `NEEDS_REVIEW`, source/artifact evidence refs, and a
+rationale. Every previously recorded, applicable Finding must also appear exactly once
+in `finding_ids` for its matching CategoryRun. These checks enforce traceability, not
+semantic correctness of the review or evidence.
+
+R6 is a Batch closure task over canonical stage artifacts, not a
 source-discovery task: do not require an absent Work Unit inventory or invent LOC anchors.
 For every R1 Surface ID, R6 output must contain exactly one `surface_dispositions`
 entry. Use `REVIEWED`, `DEFERRED`, `NOT_APPLICABLE`, or `UNREVIEWED`; include a
 rationale and evidence refs for every state except `UNREVIEWED`. Missing, extra, or
 duplicate IDs are rejected. Use `UNREVIEWED` when a stronger disposition is unsupported.
-These are Agent declarations, not host-observed file-reading evidence or proof that a
-Surface is safe. Host wrappers must follow these operation-specific contracts instead
-of applying source-discovery instructions to every task.
+R6 must also provide exactly one `finding_reviews` record per recorded Finding, using
+`CONSISTENT`, `CONFLICT`, or `NEEDS_REVIEW`; the first two require evidence refs. The
+closure report exposes review-state totals and R3.5/R4 disposition disagreements.
+These are Agent declarations, not independent human review, host-observed file-reading
+evidence, proof that a Surface is safe, or semantic verification that evidence supports
+the claim. Host wrappers must follow these operation-specific contracts instead of
+applying source-discovery instructions to every task.
 
 `shadow-evaluate` never promotes vNext or retires v3. It only reports whether supplied
 evidence satisfies the release gates. Synthetic runs cannot satisfy held-out,

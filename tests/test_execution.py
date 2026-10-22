@@ -832,7 +832,7 @@ def test_collected_r1_output_can_be_amended_before_stage_commit(
             }
             for path in plan.work_units[0].source_files
         ]
-        first_r2_tasks = coordinator.schedule_r2_compact()
+        first_r2_tasks = coordinator.schedule_r2_compact(entrypoint_checklist=[])
         assert len(first_r2_tasks) == 1
         stale_r2_lease = backend.claim(
             "old-r2-worker", task_id_filter=first_r2_tasks[0].task.task_id
@@ -939,7 +939,7 @@ def test_collected_r1_output_can_be_amended_before_stage_commit(
         assert replacement_r1_event.payload["source_task_output_refs"] == {
             task.task_id: post_commit_ref,
         }
-        replacement_r2_tasks = coordinator.schedule_r2_compact()
+        replacement_r2_tasks = coordinator.schedule_r2_compact(entrypoint_checklist=[])
         assert len(replacement_r2_tasks) == 1
         assert replacement_r2_tasks[0].task.task_id != first_r2_tasks[0].task.task_id
         assert coordinator._active_task_views(
@@ -1082,7 +1082,7 @@ def test_per_axis_r2_output_can_be_amended(tmp_path: Path, axis: DiscoveryAxis) 
         backend = ManualExecutionBackend(manager, workflow.campaign_id)
         coordinator = DiscoveryCoordinator(workflow, backend)
         task = next(
-            view.task for view in coordinator.schedule_r2()
+            view.task for view in coordinator.schedule_r2(entrypoint_checklist=[])
             if view.task.operation == f"generate_hypotheses:{axis.value}"
         )
         lease = backend.claim("axis-worker", task_id_filter=task.task_id)
@@ -1767,7 +1767,7 @@ def test_discovery_coordinator_commits_r1_and_six_axis_r2(tmp_path: Path) -> Non
         ))
         coordinator.commit_r1()
 
-        scheduled_tasks = coordinator.schedule_r2()
+        scheduled_tasks = coordinator.schedule_r2(entrypoint_checklist=[])
         assert len(scheduled_tasks) == 6
         r2_inputs = [
             json.loads(manager.artifacts.get_bytes(view.task.input_refs[0]))
@@ -2034,7 +2034,14 @@ def test_compact_r2_runs_all_axes_in_one_task_per_work_unit(tmp_path: Path) -> N
         ))
         coordinator.commit_r1()
 
-        tasks = coordinator.schedule_r2_compact()
+        checklist = [{
+            "entrypoint_id": "process-handler",
+            "work_unit_id": plan.work_units[0].work_unit_id,
+            "required_axis": "surface",
+            "description": "Review the command-execution handler path",
+            "source_refs": ["LOC-app.py:3"],
+        }]
+        tasks = coordinator.schedule_r2_compact(entrypoint_checklist=checklist)
         assert len(tasks) == len(plan.work_units) == 1
         task_input = json.loads(manager.artifacts.get_bytes(tasks[0].task.input_refs[0]))
         assert set(task_input["analysis_contract"]) == {axis.value for axis in DiscoveryAxis}
@@ -2050,7 +2057,13 @@ def test_compact_r2_runs_all_axes_in_one_task_per_work_unit(tmp_path: Path) -> N
             "not evidence of non-applicability" in contract
             for contract in task_input["analysis_contract"].values()
         )
+        assert all(
+            "bounded line-range" in contract
+            for contract in task_input["analysis_contract"].values()
+        )
         assert "review_altitude" in task_input["output_contract"]["axis_runs"]
+        assert task_input["required_entrypoints"] == checklist
+        assert "predeclared recall checklist" in task_input["analysis_contract"]["surface"]
         assert task_input["hotspot_report"]["provider_id"] == "python-ast-hotspots-v1"
         assert task_input["hotspot_report"]["candidates"][0]["rule_id"] == "PY-CMD-001"
         assert task_input["hotspot_report"]["candidates"][0]["evidence_ref"] == "LOC-app.py:4"
@@ -2062,7 +2075,27 @@ def test_compact_r2_runs_all_axes_in_one_task_per_work_unit(tmp_path: Path) -> N
             "review_altitude": "INSPECTED",
             "evidence_refs": ["LOC-app.py:1"],
             "rationale": f"reviewed {axis.value} axis",
+            "entrypoint_reviews": ([{
+                "entrypoint_id": "process-handler",
+                "disposition": "NO_CANDIDATE",
+                "evidence_refs": ["LOC-app.py:3"],
+                "rationale": "the handler was traced; no additional candidate was found",
+            }] if axis.value == "surface" else []),
         } for axis in DiscoveryAxis]
+        incomplete_output_ref = manager.artifacts.put_text(json.dumps({
+            "schema_version": "1.0",
+            "reviewed_paths": ["app.py"],
+            "axis_runs": [
+                {**item, "entrypoint_reviews": []} for item in axis_runs
+            ],
+            "hypotheses": [],
+        })).artifact_id
+        with pytest.raises(ModelError, match="entrypoint review coverage mismatch"):
+            backend.collect(compact_lease, TaskResult(
+                True, incomplete_output_ref, "omitted required helper review",
+                {"agent_runs": 1, "wall_seconds": 1}, execution_configuration_fixture(),
+            ))
+        assert backend.poll(compact_lease.task.task_id).status.value == "LEASED"
         output_ref = manager.artifacts.put_text(json.dumps({
             "schema_version": "1.0",
             "reviewed_paths": ["app.py"],

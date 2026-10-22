@@ -87,6 +87,19 @@ class CategoryRunStatus(StrEnum):
     DEFERRED = "DEFERRED"
 
 
+class HypothesisReviewDisposition(StrEnum):
+    SUPPORTED = "SUPPORTED"
+    REJECTED = "REJECTED"
+    NEEDS_REVIEW = "NEEDS_REVIEW"
+
+
+class EntrypointReviewDisposition(StrEnum):
+    ANALYZED = "ANALYZED"
+    NO_CANDIDATE = "NO_CANDIDATE"
+    DEFERRED = "DEFERRED"
+    NOT_APPLICABLE = "NOT_APPLICABLE"
+
+
 class ExperimentFidelity(StrEnum):
     REAL_TARGET = "real_target"
     EQUIVALENT = "equivalent"
@@ -129,6 +142,12 @@ class SurfaceReviewState(StrEnum):
     UNREVIEWED = "UNREVIEWED"
 
 
+class FindingReviewState(StrEnum):
+    CONSISTENT = "CONSISTENT"
+    CONFLICT = "CONFLICT"
+    NEEDS_REVIEW = "NEEDS_REVIEW"
+
+
 class ReviewAltitude(StrEnum):
     SCREENED = "SCREENED"
     INSPECTED = "INSPECTED"
@@ -153,6 +172,55 @@ class FindingStatus(StrEnum):
     CONFIRMED = "CONFIRMED"
     NEEDS_REVIEW = "NEEDS_REVIEW"
     SUPERSEDED = "SUPERSEDED"
+
+
+class FindingClassification(StrEnum):
+    SECURITY_VULNERABILITY = "SECURITY_VULNERABILITY"
+    ORDINARY_DEFECT = "ORDINARY_DEFECT"
+    HARDENING = "HARDENING"
+    INSUFFICIENT_EVIDENCE = "INSUFFICIENT_EVIDENCE"
+
+
+@dataclass(frozen=True)
+class SecurityImpact:
+    attacker_capability: str
+    trust_boundary: str
+    protected_asset: str
+    security_property: str
+    impact: str
+    severity_rationale: str
+    evidence_refs: tuple[str, ...]
+
+    @classmethod
+    def from_dict(cls, value: Mapping[str, Any]) -> "SecurityImpact":
+        if not isinstance(value, Mapping):
+            raise ModelError("Finding security_impact must be an object")
+        impact = cls(
+            attacker_capability=str(value.get("attacker_capability", "")),
+            trust_boundary=str(value.get("trust_boundary", "")),
+            protected_asset=str(value.get("protected_asset", "")),
+            security_property=str(value.get("security_property", "")),
+            impact=str(value.get("impact", "")),
+            severity_rationale=str(value.get("severity_rationale", "")),
+            evidence_refs=tuple(str(item) for item in value.get("evidence_refs", [])),
+        )
+        if not all((
+            impact.attacker_capability.strip(),
+            impact.trust_boundary.strip(),
+            impact.protected_asset.strip(),
+            impact.security_property.strip(),
+            impact.impact.strip(),
+            impact.severity_rationale.strip(),
+            impact.evidence_refs,
+        )):
+            raise ModelError(
+                "security impact requires attacker capability, trust boundary, "
+                "protected asset, security property, impact, severity rationale, "
+                "and evidence refs"
+            )
+        if len(impact.evidence_refs) != len(set(impact.evidence_refs)):
+            raise ModelError("security impact evidence refs must be unique")
+        return impact
 
 
 @dataclass(frozen=True)
@@ -686,6 +754,30 @@ class CategoryAuditPlan:
 
 
 @dataclass(frozen=True)
+class EntrypointReview:
+    entrypoint_id: str
+    disposition: EntrypointReviewDisposition
+    evidence_refs: tuple[str, ...]
+    rationale: str
+
+    @classmethod
+    def from_dict(cls, value: Mapping[str, Any]) -> "EntrypointReview":
+        if not isinstance(value, Mapping):
+            raise ModelError("R2 entrypoint review must be an object")
+        review = cls(
+            entrypoint_id=str(value["entrypoint_id"]),
+            disposition=EntrypointReviewDisposition(str(value["disposition"])),
+            evidence_refs=tuple(str(item) for item in value.get("evidence_refs", [])),
+            rationale=str(value["rationale"]),
+        )
+        if not review.entrypoint_id or not review.evidence_refs or not review.rationale.strip():
+            raise ModelError(
+                "R2 entrypoint review requires ID, evidence refs, and rationale"
+            )
+        return review
+
+
+@dataclass(frozen=True)
 class AxisRun:
     axis: DiscoveryAxis
     applicability: Applicability
@@ -693,6 +785,7 @@ class AxisRun:
     rationale: str
     work_unit_id: str | None = None
     review_altitude: ReviewAltitude = ReviewAltitude.NOT_RECORDED
+    entrypoint_reviews: tuple[EntrypointReview, ...] = ()
 
     @classmethod
     def from_dict(cls, value: Mapping[str, Any]) -> "AxisRun":
@@ -708,10 +801,45 @@ class AxisRun:
             review_altitude=ReviewAltitude(str(
                 value.get("review_altitude", ReviewAltitude.NOT_RECORDED.value)
             )),
+            entrypoint_reviews=tuple(
+                EntrypointReview.from_dict(item)
+                for item in value.get("entrypoint_reviews", [])
+            ),
         )
         if not run.evidence_refs or not run.rationale:
             raise ModelError("axis run requires evidence refs and rationale")
+        entrypoint_ids = [item.entrypoint_id for item in run.entrypoint_reviews]
+        if len(entrypoint_ids) != len(set(entrypoint_ids)):
+            raise ModelError("AxisRun contains duplicate entrypoint review IDs")
         return run
+
+
+@dataclass(frozen=True)
+class HypothesisReview:
+    hypothesis_id: str
+    disposition: HypothesisReviewDisposition
+    evidence_refs: tuple[str, ...]
+    rationale: str
+
+    @classmethod
+    def from_dict(cls, value: Mapping[str, Any]) -> "HypothesisReview":
+        if not isinstance(value, Mapping):
+            raise ModelError("CategoryRun hypothesis review must be an object")
+        review = cls(
+            hypothesis_id=str(value["hypothesis_id"]),
+            disposition=HypothesisReviewDisposition(str(value["disposition"])),
+            evidence_refs=tuple(str(item) for item in value.get("evidence_refs", [])),
+            rationale=str(value["rationale"]),
+        )
+        if (
+            not review.hypothesis_id
+            or not review.evidence_refs
+            or not review.rationale.strip()
+        ):
+            raise ModelError(
+                "CategoryRun hypothesis review requires identity, evidence, and rationale"
+            )
+        return review
 
 
 @dataclass(frozen=True)
@@ -728,6 +856,7 @@ class CategoryRun:
     rationale: str
     hypothesis_ids: tuple[str, ...]
     finding_ids: tuple[str, ...]
+    hypothesis_reviews: tuple[HypothesisReview, ...] = ()
 
     @classmethod
     def from_dict(cls, value: Mapping[str, Any]) -> "CategoryRun":
@@ -766,6 +895,10 @@ class CategoryRun:
             rationale=str(value["rationale"]),
             hypothesis_ids=tuple(str(item) for item in value.get("hypothesis_ids", [])),
             finding_ids=tuple(str(item) for item in value.get("finding_ids", [])),
+            hypothesis_reviews=tuple(
+                HypothesisReview.from_dict(item)
+                for item in value.get("hypothesis_reviews", [])
+            ),
         )
         if not run.category_run_id or not run.rationale or not run.evidence_refs:
             raise ModelError("CategoryRun identity, rationale, and evidence refs are required")
@@ -774,6 +907,16 @@ class CategoryRun:
                 raise ModelError("DEFERRED CategoryRun must have DEFERRED status")
         elif run.status is not CategoryRunStatus.COMPLETE:
             raise ModelError("non-deferred CategoryRun must be COMPLETE")
+        review_ids = [item.hypothesis_id for item in run.hypothesis_reviews]
+        if len(review_ids) != len(set(review_ids)):
+            raise ModelError("CategoryRun contains duplicate hypothesis review IDs")
+        if any(
+            not set(review.evidence_refs).issubset(run.evidence_refs)
+            for review in run.hypothesis_reviews
+        ):
+            raise ModelError(
+                "CategoryRun hypothesis review evidence must be included in run evidence_refs"
+            )
         return run
 
 
@@ -957,6 +1100,8 @@ class Finding:
     status: FindingStatus
     evidence_refs: tuple[str, ...]
     title: str
+    classification: FindingClassification = FindingClassification.INSUFFICIENT_EVIDENCE
+    security_impact: SecurityImpact | None = None
 
     @classmethod
     def from_dict(cls, value: Mapping[str, Any]) -> "Finding":
@@ -973,6 +1118,16 @@ class Finding:
             status=FindingStatus(str(value["status"])),
             evidence_refs=tuple(str(item) for item in value["evidence_refs"]),
             title=str(value["title"]),
+            classification=FindingClassification(str(
+                value.get(
+                    "classification",
+                    FindingClassification.INSUFFICIENT_EVIDENCE.value,
+                )
+            )),
+            security_impact=(
+                SecurityImpact.from_dict(value["security_impact"])
+                if value.get("security_impact") is not None else None
+            ),
         )
         if not all((
             finding.finding_id,
@@ -988,6 +1143,21 @@ class Finding:
             and finding.evidence_grade is EvidenceGrade.STATIC_ONLY
         ):
             raise ModelError("confirmed Finding must be at least edge_proven")
+        if finding.classification is FindingClassification.SECURITY_VULNERABILITY:
+            if finding.security_impact is None:
+                raise ModelError(
+                    "security vulnerability classification requires security_impact"
+                )
+            if not set(finding.security_impact.evidence_refs).issubset(
+                finding.evidence_refs
+            ):
+                raise ModelError(
+                    "security impact evidence_refs must be included in Finding evidence_refs"
+                )
+        elif finding.security_impact is not None:
+            raise ModelError(
+                "security_impact is only valid for SECURITY_VULNERABILITY classification"
+            )
         return finding
 
 
@@ -1019,6 +1189,35 @@ class SurfaceReviewDisposition:
 
 
 @dataclass(frozen=True)
+class FindingReview:
+    finding_id: str
+    state: FindingReviewState
+    evidence_refs: tuple[str, ...]
+    rationale: str
+
+    @classmethod
+    def from_dict(cls, value: Mapping[str, Any]) -> "FindingReview":
+        if not isinstance(value, Mapping):
+            raise ModelError("Finding review must be an object")
+        review = cls(
+            finding_id=str(value["finding_id"]),
+            state=FindingReviewState(str(value["state"])),
+            evidence_refs=tuple(str(item) for item in value.get("evidence_refs", [])),
+            rationale=str(value["rationale"]),
+        )
+        if not review.finding_id or not review.rationale.strip():
+            raise ModelError("Finding review requires finding_id and rationale")
+        if (
+            review.state is not FindingReviewState.NEEDS_REVIEW
+            and not review.evidence_refs
+        ):
+            raise ModelError(
+                "consistent/conflicting Finding review requires evidence refs"
+            )
+        return review
+
+
+@dataclass(frozen=True)
 class BatchClosure:
     budget_used: Mapping[str, int]
     constraints_observed: tuple[str, ...]
@@ -1026,6 +1225,7 @@ class BatchClosure:
     residual_risks: tuple[str, ...]
     lessons: tuple[str, ...]
     surface_dispositions: tuple[SurfaceReviewDisposition, ...] = ()
+    finding_reviews: tuple[FindingReview, ...] = ()
 
     @classmethod
     def from_dict(cls, value: Mapping[str, Any]) -> "BatchClosure":
@@ -1047,6 +1247,10 @@ class BatchClosure:
             surface_dispositions=tuple(
                 SurfaceReviewDisposition.from_dict(item)
                 for item in value.get("surface_dispositions", [])
+            ),
+            finding_reviews=tuple(
+                FindingReview.from_dict(item)
+                for item in value.get("finding_reviews", [])
             ),
         )
         if any(amount < 0 for amount in closure.budget_used.values()):

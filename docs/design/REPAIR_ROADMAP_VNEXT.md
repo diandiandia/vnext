@@ -9,6 +9,24 @@ supersede the corresponding open statuses below. See
 [current generality review](GENERALITY_REVIEW_VNEXT.md) before scheduling work.
 A completed code milestone does not imply improved vulnerability recall.
 
+Current-state correction (2026-10-22): the historical defect entry below saying that
+post-commit recomputation is absent is superseded for supported R1-R5 task-output
+amendments. Such amendments now append replacement/invalidation events and require
+revision-bound downstream rescheduling/recommit. The remaining target is automatic
+late-candidate insertion/reopening and invalidation for arbitrary host inputs outside
+the managed task/stage revision graph.
+
+Current-state correction (2026-10-22, policy 38): historical rows below that describe
+R2 helper coverage without a predeclared checklist and R4 Finding attribution as
+optional are superseded. Current R2 requires an explicit entrypoint checklist, R4
+requires exact hypothesis reviews and reconciliation of applicable recorded Findings,
+and R6 requires one review declaration per recorded Finding. These are structural
+coverage controls, not semantic adjudication. The Finding classification gate likewise
+validates declaration shape and evidence references, not truth or impact; the latest
+real-target run had unreviewed classification concerns. Consult the completion and
+real-target test plans for current actions. The table below remains a historical register
+and its statuses are not authoritative for the current checkout.
+
 ## Baseline
 
 The current implementation has a durable Campaign/Batch workflow, source/build inventory, language profiles, evidence gates, and a signed release evaluator. A bounded Python AST hotspot provider supplies advisory candidates to R1/R2; language-wide coverage and candidate quality remain unmeasured. The knowledge portfolio is structurally complete but materially templated and not validated for balanced per-language discovery. A real bounded single-Batch pilot exists, but required direct R5 recovery; it is not task-only acceptance or a complete mixed-language Campaign. Real held-out portfolio and 20GB+ recovery acceptance remain unavailable.
@@ -56,7 +74,7 @@ document. Preserve the original evidence only in the access-controlled Campaign 
 |---|---|---|
 | P0 | Evaluator success incorrectly implies full promotion eligibility. | **Repaired and tested:** all RG1-RG15 evaluator checks are implemented; they cannot authorize promotion without signed evidence and independent review. RG13 validates provenance structure but not host truth; RG15 validates evidence structure but not performance truth. |
 | P1 | Planner axis subsets disagree with R2 and closure. | **Repaired and tested:** planning rejects unsupported subsets; all-six execution is the current supported contract. Adaptive selection remains target work. |
-| P1 | Pre-commit amendment dispatch rejects per-axis R2 operations. | **Repaired and tested:** all six suffixed operations map to R2 pre-commit amendment; post-commit recomputation remains absent. |
+| P1 | Pre-commit amendment dispatch rejects per-axis R2 operations. | **Repaired and tested:** all six suffixed operations map to R2 pre-commit amendment. Supported R1-R5 post-commit task amendments append replacement/invalidation events and require downstream rescheduling/recommit; automatic late-candidate reopening remains a target. |
 | P1 | Multi-Batch forecasts do not reconcile. | **Repaired and tested:** Campaign counts, hypothesis rounding, R4 boundaries, R6 tasks, and rounded costs aggregate per Batch. Rates and savings still lack real calibration. |
 | P1 | Real applicable catalog cards crash R4 bundling. | **Repaired and tested:** serialize raw card mappings directly; the existing bundle fixture now selects an applicable Python card and asserts nonempty card seeds. |
 | P1 | Abort leaves a retry active; issue exports overwrite host notes. | **Repaired and tested:** cleanup uses latest task state; failed, released, and leased retries cancel; digest-marked issue revisions preserve host content and are idempotent. |

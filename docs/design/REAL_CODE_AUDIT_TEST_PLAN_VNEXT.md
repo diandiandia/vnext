@@ -115,6 +115,110 @@ are reported; token/time/budget usage reconciles with host records. A run execut
 the development pilot layer is labeled development-only; host and release gates are not
 implied.
 
+For each reported item, record `SECURITY_VULNERABILITY`, `ORDINARY_DEFECT`,
+`HARDENING`, or `INSUFFICIENT_EVIDENCE` as appropriate. Security-vulnerability
+classification must explain attacker capability, trust boundary, protected asset,
+security property, concrete impact, and severity rationale with source/artifact
+references. A reviewer separate from the discovery author must inspect whether the
+cited source actually supports each claimed precondition, sink, and impact, and record
+an accept/reclassify/unresolved disposition with evidence. If this review is not
+performed, mark semantic validation NOT ASSESSED; do not present the Agent classification
+count as an independently validated vulnerability count. A passing structural validator,
+reachability result, or confirmed experiment is not alone proof of security impact.
+
+**Finding-classification pass:** ordinary functional/robustness defects and hardening
+recommendations remain visible but are not counted as confirmed vulnerabilities;
+unsupported security-impact claims are rejected or retained as unresolved.
+
+### B1. Policy-38 large-project development test (recommended next run)
+
+**Test ID:** `RTA-38-LARGE-01`. This is a development real-target test, not release
+qualification. Its purpose is to determine whether the current R2/R4/R6 traceability
+contracts improve coverage and reconciliation on a large repository, and to measure
+workflow capacity under a real target. It does not by itself establish vulnerability
+recall, precision, exploitability, or complete physical source reads.
+
+#### Objectives
+
+1. Measure inventory and planned-scope coverage across the target's actual languages,
+   paths, Work Units and Batches; identify unsupported paths and cross-language or
+   cross-Batch boundaries.
+2. Verify that predeclared entrypoints/helpers are carried into R2 review checklists,
+   receive source-backed dispositions, and are reconciled through R4 hypotheses and R6
+   Finding/surface review.
+3. Measure R4 bundle size, input/token use, latency, task completion and repair/retry
+   behavior at the observed large-project scale.
+4. Identify misses, irrelevant evidence, unresolved reviews, false positives and
+   resource-limit failures for follow-up. Do not convert these observations to a
+   capability or release claim without independently adjudicated labels.
+
+#### Test setup and execution requirements
+
+- Freeze and record the engine commit, runtime task policy (expected baseline:
+  `vnext-task-policy-38`), target commit/snapshot, language inventory, authorized paths,
+  categories, model/tools, host limits and budgets before analysis. Use a fresh disposable
+  clone and Campaign with no prior target findings, lessons or regression backlog in
+  discovery inputs.
+- Select the complete authorized project scope if the goal is a whole-project audit.
+  Execute every planned Batch in that scope. If only representative slices are run, label
+  the result a sampled pilot and list all omitted/deferred scope; do not report it as a
+  completed project audit. For scale/boundary observations, include at least two Batches
+  when the target can be partitioned that way, and record an observed cross-Batch or
+  cross-language boundary when one exists.
+- Before task outputs are visible, record stable IDs and source anchors for representative
+  security-sensitive entrypoint/helper pairs. Include known parser/iterator/configuration,
+  evaluation or deserialization-style paths only when they actually exist in the target.
+  Preserve the expected set with the test protocol; do not add targets after seeing
+  results and count them as predeclared coverage.
+- Run the selected scope through the normal Inventory/ComponentGraph/Plan and R0-R6
+  claim/collect/commit workflow. For every predeclared entrypoint, require an R2 checklist
+  row and record the source-backed result. For every selected hypothesis, require an R4
+  disposition and evidence relevant to that hypothesis. Reconcile every applicable
+  Finding in R4 and every canonical Finding/surface in R6. Missing or duplicate IDs,
+  mismatched anchors, cross-scope evidence and unsupported claims are test failures, not
+  successful empty results.
+- Record all in-scope, excluded, deferred, unsupported and unreviewed paths explicitly.
+  For each large source file, record digest, byte/line count, input size, observed ranges,
+  task outcome and approved deferral. A completed task or `ALL_SOURCE_FILES` declaration
+  is not proof of physical read or line coverage.
+- Record R4 bundle item counts and serialized bytes, measured token usage, latency,
+  failures/retries, task/agent runs, time/cost and budget reconciliation per Batch and
+  overall. Exercise interruption/retry and amendment/invalidation in a disposable
+  Campaign copy, not by corrupting the evidence Campaign.
+- Have a reviewer separate from the discovery author adjudicate each security-impact
+  declaration and a sample of rejected, deferred and unreviewed items. Record
+  accept/reclassify/unresolved with source evidence. If no such reviewer is available,
+  mark semantic validation `NOT ASSESSED`; do not publish independently confirmed
+  vulnerability counts or quality rates.
+
+#### Acceptance and reporting
+
+Report four separate outcomes: **workflow/contracts**, **declared-scope coverage**,
+**semantic adjudication**, and **capacity/resources**. Each is `PASS`, `FAIL`,
+`INCONCLUSIVE` or `NOT ASSESSED`, with evidence references.
+
+- **Workflow/contracts PASS:** all exercised stage contracts and exact ID/anchor
+  reconciliations pass; task failures/retries are recoverable; stale outputs cannot reach
+  closure; recorded usage is within declared limits or explicitly reported as a limit
+  breach.
+- **Declared-scope coverage PASS:** every item in the frozen selected scope has an
+  explicit reviewed, excluded, deferred or unsupported disposition, and every
+  predeclared helper has a traceable R2-to-R4/R6 disposition. Any `UNREVIEWED` or
+  unmeasured source range prevents a complete-coverage claim for that scope. A disclosed
+  deferral can allow the workflow test to finish but cannot be represented as reviewed.
+- **Semantic adjudication PASS:** the independent reviewer has recorded evidence-based
+  dispositions for the required claims. Without independent labels, report
+  `NOT ASSESSED`; structural validation alone is insufficient.
+- **Capacity/resources PASS:** actual per-Batch and total usage, elapsed time, bundle
+  sizes and recovery costs reconcile with the frozen limits. Any missing measurement is
+  `NOT ASSESSED`, not zero.
+
+The test may establish workflow/contract behavior even when coverage or semantic
+adjudication fails; report those outcomes separately and preserve all gaps. Do not claim
+Top-15-language or Top-10-issue effectiveness from one repository. Use reviewer-adjudicated
+misses and false positives to update a separate test corpus and acceptance thresholds
+before implementing further providers, detectors or large-file slicing.
+
 ### C. Real External Evidence Path (signed-feature qualification only)
 
 This step is not required for a development audit that does not exercise signed
@@ -144,6 +248,50 @@ and per-issue coverage, unsupported paths, unresolved cases, Handoffs, duplicate
 For large repositories, measure v1/v2 R4 bundle input bytes, provider token usage, latency,
 per-item coverage and canonical artifact size at representative bundle counts. Synthetic
 30k/1k fixtures remain implementation tests, not substitutes for this measurement.
+
+For any Work Unit containing a source file flagged by `plan.r2_large_source_files`,
+record host context/time limits and whether the complete file was inspected. A failed
+or incomplete inspection must block R2 completion for that scope; either continue with
+full-file coverage through bounded reads or obtain an approved `DEFERRED` disposition
+and reconcile it in the Campaign report. The 1 MiB planner flag is advisory and does
+not prove that smaller files are tractable. The runtime does not observe physical file
+reads or verify line-range coverage.
+
+When a target has known security-sensitive helper paths, predeclare representative
+entry/helper pairs in the test protocol and verify that the relevant R1/R2 evidence
+contains the actual helper path, guards, and sink/call chain before claiming recall.
+An R1 surface list containing only general API entry points is not evidence that
+specialized iterator/helper paths were analyzed.
+
+### Development data collection for deferred implementation
+
+The development pilot is also the next evidence-gathering step for SWDR-010, SWDR-031,
+and N-6; these gaps do **not** require another round of repository-only synthetic tests
+before a pilot may start. Label the observations as exploratory, not as release or
+held-out qualification:
+
+1. **Language coverage:** record source-file counts and extensions per Work Unit, current
+   provider coverage, unsupported paths, and independently reviewed candidate sites for
+   the sampled language/framework. Do not claim a provider's precision/recall from an
+   unreviewed inventory or from synthetic fixtures.
+2. **Large source:** for each flagged file, record digest, bytes, lines, task-input size,
+   usage/time limits, completion state, source-backed anchors, and any approved deferral.
+   Preserve the exact uncovered ranges or explicitly mark them unmeasured; do not infer
+   line coverage from an `ALL_SOURCE_FILES` declaration.
+3. **Cross-language boundaries:** record observed FFI/RPC/IPC/serialization/generated-
+   code paths, language/framework pair, source/destination anchors, expected owner/route,
+   and whether Inventory/Plan/R1 found them. Have the target owner or reviewer adjudicate
+   misses and unrelated dependency edges.
+4. Retain these observations in the authorized evidence bundle. Use the reviewed miss,
+   false-positive, resource, and coverage patterns to define the test-first fixtures and
+   acceptance thresholds in [TEST_PLAN_VNEXT.md](TEST_PLAN_VNEXT.md) before implementing
+   or enabling a detector, slicing mechanism, or provider.
+
+If the pilot cannot measure physical reads or exact line ranges, record that limitation
+and treat the result as workflow/skill evidence only. Never convert missing observations
+to full coverage. A pilot may proceed with the currently implemented warning and
+candidate-only behavior; unresolved targets remain **NOT QUALIFIED**, rather than
+blocking all further development or being silently treated as complete.
 
 ### E. Held-Out and Release Qualification
 

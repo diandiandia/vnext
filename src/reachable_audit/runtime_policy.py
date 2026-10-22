@@ -9,13 +9,14 @@ from typing import Any
 
 TASK_OUTPUT_MAX_BYTES = 4 * 1024 * 1024
 TASK_OUTPUT_TARGET_BYTES = 1024 * 1024
+R2_LARGE_SOURCE_FILE_WARNING_BYTES = 1024 * 1024
 RELEASE_POLICY_VERSION = "vnext-release-policy-6"
 REQUIRED_RELEASE_GATES = tuple(f"RG{index}" for index in range(1, 16))
 IMPLEMENTED_RELEASE_GATES = tuple(f"RG{index}" for index in range(1, 16))
 
 
 _POLICY: dict[str, Any] = {
-    "policy_version": "vnext-task-policy-35",
+    "policy_version": "vnext-task-policy-38",
     "task_collection": {
         "shell_execution_by_scheduler": False,
         "required_measurements": ["agent_runs", "wall_seconds"],
@@ -36,6 +37,8 @@ _POLICY: dict[str, Any] = {
         "r1_boundary_review_coverage": "exactly_once_with_evidence_and_rationale_at_collect",
         "r1_boundary_anchor_validation": "endpoint_component_and_snapshot_loc_line_at_collect",
         "r2_hypothesis_shape_validation": "collect",
+        "r2_large_source_guidance": "bounded_line_range_and_symbol_reads_fail_without_complete_file_scope",
+        "r2_large_source_warning_bytes": R2_LARGE_SOURCE_FILE_WARNING_BYTES,
         "r4_bundle": "opt-in_same-family_preserve_per_plan_results",
         "r4_bundle_default_work_units": 1,
         "r4_bundle_max_input_bytes": 524288,
@@ -58,7 +61,11 @@ _POLICY: dict[str, Any] = {
         "r6_surface_dispositions": "collect_exact_one_per_r1_surface_projection_defaults_missing_to_unreviewed_agent_reported",
         "plan_path_scope": "inventory_exact_path_states_only_included_paths_assigned_exclusions_deferments_visible",
         "r4_hypothesis_references": "exactly_once_reconciliation_of_task_input_work_unit_family_allowlist_at_collect",
+        "r4_hypothesis_reviews": "one_evidence_linked_review_per_hypothesis; existing_scoped_findings_injected_and_exactly_reconciled; semantic_validity_remains_agent_asserted",
+        "r2_predeclared_entrypoints": "explicit_checklist_per_axis_requires_source_anchored_agent_disposition; checklist_empty_is_explicit",
+        "r6_finding_reconciliation": "all_recorded_findings_supplied_and_agent_reviewed_exactly_once; conflicts_reported; no_independent_human_review_claim",
         "r5_proposed_experiment": "unexecuted_inconclusive_empty_observations_needs_review_no_empirical_upgrade",
+        "finding_classification": "security_vulnerability_requires_structured_impact_and_resolvable_evidence;nonsecurity_classifications_excluded_from_vulnerability_counts",
         "r1_surface_anchors": "collect_entry_path_and_nonblank_source_line",
         "r1_surface_identity": "collect_unique_id_task_work_unit_and_component_match",
         "r1_oversize_work_unit_guard": "block_scheduling_when_minimum_valid_output_exceeds_hard_limit",

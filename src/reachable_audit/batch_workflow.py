@@ -26,6 +26,8 @@ from .analysis_models import (
     Experiment,
     ExperimentResult,
     Finding,
+    FindingClassification,
+    FindingReviewState,
     FindingStatus,
     Hypothesis,
     PathRiskTier,
@@ -920,6 +922,11 @@ class BatchWorkflow:
             event.entity_id
             for event in self._events(event_type="FINDING_RECORDED")
         }
+        finding_records = {
+            event.entity_id: self._read_artifact(event.payload_ref)
+            for event in self._events(event_type="FINDING_RECORDED")
+            if event.payload_ref is not None
+        }
         for run in runs:
             plan = plans[run.category_plan_id]
             if run.work_unit_id != plan["work_unit_id"] or run.family != plan["family"]:
@@ -972,6 +979,29 @@ class BatchWorkflow:
                 raise ModelError(
                     "CategoryRun must reconcile every scoped hypothesis exactly once: "
                     f"{run.category_run_id}"
+                )
+            if (
+                {item.hypothesis_id for item in run.hypothesis_reviews}
+                != expected_hypotheses
+                or len(run.hypothesis_reviews) != len(expected_hypotheses)
+            ):
+                raise ModelError(
+                    "CategoryRun must provide exactly one evidence-linked review per "
+                    f"scoped hypothesis: {run.category_run_id}"
+                )
+            expected_findings = {
+                finding_id
+                for finding_id, finding in finding_records.items()
+                if set(str(item) for item in finding["hypothesis_ids"])
+                & expected_hypotheses
+            }
+            if (
+                set(run.finding_ids) != expected_findings
+                or len(run.finding_ids) != len(set(run.finding_ids))
+            ):
+                raise ModelError(
+                    "CategoryRun must reconcile every existing scoped Finding exactly "
+                    f"once: {run.category_run_id}"
                 )
             if not set(run.finding_ids).issubset(recorded_findings):
                 raise ModelError(
@@ -1233,7 +1263,25 @@ class BatchWorkflow:
         )
 
     def record_finding(self, finding: Finding) -> str:
+        finding = Finding.from_dict(asdict(finding))
         self._require_stage("R3_5_COMPLETED")
+        if finding.classification is FindingClassification.INSUFFICIENT_EVIDENCE:
+            raise ModelError(
+                "Finding must classify the result as SECURITY_VULNERABILITY, "
+                "ORDINARY_DEFECT, HARDENING, or remain NEEDS_REVIEW with an explicit "
+                "non-security classification"
+            )
+        if (
+            finding.classification is FindingClassification.SECURITY_VULNERABILITY
+            and finding.status is FindingStatus.CONFIRMED
+            and finding.security_impact is None
+        ):
+            raise ModelError(
+                "confirmed security vulnerability requires structured security impact"
+            )
+        if finding.security_impact is not None:
+            for reference in finding.security_impact.evidence_refs:
+                self._validate_evidence_reference(reference, None)
         hypotheses = {
             item["hypothesis_id"]: item
             for item in self._read_artifact(
@@ -1299,6 +1347,7 @@ class BatchWorkflow:
                 "root_cause_key": finding.root_cause_key,
                 "status": finding.status.value,
                 "severity": finding.severity.value,
+                "classification": finding.classification.value,
             },
             payload_ref=artifact_id,
         )
@@ -1333,6 +1382,11 @@ class BatchWorkflow:
             if stage_events["R1_COMPLETED"]
             else {"surfaces": []}
         )
+        r4 = (
+            self._read_artifact(stage_events["R4_COMPLETED"].payload_ref)
+            if stage_events["R4_COMPLETED"]
+            else {"category_runs": []}
+        )
         surfaces_by_id = {
             str(item["surface_id"]): item for item in r1_artifact["surfaces"]
         }
@@ -1363,6 +1417,67 @@ class BatchWorkflow:
                 item["state"] == state.value for item in surface_review_dispositions
             )
             for state in SurfaceReviewState
+        }
+        findings = [
+            self._read_artifact(event.payload_ref)
+            for event in self._events(event_type="FINDING_RECORDED")
+        ]
+        expected_finding_ids = {str(item["finding_id"]) for item in findings}
+        finding_review_ids = [
+            item.finding_id for item in closure.finding_reviews
+        ]
+        if (
+            len(finding_review_ids) != len(set(finding_review_ids))
+            or set(finding_review_ids) != expected_finding_ids
+        ):
+            missing = sorted(expected_finding_ids - set(finding_review_ids))
+            extra = sorted(set(finding_review_ids) - expected_finding_ids)
+            raise ModelError(
+                "R6 Finding reviews must exactly cover recorded Findings: "
+                f"missing={missing[:10]}, extra={extra[:10]}"
+            )
+        for finding_review in closure.finding_reviews:
+            for reference in finding_review.evidence_refs:
+                self._validate_evidence_reference(reference, None)
+        finding_review_counts = {
+            state.value: sum(
+                item.state is state for item in closure.finding_reviews
+            )
+            for state in FindingReviewState
+        }
+        adjudicated_verdicts = {
+            event.entity_id: str(event.payload.get("final_verdict", ""))
+            for event in self._active_events(event_type="ADJUDICATION_DECIDED")
+        }
+        r4_r3_disagreements = []
+        for category_run in r4["category_runs"]:
+            for review in category_run.get("hypothesis_reviews", []):
+                final_verdict = adjudicated_verdicts.get(
+                    str(review["hypothesis_id"])
+                )
+                disposition = str(review["disposition"])
+                if (
+                    final_verdict == VerdictKind.REACHABLE.value
+                    and disposition == "REJECTED"
+                ) or (
+                    final_verdict == VerdictKind.UNREACHABLE.value
+                    and disposition == "SUPPORTED"
+                ):
+                    r4_r3_disagreements.append({
+                        "hypothesis_id": str(review["hypothesis_id"]),
+                        "r3_5_verdict": final_verdict,
+                        "r4_disposition": disposition,
+                        "category_run_id": str(category_run["category_run_id"]),
+                    })
+        gates["BG9"] = {
+            "pass": True,
+            "detail": {
+                "finding_count": len(expected_finding_ids),
+                "finding_review_count": len(finding_review_ids),
+                "review_state_counts": finding_review_counts,
+                "r4_r3_disagreements": r4_r3_disagreements,
+                "review_is_agent_assertion_not_independent_human_review": True,
+            },
         }
         r5_by_hypothesis = {
             str(item["hypothesis_id"]): item for item in r5["assessments"]
@@ -1413,11 +1528,6 @@ class BatchWorkflow:
             "pass": not invalid_r5,
             "detail": {"invalid_r5_assessments": invalid_r5},
         }
-        r4 = (
-            self._read_artifact(stage_events["R4_COMPLETED"].payload_ref)
-            if stage_events["R4_COMPLETED"]
-            else {"category_runs": []}
-        )
         invalid_category_runs = [
             item["category_run_id"]
             for item in r4["category_runs"]
@@ -1487,10 +1597,6 @@ class BatchWorkflow:
         if failed:
             raise ModelError(f"Batch gates failed: {', '.join(failed)}")
 
-        findings = [
-            self._read_artifact(event.payload_ref)
-            for event in self._events(event_type="FINDING_RECORDED")
-        ]
         report = {
             "schema_version": "1.0",
             "campaign_id": self.campaign_id,
@@ -1503,6 +1609,10 @@ class BatchWorkflow:
             "findings": findings,
             "surface_review_dispositions": surface_review_dispositions,
             "surface_review_disposition_counts": surface_review_disposition_counts,
+            "finding_reviews": [asdict(item) for item in closure.finding_reviews],
+            "finding_review_state_counts": finding_review_counts,
+            "finding_review_is_independent_human_review": False,
+            "r4_r3_disagreements": r4_r3_disagreements,
             "needs_review_hypothesis_ids": [
                 item["hypothesis_id"]
                 for item in r5["assessments"]

@@ -1,7 +1,8 @@
 # Reachable Audit vNext Software Design
 
-Status: as-implemented software baseline, reviewed 2026-10-17 against commit `beaef3b`
-plus the working-tree contract repairs.
+Status: as-implemented software baseline, initially reviewed 2026-10-17 against commit
+`beaef3b` plus working-tree repairs; contract updates through 2026-10-22 are identified
+below and cross-referenced to the completion plan.
 This supersedes the target package/schema descriptions in the previous revision.
 Missing capabilities and known defects below are not supported contracts.
 
@@ -11,6 +12,10 @@ acceptance matrix and [generality review](GENERALITY_REVIEW_VNEXT.md) for this
 review's scope and remaining limits. Authorized development audits do not require
 release certification, authority keys, or held-out labels unless exercising those
 specific features.
+
+Current-contract update (2026-10-22): section 1.1 item 6 and section 6 describe the
+R2 entrypoint, R4 hypothesis/Finding, and R6 Finding reconciliation contracts, including
+their structural-only assurance boundary.
 
 ## 1. Scope and Compatibility
 
@@ -62,6 +67,12 @@ release-certification claim. The as-implemented sections below remain the baseli
   Matching chain join nodes remain a necessary structural check, not a semantic proof;
   proof declarations do not establish that the asserted interface or data flow is true.
   Automatic boundary discovery and independent semantic adjudication remain target work.
+6. Coverage declarations must reconcile across stages: R2 predeclared entrypoints receive
+   source-anchored axis dispositions; R4 reviews every scoped hypothesis and links each
+   existing Finding to its applicable CategoryRun; R6 reviews every recorded Finding
+   and exposes R3.5/R4 disposition disagreements. These are traceability controls.
+   Evidence relevance, correct classification, and reviewer independence remain
+   semantic/operator responsibilities and must not be reported as mechanically proven.
 
 The minimum vertical acceptance scenario must exercise a mixed-language boundary,
 a late candidate routed to verification, source/input invalidation, interrupted-task
@@ -678,24 +689,45 @@ external container or VM.
   conclusions until rechecked.
 - **R4:** each planned Work Unit/category pair has a COMPLETE, evidenced run or a
   structured, evidenced NOT_APPLICABLE/DEFERRED disposition. Finding count may be zero.
-- `CategoryRun.finding_ids` optionally attributes canonical Findings already recorded
-  for the Batch; R4 tasks do not create Findings. R4 metrics report distinct linked
+- R4 task inputs include scoped hypotheses and previously recorded applicable Findings.
+  Each CategoryRun must contain one evidence-linked `hypothesis_reviews` disposition per
+  scoped hypothesis and reconcile every applicable existing Finding exactly once through
+  `finding_ids`; R4 tasks do not create Findings. R4 metrics report distinct linked
   Findings separately, while canonical finding count/yield come from
-  `FINDING_RECORDED` events, including Findings recorded after R5.
+  `FINDING_RECORDED` events, including Findings recorded after R5. R6 requires one
+  `finding_reviews` declaration per recorded Finding and reports R3.5/R4 disagreements.
+  These checks establish identity, coverage, and resolvable references, not semantic
+  correctness or independent human review.
 - **R5:** the experiment artifact records target reference, fidelity, prerequisites,
   exact commands or actions, observations, relevant artifacts, cleanup result, and final
   assessment. Dispositions are STATIC_VERDICT_RETAINED, EMPIRICALLY_CONFIRMED, REFUTED,
   NEEDS_REVIEW, and NOT_FEASIBLE. NOT_FEASIBLE requires a required experiment, no
   attempted run, a null experiment ID, and blocker evidence/rationale. It remains
   unresolved and never establishes confirmation/refutation; an inconclusive attempted
-  run uses NEEDS_REVIEW with its experiment artifact. Out-of-band evidence registration
-  remains unimplemented.
+  run uses NEEDS_REVIEW with its experiment artifact. External-observation registration
+  verifies a host-authority HMAC, binds Campaign/snapshot/Batch/hypothesis scope and
+  Campaign-owned artifact digests, and remains evidence-only. Authority key custody and
+  independently trusted observer identity are external.
   A harness run without `hypothesis_id` is standalone and is ineligible for an R5
-  empirical upgrade. No authorized external-observation registration contract exists.
-  Failed setup is not a negative security result. Strong unsupported claims
-  remain NEEDS_REVIEW.
+  empirical upgrade. Failed setup is not a negative security result. Strong unsupported
+  claims remain NEEDS_REVIEW.
 - **R6:** all stage outputs reconcile to the Batch manifest; every open dependent Handoff,
   drift event, omitted path, and residual risk is listed. R6 closes a Batch only.
+
+Every canonical Finding has an explicit classification: `SECURITY_VULNERABILITY`,
+`ORDINARY_DEFECT`, `HARDENING`, or `INSUFFICIENT_EVIDENCE`. The recording API rejects
+the insufficient-evidence compatibility value. A security-vulnerability Finding
+requires a structured impact declaration naming attacker capability, trust boundary,
+protected asset, security property, impact, severity rationale, and references that
+are part of the Finding evidence set. These checks validate structure and resolvable
+source/artifact references, not semantic truth, exploitability, or severity accuracy.
+Functional/robustness defects and hardening recommendations remain reportable without
+being counted as security vulnerabilities. Campaign reports distinguish Agent-declared
+classification counts and label the confirmed-security-vulnerability count as
+Agent-classified. This count is not an independent human-validated vulnerability count;
+the runtime does not authenticate or enforce independent review. External or
+release-ready claims require a qualified independent reviewer to inspect source,
+evidence relevance, attacker assumptions, impact, and severity and retain a disposition.
 
 R3.5 schedulers derive refutation/adjudication targets from the committed R3 artifact.
 When there are no eligible targets, schedule/commit records explicit empty-stage results
@@ -764,10 +796,13 @@ resource limits. Offline migration is a separate tool. Task context does not inc
 
 `tools/migrate_legacy_knowledge.py` is a developer-only, one-way tool. It reads selected v3 assets,
 normalizes candidate concepts into draft records, and emits a migration report with
-source references, rejected items, duplicates, missing fields, and provenance state. It
-does not update the active catalog as part of audit execution. Reviewed publication
-is selected by an operator flag, not an independently verified human-review record.
-No v3 module is imported at runtime.
+source references, rejected items, duplicates, missing fields, and provenance state.
+Project-residue tokens are supplied explicitly by the reviewer/evaluation authority
+through a required input file; the utility has no built-in list of historical project
+names. An empty file is an explicit decision to supply no additional token patterns.
+The tool does not update the active catalog as part of audit execution. Reviewed
+publication is selected by an operator flag, not an independently verified human-review
+record. No v3 module is imported at runtime.
 
 Publication review objectives (not universally enforced gates) include:
 

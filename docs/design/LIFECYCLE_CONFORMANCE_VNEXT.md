@@ -5,9 +5,10 @@ Status: preliminary engineering self-assessment, not certification. An authorize
 ## Assessment Basis
 
 The original assessment covered commit `beaef3b` and repairs on 2026-10-17. The
-2026-10-20 update incorporates the local implementation completion record and
-[current generality review](GENERALITY_REVIEW_VNEXT.md); it is not a new clause-level
-standards assessment. It does not assess the user's organization, independent
+2026-10-20 update incorporated the local implementation completion record and
+[generality review](GENERALITY_REVIEW_VNEXT.md). This 2026-10-22 update records the
+new R2/R4/R6 cross-stage coverage contract and its tests in SYSR-041/SWDR-047; it is
+not a new clause-level standards assessment. It does not assess the user's organization, independent
 evaluation authority, acquisition/supplier contracts, deployment operations, or
 proprietary Google engineering policies. Rebaselining documents does not waive missing
 capabilities or resolve implementation defects.
@@ -25,7 +26,7 @@ Statuses mean:
 |---|---|---|
 | Agreement processes: acquisition and supply | No acquisition or supplier contract workflow is part of the skill. | **Not applicable to the standalone tool; adopter responsibility.** If deployed as a contracted service, define supplier, acceptance, data-handling, and evidence-retention agreements outside this repository. |
 | Organizational project-enabling: life-cycle model, infrastructure, quality, knowledge, human resources | Requirements/design baseline, roadmap, versioned knowledge catalog, provenance, compatibility scan, test suite. | **Partial.** No organizational quality system, competency authorization, tool qualification, records-retention policy, or independent process audit is supplied. |
-| Technical management: planning, assessment/control, decision, risk, configuration, information, measurement, quality assurance | Frozen snapshot/plan, catalog content binding, append-only records, stage revision/invalidation, budgets/measurements, drift handling, and screening-ceiling gates. | **Partial.** Supported post-commit correction, delegated reservations, and optional HMAC envelope checks have local tests. Arbitrary host-input invalidation, trusted identities, provider caps and real-scale qualification remain unestablished. R0 is a digest receipt, not a signed baseline. |
+| Technical management: planning, assessment/control, decision, risk, configuration, information, measurement, quality assurance | Frozen snapshot/plan, catalog content binding, append-only records, stage revision/invalidation, budgets/measurements, drift handling, screening-ceiling gates, and explicit cross-stage R2/R4/R6 coverage reconciliation. | **Partial.** Supported post-commit correction, delegated reservations, and optional HMAC envelope checks have local tests. Cross-stage review records are Agent assertions, not semantic verification or organizational QA. Arbitrary host-input invalidation, trusted identities, provider caps and real-scale qualification remain unestablished. R0 is a digest receipt, not a signed baseline. |
 | Technical processes: stakeholder needs and system/software requirements | SYSR/SWDR baselines with cross-references and explicit implementation statuses. | **Partial.** Requirements are traceable, but approved-user needs, project-specific tailoring, acceptance owners, and complete requirement verification evidence are external inputs. |
 | Technical processes: architecture/design and implementation | System/software design, language/build adapters, Campaign/Batch workflow, runtime code and schema. | **Partial.** Plan scope, Surface declarations and supported stage invalidation exist; arbitrary dependency tracking, authenticated approver identity, host-observed review, and some evidence-role contracts remain incomplete. |
 | Technical processes: integration and verification | Unit/integration/adapter tests, fault injection, task contracts, Handoffs, 30k-event/Handoff and 1k-file synthetic fixtures. | **Partial.** Local scale fixtures exist; one historical 2-second timing overrun remains unexplained. Real cross-language boundary completeness, representative scale, and supported-platform integrations lack qualification evidence. |

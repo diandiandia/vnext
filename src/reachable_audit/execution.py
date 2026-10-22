@@ -24,6 +24,7 @@ from .analysis_models import (
     CategoryRunStatus,
     DiscoveryAxis,
     Experiment,
+    FindingReview,
     Hypothesis,
     PathRiskTier,
     R5Assessment,
@@ -106,7 +107,20 @@ _R2_ALTITUDE_CONTRACT = (
     "not host-observed reading or proof of safety. A lack of candidates is not evidence "
     "of non-applicability. For NOT_APPLICABLE cite source evidence for the absent "
     "precondition; for DEFERRED identify the blocker and remaining review. "
-    "Do not replace difficult analysis with an unsupported applicability label."
+    "Do not replace difficult analysis with an unsupported applicability label. For "
+    "large or long files, use bounded line-range and symbol reads; do not request a "
+    "full-file dump. If you cannot inspect all Work Unit source within the available "
+    "limits, fail the task without output instead of claiming complete file coverage."
+)
+
+_R2_ENTRYPOINT_CONTRACT = (
+    "The required_entrypoints are a predeclared recall checklist, not exhaustive "
+    "scope. For each item assigned to this axis, return exactly one AxisRun "
+    "entrypoint_reviews record with disposition ANALYZED, NO_CANDIDATE, DEFERRED, "
+    "or NOT_APPLICABLE, a specific rationale, and source LOC evidence including at "
+    "least one supplied anchor. DEFERRED and NOT_APPLICABLE are explicit coverage "
+    "limitations, not successful review. Do not treat a checked entrypoint as proof "
+    "that adjacent helpers or the whole file were reviewed."
 )
 
 _VERIFICATION_INSTRUCTIONS = (
@@ -837,6 +851,11 @@ class ManualExecutionBackend:
                 )
             else:
                 self._validate_hypothesis_output(task, output)
+                if task.required_output in {
+                    "hypothesis-set/v1",
+                    "compact-hypothesis-set/v1",
+                }:
+                    self._validate_r2_entrypoint_reviews(task, output, work_unit)
         if task.required_output == "category-run-bundle/v1":
             self._validate_category_run_bundle(task, output)
         if task.required_output == "category-run/v1":
@@ -878,6 +897,32 @@ class ManualExecutionBackend:
                     f"R6 Surface dispositions must exactly cover R1 Surfaces: "
                     f"missing={missing[:10]}, extra={extra[:10]}"
                 )
+            try:
+                task_input = json.loads(
+                    self.manager.artifacts.get_bytes(task.input_refs[0])
+                )
+            except (OSError, ValueError, IndexError, TypeError) as error:
+                raise ModelError(f"R6 task input is invalid: {task.task_id}") from error
+            expected_finding_ids = set(
+                str(item) for item in task_input.get("required_finding_ids", [])
+            )
+            finding_reviews_value = closure.get("finding_reviews", [])
+            if not isinstance(finding_reviews_value, list):
+                raise ModelError("R6 closure finding_reviews must be an array")
+            finding_reviews = [
+                FindingReview.from_dict(item) for item in finding_reviews_value
+            ]
+            actual_finding_ids = [item.finding_id for item in finding_reviews]
+            if (
+                len(actual_finding_ids) != len(set(actual_finding_ids))
+                or set(actual_finding_ids) != expected_finding_ids
+            ):
+                missing = sorted(expected_finding_ids - set(actual_finding_ids))
+                extra = sorted(set(actual_finding_ids) - expected_finding_ids)
+                raise ModelError(
+                    "R6 Finding reviews must exactly cover recorded Findings: "
+                    f"missing={missing[:10]}, extra={extra[:10]}"
+                )
         return output
 
     @staticmethod
@@ -913,7 +958,9 @@ class ManualExecutionBackend:
 
     def _validate_category_run_plan(
         self, run: CategoryRun, category_plan: Mapping[str, Any], task_id: str,
-        *, allowed_hypothesis_ids: Sequence[str] | None = None,
+        *,
+        allowed_hypothesis_ids: Sequence[str] | None = None,
+        required_finding_ids: Sequence[str] | None = None,
     ) -> None:
         plan_id = str(category_plan.get("category_plan_id", ""))
         work_unit_id = str(category_plan.get("work_unit_id", ""))
@@ -935,6 +982,23 @@ class ManualExecutionBackend:
             raise ModelError(
                 f"R4 hypothesis_ids must reconcile every allowed_hypothesis_ids entry "
                 f"exactly once, including rejected or unresolved candidates: {task_id}"
+            )
+        if allowed_hypothesis_ids is not None and (
+            {item.hypothesis_id for item in run.hypothesis_reviews}
+            != set(allowed_hypothesis_ids)
+            or len(run.hypothesis_reviews) != len(allowed_hypothesis_ids)
+        ):
+            raise ModelError(
+                f"R4 requires one evidence-linked hypothesis review per allowed "
+                f"hypothesis: {task_id}"
+            )
+        if required_finding_ids is not None and (
+            set(run.finding_ids) != set(required_finding_ids)
+            or len(run.finding_ids) != len(set(run.finding_ids))
+        ):
+            raise ModelError(
+                f"R4 finding_ids must reconcile every existing finding in scope exactly "
+                f"once: {task_id}"
             )
         expected_axes = tuple(str(item) for item in category_plan.get("discovery_axes", []))
         actual_axes = tuple(axis_run.axis.value for axis_run in run.axis_runs)
@@ -982,6 +1046,7 @@ class ManualExecutionBackend:
         self._validate_category_run_plan(
             run, category_plan, task.task_id,
             allowed_hypothesis_ids=task_input.get("allowed_hypothesis_ids"),
+            required_finding_ids=task_input.get("required_finding_ids"),
         )
 
     def _validate_category_run_bundle(
@@ -1000,6 +1065,7 @@ class ManualExecutionBackend:
         wire_version = str(task_input.get("bundle_input_version", "1.0"))
         expected = {}
         allowed_hypothesis_ids = {}
+        required_finding_ids = {}
         task_contexts = task_input.get("task_contexts", [])
         for item in items:
             if not isinstance(item, dict):
@@ -1058,6 +1124,7 @@ class ManualExecutionBackend:
                 raise ModelError(f"R4 bundle input has duplicate or missing plan IDs: {task.task_id}")
             expected[plan_id] = category_plan
             allowed_hypothesis_ids[plan_id] = item.get("allowed_hypothesis_ids")
+            required_finding_ids[plan_id] = item.get("required_finding_ids")
         if set(expected) != set(task.bundle_item_ids):
             raise ModelError(f"R4 bundle member IDs mismatch: {task.task_id}")
         if set(task.work_unit_ids) != {
@@ -1080,6 +1147,7 @@ class ManualExecutionBackend:
             self._validate_category_run_plan(
                 run, category_plan, task.task_id,
                 allowed_hypothesis_ids=allowed_hypothesis_ids[run.category_plan_id],
+                required_finding_ids=required_finding_ids[run.category_plan_id],
             )
         if actual != set(expected):
             missing = sorted(set(expected) - actual)
@@ -1229,6 +1297,53 @@ class ManualExecutionBackend:
         elif not isinstance(work_unit.get("source_files"), list):
             raise ModelError(f"task input has malformed file scope: {task.task_id}")
         return work_unit
+
+    def _validate_r2_entrypoint_reviews(
+        self,
+        task: TaskSpec,
+        output: Mapping[str, Any],
+        work_unit: Mapping[str, Any],
+    ) -> None:
+        try:
+            task_input = json.loads(
+                self.manager.artifacts.get_bytes(task.input_refs[0])
+            )
+            required_entrypoints = task_input["required_entrypoints"]
+            if not isinstance(required_entrypoints, list):
+                raise TypeError("required_entrypoints is not an array")
+        except (OSError, ValueError, KeyError, IndexError, TypeError) as error:
+            raise ModelError(
+                f"R2 task input is missing its entrypoint checklist: {task.task_id}"
+            ) from error
+        raw_axis_runs = output.get(
+            "axis_runs"
+            if task.required_output == "compact-hypothesis-set/v1"
+            else "axis_run"
+        )
+        axis_runs = raw_axis_runs if isinstance(raw_axis_runs, list) else [raw_axis_runs]
+        workflow = BatchWorkflow(self.manager, task.campaign_id, task.batch_id)
+        for raw_axis_run in axis_runs:
+            if not isinstance(raw_axis_run, dict):
+                raise ModelError(f"R2 axis run must be an object: {task.task_id}")
+            try:
+                axis_run = AxisRun.from_dict(raw_axis_run)
+            except (KeyError, TypeError, ValueError) as error:
+                raise ModelError(
+                    f"invalid R2 axis run structure: {task.task_id}: {error}"
+                ) from error
+            applicable_entrypoints = [
+                item for item in required_entrypoints
+                if isinstance(item, dict)
+                and item.get("required_axis") == axis_run.axis.value
+            ]
+            if applicable_entrypoints:
+                DiscoveryCoordinator._validate_entrypoint_reviews(
+                    workflow,
+                    axis_run,
+                    applicable_entrypoints,
+                    {"source_files": _expand_agent_work_unit_files(work_unit)},
+                    task.task_id,
+                )
 
     def _validate_surface_coverage(
         self, task: TaskSpec, output: Mapping[str, Any],
@@ -1716,7 +1831,9 @@ class DiscoveryCoordinator:
             },
         )
 
-    def schedule_r2(self) -> tuple[TaskView, ...]:
+    def schedule_r2(
+        self, *, entrypoint_checklist: Sequence[Mapping[str, Any]],
+    ) -> tuple[TaskView, ...]:
         r1_event = self._require_stage("R1_COMPLETED")
         revision_parts = self._stage_revision_parts("R1_COMPLETED")
         stage_revision_ids = self._stage_revision_id_map("R1_COMPLETED")
@@ -1727,11 +1844,19 @@ class DiscoveryCoordinator:
         surfaces_by_work_unit: dict[str, list[Mapping[str, Any]]] = {}
         for surface in r1["surfaces"]:
             surfaces_by_work_unit.setdefault(str(surface["work_unit_id"]), []).append(surface)
+        normalized_checklist = self._normalize_entrypoint_checklist(
+            entrypoint_checklist
+        )
         views = []
         for work_unit in self._work_units():
             work_unit_id = str(work_unit["work_unit_id"])
             hotspot_report = self._hotspot_context(work_unit)
             for axis in DiscoveryAxis:
+                required_entrypoints = [
+                    item for item in normalized_checklist
+                    if item["required_axis"] == axis.value
+                    and item["work_unit_id"] == work_unit_id
+                ]
                 knowledge_context = self.knowledge_catalog.task_context(
                     work_unit.get("languages", []),
                     families=work_unit.get("category_families", []),
@@ -1746,10 +1871,12 @@ class DiscoveryCoordinator:
                     "hotspot_report": hotspot_report,
                     "hotspot_contract": _HOTSPOT_CONTRACT,
                     "surfaces": surfaces_by_work_unit.get(work_unit_id, []),
+                    "required_entrypoints": required_entrypoints,
                     "language_adapters": self._language_adapter_context(work_unit),
                     "knowledge_context": knowledge_context,
                     "analysis_contract": (
                         _AXIS_INSTRUCTIONS[axis.value] + " " + _R2_ALTITUDE_CONTRACT
+                        + " " + _R2_ENTRYPOINT_CONTRACT
                     ),
                     "output_contract": {
                         "schema_version": "1.0",
@@ -1757,6 +1884,10 @@ class DiscoveryCoordinator:
                         "axis_run": (
                             "AxisRun with APPLICABLE/NOT_APPLICABLE/DEFERRED, evidence_refs, "
                             "rationale, and review_altitude per analysis_contract"
+                        ),
+                        "entrypoint_reviews": (
+                            "AxisRun.entrypoint_reviews must contain exactly one "
+                            "evidence-linked review for every required_entrypoints ID"
                         ),
                         "hypotheses": (
                             "array<Hypothesis>; each mechanism is an object with required "
@@ -1781,7 +1912,9 @@ class DiscoveryCoordinator:
                 )))
         return tuple(views)
 
-    def schedule_r2_compact(self) -> tuple[TaskView, ...]:
+    def schedule_r2_compact(
+        self, *, entrypoint_checklist: Sequence[Mapping[str, Any]],
+    ) -> tuple[TaskView, ...]:
         """Schedule one consolidated six-axis task per Work Unit."""
         r1_event = self._require_stage("R1_COMPLETED")
         revision_parts = self._stage_revision_parts("R1_COMPLETED")
@@ -1793,6 +1926,9 @@ class DiscoveryCoordinator:
         surfaces_by_work_unit: dict[str, list[Mapping[str, Any]]] = {}
         for surface in r1["surfaces"]:
             surfaces_by_work_unit.setdefault(str(surface["work_unit_id"]), []).append(surface)
+        normalized_checklist = self._normalize_entrypoint_checklist(
+            entrypoint_checklist
+        )
         views = []
         axes = [axis.value for axis in DiscoveryAxis]
         for work_unit in self._work_units():
@@ -1811,10 +1947,17 @@ class DiscoveryCoordinator:
                 "hotspot_report": hotspot_report,
                 "hotspot_contract": _HOTSPOT_CONTRACT,
                 "surfaces": surfaces_by_work_unit.get(work_unit_id, []),
+                "required_entrypoints": [
+                    item for item in normalized_checklist
+                    if item["work_unit_id"] == work_unit_id
+                ],
                 "language_adapters": self._language_adapter_context(work_unit),
                 "knowledge_context": knowledge_context,
                 "analysis_contract": {
-                    axis: _AXIS_INSTRUCTIONS[axis] + " " + _R2_ALTITUDE_CONTRACT
+                    axis: (
+                        _AXIS_INSTRUCTIONS[axis] + " " + _R2_ALTITUDE_CONTRACT
+                        + " " + _R2_ENTRYPOINT_CONTRACT
+                    )
                     for axis in axes
                 },
                 "output_contract": {
@@ -1823,6 +1966,10 @@ class DiscoveryCoordinator:
                     "axis_runs": (
                         "exactly one evidenced AxisRun per listed axis, including "
                         "review_altitude per analysis_contract"
+                    ),
+                    "entrypoint_reviews": (
+                        "exactly one source-backed review for every required entrypoint "
+                        "on its predeclared required_axis"
                     ),
                     "hypotheses": (
                         "array<Hypothesis>, each with its origin_axis; mechanism is an "
@@ -1874,9 +2021,25 @@ class DiscoveryCoordinator:
                 replace(AxisRun.from_dict(item), work_unit_id=work_unit_id)
                 for item in raw_axis_runs
             ]
+            task_input = json.loads(
+                self.workflow.manager.artifacts.get_bytes(view.task.input_refs[0])
+            )
+            required_entrypoints = task_input.get("required_entrypoints", [])
+            if not isinstance(required_entrypoints, list):
+                raise ModelError(
+                    f"compact R2 required_entrypoints must be an array: {view.task.task_id}"
+                )
             for axis_run in parsed_axis_runs:
                 ManualExecutionBackend._validate_axis_review_altitude(
                     axis_run, view.task.task_id,
+                )
+                axis_requirements = [
+                    item for item in required_entrypoints
+                    if item.get("required_axis") == axis_run.axis.value
+                ]
+                self._validate_entrypoint_reviews(
+                    self.workflow,
+                    axis_run, axis_requirements, work_unit, view.task.task_id,
                 )
             axes_seen = [item.axis.value for item in parsed_axis_runs]
             if set(axes_seen) != required_axes or len(axes_seen) != len(required_axes):
@@ -1945,6 +2108,18 @@ class DiscoveryCoordinator:
             if axis_run.work_unit_id not in (None, work_unit_id):
                 raise ModelError(f"R2 axis disposition Work Unit mismatch: {view.task.task_id}")
             axis_run = replace(axis_run, work_unit_id=work_unit_id)
+            task_input = json.loads(
+                self.workflow.manager.artifacts.get_bytes(view.task.input_refs[0])
+            )
+            required_entrypoints = task_input.get("required_entrypoints", [])
+            if not isinstance(required_entrypoints, list):
+                raise ModelError(
+                    f"R2 required_entrypoints must be an array: {view.task.task_id}"
+                )
+            self._validate_entrypoint_reviews(
+                self.workflow,
+                axis_run, required_entrypoints, work_unit, view.task.task_id,
+            )
             if axis_run.applicability is not Applicability.APPLICABLE and value.get("hypotheses"):
                 raise ModelError(
                     f"non-applicable or deferred R2 axis returned hypotheses: {view.task.task_id}"
@@ -2426,6 +2601,19 @@ class DiscoveryCoordinator:
             hypotheses_by_work_unit.setdefault(
                 str(hypothesis["work_unit_id"]), []
             ).append(hypothesis)
+        findings = []
+        for event in self.workflow.manager.store.list_batch_events(
+            self.workflow.campaign_id,
+            self.workflow.batch_id,
+            entity_type="finding",
+            event_type="FINDING_RECORDED",
+        ):
+            if event.payload_ref is None:
+                raise ModelError(f"recorded Finding has no artifact: {event.entity_id}")
+            finding = json.loads(
+                self.workflow.manager.artifacts.get_bytes(event.payload_ref)
+            )
+            findings.append(finding)
         views = []
         screening_runs = []
         for category_plan in value["category_plans"]:
@@ -2474,6 +2662,21 @@ class DiscoveryCoordinator:
                 families=[str(category_plan["family"])],
                 max_entries=10,
             ).to_dict()
+            hypotheses_to_review = [
+                item for item in hypotheses_by_work_unit.get(work_unit_id, [])
+                if str(item["mechanism"]["family"]) == str(category_plan["family"])
+            ]
+            allowed_hypothesis_ids = [
+                str(item["hypothesis_id"]) for item in hypotheses_to_review
+            ]
+            findings_to_reconcile = [
+                item for item in findings
+                if set(str(value) for value in item["hypothesis_ids"])
+                & set(allowed_hypothesis_ids)
+            ]
+            required_finding_ids = sorted(
+                str(item["finding_id"]) for item in findings_to_reconcile
+            )
             input_ref = self._put_json({
                 "schema_version": "1.0",
                 "operation": "run_category_audit",
@@ -2483,11 +2686,10 @@ class DiscoveryCoordinator:
                 "language_adapters": self._language_adapter_context(work_units[work_unit_id]),
                 "knowledge_context": knowledge_context,
                 "mechanism_cards": mechanism_cards,
-                "allowed_hypothesis_ids": [
-                    str(item["hypothesis_id"])
-                    for item in hypotheses_by_work_unit.get(work_unit_id, [])
-                    if str(item["mechanism"]["family"]) == str(category_plan["family"])
-                ],
+                "hypotheses_to_review": hypotheses_to_review,
+                "allowed_hypothesis_ids": allowed_hypothesis_ids,
+                "findings_to_reconcile": findings_to_reconcile,
+                "required_finding_ids": required_finding_ids,
                 "analysis_contract": (
                     "Execute every planned discovery axis and mechanism variant. Record "
                     "SCREENED/INSPECTED altitude for each APPLICABLE AxisRun; use "
@@ -2500,6 +2702,14 @@ class DiscoveryCoordinator:
                     "once, including rejected or unresolved candidates; explain their "
                     "disposition in rationale. Use [] only when the allowlist is empty. "
                     "These are reconciliation links, not claims of a vulnerability. "
+                    "Return exactly one hypothesis_reviews record per allowed ID, with "
+                    "SUPPORTED, REJECTED, or NEEDS_REVIEW, a specific rationale, and "
+                    "evidence_refs that also appear in CategoryRun.evidence_refs. The "
+                    "record is an auditable Agent claim, not proof that the cited lines "
+                    "semantically support it. Review every supplied existing Finding "
+                    "against its linked hypothesis and report each required_finding_id "
+                    "exactly once in finding_ids; flag contradictions in the run rationale. "
+                    "Finding IDs are reconciliation links, not independent validation. "
                     "Never invent IDs for late candidates; report them as "
                     "unresolved risks for explicit follow-up."
                 ),
@@ -2507,7 +2717,9 @@ class DiscoveryCoordinator:
                     "schema_version": "1.0",
                     "category_run": (
                         "CategoryRun; omit redundant AxisRun.work_unit_id (inherited "
-                        "from the parent), with review_altitude on every APPLICABLE axis"
+                        "from the parent), with review_altitude on every APPLICABLE axis, "
+                        "exactly one hypothesis_reviews entry per allowed hypothesis ID, "
+                        "and finding_ids exactly matching required_finding_ids"
                     ),
                 },
             })
@@ -2519,12 +2731,7 @@ class DiscoveryCoordinator:
                 batch_id=self.workflow.batch_id,
                 work_unit_id=work_unit_id,
                 operation="run_category_audit",
-                input_refs=(
-                    input_ref,
-                    plan_event.payload_ref,
-                    r2_event.payload_ref,
-                    r3_event.payload_ref,
-                ),
+                input_refs=(input_ref, plan_event.payload_ref, r2_event.payload_ref, r3_event.payload_ref),
                 required_output="category-run/v1",
                 budget={
                     str(name): int(amount)
@@ -2565,6 +2772,18 @@ class DiscoveryCoordinator:
         hypotheses_by_work_unit: dict[str, list[Mapping[str, Any]]] = {}
         for hypothesis in r2["hypotheses"]:
             hypotheses_by_work_unit.setdefault(str(hypothesis["work_unit_id"]), []).append(hypothesis)
+        findings = []
+        for event in self.workflow.manager.store.list_batch_events(
+            self.workflow.campaign_id,
+            self.workflow.batch_id,
+            entity_type="finding",
+            event_type="FINDING_RECORDED",
+        ):
+            if event.payload_ref is None:
+                raise ModelError(f"recorded Finding has no artifact: {event.entity_id}")
+            findings.append(json.loads(
+                self.workflow.manager.artifacts.get_bytes(event.payload_ref)
+            ))
 
         screening_runs = []
         active_plans = []
@@ -2616,7 +2835,7 @@ class DiscoveryCoordinator:
             for category_plan in family_plans:
                 candidate = [*current, category_plan]
                 candidate_payload = self._r4_bundle_input(
-                    family, candidate, work_units, hypotheses_by_work_unit,
+                    family, candidate, work_units, hypotheses_by_work_unit, findings,
                 )
                 candidate_bytes = len(json.dumps(
                     candidate_payload, ensure_ascii=False, sort_keys=True,
@@ -2632,7 +2851,10 @@ class DiscoveryCoordinator:
                     current = candidate
                 if len(current) == 1:
                     single_size = len(json.dumps(
-                        self._r4_bundle_input(family, current, work_units, hypotheses_by_work_unit),
+                        self._r4_bundle_input(
+                            family, current, work_units,
+                            hypotheses_by_work_unit, findings,
+                        ),
                         ensure_ascii=False, sort_keys=True, separators=(",", ":"),
                     ).encode("utf-8"))
                     if single_size > max_task_input_bytes:
@@ -2675,7 +2897,9 @@ class DiscoveryCoordinator:
         for family, group in groups:
             category_plan_ids = tuple(str(item["category_plan_id"]) for item in group)
             unit_ids = tuple(dict.fromkeys(str(item["work_unit_id"]) for item in group))
-            task_input = self._r4_bundle_input(family, group, work_units, hypotheses_by_work_unit)
+            task_input = self._r4_bundle_input(
+                family, group, work_units, hypotheses_by_work_unit, findings,
+            )
             input_ref = self._put_json(task_input)
             budgets: dict[str, int] = {}
             for category_plan in group:
@@ -2708,6 +2932,7 @@ class DiscoveryCoordinator:
         category_plans: Sequence[Mapping[str, Any]],
         work_units: Mapping[str, Mapping[str, Any]],
         hypotheses_by_work_unit: Mapping[str, Sequence[Mapping[str, Any]]],
+        findings: Sequence[Mapping[str, Any]] = (),
         *,
         wire_version: str = "2.0",
     ) -> dict[str, Any]:
@@ -2730,6 +2955,18 @@ class DiscoveryCoordinator:
                 for item in hypotheses_by_work_unit.get(work_unit_id, [])
                 if str(item["mechanism"]["family"]) == family
             ]
+            hypotheses_to_review = [
+                item for item in hypotheses_by_work_unit.get(work_unit_id, [])
+                if str(item["mechanism"]["family"]) == family
+            ]
+            findings_to_reconcile = [
+                item for item in findings
+                if set(str(value) for value in item["hypothesis_ids"])
+                & set(allowed_hypothesis_ids)
+            ]
+            required_finding_ids = sorted(
+                str(item["finding_id"]) for item in findings_to_reconcile
+            )
             knowledge_context = self.knowledge_catalog.task_context(
                 work_unit.get("languages", []),
                 families=[family],
@@ -2757,6 +2994,9 @@ class DiscoveryCoordinator:
                 "language_adapters": language_adapters,
                 "knowledge_context": knowledge_context,
                 "allowed_hypothesis_ids": allowed_hypothesis_ids,
+                "hypotheses_to_review": hypotheses_to_review,
+                "findings_to_reconcile": findings_to_reconcile,
+                "required_finding_ids": required_finding_ids,
             })
             axes = tuple(str(axis) for axis in category_plan["discovery_axes"])
             if axes not in axis_set_ids:
@@ -2777,6 +3017,9 @@ class DiscoveryCoordinator:
                     }
                 },
                 "allowed_hypothesis_ids": allowed_hypothesis_ids,
+                "hypotheses_to_review": hypotheses_to_review,
+                "findings_to_reconcile": findings_to_reconcile,
+                "required_finding_ids": required_finding_ids,
             })
         value = {
             "schema_version": "1.0",
@@ -2804,9 +3047,13 @@ class DiscoveryCoordinator:
                 "host-observed reads. "
                 "Each run's hypothesis_ids must include every entry of that category_item's "
                 "allowed_hypothesis_ids exactly once, including rejected or unresolved "
-                "candidates; explain their disposition in rationale. Use [] only when the "
-                "allowlist is empty. These are reconciliation links, not vulnerability "
-                "claims. Never invent IDs for "
+                "candidates. Provide exactly one hypothesis_reviews entry per ID, with "
+                "SUPPORTED/REJECTED/NEEDS_REVIEW, a specific rationale, and evidence_refs "
+                "also included in the run-level evidence_refs. Use [] only when the "
+                "allowlist is empty. Review each supplied finding and return its "
+                "required_finding_id exactly once. Finding and hypothesis IDs are "
+                "reconciliation links, not semantic proof. "
+                "Never invent IDs for "
                 "late candidates; report them as unresolved risks for explicit follow-up."
             ),
             "output_contract": {
@@ -2814,7 +3061,12 @@ class DiscoveryCoordinator:
                 "category_runs": (
                     "one CategoryRun per category_item, no missing or extra IDs; "
                     "omit redundant AxisRun.work_unit_id (inherited from parent); "
-                    "APPLICABLE AxisRuns require SCREENED/INSPECTED altitude"
+                    "APPLICABLE AxisRuns require SCREENED/INSPECTED altitude. "
+                    "Example: allowed_hypothesis_ids=['HYP-WU-state-1'] requires "
+                    "hypothesis_ids=['HYP-WU-state-1'] even when the rationale rejects "
+                    "the candidate; [] is valid only for an empty allowlist. Each "
+                    "hypothesis requires one evidence-linked hypothesis_reviews entry, "
+                    "and finding_ids must exactly match required_finding_ids."
                 ),
             },
         }
@@ -3032,7 +3284,13 @@ class DiscoveryCoordinator:
                 "output_contract": {
                     "schema_version": "1.0",
                     "experiments": "array<Experiment>",
-                    "assessment": "R5Assessment; optional external_observation_refs must name registered same-Batch observations",
+                    "assessment": (
+                        "R5Assessment; optional external_observation_refs must name "
+                        "registered same-Batch observations. Example proposed-only "
+                        "experiment: result=inconclusive, observation_refs=[], and "
+                        "assessment disposition=NEEDS_REVIEW. Example invalid result: "
+                        "confirmed/refuted with observation_refs=[]; collector rejects it."
+                    ),
                 },
             })
             views.append(self.backend.submit(TaskSpec(
@@ -3112,11 +3370,27 @@ class DiscoveryCoordinator:
             if event.payload_ref is None:
                 raise ModelError(f"{event_type} is missing its artifact")
             stage_refs.append(event.payload_ref)
+        findings_to_reconcile = []
+        for event in self.workflow.manager.store.list_batch_events(
+            self.workflow.campaign_id,
+            self.workflow.batch_id,
+            entity_type="finding",
+            event_type="FINDING_RECORDED",
+        ):
+            if event.payload_ref is None:
+                raise ModelError(f"recorded Finding has no artifact: {event.entity_id}")
+            findings_to_reconcile.append(
+                json.loads(self.workflow.manager.artifacts.get_bytes(event.payload_ref))
+            )
         input_ref = self._put_json({
             "schema_version": "1.0",
             "operation": "collect_batch_closure_evidence",
             "snapshot_id": self.workflow.campaign.snapshot_id,
             "batch_id": self.workflow.batch_id,
+            "findings_to_reconcile": findings_to_reconcile,
+            "required_finding_ids": sorted(
+                str(item["finding_id"]) for item in findings_to_reconcile
+            ),
             "evidence_contract": {
                 "source": "canonical_stage_artifacts",
                 "source_inventory_required": False,
@@ -3135,7 +3409,13 @@ class DiscoveryCoordinator:
                 "duplicate Surface IDs. Use UNREVIEWED when a disposition cannot be "
                 "supported; all other states require evidence refs. Do not imply that an "
                 "omitted entry was reviewed. This is an Agent declaration, not "
-                "host-observed file reading or proof that a Surface is safe."
+                "host-observed file reading or proof that a Surface is safe. Review "
+                "every supplied Finding against the R2/R3/R4/R5 artifacts; return one "
+                "finding_reviews entry per required_finding_id, with state CONSISTENT, "
+                "CONFLICT, or NEEDS_REVIEW, rationale, and evidence refs. Explicitly "
+                "identify classification/impact disagreements and R3/R4 contradictions. "
+                "This is an Agent consistency check, not independent human review or "
+                "semantic proof; unresolved conflicts remain report limitations."
             ),
             "output_contract": {
                 "schema_version": "1.0",
@@ -3144,7 +3424,8 @@ class DiscoveryCoordinator:
                     "unreviewed_scope": "array<string>",
                     "residual_risks": "array<string>",
                     "lessons": "array<string>",
-                    "surface_dispositions": "array<SurfaceReviewDisposition>"
+                    "surface_dispositions": "array<SurfaceReviewDisposition>",
+                    "finding_reviews": "array<FindingReview>"
                 },
             },
         })
@@ -3233,6 +3514,93 @@ class DiscoveryCoordinator:
             if item["verdict"] == "REACHABLE"
             and item["evidence_grade"] == "edge_proven"
         }
+
+    def _normalize_entrypoint_checklist(
+        self, checklist: Sequence[Mapping[str, Any]],
+    ) -> list[dict[str, Any]]:
+        work_units = {
+            str(item["work_unit_id"]): item for item in self._work_units()
+        }
+        normalized = []
+        seen_ids: set[str] = set()
+        for item in checklist:
+            if not isinstance(item, Mapping):
+                raise ModelError("R2 entrypoint checklist items must be objects")
+            required = {
+                "entrypoint_id", "work_unit_id", "required_axis",
+                "description", "source_refs",
+            }
+            if set(item) != required:
+                raise ModelError(
+                    "R2 entrypoint checklist requires exactly "
+                    "entrypoint_id/work_unit_id/required_axis/description/source_refs"
+                )
+            entrypoint_id = str(item["entrypoint_id"]).strip()
+            work_unit_id = str(item["work_unit_id"])
+            if not entrypoint_id or entrypoint_id in seen_ids:
+                raise ModelError("R2 entrypoint checklist IDs must be unique and non-empty")
+            seen_ids.add(entrypoint_id)
+            if work_unit_id not in work_units:
+                raise ModelError(
+                    f"R2 checklist Work Unit is outside this Batch: {work_unit_id}"
+                )
+            try:
+                required_axis = DiscoveryAxis(str(item["required_axis"])).value
+            except ValueError as error:
+                raise ModelError(
+                    f"R2 checklist has unknown required_axis: {item['required_axis']}"
+                ) from error
+            description = str(item["description"]).strip()
+            source_refs = item["source_refs"]
+            if not description or not isinstance(source_refs, list) or not source_refs:
+                raise ModelError(
+                    f"R2 checklist entry requires description and source_refs: {entrypoint_id}"
+                )
+            source_paths = {
+                str(path) for path in work_units[work_unit_id]["source_files"]
+            }
+            refs = tuple(str(reference) for reference in source_refs)
+            for reference in refs:
+                self.workflow._validate_source_location(
+                    reference, source_paths,
+                )
+            normalized.append({
+                "entrypoint_id": entrypoint_id,
+                "work_unit_id": work_unit_id,
+                "required_axis": required_axis,
+                "description": description,
+                "source_refs": list(refs),
+            })
+        return normalized
+
+    @staticmethod
+    def _validate_entrypoint_reviews(
+        workflow: BatchWorkflow,
+        axis_run: AxisRun,
+        required_entrypoints: Sequence[Mapping[str, Any]],
+        work_unit: Mapping[str, Any],
+        task_id: str,
+    ) -> None:
+        expected = {
+            str(item["entrypoint_id"]): item for item in required_entrypoints
+        }
+        actual = {item.entrypoint_id: item for item in axis_run.entrypoint_reviews}
+        if set(actual) != set(expected) or len(actual) != len(axis_run.entrypoint_reviews):
+            raise ModelError(
+                f"R2 entrypoint review coverage mismatch: {task_id}; "
+                f"missing={sorted(set(expected) - set(actual))}, "
+                f"extra={sorted(set(actual) - set(expected))}"
+            )
+        source_paths = {str(item) for item in work_unit["source_files"]}
+        for entrypoint_id, review in actual.items():
+            required_refs = set(expected[entrypoint_id]["source_refs"])
+            if not required_refs.intersection(review.evidence_refs):
+                raise ModelError(
+                    f"R2 entrypoint review must cite a predeclared source anchor: "
+                    f"{task_id}/{entrypoint_id}"
+                )
+            for reference in review.evidence_refs:
+                workflow._validate_source_location(reference, source_paths)
 
     def _work_units(self) -> list[Mapping[str, Any]]:
         value = self.workflow.batch.manifest.get("work_units", [])

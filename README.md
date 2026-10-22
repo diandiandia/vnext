@@ -30,7 +30,7 @@ The analysis workflow is organized into stages:
 | R1 | Map entry surfaces, principals, components, and trust boundaries |
 | R2 | Generate falsifiable hypotheses across applicable discovery axes |
 | R3 | Verify reachability and the proposed vulnerability mechanism |
-| R3.5 | Independently refute, adjudicate, and review selected dispositions |
+| R3.5 | Separate-task refutation, adjudication, and review of selected dispositions |
 | R4 | Audit planned security categories and record evidenced coverage |
 | R5 | Run justified experiments or preserve an explicit unresolved disposition |
 | R6 | Reconcile evidence, scope, handoffs, risks, and Batch completion |
@@ -39,6 +39,14 @@ Campaign closure is separate from Batch completion. A passed gate means the reco
 requirements were satisfied; it does not mean that every file was inspected or that no
 undiscovered vulnerability exists. Reports preserve excluded, deferred, and unresolved
 scope.
+
+Findings are explicitly classified as security vulnerabilities, ordinary defects,
+hardening recommendations, or insufficient evidence. A confirmed behavior defect is
+not automatically a confirmed vulnerability; security-impact declarations are
+evidence-linked structure, not automated proof of exploitability. Runtime
+classification counts are Agent-declared; they are not independently human-validated
+vulnerability counts. Require qualified independent review before externally presenting
+a security-impact declaration as validated or release-ready.
 
 ## What Is Included
 
@@ -131,9 +139,10 @@ PYTHONPATH=src python3 -m reachable_audit compatibility-scan
 The compatibility scan checks legacy imports/formats and generic residue patterns in
 runtime Python source, the main skill prompt, and runtime-eligible knowledge. It reports
 the actual file counts; development/history documents and test fixtures are not runtime
-knowledge. Project-specific tokens come from the evaluation authority, not a built-in
-list of past targets. A passing scan is bounded pattern evidence, not semantic proof
-that no historical bias or project-specific guidance remains.
+knowledge. Project-specific residue tokens are caller-supplied rather than taken from a
+built-in list of past targets. The offline legacy-knowledge migration tool also requires
+an explicit reviewer/evaluator token file. A passing scan is bounded pattern evidence,
+not semantic proof that no historical bias or project-specific guidance remains.
 
 ## Project Documents
 

@@ -38,7 +38,10 @@ from .evaluation import evaluate_release, write_evaluation_report
 from .experiments.environment import probe_toolchain
 from .experiments.runner import run_harness
 from .execution import DiscoveryCoordinator, ManualExecutionBackend, TaskResult
-from .runtime_policy import TASK_OUTPUT_MAX_BYTES
+from .runtime_policy import (
+    R2_LARGE_SOURCE_FILE_WARNING_BYTES,
+    TASK_OUTPUT_MAX_BYTES,
+)
 from .drift import resolve_snapshot_drift
 from .graph import build_component_graph
 from .handoffs import HandoffResolver
@@ -291,9 +294,6 @@ def _handle_plan(arguments: argparse.Namespace) -> int:
             if not isinstance(profile, dict):
                 raise ValueError("cost profile must be a JSON object")
             forecast = forecast_plan_cost(plan, profile)
-        artifact_id = manager.record_plan(
-            campaign_id=arguments.campaign_id, plan=plan, inventory=inventory
-        )
         files_by_unit = {
             unit.work_unit_id: unit.source_files for unit in plan.work_units
         }
@@ -309,8 +309,19 @@ def _handle_plan(arguments: argparse.Namespace) -> int:
         def _size(path: str) -> int:
             try:
                 return (manager.target_root / path).stat().st_size
-            except OSError:
-                return 0
+            except OSError as error:
+                raise OSError(
+                    f"cannot measure planned source file size: {path}"
+                ) from error
+
+        source_sizes = {
+            path: _size(path)
+            for paths in files_by_unit.values()
+            for path in paths
+        }
+        artifact_id = manager.record_plan(
+            campaign_id=arguments.campaign_id, plan=plan, inventory=inventory
+        )
 
         _print({
             "artifact_id": artifact_id,
@@ -335,13 +346,29 @@ def _handle_plan(arguments: argparse.Namespace) -> int:
                 for unit_id, floor in sorted(floor_by_unit.items())
                 if floor > TASK_OUTPUT_MAX_BYTES
             ],
+            "r2_large_source_files": [
+                {
+                    "path": path,
+                    "size_bytes": size,
+                    "work_unit_id": unit_id,
+                    "warning_threshold_bytes": R2_LARGE_SOURCE_FILE_WARNING_BYTES,
+                    "action": (
+                        "review against host context/time limits; if full source "
+                        "coverage cannot be completed, do not claim it and resolve "
+                        "the path through an approved scope decision"
+                    ),
+                }
+                for unit_id, paths in sorted(files_by_unit.items())
+                for path in paths
+                if (size := source_sizes[path]) >= R2_LARGE_SOURCE_FILE_WARNING_BYTES
+            ],
             "batch_summaries": [
                 {
                     "batch_id": batch.batch_id,
                     "work_units": len(batch.work_unit_ids),
                     "source_files": batch.source_file_count,
                     "source_bytes": sum(
-                        _size(path)
+                        source_sizes[path]
                         for unit_id in batch.work_unit_ids
                         for path in files_by_unit[unit_id]
                     ),
@@ -751,11 +778,25 @@ def _handle_task(arguments: argparse.Namespace) -> int:
             elif arguments.command == "task-commit-r1":
                 _print({"artifact_id": coordinator.commit_r1()})
             elif arguments.command == "task-schedule-r2":
-                _print({"tasks": [asdict(view) for view in coordinator.schedule_r2_compact()]})
+                checklist = json.loads(
+                    Path(arguments.entrypoint_checklist).read_text(encoding="utf-8")
+                )
+                if not isinstance(checklist, list):
+                    raise ModelError("R2 entrypoint checklist file must contain a JSON array")
+                _print({"tasks": [asdict(view) for view in coordinator.schedule_r2_compact(
+                    entrypoint_checklist=checklist,
+                )]})
             elif arguments.command == "task-commit-r2":
                 _print({"artifact_id": coordinator.commit_r2_compact()})
             elif arguments.command == "task-schedule-r2-per-axis":
-                _print({"tasks": [asdict(view) for view in coordinator.schedule_r2()]})
+                checklist = json.loads(
+                    Path(arguments.entrypoint_checklist).read_text(encoding="utf-8")
+                )
+                if not isinstance(checklist, list):
+                    raise ModelError("R2 entrypoint checklist file must contain a JSON array")
+                _print({"tasks": [asdict(view) for view in coordinator.schedule_r2(
+                    entrypoint_checklist=checklist,
+                )]})
             elif arguments.command == "task-commit-r2-per-axis":
                 _print({"artifact_id": coordinator.commit_r2()})
             elif arguments.command == "task-schedule-r3":
@@ -1169,6 +1210,12 @@ def _parser() -> argparse.ArgumentParser:
         task_stage.add_argument("--state-dir", default=".audit_vnext")
 
     task_schedule_r4 = subparsers.choices["task-schedule-r4"]
+    for command in ("task-schedule-r2", "task-schedule-r2-per-axis"):
+        subparsers.choices[command].add_argument(
+            "--entrypoint-checklist",
+            required=True,
+            help="JSON array of predeclared entrypoint checks; use [] to declare none",
+        )
     human_review = subparsers.choices["task-approve-r35-adjudication"]
     human_review.add_argument("task_id")
     human_review.add_argument("--input", required=True)

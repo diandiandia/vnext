@@ -43,7 +43,7 @@ def _legacy_inventory() -> dict[str, object]:
                 "id": f"SRC-{language}-{index:02d}",
                 "lang": language,
                 "title": (
-                    "QuickJS project-specific sample"
+                    "ExampleTarget project-specific sample"
                     if language == "c" and index == 10
                     else f"{language} issue pattern {index:02d}"
                 ),
@@ -97,18 +97,42 @@ def _legacy_inventory() -> dict[str, object]:
 
 
 def _run_migration(
-    source: Path, output: Path, *, publish: bool, replace: bool = False,
+    source: Path,
+    output: Path,
+    *,
+    publish: bool,
+    forbidden_tokens: tuple[str, ...],
+    replace: bool = False,
 ) -> None:
     script = Path(__file__).resolve().parents[1] / "tools" / "migrate_legacy_knowledge.py"
+    tokens = output.parent / "forbidden-residue-tokens.txt"
+    tokens.write_text("\n".join(forbidden_tokens) + "\n", encoding="utf-8")
     command = [
         sys.executable, str(script), "--inventory", str(source),
         "--output", str(output), "--version", "migration-test-v1",
+        "--forbidden-tokens-file", str(tokens),
     ]
     if publish:
         command.append("--publish-reviewed")
     if replace:
         command.append("--replace-existing-catalog")
     subprocess.run(command, check=True, capture_output=True, text=True)
+
+
+def test_migration_requires_reviewer_supplied_residue_tokens(tmp_path: Path) -> None:
+    script = Path(__file__).resolve().parents[1] / "tools" / "migrate_legacy_knowledge.py"
+    result = subprocess.run(
+        [
+            sys.executable, str(script),
+            "--inventory", str(tmp_path / "inventory.json"),
+            "--output", str(tmp_path / "output"),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 2
+    assert "--forbidden-tokens-file" in result.stderr
 
 
 def test_migration_builds_complete_reviewed_catalog_without_project_tokens(
@@ -118,7 +142,9 @@ def test_migration_builds_complete_reviewed_catalog_without_project_tokens(
     source.write_text(json.dumps(_legacy_inventory()), encoding="utf-8")
     output = tmp_path / "published"
 
-    _run_migration(source, output, publish=True)
+    _run_migration(
+        source, output, publish=True, forbidden_tokens=("ExampleTarget",)
+    )
     catalog = KnowledgeCatalog.load(output)
     report = json.loads((output / "migration-report.json").read_text(encoding="utf-8"))
     published_runtime = json.dumps({
@@ -131,7 +157,7 @@ def test_migration_builds_complete_reviewed_catalog_without_project_tokens(
     assert sum(len(profile["entries"]) for profile in catalog.profiles.values()) == 150
     assert len(catalog.cards) == 150
     assert report["languages"]["c"]["excluded_for_project_tokens"] == ["SRC-c-10"]
-    assert "QuickJS project-specific sample" not in published_runtime
+    assert "ExampleTarget project-specific sample" not in published_runtime
     assert all(
         len({cwe for issue in profile["entries"] for cwe in issue["weakness_refs"]}) == 10
         for profile in catalog.profiles.values()
@@ -194,7 +220,9 @@ def test_migration_builds_complete_reviewed_catalog_without_project_tokens(
     stale_card = output / "cards" / "obsolete-family" / "MECH-csharp-05.json"
     stale_card.parent.mkdir(parents=True)
     stale_card.write_text(json.dumps(catalog.cards["MECH-csharp-05"]), encoding="utf-8")
-    _run_migration(source, output, publish=True, replace=True)
+    _run_migration(
+        source, output, publish=True, forbidden_tokens=("ExampleTarget",), replace=True
+    )
     assert not stale_card.exists()
     KnowledgeCatalog.load(output)
 
@@ -212,7 +240,7 @@ def test_draft_migration_is_rejected_by_runtime_catalog(tmp_path: Path) -> None:
     source.write_text(json.dumps(_legacy_inventory()), encoding="utf-8")
     output = tmp_path / "draft"
 
-    _run_migration(source, output, publish=False)
+    _run_migration(source, output, publish=False, forbidden_tokens=())
 
     with pytest.raises(ModelError, match="portfolio is not approved"):
         KnowledgeCatalog.load(output)

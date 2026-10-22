@@ -14,6 +14,8 @@ from reachable_audit.analysis_models import (
     MechanismCard,
     EvidenceGrade,
     Hypothesis,
+    HypothesisReview,
+    HypothesisReviewDisposition,
     HypothesisStatus,
     Mechanism,
     ReviewAltitude,
@@ -260,6 +262,23 @@ def test_r4_category_plan_runs_as_durable_task(
             budget={"agent_runs": 1},
         )[0]
         workflow.record_category_audit_plan([category_plan])
+        if static_hypothesis:
+            finding_ref = manager.artifacts.put_text(json.dumps({
+                "finding_id": "FND-static",
+                "hypothesis_ids": ["HYP-static"],
+                "title": "synthetic existing finding",
+            })).artifact_id
+            manager.store.append_event(
+                campaign_id=workflow.campaign_id,
+                batch_id=workflow.batch_id,
+                entity_type="finding",
+                entity_id="FND-static",
+                event_type="FINDING_RECORDED",
+                idempotency_key="test-finding:FND-static",
+                actor="test",
+                payload={},
+                payload_ref=finding_ref,
+            )
         run = CategoryRun(
             "CR-task", category_plan.category_plan_id,
             category_plan.work_unit_id, "STATE", category_plan.mechanism_variants,
@@ -270,7 +289,12 @@ def test_r4_category_plan_runs_as_durable_task(
             ) for axis in category_plan.discovery_axes),
             Applicability.APPLICABLE, CategoryRunStatus.COMPLETE,
             ("EVID-category-review",), "all planned checks completed",
-            ("HYP-static",) if static_hypothesis else (), (),
+            ("HYP-static",) if static_hypothesis else (),
+            ("FND-static",) if static_hypothesis else (),
+            (HypothesisReview(
+                "HYP-static", HypothesisReviewDisposition.NEEDS_REVIEW,
+                ("EVID-category-review",), "R3 reachability requires adjudication",
+            ),) if static_hypothesis else (),
         )
         backend = ManualExecutionBackend(manager, "CMP-r4")
         coordinator = DiscoveryCoordinator(workflow, backend)
@@ -284,6 +308,12 @@ def test_r4_category_plan_runs_as_durable_task(
         assert task_input["knowledge_context"]["issue_entries"]
         assert task_input["knowledge_context"]["knowledge_version"] == "portfolio-2026-09-v1"
         assert bool(task_input["allowed_hypothesis_ids"]) is static_hypothesis
+        assert [item["finding_id"] for item in task_input["findings_to_reconcile"]] == (
+            ["FND-static"] if static_hypothesis else []
+        )
+        assert task_input["required_finding_ids"] == (
+            ["FND-static"] if static_hypothesis else []
+        )
         lease = backend.claim("category-auditor")
         assert lease is not None
         if static_hypothesis:
@@ -297,6 +327,16 @@ def test_r4_category_plan_runs_as_durable_task(
                 with pytest.raises(ModelError, match="reconcile every"):
                     backend.collect(lease, TaskResult(
                         True, missing_links_ref, "lost or duplicated reconciliation links",
+                        {"agent_runs": 1, "wall_seconds": 1},
+                    ))
+            missing_reviews = asdict(run)
+            missing_reviews["hypothesis_reviews"] = []
+            missing_reviews_ref = manager.artifacts.put_text(json.dumps({
+                    "schema_version": "1.0", "category_run": missing_reviews,
+            })).artifact_id
+            with pytest.raises(ModelError, match="one evidence-linked hypothesis review"):
+                    backend.collect(lease, TaskResult(
+                        True, missing_reviews_ref, "missing per-hypothesis review",
                         {"agent_runs": 1, "wall_seconds": 1},
                     ))
             assert backend.poll(lease.task.task_id).status.value == "LEASED"
@@ -526,6 +566,7 @@ def test_r4_bundle_schedules_two_work_units_and_commits_each_plan(
         task_input = json.loads(manager.artifacts.get_bytes(tasks[0].task.input_refs[0]))
         assert len(task_input["category_items"]) == 2
         assert task_input["bundle_input_version"] == "2.0"
+        assert "Example: allowed_hypothesis_ids" in json.dumps(task_input)
         assert task_input["family"] == "STATE"
         assert len(task_input["discovery_axis_sets"]) == 1
         assert all(

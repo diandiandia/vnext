@@ -186,6 +186,109 @@ not a release pass.
 runs, target-read proof, 20GB+ repository evidence and host-reviewed findings must be
 supplied and independently reviewed. Never mark synthetic fixtures as real or held-out.
 
+### TR-09: Finding Classification and Large-Source Preflight
+
+**Coverage:** finding classification is explicit; security-vulnerability reports carry
+structured, resolvable impact references; reports separate Agent-classified confirmed
+security-vulnerability claims from ordinary defects and hardening; planning flags
+individual included sources at or above the 1 MiB advisory threshold.
+
+**Required tests:** `test_batch_closure.py`, `test_campaign_closure.py`, `test_cli.py`,
+and `test_execution.py` cover recording/rejection, report totals, the large-file
+preflight field, and R2 task guidance.
+
+**Pass:** incomplete/non-security findings cannot be counted as Agent-classified
+confirmed security vulnerabilities; planner measurement failures are surfaced rather
+than converted to zero; the warning names the affected path and Work Unit. This is a
+structural classification gate, not a semantic classifier: it does not establish that
+the evidence is relevant, that the threat model is correct, or that a finding is
+exploitable. Real-target reporting must separately record independent review of each
+security-impact declaration before calling it independently validated or release-ready.
+The warning is advisory and does not prove R2 completion or physical inspection.
+
+**External gate:** on representative large-source targets, verify full-scope R2
+completion under recorded context/time limits or obtain an approved deferred-scope
+decision and reconcile it in Campaign closure. Predeclare important helper-level
+entrypoints and require source-backed call/guard/sink evidence before making recall
+claims. The engine does not observe reads or enforce line-range completeness.
+
+### TR-10: Evidence-First Qualification Before Capability Development
+
+TR-10 is a development-entry gate for capabilities whose correct behavior depends on
+target language/framework conventions or actual model/context limits. It is not a
+release gate and must not be satisfied by synthetic tests alone.
+
+**Hotspot-provider test-first matrix:** before implementing or enabling each additional
+language provider, freeze a representative, legally usable sample corpus and label
+expected candidate sites independently. Add positive, negative (including comments,
+strings, and lookalikes), alias/import, malformed-source, encoding, and snapshot-drift
+cases. Measure candidate coverage and precision against reviewed labels; retain each
+sample's language, framework, rule, expected sites, observed candidates, and evidence
+reference. Synthetic fixtures must pass first; held-out results are reported separately
+and cannot be inferred from the fixtures. `test_hotspots.py` currently asserts that
+Java, Go, C, and C++ remain explicitly unsupported; replace that characterization for
+each language only when its provider is actually implemented and coverage is reported.
+
+**Large-source R2 test-first matrix:** on an authorized representative file, record the
+frozen digest, byte/line counts, task-input bytes, model/context limit, token and wall
+time, inspected line ranges (if available), evidence anchors, and completion/defer
+decision. Predeclare helper/entrypoint and sink anchors. A qualifying result requires
+all source ranges accounted for without overlap or gaps, or an explicit approved
+deferred disposition; `reviewed_scope: ALL_SOURCE_FILES` alone is not measured line
+coverage. Use the observed failure mode to define slice boundaries and reconciliation
+before writing implementation tests. The current planner test is only an advisory-
+warning test.
+
+**Cross-language boundary test-first matrix:** in a representative mixed-language
+target, inventory actual FFI, RPC, IPC, serialization, generated-code, and shared-data
+mechanisms. For each sampled edge, retain source and destination anchors, language pair,
+protocol/framework, direction, trust boundary, expected owner and route, and whether
+current discovery found it. Include negative/unrelated dependency cases. Only then
+specify detector behavior and add synthetic regression fixtures; measure misses and
+false positives on a separate reviewed sample.
+
+**Pass before implementation:** the target/sample, labels, metrics, known limitations,
+and acceptance thresholds are predeclared and retained as an evidence bundle. If an
+authorized representative sample is unavailable, mark the capability **BLOCKED on
+target evidence**; do not implement a speculative detector or report a synthetic pass
+as capability evidence.
+
+### TR-11: Cross-Stage Coverage and Finding Reconciliation
+
+**Coverage:** R2 requires an explicit predeclared entrypoint checklist and exactly one
+source-backed disposition per checklist ID on its specified axis; R4 requires exactly
+one evidence-linked disposition per scoped hypothesis and exact reconciliation of
+previously recorded Findings in applicable CategoryRuns; R6 requires exactly one review
+per recorded Finding and reports R3.5/R4 disposition disagreements.
+
+**Required tests:** `test_execution.py` covers checklist parsing, per-axis and compact
+task collection, exact ID coverage, evidence anchors, and explicit empty checklists.
+`test_category_runs.py` covers R4 hypothesis and Finding coverage for individual and
+bundled CategoryRuns. `test_batch_closure.py` covers R6 review coverage, evidence
+references, disagreement reporting, and the distinction between Agent assertions and
+independent human review. `test_cli.py` covers the required checklist argument.
+
+**Pass:** missing, duplicate, extra, or unsupported references fail without silently
+accepting a task; valid outputs preserve canonical R2/R4/R6 artifacts and reports.
+These structural checks establish identity and traceability only; they do not prove
+that evidence semantically supports a disposition or that the Agent's analysis is
+correct.
+
+### TR-12: Caller-Supplied Residue Policy for Offline Migration
+
+**Coverage:** The developer-only knowledge migration tool must not embed a blacklist of
+historical target/project names. It requires a reviewer/evaluator-supplied token file,
+uses those tokens to exclude matching source entries, and rejects any matching residue
+in generated runtime assets.
+
+**Required tests:** `test_knowledge_migration.py` verifies that the CLI refuses to run
+without the token-file argument, excludes a synthetic caller-supplied project token,
+reports the excluded source record, and does not publish the token in generated assets.
+
+**Pass:** no repository-owned target-name list is used by migration; an explicitly empty
+file is accepted as an explicit no-additional-token decision. This scan is only a
+pattern-based safeguard; it cannot prove that a concept is semantically portable.
+
 ## 5. Evidence Record
 
 Every test report records:
