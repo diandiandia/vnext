@@ -12,6 +12,8 @@ from reachable_audit.analysis_models import (
     HypothesisStatus,
     Mechanism,
     Refutation,
+    RevivalOutcome,
+    RevivalReview,
     SourceVerification,
     Surface,
     VerdictKind,
@@ -24,6 +26,38 @@ from reachable_audit.inventory import build_inventory
 from reachable_audit.models import ModelError
 from conftest import axis_runs_from_evidence
 from reachable_audit.planning import create_audit_plan
+
+
+@pytest.mark.parametrize("outcome", list(RevivalOutcome))
+def test_revival_summary_separates_review_from_overturn(
+    tmp_path: Path, outcome: RevivalOutcome,
+) -> None:
+    manager, workflow = _reachable_workflow(
+        tmp_path, verdict_kind=VerdictKind.UNREACHABLE,
+    )
+    try:
+        workflow.record_revival_selection(
+            ["HYP-state"], rationale="sample a rejected hypothesis",
+            evidence_refs=("EVID-selection",),
+        )
+        workflow.record_revival_review(RevivalReview(
+            "REV-state", "HYP-state", "reviewer", outcome,
+            ("LOC-app.py:1",), "source-backed review disposition",
+        ))
+        ref = workflow.complete_r35()
+        summary = json.loads(manager.artifacts.get_bytes(ref))
+        assert summary["adjudicated_hypothesis_ids"] == []
+        assert summary["revival_reviewed_hypothesis_ids"] == ["HYP-state"]
+        assert summary["revived_hypothesis_ids"] == ["HYP-state"]
+        assert summary["upheld_hypothesis_ids"] == (
+            ["HYP-state"] if outcome is RevivalOutcome.UPHOLD else []
+        )
+        assert summary["actual_revived_hypothesis_ids"] == (
+            [] if outcome is RevivalOutcome.UPHOLD else ["HYP-state"]
+        )
+        assert workflow.complete_r35() == ref
+    finally:
+        manager.close()
 
 
 def _reachable_workflow(
@@ -152,5 +186,41 @@ def test_revival_scheduler_reuses_existing_selection(tmp_path: Path) -> None:
             if event.event_type == "REVIVAL_SAMPLE_SELECTED"
         ]
         assert len(selection_events) == 1
+    finally:
+        manager.close()
+
+
+def test_legacy_r35_summary_retry_does_not_rewrite_recorded_stage(tmp_path: Path) -> None:
+    manager, workflow = _reachable_workflow(
+        tmp_path, verdict_kind=VerdictKind.UNREACHABLE,
+    )
+    try:
+        workflow.record_revival_selection(
+            ["HYP-state"], rationale="review rejection",
+            evidence_refs=("EVID-selection",),
+        )
+        workflow.record_revival_review(RevivalReview(
+            "REV-state", "HYP-state", "reviewer", RevivalOutcome.UPHOLD,
+            ("LOC-app.py:1",), "blocking evidence remains valid",
+        ))
+        legacy_value = {
+            "schema_version": "1.0",
+            "adjudicated_hypothesis_ids": [],
+            "revived_hypothesis_ids": ["HYP-state"],
+        }
+        metadata = workflow._stage_revision_metadata(
+            "R3_5", legacy_value, {}, ("R3_COMPLETED",)
+        )
+        ref = workflow._put_json(legacy_value)
+        manager.store.append_event(
+            campaign_id=workflow.campaign_id, batch_id=workflow.batch_id,
+            entity_type="batch_stage", entity_id=workflow.batch_id,
+            event_type="R3_5_COMPLETED", idempotency_key="legacy-r35-fixture",
+            actor="tool", payload={**legacy_value, **metadata}, payload_ref=ref,
+        )
+        assert workflow.complete_r35() == ref
+        assert len(manager.store.list_events(
+            workflow.campaign_id, event_type="R3_5_COMPLETED",
+        )) == 1
     finally:
         manager.close()

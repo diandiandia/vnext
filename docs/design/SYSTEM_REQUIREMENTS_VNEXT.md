@@ -64,6 +64,7 @@ semantic validation or lifecycle-standard conformity.
 | SYSR-039 | R1/R3 stage validators shall distinguish call-chain/supporting anchors, check non-blank valid locations, and use indexed path lookup with stage-local line caches. | §3.3; §6 | SWDR-041 | R1 Surface and R3 location checks also run at collect. Not all stage-level semantic/reference checks run there; cross-task line caching and scale certification remain absent. |
 | SYSR-040 | Large Campaign event and Handoff processing shall provide indexed, batchable operations, preserve per-edge evidence/idempotency, and short-circuit zero-target stages without scanning unrelated work. | §3.4; §5; §9 | SWDR-042 | Partial; indexed queries, atomic bulk resolution, and empty-stage fast paths exist, but large-scale acceptance is outstanding |
 | SYSR-041 | R2 shall exactly reconcile source-anchored reviews for predeclared entrypoints; R4 shall review every scoped hypothesis and reconcile each existing applicable Finding; R6 shall review every recorded Finding and report R3.5/R4 disposition disagreements. | §6 | SWDR-047 | Implemented at identity, coverage, and reference scope. These are Agent assertions; evidence relevance, semantic correctness, and independent human review are not established. |
+| SYSR-042 | Campaign reports shall preserve current Batch unresolved scope, give every hypothesis a derived report outcome, distinguish revival review from overturn, and separate resource assessment from workflow completion. | §3.4; §6 | SWDR-048 | Implemented at recorded-event scope; inherited unresolved items are not implicit approvals, and derived outcomes do not establish semantic correctness. |
 
 ## 3. Software-Design Coverage Result
 
@@ -76,7 +77,7 @@ task/stage revision graph; observed rather than Agent-declared reading evidence;
 independent semantic validation of interface proofs. The narrower implemented contracts
 and synthetic follow-up fixture do not close those targets.
 
-All 41 IDs are retained and map to software requirements, which name software-design
+All 42 IDs are retained and map to software requirements, which name software-design
 sections and code/tests. This is document traceability, not complete verification or
 certification. Unchanged "Covered" entries indicate a mapped local mechanism, not a
 claim of real-project acceptance. The software requirements give implementation bounds.

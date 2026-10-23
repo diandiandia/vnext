@@ -16,8 +16,10 @@ IMPLEMENTED_RELEASE_GATES = tuple(f"RG{index}" for index in range(1, 16))
 
 
 _POLICY: dict[str, Any] = {
-    "policy_version": "vnext-task-policy-38",
+    "policy_version": "vnext-task-policy-40",
     "task_collection": {
+        "go_hotspots": "campaign_frozen_opt_in_trusted_offline_ast_helper_candidates_only_not_release_qualified",
+        "go_harness_profile": "explicit_go_offline_environment_and_bounded_build_file_size;captured_output_limits_independent;ineligible_runs_cannot_upgrade",
         "shell_execution_by_scheduler": False,
         "required_measurements": ["agent_runs", "wall_seconds"],
         "delegated_agent_runs": "optional_measurement_required_when_task_budgeted_and_bounded_by_agent_runs",
@@ -77,7 +79,15 @@ _POLICY: dict[str, Any] = {
         "r1_high_path_risk_tier": "requires_inspected_work_unit_altitude_agent_declaration_not_observed_reads",
         "r2_review_altitude": "applicable_axis_requires_screened_or_inspected;_non_applicable_not_recorded",
         "r4_review_altitude": "applicable_category_axis_requires_screened_or_inspected;_non_applicable_not_recorded",
-            "handoff_edge_proven": "typed_edge_endpoint_direction_principal_premise_and_data_mapping_proof",
+        "r3_call_chain": "ordered_pure_LOC_path_line_anchors;descriptions_separate_in_rationale",
+        "r3_runtime_assumptions": "actual_exact_target_version_evidence_or_NEEDS_REVIEW;never_infer_from_worker_runtime",
+        "task_poll_lease": "claim_created_at_elapsed_seconds_expired_flag;worker_liveness_always_UNKNOWN",
+        "campaign_wall_deadline": "positive_integer_seconds_from_campaign_created_at_includes_pauses_without_subtraction;blocks_claims_only",
+        "closure_unreviewed_scope": "inherited_batch_unreviewed_scope_union_cannot_be_removed_by_coordinator",
+        "closure_hypothesis_outcomes": "findings_joined_by_hypothesis_ids_even_late;rejection_only_when_consistent_across_stages",
+        "closure_resource_assessment": "separate_from_workflow_status;NOT_ASSESSED_without_attempts_usage_configuration_or_wall_limit;FAIL_when_elapsed_completion_exceeds_configured_limit",
+        "r35_revival_counts": "reviewed_upheld_actual_revived;legacy_revived_equals_all_reviewed",
+        "handoff_edge_proven": "typed_edge_endpoint_direction_principal_premise_and_data_mapping_proof",
     },
     "harness_limits": {
         "max_timeout_seconds": 300,

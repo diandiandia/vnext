@@ -13,6 +13,12 @@ evaluation authority, acquisition/supplier contracts, deployment operations, or
 proprietary Google engineering policies. Rebaselining documents does not waive missing
 capabilities or resolve implementation defects.
 
+2026-10-23 maintenance update: TR-13 covers reproduced closure-scope inheritance,
+hypothesis outcome reporting, revival naming, task contracts and local execution
+observability. These are tool maintenance/verification work products, not a new
+clause-level conformance assessment. Host/provider controls and organizational
+approval gaps below remain open.
+
 Statuses mean:
 
 - **Implemented in tool:** a tested software mechanism exists.

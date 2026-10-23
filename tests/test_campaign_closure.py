@@ -35,6 +35,7 @@ from reachable_audit.campaign_closure import (
     _derive_r5_strength_gate,
     _derive_screening_coverage,
     _derive_snapshot_drift_gate,
+    _derive_hypothesis_outcomes,
 )
 from reachable_audit.cli import main
 from reachable_audit.campaign import CampaignManager
@@ -51,7 +52,6 @@ from reachable_audit.inventory import build_inventory
 from reachable_audit.models import CampaignAuditMode, CampaignStatus, ModelError
 from reachable_audit.plan_models import PlanPathDisposition, PlanPathState
 from reachable_audit.planning import create_audit_plan
-from reachable_audit.planning import create_audit_plan
 from reachable_audit.resource_cleanup import (
     create_campaign_temp_directory,
     register_process_group,
@@ -65,6 +65,7 @@ def _closable_campaign(
     path_dispositions: tuple[PlanPathDisposition, ...] = (),
     path_review_claims: tuple[dict[str, str], ...] = (),
     axis_review_altitudes: dict[str, str] | None = None,
+    batch_unreviewed_scope: tuple[str, ...] = (),
 ):  # type: ignore[no-untyped-def]
     manager, workflow = _ready_for_r5(
         tmp_path,
@@ -94,12 +95,152 @@ def _closable_campaign(
     workflow.close_r6(BatchClosure(
         budget_used={"agent_runs": 2, "minutes": 5},
         constraints_observed=("offline",),
-        unreviewed_scope=(),
+        unreviewed_scope=batch_unreviewed_scope,
         residual_risks=("deployment configuration not exercised",),
         lessons=("six-axis clean run completed",),
     ))
     plan_id = str(workflow.batch.manifest["plan_id"])
     return manager, manager.load_audit_plan("CMP-r4", plan_id)
+
+
+def test_campaign_inherits_batch_unreviewed_scope_without_coordinator_approval(
+    tmp_path: Path,
+) -> None:
+    manager, plan = _closable_campaign(
+        tmp_path, batch_unreviewed_scope=("runtime precondition not verified",),
+    )
+    try:
+        report = CampaignCloser(manager, "CMP-r4", plan).close(CampaignClosure(
+            architecture_overview="A source-only development pilot.",
+            unreviewed_scope=(), residual_risks=(), limitations=(), lessons=(),
+            knowledge_nominations=(), skill_issues=(),
+        ))
+        assert report["status"] == "PASS"
+        assert report["scope_completeness"] == "WITH_DECLARED_UNREVIEWED_SCOPE"
+        assert report["unreviewed_scope"] == ["runtime precondition not verified"]
+        assert report["inherited_unreviewed_scope"] == [{
+            "batch_id": plan.batches[0].batch_id,
+            "scope_ref": "runtime precondition not verified",
+        }]
+        assert report["scope_dispositions"] == []
+        assert "runtime precondition not verified" in CampaignCloser._markdown(report)
+        lessons = tmp_path / ".audit_vnext/campaigns/CMP-r4/lessons.md"
+        assert "runtime precondition not verified" in lessons.read_text()
+        assert CampaignCloser(manager, "CMP-r4", plan).close(CampaignClosure(
+            architecture_overview="A source-only development pilot.",
+            unreviewed_scope=(), residual_risks=(), limitations=(), lessons=(),
+            knowledge_nominations=(), skill_issues=(),
+        ))["artifact_id"] == report["artifact_id"]
+    finally:
+        manager.close()
+
+
+def test_campaign_resource_result_does_not_promote_missing_measurements(
+    tmp_path: Path,
+) -> None:
+    manager, plan = _closable_campaign(tmp_path)
+    try:
+        report = CampaignCloser(manager, "CMP-r4", plan).close(CampaignClosure(
+            architecture_overview="A fixture without execution usage.",
+            unreviewed_scope=(), residual_risks=(), limitations=(), lessons=(),
+            knowledge_nominations=(), skill_issues=(),
+        ))
+        assert report["resource_assessment"]["status"] == "NOT_ASSESSED"
+        assert "No task execution attempts were measured." in report[
+            "resource_assessment"
+        ]["limitations"]
+        assert "Resource assessment: NOT_ASSESSED" in CampaignCloser._markdown(report)
+    finally:
+        manager.close()
+
+
+def test_campaign_resource_result_records_exceeded_deadline(tmp_path: Path) -> None:
+    manager, plan = _closable_campaign(tmp_path)
+    try:
+        closer = CampaignCloser(manager, "CMP-r4", plan)
+        closer.campaign = replace(
+            closer.campaign,
+            budget={"max_wall_seconds": 1},
+            created_at="2020-01-01T00:00:00+00:00",
+        )
+        report = closer.close(CampaignClosure(
+            architecture_overview="A run exceeding its declared elapsed-time limit.",
+            unreviewed_scope=(), residual_risks=(), limitations=(), lessons=(),
+            knowledge_nominations=(), skill_issues=(),
+        ))
+        assert report["status"] == "PASS"
+        assert report["resource_assessment"]["status"] == "FAIL"
+        assert report["resource_assessment"]["wall_limit_exceeded"] is True
+        assert report["resource_assessment"]["elapsed_wall_seconds"] > 1
+    finally:
+        manager.close()
+
+
+def test_hypothesis_outcomes_join_late_findings_and_preserve_conflicts() -> None:
+    hypotheses = [{"hypothesis_id": name} for name in (
+        "HYP-finding", "HYP-finding-sibling", "HYP-conflict",
+        "HYP-rejected", "HYP-pending",
+    )]
+    verdicts = [
+        {"hypothesis_id": name, "verdict": "UNREACHABLE"}
+        for name in ("HYP-conflict", "HYP-rejected")
+    ]
+    runs = [{
+        "category_run_id": "CR-state",
+        "finding_ids": [],
+        "hypothesis_reviews": [{
+            "hypothesis_id": name,
+            "disposition": state,
+            "rationale": "source-backed category review",
+            "evidence_refs": ["LOC-src/module.py:1"],
+        } for name, state in (
+            ("HYP-finding", "SUPPORTED"),
+            ("HYP-conflict", "SUPPORTED"),
+            ("HYP-rejected", "REJECTED"),
+        )],
+    }]
+    assessments = [{
+        "hypothesis_id": item["hypothesis_id"],
+        "disposition": "STATIC_VERDICT_RETAINED",
+    } for item in hypotheses]
+    outcomes = _derive_hypothesis_outcomes(
+        hypotheses, verdicts, runs, assessments,
+        [{
+            "finding_id": "F-later",
+            "hypothesis_ids": ["HYP-finding", "HYP-finding-sibling"],
+        }],
+    )
+    by_id = {item["hypothesis_id"]: item for item in outcomes}
+    assert len(outcomes) == len(hypotheses)
+    assert by_id["HYP-finding"]["state"] == "FINDING_RECORDED"
+    assert by_id["HYP-finding"]["finding_ids"] == ["F-later"]
+    assert by_id["HYP-finding-sibling"]["finding_ids"] == ["F-later"]
+    assert by_id["HYP-rejected"]["state"] == "REJECTED"
+    assert by_id["HYP-conflict"]["state"] == "NEEDS_REVIEW"
+    assert by_id["HYP-pending"]["state"] == "NEEDS_REVIEW"
+    assert by_id["HYP-conflict"]["r4_reviews"][0]["evidence_refs"] == [
+        "LOC-src/module.py:1"
+    ]
+
+
+def test_campaign_rejects_impossible_completion_timeline(tmp_path: Path) -> None:
+    manager, plan = _closable_campaign(tmp_path)
+    try:
+        closer = CampaignCloser(manager, "CMP-r4", plan)
+        closer.campaign = replace(
+            closer.campaign, created_at="9999-01-01T00:00:00+00:00",
+        )
+        with pytest.raises(ModelError, match="timestamp precedes"):
+            closer.close(CampaignClosure(
+                architecture_overview="Invalid timeline fixture.",
+                unreviewed_scope=(), residual_risks=(), limitations=(), lessons=(),
+                knowledge_nominations=(), skill_issues=(),
+            ))
+        assert not manager.store.list_events(
+            "CMP-r4", event_type="CAMPAIGN_REPORT_CREATED",
+        )
+    finally:
+        manager.close()
 
 
 def test_campaign_closure_passes_ten_gates_and_writes_reports(tmp_path: Path) -> None:

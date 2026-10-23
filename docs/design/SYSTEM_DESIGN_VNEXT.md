@@ -17,6 +17,18 @@ hypothesis/Finding reconciliation, and R6 Finding reviews are enforced at their
 documented structural boundaries. They improve traceability but do not establish
 semantic evidence relevance or independent human review.
 
+Current-contract update (2026-10-23): Campaign closure inherits unresolved Batch
+scope and derives a hypothesis-to-Finding outcome ledger from existing stage records.
+Workflow completion and resource assessment are separate results. An optional local
+claim deadline includes pauses; it does not terminate a provider worker or establish
+provider-side caps. Revival review summaries distinguish UPHOLD from actual revival;
+the legacy `revived_hypothesis_ids` field means reviewed items, not overturned verdicts.
+See TR-13 and the current [generality review](GENERALITY_REVIEW_VNEXT.md).
+New CLI Campaigns use target-external state under the XDG state directory; existing
+in-tree stores remain recoverable and ambiguous dual stores require an explicit
+selection. Library hosts must explicitly select external state. Physical source-read
+or OS context isolation is still a host responsibility.
+
 ## 1. Purpose
 
 vNext is an experimental reachable-vulnerability audit workflow for mixed-language

@@ -1,28 +1,154 @@
 import json
+import datetime as dt
 from pathlib import Path
 import sys
 
-from reachable_audit.cli import main
+import pytest
+
+from reachable_audit.cli import _default_cli_state_dir, main
 from reachable_audit.campaign import CampaignManager
 from reachable_audit.compatibility import scan_runtime_compatibility, scan_runtime_deproject
-from reachable_audit.execution import ManualExecutionBackend, TaskResult, TaskSpec, TaskStatus
+from reachable_audit.execution import (
+    DiscoveryCoordinator,
+    ManualExecutionBackend,
+    TaskResult,
+    TaskSpec,
+    TaskStatus,
+    TaskView,
+)
+from reachable_audit.models import ModelError
 from dataclasses import replace
 from test_evaluation import _manifest
 from test_batch_workflow import _workflow
 
 
-def test_cli_initializes_and_reports_campaign(tmp_path: Path, capsys: object) -> None:
+def test_cli_initializes_and_reports_campaign(
+    tmp_path: Path, capsys: object, monkeypatch: object,
+) -> None:
     target = tmp_path / "target"
     target.mkdir()
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state-home"))
 
     assert main(["init", str(target), "--snapshot-id", "fixture:cli"]) == 0
     init_output = json.loads(capsys.readouterr().out)  # type: ignore[attr-defined]
     assert init_output["status"] == "PLANNING"
-    assert (target / ".audit_vnext" / "campaign.json").exists()
+    state_dir = _default_cli_state_dir(target)
+    assert state_dir.is_dir()
+    assert target not in state_dir.parents
+    assert not (target / ".audit_vnext").exists()
 
     assert main(["status", str(target)]) == 0
     status_output = json.loads(capsys.readouterr().out)  # type: ignore[attr-defined]
     assert status_output["campaigns"][0]["campaign_id"] == init_output["campaign_id"]
+
+
+def test_cli_external_default_is_cwd_independent(
+    tmp_path: Path, capsys: object, monkeypatch: object,
+) -> None:
+    target = tmp_path / "project"
+    first_cwd = tmp_path / "first-cwd"
+    second_cwd = tmp_path / "second-cwd"
+    target.mkdir()
+    first_cwd.mkdir()
+    second_cwd.mkdir()
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state-home"))
+    monkeypatch.chdir(first_cwd)
+
+    assert main(["init", str(target), "--snapshot-id", "fixture:cwd"]) == 0
+    campaign = json.loads(capsys.readouterr().out)  # type: ignore[attr-defined]
+    monkeypatch.chdir(second_cwd)
+    assert main(["status", str(target)]) == 0
+    result = json.loads(capsys.readouterr().out)  # type: ignore[attr-defined]
+
+    assert result["campaigns"][0]["campaign_id"] == campaign["campaign_id"]
+    assert _default_cli_state_dir(target).is_dir()
+    assert not (target / ".audit_vnext").exists()
+
+
+@pytest.mark.parametrize("state_home", [".", ""])
+def test_cli_falls_back_for_relative_or_empty_xdg_state_home(
+    tmp_path: Path, capsys: object, monkeypatch: object, state_home: str,
+) -> None:
+    target = tmp_path / "project"
+    home = tmp_path / "home"
+    target.mkdir()
+    home.mkdir()
+    monkeypatch.setenv("XDG_STATE_HOME", state_home)
+    monkeypatch.setenv("HOME", str(home))
+
+    assert main([
+        "init", str(target), "--snapshot-id", "fixture:fallback-state-home",
+    ]) == 0
+    capsys.readouterr()  # type: ignore[attr-defined]
+    state_dir = _default_cli_state_dir(target)
+    assert state_dir.is_dir()
+    assert home / ".local" / "state" in state_dir.parents
+    assert target not in state_dir.parents
+    assert not (target / ".audit_vnext").exists()
+
+
+def test_cli_rejects_state_home_inside_target(
+    tmp_path: Path, capsys: object, monkeypatch: object,
+) -> None:
+    target = tmp_path / "project"
+    target.mkdir()
+    monkeypatch.setenv("XDG_STATE_HOME", str(target / "state"))
+
+    assert main([
+        "init", str(target), "--snapshot-id", "fixture:unsafe-state-home",
+    ]) == 2
+    assert "default state directory would be inside the target" in (
+        capsys.readouterr().err  # type: ignore[attr-defined]
+    )
+    assert not (target / "state" / "reachable-audit").exists()
+
+
+def test_cli_relative_xdg_fallback_still_rejects_home_inside_target(
+    tmp_path: Path, capsys: object, monkeypatch: object,
+) -> None:
+    target = tmp_path / "project"
+    target.mkdir()
+    monkeypatch.setenv("XDG_STATE_HOME", "relative-state")
+    monkeypatch.setenv("HOME", str(target))
+
+    assert main([
+        "init", str(target), "--snapshot-id", "fixture:unsafe-fallback",
+    ]) == 2
+    assert "default state directory would be inside the target" in (
+        capsys.readouterr().err  # type: ignore[attr-defined]
+    )
+    assert not (target / ".local" / "state" / "reachable-audit").exists()
+
+
+def test_cli_reuses_unambiguous_legacy_state_and_rejects_ambiguity(
+    tmp_path: Path, capsys: object, monkeypatch: object,
+) -> None:
+    target = tmp_path / "legacy-target"
+    target.mkdir()
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state-home"))
+    with CampaignManager(target) as manager:
+        campaign = manager.create_campaign(
+            campaign_id="CMP-legacy-cli", snapshot_id="fixture:legacy"
+        )
+
+    assert main(["status", str(target)]) == 0
+    result = json.loads(capsys.readouterr().out)  # type: ignore[attr-defined]
+    assert result["campaigns"][0]["campaign_id"] == campaign.campaign_id
+
+    assert main([
+        "init", str(target), "--snapshot-id", "fixture:new-store",
+        "--campaign-id", "CMP-new-store",
+    ]) == 0
+    capsys.readouterr()  # type: ignore[attr-defined]
+    assert main(["status", str(target)]) == 2
+    assert "both legacy and external Campaign state exist" in (
+        capsys.readouterr().err  # type: ignore[attr-defined]
+    )
+    assert main([
+        "status", str(target), "--state-dir", str(_default_cli_state_dir(target)),
+    ]) == 0
+    selected = json.loads(capsys.readouterr().out)  # type: ignore[attr-defined]
+    assert selected["campaigns"][0]["campaign_id"] == "CMP-new-store"
 
 
 def test_cli_adds_batch_from_manifest_file(tmp_path: Path, capsys: object) -> None:
@@ -95,6 +221,77 @@ def test_cli_can_require_host_worker_attestation_at_campaign_init(
     ]) == 0
     campaign = json.loads(capsys.readouterr().out)  # type: ignore[attr-defined]
     assert campaign["budget"]["require_host_worker_attestation"] is True
+
+
+def test_cli_init_accepts_only_positive_max_wall_seconds(
+    tmp_path: Path, capsys: object,
+) -> None:
+    target = tmp_path / "wall-budget"
+    target.mkdir()
+    assert main([
+        "init", str(target), "--snapshot-id", "fixture:wall-budget",
+        "--campaign-id", "CMP-wall-budget", "--max-wall-seconds", "120",
+    ]) == 0
+    campaign = json.loads(capsys.readouterr().out)  # type: ignore[attr-defined]
+    assert campaign["budget"]["max_wall_seconds"] == 120
+
+    assert main([
+        "init", str(target), "--snapshot-id", "fixture:invalid-wall-budget",
+        "--campaign-id", "CMP-invalid-wall-budget", "--max-wall-seconds", "0",
+    ]) == 2
+    assert "positive integer" in capsys.readouterr().err  # type: ignore[attr-defined]
+
+
+def test_execution_claim_enforces_created_at_wall_deadline_and_reports_it(
+    tmp_path: Path,
+) -> None:
+    with CampaignManager(tmp_path) as manager:
+        campaign = manager.create_campaign(
+            campaign_id="CMP-wall-deadline",
+            snapshot_id="fixture:wall-deadline",
+            budget={"max_wall_seconds": 60},
+        )
+        start = dt.datetime.fromisoformat(campaign.created_at)
+        manager.add_batch(
+            campaign_id=campaign.campaign_id,
+            batch_id="B-wall-deadline",
+            manifest={"work_unit_ids": ["WU-wall-deadline"]},
+        )
+        input_ref = manager.artifacts.put_text("{}").artifact_id
+        backend = ManualExecutionBackend(
+            manager, campaign.campaign_id,
+            clock=lambda: start + dt.timedelta(seconds=30),
+        )
+        for task_id in ("TASK-before-deadline", "TASK-after-deadline"):
+            backend.submit(TaskSpec(
+                task_id,
+                campaign.campaign_id,
+                "B-wall-deadline",
+                "WU-wall-deadline",
+                "discover_surfaces",
+                (input_ref,),
+                "surface-set/v1",
+                {},
+            ))
+        lease = backend.claim("worker", task_id_filter="TASK-before-deadline")
+        assert lease is not None
+        wall_report = backend.describe_lease(lease)["campaign_wall_clock"]
+        assert wall_report["elapsed_seconds"] >= 30
+        assert wall_report["max_wall_seconds"] == 60
+        assert wall_report["deadline_at"] == (
+            start.astimezone(dt.UTC) + dt.timedelta(seconds=60)
+        ).isoformat()
+
+        expired_backend = ManualExecutionBackend(
+            manager, campaign.campaign_id,
+            clock=lambda: start + dt.timedelta(seconds=60),
+        )
+        with pytest.raises(
+            ModelError, match="elapsed_seconds=60.0.*deadline_at="
+        ):
+            expired_backend.claim(
+                "worker", task_id_filter="TASK-after-deadline"
+            )
 
 
 def test_cli_runs_registered_language_toolchain_probe(capsys: object) -> None:
@@ -262,6 +459,42 @@ def test_cli_task_list_filters_batch_and_hints_exhausted_retry(
     assert [item["task"]["task_id"] for item in result["tasks"]] == ["TASK-pending"]
 
 
+def test_r6_scheduler_exposes_tasks_and_legacy_task_alias(
+    tmp_path: Path, capsys: object, monkeypatch: object,
+) -> None:
+    target = tmp_path / "r6-cli-target"
+    target.mkdir()
+    with CampaignManager(target) as manager:
+        campaign = manager.create_campaign(
+            campaign_id="CMP-r6-cli", snapshot_id="fixture:r6-cli"
+        )
+        manager.add_batch(
+            campaign_id=campaign.campaign_id,
+            batch_id="B-r6-cli",
+            manifest={"work_unit_ids": ["WU-r6-cli"]},
+        )
+    task_view = TaskView(
+        TaskSpec(
+            "TASK-r6-cli", "CMP-r6-cli", "B-r6-cli", "WU-r6-cli",
+            "collect_batch_closure_evidence", (), "batch-closure-evidence/v1", {},
+        ),
+        TaskStatus.PENDING,
+        None,
+        0,
+        None,
+        None,
+    )
+    monkeypatch.setattr(DiscoveryCoordinator, "schedule_r6", lambda _self: task_view)
+
+    assert main([
+        "task-schedule-r6", str(target), "CMP-r6-cli", "B-r6-cli",
+    ]) == 0
+    result = json.loads(capsys.readouterr().out)  # type: ignore[attr-defined]
+
+    assert result["tasks"] == [result["task"]]
+    assert result["task"]["task"]["task_id"] == "TASK-r6-cli"
+
+
 def test_task_list_help_exposes_filters() -> None:
     from reachable_audit.cli import _parser
 
@@ -273,6 +506,7 @@ def test_task_list_help_exposes_filters() -> None:
     task_list_help = task_list_parser.format_help()
     assert "--batch-id" in task_list_help
     assert "--operation" in task_list_help
+    assert "relative paths are target-relative" in task_list_help
 
 
 def test_cli_amends_successful_uncommitted_task_output(
@@ -285,7 +519,8 @@ def test_cli_amends_successful_uncommitted_task_output(
         "--campaign-id", "CMP-task-amend",
     ]) == 0
     capsys.readouterr()  # type: ignore[attr-defined]
-    with CampaignManager(target) as manager:
+    state_dir = _default_cli_state_dir(target)
+    with CampaignManager(target, state_dir) as manager:
         manager.add_batch(
             campaign_id="CMP-task-amend", batch_id="B-amend",
             manifest={"work_unit_ids": ["WU-amend"]},
@@ -329,7 +564,7 @@ def test_cli_amends_successful_uncommitted_task_output(
     amended = json.loads(capsys.readouterr().out)  # type: ignore[attr-defined]
     assert amended["status"] == "SUCCEEDED"
     assert amended["output_ref"] != prior_ref
-    with CampaignManager(target) as manager:
+    with CampaignManager(target, state_dir) as manager:
         event = next(
             event for event in manager.store.list_events("CMP-task-amend")
             if event.event_type == "TASK_OUTPUT_AMENDED"
@@ -429,6 +664,7 @@ def test_cli_plan_accepts_path_dispositions_and_reports_them(
         "init", str(target), "--snapshot-id", "fixture:path-scope",
         "--campaign-id", "CMP-path-scope",
     ]) == 0
+    state_dir = _default_cli_state_dir(target)
     capsys.readouterr()  # type: ignore[attr-defined]
     assert main(["inventory", str(target), "CMP-path-scope"]) == 0
     capsys.readouterr()  # type: ignore[attr-defined]
@@ -445,7 +681,7 @@ def test_cli_plan_accepts_path_dispositions_and_reports_them(
     }
     assert output["batch_summaries"][0]["source_files"] == 1
     plan_file = next(
-        (target / ".audit_vnext" / "campaigns" / "CMP-path-scope" / "plans").glob(
+        (state_dir / "campaigns" / "CMP-path-scope" / "plans").glob(
             "*.json"
         )
     )
@@ -550,6 +786,7 @@ def test_cli_drives_a_durable_surface_task(tmp_path: Path, capsys: object) -> No
         "init", str(target), "--snapshot-id", "fixture:tasks",
         "--campaign-id", "CMP-tasks",
     ]) == 0
+    state_dir = _default_cli_state_dir(target)
     capsys.readouterr()  # type: ignore[attr-defined]
     assert main(["inventory", str(target), "CMP-tasks"]) == 0
     capsys.readouterr()  # type: ignore[attr-defined]
@@ -558,7 +795,7 @@ def test_cli_drives_a_durable_surface_task(tmp_path: Path, capsys: object) -> No
     assert main(["plan", str(target), "CMP-tasks", "--categories", "STATE"]) == 0
     plan = json.loads(capsys.readouterr().out)  # type: ignore[attr-defined]
     plan_file = next(
-        (target / ".audit_vnext" / "campaigns" / "CMP-tasks" / "plans").glob(
+        (state_dir / "campaigns" / "CMP-tasks" / "plans").glob(
             "*.json"
         )
     )
@@ -615,7 +852,7 @@ def test_cli_drives_a_durable_surface_task(tmp_path: Path, capsys: object) -> No
     assert "artifact_id" in json.loads(
         capsys.readouterr().out  # type: ignore[attr-defined]
     )
-    with CampaignManager(target) as manager:
+    with CampaignManager(target, state_dir) as manager:
         r0_event = next(
             event for event in manager.store.list_batch_events(
                 "CMP-tasks", batch_id, event_type="R0_COMPLETED",
@@ -745,6 +982,7 @@ def test_cli_aborts_campaign_writes_lesson_and_cleans_resources(
         "init", str(target), "--snapshot-id", "fixture:abort",
         "--campaign-id", "CMP-abort",
     ]) == 0
+    state_dir = _default_cli_state_dir(target)
     capsys.readouterr()  # type: ignore[attr-defined]
     assert main([
         "resource-create-temp", str(target), "CMP-abort", "--label", "harness",
@@ -762,4 +1000,4 @@ def test_cli_aborts_campaign_writes_lesson_and_cleans_resources(
     assert report["status"] == "ABORTED"
     assert report["resource_cleanup"]["failures"] == []
     assert not temp_path.exists()
-    assert (target / ".audit_vnext" / "campaigns" / "CMP-abort" / "lessons.md").exists()
+    assert (state_dir / "campaigns" / "CMP-abort" / "lessons.md").exists()

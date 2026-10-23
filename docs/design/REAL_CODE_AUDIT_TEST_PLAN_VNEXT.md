@@ -130,13 +130,33 @@ reachability result, or confirmed experiment is not alone proof of security impa
 recommendations remain visible but are not counted as confirmed vulnerabilities;
 unsupported security-impact claims are rejected or retained as unresolved.
 
-### B1. Policy-38 large-project development test (recommended next run)
+### B1. Current-policy large-project development test (originating policy-38 protocol)
 
 **Test ID:** `RTA-38-LARGE-01`. This is a development real-target test, not release
 qualification. Its purpose is to determine whether the current R2/R4/R6 traceability
 contracts improve coverage and reconciliation on a large repository, and to measure
 workflow capacity under a real target. It does not by itself establish vulnerability
 recall, precision, exploitability, or complete physical source reads.
+
+2026-10-23 repair retest: retain this test ID as the originating protocol, but record
+the actual new engine commit/worktree digest and task policy rather than claiming a
+policy-38 run. First execute the bounded TR-13 regressions. For the host retest:
+
+- Use target-external Campaign state and frozen source-path searches. Confirm worker
+  dispatch after each claim and release failed dispatches; do not infer liveness from
+  a lease.
+- Set a numeric `init --max-wall-seconds` and host/provider limits. The local deadline
+  includes pauses and stops new claims only; record explicit operator decisions on
+  stopping/restarting a run, and use a new Campaign for a new frozen budget. Retain
+  per-attempt input/cache/output usage or mark resource assessment NOT ASSESSED.
+- Verify Batch unresolved scope cannot disappear from Campaign JSON, Markdown or
+  lessons. Check every hypothesis's final report outcome, including candidates with
+  no canonical Finding; unknown or conflicting dispositions remain unresolved.
+- Check revival outcomes, not the legacy reviewed-list field name. UPHOLD is not a
+  reversal and does not itself require a new positive adjudication.
+- Register an authorized bounded harness before asking for empirical confirmation;
+  preserve infeasibility if the host cannot execute. A separate qualified reviewer,
+  not another worker label, is needed for an independently validated impact claim.
 
 #### Objectives
 
@@ -155,7 +175,7 @@ recall, precision, exploitability, or complete physical source reads.
 #### Test setup and execution requirements
 
 - Freeze and record the engine commit, runtime task policy (expected baseline:
-  `vnext-task-policy-38`), target commit/snapshot, language inventory, authorized paths,
+  the actual current version, originally `vnext-task-policy-38`), target commit/snapshot, language inventory, authorized paths,
   categories, model/tools, host limits and budgets before analysis. Use a fresh disposable
   clone and Campaign with no prior target findings, lessons or regression backlog in
   discovery inputs.
@@ -284,8 +304,17 @@ held-out qualification:
    misses and unrelated dependency edges.
 4. Retain these observations in the authorized evidence bundle. Use the reviewed miss,
    false-positive, resource, and coverage patterns to define the test-first fixtures and
-   acceptance thresholds in [TEST_PLAN_VNEXT.md](TEST_PLAN_VNEXT.md) before implementing
-   or enabling a detector, slicing mechanism, or provider.
+   acceptance thresholds in [TEST_PLAN_VNEXT.md](TEST_PLAN_VNEXT.md). A bounded,
+   explicit development-only prototype may be implemented after its concrete behavior
+   and fixtures are specified; do not require it to demonstrate capability before it
+   exists. Default enablement, general slicing/detector claims and release qualification
+   still need independently reviewed representative evidence.
+
+The Go pilot unlocks the experimental provider and managed synthetic runtime probe
+under TR-14. Test Go lead quality on a new frozen Campaign with
+`--experimental-go-hotspots`; retain scan failures and source-backed false positives.
+Keep expected historical issues outside fresh discovery inputs. The synthetic probe
+establishes harness mechanics only, not that any prior target candidate is exploitable.
 
 If the pilot cannot measure physical reads or exact line ranges, record that limitation
 and treat the result as workflow/skill evidence only. Never convert missing observations

@@ -17,6 +17,9 @@ reachable-audit = "reachable_audit.cli:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+"reachable_audit.discovery" = ["*.go"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"

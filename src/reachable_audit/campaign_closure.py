@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict
+import datetime as dt
 import hashlib
 import json
 from pathlib import Path
@@ -30,6 +31,65 @@ from .stage_revisions import (
 
 
 _SEVERITY_ORDER = {"LOW": 0, "MEDIUM": 1, "HIGH": 2, "CRITICAL": 3}
+
+
+def _derive_hypothesis_outcomes(
+    hypotheses: Sequence[Mapping[str, Any]],
+    verdicts: Sequence[Mapping[str, Any]],
+    category_runs: Sequence[Mapping[str, Any]],
+    assessments: Sequence[Mapping[str, Any]],
+    findings: Sequence[Mapping[str, Any]],
+    actual_revived_ids: Sequence[str] = (),
+) -> list[dict[str, Any]]:
+    verdict_by_id = {item["hypothesis_id"]: item for item in verdicts}
+    assessment_by_id = {item["hypothesis_id"]: item for item in assessments}
+    reviews_by_id: dict[str, list[dict[str, Any]]] = {}
+    for run in category_runs:
+        for review in run.get("hypothesis_reviews", []):
+            reviews_by_id.setdefault(review["hypothesis_id"], []).append({
+                "category_run_id": run["category_run_id"], **review,
+            })
+    findings_by_id: dict[str, list[str]] = {}
+    for finding in findings:
+        for hypothesis_id in finding["hypothesis_ids"]:
+            findings_by_id.setdefault(hypothesis_id, []).append(finding["finding_id"])
+    outcomes = []
+    revived = set(actual_revived_ids)
+    for hypothesis in sorted(hypotheses, key=lambda item: item["hypothesis_id"]):
+        hypothesis_id = hypothesis["hypothesis_id"]
+        verdict = verdict_by_id.get(hypothesis_id, {})
+        assessment = assessment_by_id.get(hypothesis_id, {})
+        reviews = reviews_by_id.get(hypothesis_id, [])
+        finding_ids = sorted(findings_by_id.get(hypothesis_id, []))
+        review_states = {item["disposition"] for item in reviews}
+        if finding_ids:
+            state = "FINDING_RECORDED"
+        elif hypothesis_id in revived:
+            state = "NEEDS_REVIEW"
+        elif (
+            verdict.get("verdict") == "UNREACHABLE"
+            and review_states == {"REJECTED"}
+            and assessment.get("disposition") == "STATIC_VERDICT_RETAINED"
+        ):
+            state = "REJECTED"
+        elif (
+            assessment.get("disposition") == "REFUTED"
+            and review_states == {"REJECTED"}
+            and verdict.get("verdict") != "REACHABLE"
+        ):
+            state = "REJECTED"
+        else:
+            state = "NEEDS_REVIEW"
+        outcomes.append({
+            "hypothesis_id": hypothesis_id,
+            "state": state,
+            "finding_ids": finding_ids,
+            "r3_verdict": dict(verdict),
+            "r4_reviews": reviews,
+            "r5_assessment": dict(assessment),
+            "basis": "Derived Agent records, not independent semantic adjudication.",
+        })
+    return outcomes
 
 
 def _stable_id(prefix: str, value: str) -> str:
@@ -629,8 +689,9 @@ class CampaignCloser:
         seen_path_review_claims: set[tuple[str, str]] = set()
         artifact_event_types = {
             "R1_COMPLETED", "R2_COMPLETED", "R3_COMPLETED", "R4_COMPLETED", "R5_COMPLETED",
-            "R6_COMPLETED", "TRANSMISSION_METRICS_RECORDED",
+            "R3_5_COMPLETED", "R6_COMPLETED", "TRANSMISSION_METRICS_RECORDED",
         }
+        revival_summaries = []
         invalidated_event_ids = invalidated_stage_event_ids(events)
         for batch_id in planned_batch_ids:
             for event in event_by_batch.get(batch_id, []):
@@ -726,6 +787,12 @@ class CampaignCloser:
                     discovery_axis_runs.extend(artifact.get("axis_runs", []))
                 elif event.event_type == "R3_COMPLETED":
                     verdicts.extend(artifact["verdicts"])
+                elif event.event_type == "R3_5_COMPLETED":
+                    revival_summaries.append({
+                        "batch_id": batch_id,
+                        **artifact,
+                        "legacy_revived_field_means_reviewed": True,
+                    })
                 elif event.event_type == "R4_COMPLETED":
                     category_runs.extend(artifact["category_runs"])
                 elif event.event_type == "R5_COMPLETED":
@@ -735,6 +802,11 @@ class CampaignCloser:
                 elif event.event_type == "TRANSMISSION_METRICS_RECORDED":
                     metrics.append(artifact)
         batch_reports = list(batch_reports_by_id.values())
+        inherited_unreviewed_scope = [
+            {"batch_id": batch_id, "scope_ref": scope_ref}
+            for batch_id, batch_report in sorted(batch_reports_by_id.items())
+            for scope_ref in batch_report.get("closure", {}).get("unreviewed_scope", [])
+        ]
         surface_review_dispositions = [
             {"batch_id": batch_id, **item}
             for batch_id, batch_report in sorted(batch_reports_by_id.items())
@@ -924,6 +996,26 @@ class CampaignCloser:
             if event.payload_ref
         ]
         merged_findings = self._deduplicate_findings(findings)
+        hypothesis_outcomes = _derive_hypothesis_outcomes(
+            hypotheses, verdicts, category_runs, r5_assessments, findings,
+            [
+                hypothesis_id for summary in revival_summaries
+                for hypothesis_id in summary.get(
+                    "actual_revived_hypothesis_ids",
+                    summary.get("revived_hypothesis_ids", []),
+                )
+            ],
+        )
+        unresolved_hypothesis_scope = [
+            f"Hypothesis {item['hypothesis_id']} has no canonical Finding and "
+            "requires a final evidence-backed disposition."
+            for item in hypothesis_outcomes if item["state"] == "NEEDS_REVIEW"
+        ]
+        effective_unreviewed_scope = list(dict.fromkeys([
+            *closure.unreviewed_scope,
+            *(item["scope_ref"] for item in inherited_unreviewed_scope),
+            *unresolved_hypothesis_scope,
+        ]))
         execution_task_events = [
             event for event in events if event.entity_type == "execution_task"
         ]
@@ -1035,6 +1127,49 @@ class CampaignCloser:
             name: sum(values.get(name, 0) for values in attempt_usage_by_operation.values())
             for name in ("input_tokens", "cache_read_tokens", "output_tokens")
         }
+        completion_times = [
+            dt.datetime.fromisoformat(event.created_at)
+            for event in events
+            if event.event_type in {"TASK_COMPLETED", "TASK_FAILED", "R6_COMPLETED"}
+        ]
+        elapsed_wall_seconds = (
+            int((
+                max(completion_times)
+                - dt.datetime.fromisoformat(self.campaign.created_at)
+            ).total_seconds())
+            if completion_times else None
+        )
+        wall_limit = self.campaign.budget.get("max_wall_seconds")
+        resource_limitations = []
+        if elapsed_wall_seconds is not None and elapsed_wall_seconds < 0:
+            raise ModelError("Campaign completion timestamp precedes its creation")
+        if not terminal_attempts and not unreported_claims:
+            resource_limitations.append("No task execution attempts were measured.")
+        if missing_usage_attempts:
+            resource_limitations.append("Task attempt token usage is incomplete.")
+        if unreported_configuration_tasks:
+            resource_limitations.append("Task execution configuration is incomplete.")
+        if wall_limit is None:
+            resource_limitations.append("No Campaign wall-clock limit was configured.")
+        elif type(wall_limit) is not int or wall_limit <= 0:
+            raise ModelError("Campaign max_wall_seconds must be a positive integer")
+        wall_limit_exceeded = (
+            wall_limit is not None
+            and elapsed_wall_seconds is not None
+            and elapsed_wall_seconds > wall_limit
+        )
+        resource_assessment = {
+            "status": (
+                "FAIL" if wall_limit_exceeded
+                else "NOT_ASSESSED" if resource_limitations else "PASS"
+            ),
+            "basis": "Local declared measurements; not provider-side enforcement.",
+            "elapsed_wall_seconds": elapsed_wall_seconds,
+            "max_wall_seconds": wall_limit,
+            "wall_limit_exceeded": wall_limit_exceeded,
+            "limitations": resource_limitations,
+            "provider_enforcement": "NOT_ASSESSED",
+        }
         input_total = measurement_totals.get("input_tokens", 0)
         cache_read_total = measurement_totals.get("cache_read_tokens", 0)
         cache_hit_ratio = (
@@ -1049,7 +1184,7 @@ class CampaignCloser:
         gates["CG8"] = _derive_snapshot_drift_gate(events)
         gates["CG9"] = _derive_finding_report_gate(batch_reports, findings)
         closure_statements = {
-            "unreviewed_scope": closure.unreviewed_scope,
+            "unreviewed_scope": effective_unreviewed_scope,
             "residual_risks": closure.residual_risks,
             "limitations": closure.limitations,
             "lessons": closure.lessons,
@@ -1210,13 +1345,19 @@ class CampaignCloser:
                 {"batch_id": batch_id, "status": batches[batch_id].status.value}
                 for batch_id in sorted(planned_batch_ids)
             ],
-            "unreviewed_scope": list(closure.unreviewed_scope),
+            "unreviewed_scope": effective_unreviewed_scope,
+            "inherited_unreviewed_scope": inherited_unreviewed_scope,
+            "hypothesis_outcomes": hypothesis_outcomes,
+            "hypothesis_outcome_counts": _counts(
+                item["state"] for item in hypothesis_outcomes
+            ),
+            "revival_summaries": revival_summaries,
             "scope_completeness": (
                 "WITH_SCREENING_ONLY_WORK_UNITS"
                 if screening_work_unit_ids
                 else (
                     "WITH_DECLARED_UNREVIEWED_SCOPE"
-                    if closure.unreviewed_scope
+                    if effective_unreviewed_scope
                     else "NO_DECLARED_UNREVIEWED_SCOPE"
                 )
             ),
@@ -1295,6 +1436,11 @@ class CampaignCloser:
                 "tasks": completed_task_measurements,
             },
             "resource_cleanup": resource_cleanup,
+            "resource_assessment": resource_assessment,
+            "experimental_features": (
+                ["go_ast_hotspots"]
+                if "experimental_go_hotspots" in self.campaign.constraints else []
+            ),
         }
         encoded = json.dumps(
             report, ensure_ascii=False, sort_keys=True, separators=(",", ":")
@@ -1326,7 +1472,7 @@ class CampaignCloser:
         )
         self.manager.write_campaign_closure_lessons(
             self.campaign_id,
-            unreviewed_scope=closure.unreviewed_scope,
+            unreviewed_scope=effective_unreviewed_scope,
             residual_risks=closure.residual_risks,
             limitations=closure.limitations,
             lessons=closure.lessons,
@@ -1424,6 +1570,8 @@ class CampaignCloser:
             f"- Status: **{report['status']}**",
             f"- Audit mode: `{audit_mode}`",
             f"- Scope completeness: `{scope_completeness}`",
+            "- Experimental development features: "
+            + (", ".join(report.get("experimental_features", [])) or "none recorded"),
             "- Screening-only Work Units: "
             f"{report.get('screening_coverage', {}).get('screened_work_unit_count', 'not recorded')} / "
             f"{report.get('screening_coverage', {}).get('total_work_unit_count', 'not recorded')}",
@@ -1593,13 +1741,58 @@ class CampaignCloser:
                 f"{item['rationale']} Evidence: {', '.join(item['evidence_refs'])}"
                 for item in report["scope_dispositions"]
             )
-        elif unreviewed_scope:
-            lines.extend(f"- {item}" for item in unreviewed_scope)
+        disposition_refs = {
+            item["scope_ref"] for item in report.get("scope_dispositions", [])
+        }
+        inherited_only = [
+            item for item in unreviewed_scope if item not in disposition_refs
+        ]
+        if inherited_only:
+            lines.extend(f"- {item}" for item in inherited_only)
             lines.append(
-                "- Structured scope dispositions were not recorded in this report version."
+                "- Unresolved items are retained without inferring approval or review."
             )
-        else:
+            if "scope_dispositions" not in report:
+                lines.append(
+                    "- Structured scope dispositions were not recorded in this report version."
+                )
+        if not unreviewed_scope:
             lines.append("- None recorded.")
+        lines.extend(["", "### Hypothesis Outcomes", ""])
+        lines.append(
+            "Derived Agent records; FINDING_RECORDED does not mean confirmed. "
+            "Non-finding candidates without consistent rejection remain NEEDS_REVIEW."
+        )
+        for item in report.get("hypothesis_outcomes", []):
+            lines.append(
+                f"- `{item['hypothesis_id']}`: {item['state']}; "
+                f"Findings: {', '.join(item['finding_ids']) or 'none'}. "
+                "See the JSON report for stage-specific evidence and rationales."
+            )
+        lines.extend([
+            "", "### Revival Review Summaries", "",
+            "Legacy revived_hypothesis_ids lists reviewed items, including UPHOLD; "
+            "it is not an overturn count. Missing outcome splits in old artifacts "
+            "remain unmeasured.",
+        ])
+        for item in report.get("revival_summaries", []):
+            lines.append(
+                f"- `{item['batch_id']}`: reviewed "
+                f"{len(item.get('revival_reviewed_hypothesis_ids', item.get('revived_hypothesis_ids', [])))}; "
+                f"upheld {len(item['upheld_hypothesis_ids']) if 'upheld_hypothesis_ids' in item else 'not recorded'}; "
+                f"actual revivals {len(item['actual_revived_hypothesis_ids']) if 'actual_revived_hypothesis_ids' in item else 'not recorded'}."
+            )
+        resource_assessment = report.get("resource_assessment", {})
+        lines.extend([
+            "", "### Resource Assessment", "",
+            f"- Resource assessment: {resource_assessment.get('status', 'NOT_ASSESSED')}",
+            "- This is separate from workflow closure PASS and does not certify provider limits.",
+            f"- Elapsed wall seconds: {resource_assessment.get('elapsed_wall_seconds')}",
+            f"- Configured wall limit: {resource_assessment.get('max_wall_seconds')}",
+        ])
+        lines.extend(
+            f"- {item}" for item in resource_assessment.get("limitations", [])
+        )
         lines.extend(["", "### Limitations", ""])
         lines.extend(f"- {item}" for item in report.get("limitations", []) or ["None recorded."])
         lines.extend(["", "### Residual Risk", ""])

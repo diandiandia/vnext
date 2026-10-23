@@ -33,6 +33,18 @@ provide an approved immutable `--snapshot-id` and retain its provenance; do not 
 a stable identity for mutable source. Keep source permissions, isolation, runtime
 limits, logs, stop owner and allowed commands explicit.
 
+New CLI `init` defaults to a target-path-hashed store below
+`$XDG_STATE_HOME/reachable-audit` (or `~/.local/state/reachable-audit` when
+`XDG_STATE_HOME` is unset, empty, or relative), outside the source tree. Other commands
+reuse that store or a sole legacy `<target>/.audit_vnext` store. If both exist, select
+explicitly with `--state-dir`; no silent merge occurs.
+An explicit absolute `--state-dir` selects the same store from any working directory;
+relative paths remain target-relative for compatibility. Pass an explicit choice to
+every command when overriding the default. Existing stores are not automatically
+moved. The library `CampaignManager` retains its legacy default; embedded hosts must
+provide an external location themselves. Source workers may search only inventoried
+source paths, not arbitrary files under the target root.
+
 Select categories from the applicable language profiles and threat model before
 planning. Categories are hard scope: a Java Top10 audit must not silently use only
 the three categories in an example or only deserialization/JNDI leads. Record any
@@ -63,6 +75,10 @@ findings; do not send signing/provider secrets.
 
 - Claim by Batch/operation or task ID and retain worker, attempt and lease expiry.
   Keep concurrent claims within host and task budgets.
+- Immediately confirm dispatch through the host. If a worker was not started,
+  release the lease with the owner/attempt and reason rather than waiting for expiry.
+  Poll lease timing and expiry; `worker_liveness: UNKNOWN` is deliberate, not evidence
+  of a running or dead worker. The CLI does not observe host process health.
 - A worker reads its scoped source, follows explicit boundaries, and returns the
   result plus actual measurements. The coordinator validates/collects the result,
   not a rewritten or fabricated answer.
@@ -120,6 +136,8 @@ empty success payloads, bypass commits, or interpret no hypotheses as proof of s
 Retries and amendments must preserve old history. Committed R1-R5 amendments
 invalidate affected descendants: reschedule and recommit current revisions.
 After Campaign completion do not amend history; use a declared new Campaign.
+Schedulers return `tasks` arrays; R6 also retains the legacy single `task` alias.
+New runners should consume `tasks`, not count an unknown JSON shape as an empty queue.
 
 ### Human adjudication is a separate operator action
 
@@ -192,6 +210,11 @@ Java profile's ten issues rather than treating a few high-profile APIs as comple
 No candidates does not justify NOT_APPLICABLE. Provide source evidence for an absent
 precondition; use DEFERRED with the blocker when required review cannot be done.
 APPLICABLE can legitimately produce zero hypotheses after evidenced analysis.
+An unavailable hotspot provider is different from a completed scan with no candidates.
+Use `scan_status` (`not_scanned`, `completed`, `partial`, or `error`) and the
+`supported_path_count`, `scanned_path_count`, `unsupported_path_count`, and
+`parse_error_count` fields; candidate count alone is not a discovery-quality or
+safe-source result.
 
 R3.5 defaults to full initial-UNREACHABLE revival, not random sampling. Examine
 regex anchoring, slicing, canonicalization, decoding order and cross-language guard
@@ -199,6 +222,9 @@ assumptions as potential rejection errors, not predetermined bypasses. A keyword
 severity label or boundary name does not prove exploitability. If budget cannot
 cover the recorded review set, stop/report the unmet work instead of quietly sampling
 or weakening selection. Weighted policies need prospective cost/recall evaluation.
+The legacy `revived_hypothesis_ids` field includes UPHOLD reviews. New summaries split
+reviewed, upheld and actual revivals. Empty positive adjudication coverage is not by
+itself evidence that UPHOLD reviews were omitted.
 
 ## 5. Recovery Decision Table
 
@@ -238,3 +264,61 @@ per-module gap heatmap or automatic gap-attack planner. Keep that limitation exp
 Handoff ownership exists for supplied edges; automatic symbol-to-security-boundary
 discovery is not implemented. Any future index must emit candidates, not silently
 declare a cross-language call chain proven.
+
+Campaign closure inherits unresolved scope from current Batch reports. An empty
+Campaign list cannot erase those items; inherited gaps are not implicit approvals.
+The report also derives an outcome for every hypothesis, joining late Findings by
+hypothesis ID. Without a Finding or consistent rejection, the candidate remains
+NEEDS_REVIEW with stage evidence available in JSON; do not force a vulnerability.
+
+Workflow PASS is separate from `resource_assessment`. Missing usage, configuration or
+wall limits mean NOT ASSESSED; measured elapsed deadline breaches mean FAIL. Task
+`wall_seconds` totals may sum concurrent work and are not Campaign elapsed time.
+Use `init --max-wall-seconds <positive-int>` for a local claim deadline from Campaign
+creation, including pauses. Collection/recovery remain possible after the deadline;
+the host must stop active workers and enforce provider limits. Do not silently reset
+the clock on coordinator restart or claim provider enforcement from a local budget.
+Set up a registered, authorized bounded harness before R5 if experiments are needed;
+without execution, retain proposed/infeasible outcomes and independent-review limits.
+
+## 7. Evidence-Ready Go Development Slice
+
+Use `init --experimental-go-hotspots` only when creating a new authorized development
+Campaign. The choice is retained in Campaign constraints and propagated to R1 and
+both R2 modes; do not inject a new provider into an in-flight Campaign. The local Go
+toolchain parses the supplied frozen source bytes through a trusted bundled helper;
+it must not build/import/execute target packages or fetch modules. Parser output is
+candidate guidance, not a call graph, security verdict or measured language coverage.
+Missing tools, failed scans and unhandled syntax remain visible limitations.
+
+Before asking R5 workers to assess an actual experiment, use the existing `harness-run`
+with an approved argv, hypothesis ID, timeout, resource policy and offline environment.
+Go may require a larger virtual-address-space allowance than the default; do not
+disable limits or confuse virtual address space with resident memory. A host container
+or VM is still required for hostile code. Capture stdout/stderr and execution artifact
+refs, verify the observed behavior, and pass the registered refs to normal R5 tasks.
+Toolchain availability alone does not mean an experiment was executed.
+
+For a trusted standard-library-only probe already present in the approved frozen
+disposable target, an explicit harness input can be:
+
+```json
+{
+  "profile": "go-offline",
+  "command": ["go", "run", "./approved_probe.go"],
+  "cwd": ".",
+  "timeout_seconds": 120,
+  "hypothesis_id": "HYP-from-the-current-campaign",
+  "output_limit_bytes": 4096
+}
+```
+
+The opt-in profile uses a bounded 8 GiB virtual-address-space default (an explicit
+approved `memory_limit_bytes` still overrides it), a 64 MiB per-file build limit,
+and independent captured-output limits. Ordinary harness defaults remain unchanged.
+It supplies private Go cache/temp paths and disables Go module/toolchain fetching.
+This is not OS network isolation and cannot authorize hostile target execution.
+Do not copy these limits without checking host approval. Do not create or alter a
+probe inside an already frozen source snapshot; prepare the approved copy first.
+After the run, inspect actual output and eligibility, then register the appropriate
+experiment through the normal R5 task result; an exit code alone is not confirmation.

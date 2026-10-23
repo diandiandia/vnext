@@ -40,6 +40,13 @@ requirements were satisfied; it does not mean that every file was inspected or t
 undiscovered vulnerability exists. Reports preserve excluded, deferred, and unresolved
 scope.
 
+Campaign reports inherit unresolved scope from every current Batch report; a
+coordinator cannot erase it by submitting an empty list. A derived per-hypothesis
+outcome ledger joins late Findings by hypothesis ID and retains non-finding candidates
+without consistent rejection as `NEEDS_REVIEW`. These are traceability records, not
+independent semantic decisions. Workflow `PASS` is separate from resource assessment:
+missing attempt usage or limits cannot produce a resource `PASS`.
+
 Findings are explicitly classified as security vulnerabilities, ordinary defects,
 hardening recommendations, or insufficient evidence. A confirmed behavior defect is
 not automatically a confirmed vulnerability; security-impact declarations are
@@ -68,7 +75,22 @@ quality evidence remain incomplete. Build and import edges are not a complete se
 call graph. Unsupported syntax, unresolved boundaries, and missing tools must remain
 visible as limitations, not be treated as evidence of safety.
 
-The runtime uses its own `.audit_vnext` state and canonical schemas. It does not load v3
+For development pilots, `init --experimental-go-hotspots` freezes an explicit Go AST
+candidate-provider opt-in in the new Campaign. It requires a local Go toolchain and
+does not build or run target packages. It is not enabled by default or language
+certification; missing toolchains and parse failures remain visible. Review leads
+against the target's actual guards, trust boundaries and counterevidence.
+The existing `harness-run` accepts explicit JSON `"profile": "go-offline"` for
+Go-compatible bounded builds/probes with private caches and offline fetch settings.
+It changes neither ordinary harness defaults nor the need for host approval/isolation.
+See the [Go execution example](docs/ORCHESTRATOR_RUNBOOK.md#7-evidence-ready-go-development-slice)
+and TR-14 before claiming empirical evidence.
+
+The runtime uses its own Campaign state and canonical schemas. Use an explicit
+absolute `--state-dir` outside the frozen target for source-search isolation; pass the
+same location to every command. CLI defaults and legacy-state selection are described
+in the [orchestrator runbook](docs/ORCHESTRATOR_RUNBOOK.md).
+It does not load v3
 queues or findings as discovery input. Fresh Campaigns isolate prior audit history;
 follow-up history must be declared and remains context, not proof.
 
@@ -135,6 +157,10 @@ python3 -m reachable_audit --help
 env -u PYTHONPATH python3 -m pytest tests -q
 PYTHONPATH=src python3 -m reachable_audit compatibility-scan
 ```
+
+On hosts where unrelated pytest plugins interfere with validation, record that fact
+and use `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1` with the same test selection. A killed or
+incomplete run is not a passing result.
 
 The compatibility scan checks legacy imports/formats and generic residue patterns in
 runtime Python source, the main skill prompt, and runtime-eligible knowledge. It reports

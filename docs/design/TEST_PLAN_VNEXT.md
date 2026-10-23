@@ -289,6 +289,73 @@ reports the excluded source record, and does not publish the token in generated 
 file is accepted as an explicit no-additional-token decision. This scan is only a
 pattern-based safeguard; it cannot prove that a concept is semantically portable.
 
+### TR-13: Pilot-Driven Closure and Execution Reliability
+
+**Coverage and required tests:**
+
+- `test_campaign_closure.py`: reproduce a Batch with unresolved scope and an empty
+  Campaign declaration; preserve the item, Batch provenance, Markdown, lessons and
+  exact retry. A Finding recorded after R4 must join by hypothesis ID; unrecorded
+  candidates without consistent rejection remain unresolved, not silently dropped.
+  Missing execution attempts/usage/configuration/limits must not produce resource
+  PASS; elapsed deadline breaches produce FAIL independently of workflow PASS.
+- `test_refutation.py`: UPHOLD counts as reviewed, not overturned; test all revival
+  outcomes, retain the legacy reviewed-list alias and exact retries.
+- `test_execution.py`: the R3 contract states ordered pure source anchors and external
+  runtime-assumption evidence requirements; poll timing distinguishes expired leases
+  without inventing worker liveness; claim deadlines reject invalid/expired budgets
+  and preserve result collection/recovery.
+- `test_cli.py` and `test_hotspots.py`: external state selection and legacy recovery,
+  cwd-independent explicit paths, R6 list output with compatibility, positive init
+  deadline, and unsupported-only/mixed/zero-result/parse-error provider reporting.
+
+**Pass:** the named regression tests and full suite pass; there are no target-specific
+runtime branches, known-target blacklists or expected-finding quotas. Workflow PASS
+must not be interpreted as resource PASS or independently confirmed security impact.
+Host dispatch confirmation, actual worker stopping, complete provider metering and
+independent reviewer identity still require real host evidence.
+
+### TR-14: Experimental Go Leads and Managed Runtime Evidence
+
+**Development entry:** the real Go pilot established missing automatic leads and an
+unconnected empirical path. These justify a bounded candidate provider and reuse of
+the existing harness, not broad language certification or a new experiment system.
+
+**Provider requirements:** parse Go with its standard parser, use generic imported
+standard-library call sites and source anchors, and remain an explicit frozen opt-in
+for new development Campaigns. Test positive/negative/aliased/shadowed calls, comments
+and strings, malformed input, unavailable toolchain, snapshot drift, mixed-language
+coverage and truncation. The helper must not execute target packages or resolve their
+dependencies, and its process, input, output and temporary resources must be bounded.
+
+**Integration requirements:** CLI opt-in persists in the Campaign; R1, compact R2 and
+per-axis R2 use that same selection and R0 digests. Default Python-only behavior and
+the release-qualified provider roster remain unchanged. Installed package data must
+include the trusted Go helper; a checkout-only success is insufficient.
+Run `tests/test_hotspots.py` and `tests/test_go_provider_integration.py` together.
+Keep Go optional: environments without the toolchain must exercise explicit
+unavailable-provider behavior; Go-enabled validation must record the actual toolchain
+and must not count toolchain-dependent skips as passing parser execution.
+
+**Empirical requirements:** execute a synthetic, authorized offline Go probe through
+`run_harness`, bind to a hypothesis and verify execution/stdout/stderr references,
+actual exit/output, cleanup and unchanged source. Use explicit Go-compatible address
+space and offline environment (`profile="go-offline"` in the API or harness JSON),
+not a silent default memory increase. Verify CLI forwarding as well as the library
+path; ordinary default limits and explicit overrides must remain intact. Where an R5
+upgrade is exercised, show both eligible confirming evidence and a nonconfirming or
+failed path that cannot upgrade. A successful process exit alone is not proof of a
+security vulnerability. Timeout and truncated-output reports explicitly marked
+ineligible must fail the actual R5 evidence validator. Complete nonzero-exit
+observations can remain reviewable crash evidence, without automatic confirmation.
+Run `tests/test_go_harness_runner.py`, `tests/test_harness_runner.py`,
+`tests/test_refutation.py` and `tests/test_go_provider_integration.py` together.
+
+**Real-target exit:** independently adjudicate candidate sites and false positives
+on predeclared frozen scopes before enabling Go by default or claiming measured
+precision/recall. Retest the actual host's harness registration, isolation and resource
+policy. Synthetic Go probes establish execution mechanics, not target exploitability.
+
 ## 5. Evidence Record
 
 Every test report records:

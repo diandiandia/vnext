@@ -125,8 +125,17 @@ _R2_ENTRYPOINT_CONTRACT = (
 
 _VERIFICATION_INSTRUCTIONS = (
     "Determine reachability from a declared principal. REACHABLE requires an explicit "
-    "call chain and edge evidence; UNREACHABLE requires blocking evidence; uncertainty "
-    "must remain NEEDS_REVIEW. Do not claim empirical confirmation in R3."
+    "caller-to-callee call chain and edge evidence. The call_chain value is an ordered "
+    "array containing only pure LOC-path:line anchors, one source location per step; "
+    "put descriptions and the reason each edge is supported in rationale, never in an "
+    "anchor. UNREACHABLE requires blocking evidence; uncertainty must remain NEEDS_REVIEW. "
+    "For claims depending on standard-library, operating-system, interpreter, or other "
+    "runtime behavior, require actual evidence matched to the target's exact runtime "
+    "version, cite that evidence in edge_evidence_ids, and identify the version in "
+    "rationale. Do not infer target behavior from the worker's runtime or fabricate a "
+    "machine check. If matched-version evidence is unavailable or ambiguous, retain "
+    "NEEDS_REVIEW and explain the limitation in rationale. Do not claim empirical "
+    "confirmation in R3."
 )
 
 _HOTSPOT_CONTRACT = (
@@ -353,6 +362,10 @@ class TaskView:
     attempt: int
     lease_expires_at: str | None
     output_ref: str | None
+    lease_claimed_at: str | None = None
+    lease_elapsed_seconds: int | None = None
+    lease_expired: bool | None = None
+    worker_liveness: str = "UNKNOWN"
 
 
 
@@ -470,13 +483,31 @@ class ManualExecutionBackend:
             if amendment.payload.get("prior_output_ref") != output_ref:
                 raise ModelError(f"task output amendment chain is invalid: {task_id}")
             output_ref = amendment.payload_ref
+        now = dt.datetime.fromisoformat(self._now())
+        lease_claimed_at = claim.created_at if claim is not None else None
+        lease_elapsed_seconds = None
+        lease_expired = None
+        lease_expires_at = (
+            str(claim.payload["lease_expires_at"]) if claim is not None else None
+        )
+        if claim is not None:
+            claimed_at = dt.datetime.fromisoformat(claim.created_at)
+            expires_at = dt.datetime.fromisoformat(lease_expires_at)
+            lease_elapsed_seconds = max(
+                0, int((now - claimed_at).total_seconds())
+            )
+            lease_expired = now >= expires_at
         return TaskView(
             task=task,
             status=status,
             worker_id=claim.actor if claim else None,
             attempt=int(claim.payload["attempt"]) if claim else 0,
-            lease_expires_at=str(claim.payload["lease_expires_at"]) if claim else None,
+            lease_expires_at=lease_expires_at,
             output_ref=output_ref,
+            lease_claimed_at=lease_claimed_at,
+            lease_elapsed_seconds=lease_elapsed_seconds,
+            lease_expired=lease_expired,
+            worker_liveness="UNKNOWN",
         )
 
     def claim(
@@ -487,6 +518,17 @@ class ManualExecutionBackend:
         if not worker_id.strip() or lease_seconds <= 0:
             raise ModelError("task claim requires a worker and positive lease duration")
         now = self._now()
+        wall_clock = self._campaign_wall_clock(now)
+        if (
+            wall_clock["deadline_at"] is not None
+            and dt.datetime.fromisoformat(now)
+            >= dt.datetime.fromisoformat(wall_clock["deadline_at"])
+        ):
+            raise ModelError(
+                "Campaign wall-clock deadline reached: "
+                f"elapsed_seconds={wall_clock['elapsed_seconds']:.1f}, "
+                f"deadline_at={wall_clock['deadline_at']}"
+            )
         for candidate_task_id in self._task_ids():
             if task_id_filter is not None and candidate_task_id != task_id_filter:
                 continue
@@ -1457,6 +1499,13 @@ class ManualExecutionBackend:
         verdict_value = output.get("verdict")
         if not isinstance(verdict_value, dict):
             raise ModelError(f"task output requires a verdict object: {task.task_id}")
+        call_chain = verdict_value.get("call_chain")
+        if not isinstance(call_chain, list) or any(
+            not isinstance(reference, str) for reference in call_chain
+        ):
+            raise ModelError(
+                f"task verdict call_chain must be an array of LOC anchors: {task.task_id}"
+            )
         submission = VerdictSubmission.from_dict(verdict_value)
         workflow = BatchWorkflow(self.manager, task.campaign_id, task.batch_id)
         line_count_cache: dict[str, tuple[int, frozenset[int]]] = {}
@@ -1530,7 +1579,11 @@ class ManualExecutionBackend:
             except json.JSONDecodeError:
                 value = raw.decode("utf-8", errors="replace")
             inputs.append({"artifact_id": artifact_id, "value": value})
-        return {"lease": asdict(lease), "inputs": inputs}
+        return {
+            "lease": asdict(lease),
+            "inputs": inputs,
+            "campaign_wall_clock": self._campaign_wall_clock(self._now()),
+        }
 
     def cancel(self, task_id: str, *, reason: str) -> TaskView:
         if not reason.strip():
@@ -1586,6 +1639,31 @@ class ManualExecutionBackend:
         if value.tzinfo is None:
             raise ModelError("execution clock must return a timezone-aware datetime")
         return value.astimezone(dt.UTC).isoformat()
+
+    def _campaign_wall_clock(self, now: str) -> dict[str, Any]:
+        campaign = self.manager.store.get_campaign(self.campaign_id)
+        max_wall_seconds = campaign.budget.get("max_wall_seconds")
+        if max_wall_seconds is not None and (
+            type(max_wall_seconds) is not int or max_wall_seconds <= 0
+        ):
+            raise ModelError("Campaign max_wall_seconds budget must be a positive integer")
+        created_at = dt.datetime.fromisoformat(campaign.created_at)
+        current_time = dt.datetime.fromisoformat(now)
+        if created_at.tzinfo is None:
+            raise ModelError("Campaign created_at must include a timezone")
+        elapsed_seconds = max(
+            0.0, (current_time - created_at.astimezone(dt.UTC)).total_seconds()
+        )
+        deadline = (
+            created_at.astimezone(dt.UTC) + dt.timedelta(seconds=max_wall_seconds)
+            if max_wall_seconds is not None else None
+        )
+        return {
+            "created_at": created_at.isoformat(),
+            "elapsed_seconds": round(elapsed_seconds, 1),
+            "max_wall_seconds": max_wall_seconds,
+            "deadline_at": deadline.isoformat() if deadline is not None else None,
+        }
 
 
 class DiscoveryCoordinator:
@@ -2164,6 +2242,15 @@ class DiscoveryCoordinator:
                 "output_contract": {
                     "schema_version": "1.0",
                     "verdict": "VerdictSubmission",
+                    "call_chain": (
+                        "ordered array of pure LOC-path:line source anchors, "
+                        "caller-to-callee; no descriptions or other prose"
+                    ),
+                    "rationale": (
+                        "separate explanation of the call-chain steps and supporting "
+                        "edge evidence; target-runtime claims require actual evidence "
+                        "matched to the exact target version or verdict NEEDS_REVIEW"
+                    ),
                 },
             })
             views.append(self.backend.submit(TaskSpec(
@@ -3761,6 +3848,12 @@ class DiscoveryCoordinator:
             return compact_hotspot_report(scan_work_unit_hotspots(
                 self.workflow.manager.target_root, work_unit.get("source_files", []),
                 expected_digests=receipt["file_digests"],
+                enable_go=(
+                    "experimental_go_hotspots"
+                    in self.workflow.manager.store.get_campaign(
+                        self.workflow.campaign_id
+                    ).constraints
+                ),
             ))
         except ModelError:
             self.workflow.run_r0()

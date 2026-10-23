@@ -691,7 +691,7 @@ class BatchWorkflow:
         return artifact_id
 
     def complete_r35(self) -> str:
-        r3_event = self._require_stage("R3_COMPLETED")
+        self._require_stage("R3_COMPLETED")
         verdicts = self._r3_verdicts()
         eligible = {
             item["hypothesis_id"]
@@ -710,10 +710,8 @@ class BatchWorkflow:
             )
         selection = self._require_stage("REVIVAL_SAMPLE_SELECTED")
         selected = set(self._read_artifact(selection.payload_ref)["hypothesis_ids"])
-        reviewed = {
-            event.entity_id
-            for event in self._active_events(event_type="REVIVAL_REVIEWED")
-        }
+        revival_events = self._active_events(event_type="REVIVAL_REVIEWED")
+        reviewed = {event.entity_id for event in revival_events}
         if selected != reviewed:
             raise ModelError(
                 f"R3.5 revival coverage mismatch: expected={sorted(selected)}, "
@@ -722,11 +720,39 @@ class BatchWorkflow:
         value = {
             "schema_version": "1.0",
             "adjudicated_hypothesis_ids": sorted(adjudicated),
+            "revival_reviewed_hypothesis_ids": sorted(reviewed),
+            "upheld_hypothesis_ids": sorted({
+                event.entity_id for event in revival_events
+                if event.payload["outcome"] == "UPHOLD"
+            }),
+            "actual_revived_hypothesis_ids": sorted({
+                event.entity_id for event in revival_events
+                if event.payload["outcome"] != "UPHOLD"
+            }),
+            # Legacy field includes UPHOLD reviews; it never meant actual overturns.
             "revived_hypothesis_ids": sorted(reviewed),
         }
         revision_metadata = self._stage_revision_metadata(
             "R3_5", value, {}, ("R3_COMPLETED",)
         )
+        previous = self._stage_event("R3_5_COMPLETED")
+        if previous is not None:
+            legacy_value = {
+                key: value[key] for key in (
+                    "schema_version", "adjudicated_hypothesis_ids",
+                    "revived_hypothesis_ids",
+                )
+            }
+            if self._read_artifact(previous.payload_ref) == legacy_value:
+                legacy_metadata = self._stage_revision_metadata(
+                    "R3_5", legacy_value, {}, ("R3_COMPLETED",)
+                )
+                legacy_artifact_id = self._existing_stage_artifact(
+                    "R3_5_COMPLETED", legacy_value,
+                    expected_revision_id=legacy_metadata["revision_id"],
+                )
+                if legacy_artifact_id is not None:
+                    return legacy_artifact_id
         existing_artifact_id = self._existing_stage_artifact(
             "R3_5_COMPLETED", value,
             expected_revision_id=revision_metadata["revision_id"],
@@ -1235,6 +1261,7 @@ class BatchWorkflow:
                 or report.get("campaign_id") != self.campaign_id
                 or report.get("snapshot_id") != self.campaign.snapshot_id
                 or report.get("hypothesis_id") != experiment.hypothesis_id
+                or report.get("empirical_upgrade_eligible") is False
                 or not isinstance(report.get("command"), list)
                 or not report["command"]
             ):
@@ -2098,6 +2125,22 @@ class BatchWorkflow:
         reported_revived = set(stage.get("revived_hypothesis_ids", []))
         if selected != reviewed or reported_revived != reviewed:
             errors.append("R3.5 revival selection, review events, and summary differ")
+        expected_summaries = {
+            "revival_reviewed_hypothesis_ids": reviewed,
+            "upheld_hypothesis_ids": {
+                event.entity_id for event in events
+                if event.event_type == "REVIVAL_REVIEWED"
+                and event.payload["outcome"] == "UPHOLD"
+            },
+            "actual_revived_hypothesis_ids": {
+                event.entity_id for event in events
+                if event.event_type == "REVIVAL_REVIEWED"
+                and event.payload["outcome"] != "UPHOLD"
+            },
+        }
+        for key, expected in expected_summaries.items():
+            if key in stage and set(stage[key]) != expected:
+                errors.append(f"R3.5 {key} summary does not match review outcomes")
         return not errors, {
             "eligible_hypothesis_ids": sorted(eligible),
             "adjudicated_hypothesis_ids": sorted(adjudications),

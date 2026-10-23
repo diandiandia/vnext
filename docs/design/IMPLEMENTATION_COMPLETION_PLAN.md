@@ -20,7 +20,7 @@ The following work is deliberately separated by what evidence can establish:
 |---|---|---|
 | Offline migration residue policy | **Fixed in this iteration.** The migration tool no longer embeds a blacklist of historical project names; it requires a reviewer/evaluator-supplied token file and uses it for candidate exclusion and output validation. | Retain the explicit token input and pattern-based limitation; do not reintroduce project-specific defaults. Verify with TR-12. |
 | Finding classification gate and large-source preflight | **Locally implemented and covered by synthetic regression tests (TR-09).** The planner warns at the configured threshold; it does not measure R2 read coverage. A 2026-10-22 development audit completed one >1 MiB source-file R2 task, but also recorded helper-level recall gaps and Agent classifications that were not independently reviewed. | Do not treat structural Finding validation as semantic classification. In the next authorized pilot, predeclare helper entries under the current policy, reconcile actual R2/R6 dispositions, and independently review each security-impact declaration. Keep uncovered source explicitly unreviewed/deferred; do not infer line coverage from a completed task. |
-| Additional language hotspot providers (SWDR-031) | Python AST provider is active; other-language files are explicitly reported unsupported. | Before each provider is enabled, run the language-specific positive/negative/alias/malformed-source fixture matrix and review a representative held-out sample for candidate coverage and precision. Do not treat fixture success as real-target qualification. |
+| Additional language hotspot providers (SWDR-031) | Python AST provider is active. The Go pilot established an automatic-lead gap, permitting a bounded experimental Go AST slice, not portfolio-wide enablement. | Use explicit Campaign-frozen opt-in for development only; verify positive/negative/alias/shadow/malformed-source and snapshot identity fixtures before trial. Independently reviewed candidate coverage and precision remain required before qualification. |
 | Large-source R2 slicing and completeness claims (N-6) | Preflight warning and bounded-read guidance exist; no line-range coverage ledger or automatic slicing contract exists. | First measure an authorized representative large file's task input size, runtime, context use, candidate/evidence distribution, and full-scope result. Then specify slices and reconciliation rules from observed failure modes; add regression tests before implementing them. |
 | Automatic cross-language boundary discovery (SWDR-010) | Typed boundary records, build/import proposals, owner review, and Handoff proof exist; automatic FFI/RPC/IPC/serialization discovery is incomplete. | First inventory real boundary mechanisms and observed misses in an authorized mixed-language target. Define framework-specific evidence and false-positive expectations before adding detectors. |
 | Host identity/key custody, provider-enforced hard limits, authority keys, and independent held-out release evidence | Repository mechanisms are partial or intentionally rely on external authorities. | Remain blocked on the named host, provider, or evaluation authority; repository-only code and mocks cannot close these items. |
@@ -31,6 +31,28 @@ need target-specific evidence before their behavior can be specified safely or r
 external authority. Development-only pilots may proceed under
 [REAL_CODE_AUDIT_TEST_PLAN_VNEXT.md](REAL_CODE_AUDIT_TEST_PLAN_VNEXT.md) without claiming
 release qualification.
+
+#### Evidence-ready development after the Go pilot
+
+The supplied pilot on engine `f1ec0bc` exercised one Batch, 369 source files and
+182 completed tasks, predominantly Go, with no automatic Go hotspot leads and no
+executed R5 experiments. This unlocks two bounded items:
+
+1. An explicit experimental Go AST provider for generic standard-library call sites,
+   supplied through normal R1/R2 task context. It must parse supplied snapshot bytes,
+   never build/import/execute target packages, never use target function names, and
+   emit review candidates rather than vulnerability verdicts. Default production
+   provider and release-acceptance scope must not silently expand.
+2. A real offline Go probe through the existing registered harness and R5 evidence
+   path, with explicit memory/CPU/time/output policy and unchanged source. Reuse the
+   existing runner rather than create a second experiment engine. A probe that cannot
+   start or yields inconclusive output cannot count as a confirmed experiment.
+
+The earlier TR-13 workflow repairs are already locally implemented. No new generic
+FFI detector or automatic large-file slicing is unlocked by this single-Batch trial:
+it had no qualifying large-source flags or measured mixed-language boundary misses.
+Collect those specific observations rather than require another undirected full audit.
+The executable local acceptance for this increment is TR-14.
 
 #### Latest real-target evidence and version boundary
 
@@ -204,6 +226,17 @@ The host runner must deliver the task input and output contract unchanged; repre
 real-target recall and independent human review remain external evidence.
 
 ## Current Test Gates
+
+2026-10-23 follow-up: TR-13 repairs Batch-to-Campaign unresolved-scope inheritance,
+per-hypothesis outcome visibility, revival summary semantics, task contracts,
+state isolation defaults, provider reporting and local deadline/lease observability.
+Workflow closure remains separate from resource and semantic qualification.
+Final integrated verification passed **385 tests with 1 skipped in 39.96 seconds**
+with pytest plugin auto-loading disabled. Compatibility scanning (zero findings),
+Python syntax, local document targets and diff formatting pass. The skip requires
+an unconfigured protected real held-out manifest. Details and a read-only replay of
+the original outcome records are in the current generality review. Do not reuse the
+earlier pilot as evidence that these changes passed real-host testing.
 
 After the TR-12 offline migration residue-policy change, the focused migration/CLI/
 experiment tests passed **45 tests** and the full suite passed **359 tests with 1

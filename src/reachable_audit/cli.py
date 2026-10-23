@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import asdict
+import hashlib
 import json
+import os
 from pathlib import Path
 import sys
 from typing import Any
@@ -57,7 +59,53 @@ from .resource_cleanup import (
     create_campaign_temp_directory,
     register_process_group,
 )
-from .models import CampaignAuditMode
+from .models import CampaignAuditMode, ModelError
+
+
+def _default_cli_state_dir(target: str | Path) -> Path:
+    target_root = Path(target).resolve()
+    configured_state_home = os.environ.get("XDG_STATE_HOME", "").strip()
+    state_home = Path(configured_state_home).expanduser() if configured_state_home else Path()
+    if not configured_state_home or not state_home.is_absolute():
+        state_home = Path.home() / ".local" / "state"
+    state_home = state_home.resolve()
+    identity = hashlib.sha256(os.fsencode(str(target_root))).hexdigest()[:24]
+    state_dir = (state_home / "reachable-audit" / identity).resolve()
+    if target_root == state_dir or target_root in state_dir.parents:
+        raise ValueError(
+            "default state directory would be inside the target; set XDG_STATE_HOME "
+            "outside the target or pass --state-dir explicitly"
+        )
+    return state_dir
+
+
+def _cli_state_dir(
+    target: str | Path,
+    requested: str | Path | None,
+    *,
+    prefer_external: bool = False,
+) -> str | Path:
+    if requested is not None:
+        return requested
+    target_root = Path(target).resolve()
+    new_state = _default_cli_state_dir(target_root)
+    legacy_state = target_root / ".audit_vnext"
+    legacy_exists = any(
+        (legacy_state / filename).is_file()
+        for filename in ("state.db", "campaign.json")
+    )
+    new_exists = any(
+        (new_state / filename).is_file()
+        for filename in ("state.db", "campaign.json")
+    )
+    if legacy_exists and new_exists:
+        raise ValueError(
+            "both legacy and external Campaign state exist; pass --state-dir "
+            f"explicitly (legacy: {legacy_state}; external: {new_state})"
+        )
+    if legacy_exists and not prefer_external:
+        return legacy_state
+    return new_state
 
 
 def _print(value: Any) -> None:
@@ -78,11 +126,18 @@ def _handle_init(arguments: argparse.Namespace) -> int:
         and arguments.max_delegated_agent_runs < 0
     ):
         raise ValueError("max-delegated-agent-runs must be non-negative")
+    if (
+        arguments.max_wall_seconds is not None
+        and arguments.max_wall_seconds <= 0
+    ):
+        raise ValueError("max-wall-seconds must be a positive integer")
     budget = {}
     if arguments.max_screening_fraction is not None:
         budget["max_screening_fraction"] = arguments.max_screening_fraction
     if arguments.max_delegated_agent_runs is not None:
         budget["max_delegated_agent_runs"] = arguments.max_delegated_agent_runs
+    if arguments.max_wall_seconds is not None:
+        budget["max_wall_seconds"] = arguments.max_wall_seconds
     if arguments.require_host_worker_attestation:
         budget["require_host_worker_attestation"] = True
     with CampaignManager(arguments.target, arguments.state_dir) as manager:
@@ -92,6 +147,10 @@ def _handle_init(arguments: argparse.Namespace) -> int:
             budget=budget or None,
             audit_mode=CampaignAuditMode(arguments.audit_mode),
             history_source_campaign_ids=tuple(arguments.history_source),
+            constraints=(
+                ("experimental_go_hotspots",)
+                if arguments.experimental_go_hotspots else ()
+            ),
         )
         _print(asdict(campaign))
     return 0
@@ -235,6 +294,7 @@ def _handle_harness_run(arguments: argparse.Namespace) -> int:
             manager,
             arguments.campaign_id,
             command=value["command"],
+            profile=value.get("profile"),
             cwd=str(value.get("cwd", ".")),
             timeout_seconds=int(value.get("timeout_seconds", 30)),
             environment=value.get("environment"),
@@ -859,7 +919,8 @@ def _handle_task(arguments: argparse.Namespace) -> int:
             elif arguments.command == "task-commit-r5":
                 _print({"artifact_id": coordinator.commit_r5()})
             elif arguments.command == "task-schedule-r6":
-                _print({"task": asdict(coordinator.schedule_r6())})
+                task = asdict(coordinator.schedule_r6())
+                _print({"tasks": [task], "task": task})
             else:
                 _print(coordinator.commit_r6())
     return 0
@@ -891,8 +952,16 @@ def _parser() -> argparse.ArgumentParser:
         help="reserve no more than this many delegated agent runs across the Campaign",
     )
     init.add_argument(
+        "--max-wall-seconds", type=int,
+        help="stop accepting execution-task claims after this Campaign wall-clock budget",
+    )
+    init.add_argument(
         "--require-host-worker-attestation", action="store_true",
         help="require task-result HMAC attestations from the host wrapper",
+    )
+    init.add_argument(
+        "--experimental-go-hotspots", action="store_true",
+        help="opt into offline Go AST candidate hints; requires local Go, not release-qualified",
     )
 
     status = subparsers.add_parser("status", help="show Campaign and Batch state")
@@ -941,12 +1010,14 @@ def _parser() -> argparse.ArgumentParser:
         description=(
             "Run an argv harness bound to the current Campaign and source snapshot. "
             "Set input.hypothesis_id to make the captured execution eligible for "
-            "R5 empirical-upgrade review."
+            "R5 empirical-upgrade review. Optional input.profile='go-offline' uses "
+            "explicit Go-compatible resource limits and disables Go module fetching."
         ),
         epilog=(
             "input.cwd must be an existing directory under the target root. CPU, "
             "address-space, output-file, descriptor, timeout, and process-group "
-            "limits are resource controls, not an OS sandbox for hostile native code."
+            "limits are resource controls, not an OS sandbox for hostile native code. "
+            "go-offline is not an OS network sandbox."
         ),
         help=(
             "run a bounded argv harness; input.hypothesis_id binds output to an R5 "
@@ -1299,12 +1370,29 @@ def _parser() -> argparse.ArgumentParser:
     drift_resolve.add_argument("--input", required=True)
     drift_resolve.add_argument("--state-dir", default=".audit_vnext")
 
+    for command_parser in subparsers.choices.values():
+        for action in command_parser._actions:
+            if action.dest == "state_dir" and action.default == ".audit_vnext":
+                action.default = None
+                action.help = (
+                    "state directory; relative paths are target-relative. New Campaigns "
+                    "default to a per-target directory outside the target under "
+                    "XDG_STATE_HOME (or ~/.local/state). Non-init commands reuse a "
+                    "sole existing .audit_vnext store; if both old and external stores "
+                    "exist, pass this option explicitly."
+                )
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     arguments = _parser().parse_args(argv)
     try:
+        if hasattr(arguments, "state_dir") and arguments.state_dir is None:
+            arguments.state_dir = _cli_state_dir(
+                arguments.target,
+                None,
+                prefer_external=arguments.command == "init",
+            )
         if arguments.command == "init":
             return _handle_init(arguments)
 

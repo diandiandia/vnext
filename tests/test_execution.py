@@ -1565,6 +1565,172 @@ def test_runtime_policy_digest_is_available_without_host_attestation(tmp_path: P
         manager.close()
 
 
+def test_task_poll_reports_lease_history_without_claiming_worker_liveness(
+    tmp_path: Path,
+) -> None:
+    manager, task = _setup(tmp_path)
+    created_at = dt.datetime.fromisoformat(
+        manager.store.get_campaign(task.campaign_id).created_at
+    )
+    now = [created_at + dt.timedelta(seconds=10)]
+    backend = ManualExecutionBackend(manager, task.campaign_id, clock=lambda: now[0])
+    try:
+        pending = backend.submit(task)
+        assert pending.status is TaskStatus.PENDING
+        assert pending.lease_claimed_at is None
+        assert pending.lease_elapsed_seconds is None
+        assert pending.lease_expired is None
+        assert pending.worker_liveness == "UNKNOWN"
+
+        first = backend.claim("worker-a", lease_seconds=5)
+        assert first is not None
+        active = backend.poll(task.task_id)
+        assert active.lease_claimed_at == now[0].isoformat()
+        assert active.lease_elapsed_seconds == 0
+        assert active.lease_expired is False
+        assert active.worker_liveness == "UNKNOWN"
+
+        now[0] += dt.timedelta(seconds=6)
+        expired = backend.poll(task.task_id)
+        assert expired.status is TaskStatus.LEASED
+        assert expired.lease_elapsed_seconds == 6
+        assert expired.lease_expired is True
+        second = backend.claim("worker-b", lease_seconds=60)
+        assert second is not None
+        assert second.attempt == 2
+        with pytest.raises(ConflictError, match="attempt is stale"):
+            backend.collect(first, TaskResult(
+                False, None, "stale lease", {"agent_runs": 0, "wall_seconds": 0},
+            ))
+
+        reclaimed = backend.poll(task.task_id)
+        assert reclaimed.worker_id == "worker-b"
+        assert reclaimed.lease_claimed_at == now[0].isoformat()
+        assert reclaimed.lease_expired is False
+        released = backend.release(second)
+        assert released.status is TaskStatus.PENDING
+        assert released.lease_claimed_at == now[0].isoformat()
+        assert released.worker_liveness == "UNKNOWN"
+
+        terminal_lease = backend.claim("worker-c", lease_seconds=60)
+        assert terminal_lease is not None
+        output_ref = manager.artifacts.put_text(json.dumps({
+            "schema_version": "1.0",
+            "review_altitude": "INSPECTED",
+            "reviewed_paths": [],
+            "surfaces": [],
+            "boundary_reviews": [],
+        })).artifact_id
+        terminal = backend.collect(terminal_lease, TaskResult(
+            True, output_ref, "completed",
+            {"agent_runs": 1, "wall_seconds": 1},
+        ))
+        assert terminal.status is TaskStatus.SUCCEEDED
+        assert terminal.lease_claimed_at == now[0].isoformat()
+        assert terminal.lease_expired is False
+        assert terminal.worker_liveness == "UNKNOWN"
+    finally:
+        manager.close()
+
+
+def test_campaign_wall_deadline_blocks_claims_but_allows_collection(
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "deadline-target"
+    target.mkdir()
+    manager = CampaignManager(target)
+    manager.create_campaign(
+        campaign_id="CMP-deadline",
+        snapshot_id="fixture:deadline",
+        budget={"max_wall_seconds": 5},
+    )
+    manager.add_batch(
+        campaign_id="CMP-deadline",
+        batch_id="B-deadline",
+        manifest={"work_unit_ids": ["WU-deadline"]},
+    )
+    input_ref = manager.artifacts.put_text(json.dumps({
+        "work_unit": {"work_unit_id": "WU-deadline", "source_files": []},
+        "boundary_edges": [],
+    })).artifact_id
+    task = TaskSpec(
+        task_id="TASK-deadline",
+        campaign_id="CMP-deadline",
+        batch_id="B-deadline",
+        work_unit_id="WU-deadline",
+        operation="discover_surfaces",
+        input_refs=(input_ref,),
+        required_output="surface-set/v1",
+        budget={"agent_runs": 1},
+    )
+    created_at = dt.datetime.fromisoformat(
+        manager.store.get_campaign("CMP-deadline").created_at
+    )
+    now = [created_at + dt.timedelta(seconds=4)]
+    backend = ManualExecutionBackend(manager, "CMP-deadline", clock=lambda: now[0])
+    try:
+        backend.submit(task)
+        lease = backend.claim("worker", lease_seconds=60)
+        assert lease is not None
+
+        now[0] = created_at + dt.timedelta(seconds=6)
+        output_ref = manager.artifacts.put_text(json.dumps({
+            "schema_version": "1.0",
+            "review_altitude": "INSPECTED",
+            "reviewed_paths": [],
+            "surfaces": [],
+            "boundary_reviews": [],
+        })).artifact_id
+        assert backend.collect(lease, TaskResult(
+            True, output_ref, "collected after campaign deadline",
+            {"agent_runs": 1, "wall_seconds": 1},
+        )).status is TaskStatus.SUCCEEDED
+
+        next_task = replace(task, task_id="TASK-after-deadline")
+        backend.submit(next_task)
+        with pytest.raises(ModelError, match="wall-clock deadline reached"):
+            backend.claim("worker", task_id_filter=next_task.task_id)
+    finally:
+        manager.close()
+
+
+@pytest.mark.parametrize("invalid_limit", [True, 0, -1, 1.5, "5"])
+def test_campaign_wall_deadline_requires_positive_integer(
+    tmp_path: Path, invalid_limit: object,
+) -> None:
+    target = tmp_path / "invalid-deadline"
+    target.mkdir()
+    manager = CampaignManager(target)
+    manager.create_campaign(
+        campaign_id="CMP-invalid-deadline",
+        snapshot_id="fixture:invalid-deadline",
+        budget={"max_wall_seconds": invalid_limit},
+    )
+    manager.add_batch(
+        campaign_id="CMP-invalid-deadline",
+        batch_id="B-invalid-deadline",
+        manifest={"work_unit_ids": ["WU-invalid-deadline"]},
+    )
+    input_ref = manager.artifacts.put_text('{"work_unit":{"source_files":[]}}').artifact_id
+    task = TaskSpec(
+        task_id="TASK-invalid-deadline",
+        campaign_id="CMP-invalid-deadline",
+        batch_id="B-invalid-deadline",
+        work_unit_id="WU-invalid-deadline",
+        operation="discover_surfaces",
+        input_refs=(input_ref,),
+        required_output="surface-set/v1",
+        budget={"agent_runs": 1},
+    )
+    try:
+        backend = ManualExecutionBackend(manager, "CMP-invalid-deadline")
+        backend.submit(task)
+        with pytest.raises(ModelError, match="max_wall_seconds.*positive integer"):
+            backend.claim("worker")
+    finally:
+        manager.close()
+
+
 def test_expired_lease_is_reclaimed_and_survives_reopen(tmp_path: Path) -> None:
     manager, task = _setup(tmp_path)
     current = dt.datetime(2026, 9, 29, tzinfo=dt.UTC)
@@ -2542,6 +2708,15 @@ def test_discovery_coordinator_schedules_and_commits_r3(
         assert len(coordinator.schedule_r3()) == 1
         lease = backend.claim("verifier")
         assert lease is not None
+        task_input = json.loads(
+            manager.artifacts.get_bytes(lease.task.input_refs[0])
+        )
+        assert "caller-to-callee" in task_input["output_contract"]["call_chain"]
+        assert "pure LOC-path:line" in task_input["output_contract"]["call_chain"]
+        assert "descriptions" in task_input["output_contract"]["call_chain"]
+        assert "matched to the exact target version" in task_input["output_contract"]["rationale"]
+        assert "NEEDS_REVIEW" in task_input["analysis_contract"]
+        assert "worker's runtime" in task_input["analysis_contract"]
         schema_evidence_ref = "LOC-schema.yaml:1"
         bad_output_ref = manager.artifacts.put_text(json.dumps({
             "schema_version": "1.0",
@@ -2572,6 +2747,49 @@ def test_discovery_coordinator_schedules_and_commits_r3(
                     {"agent_runs": 1, "wall_seconds": 1},
                     execution_configuration_fixture(),
                 ))
+        assert backend.poll(lease.task.task_id).status is TaskStatus.LEASED
+        prose_chain_ref = manager.artifacts.put_text(json.dumps({
+            "schema_version": "1.0",
+            "verdict": {
+                "hypothesis_id": "HYP-r3",
+                "verdict": "REACHABLE",
+                "evidence_grade": "edge_proven",
+                "principal": "remote",
+                "preconditions": [],
+                "call_chain": ["LOC-app.py:1 describes a call"],
+                "edge_evidence_ids": [schema_evidence_ref],
+                "blocking_evidence_ids": [],
+                "experiment_ids": [],
+                "rationale": "prose must stay separate from anchors",
+            },
+        })).artifact_id
+        with pytest.raises(ModelError, match="not in the Campaign inventory"):
+            backend.collect(lease, TaskResult(
+                True, prose_chain_ref, "call-chain prose",
+                {"agent_runs": 1, "wall_seconds": 1},
+                execution_configuration_fixture(),
+            ))
+        non_array_chain_ref = manager.artifacts.put_text(json.dumps({
+            "schema_version": "1.0",
+            "verdict": {
+                "hypothesis_id": "HYP-r3",
+                "verdict": "REACHABLE",
+                "evidence_grade": "edge_proven",
+                "principal": "remote",
+                "preconditions": [],
+                "call_chain": "LOC-app.py:1",
+                "edge_evidence_ids": [schema_evidence_ref],
+                "blocking_evidence_ids": [],
+                "experiment_ids": [],
+                "rationale": "a scalar is not an ordered anchor array",
+            },
+        })).artifact_id
+        with pytest.raises(ModelError, match="call_chain must be an array of LOC anchors"):
+            backend.collect(lease, TaskResult(
+                True, non_array_chain_ref, "non-array call chain",
+                {"agent_runs": 1, "wall_seconds": 1},
+                execution_configuration_fixture(),
+            ))
         assert backend.poll(lease.task.task_id).status is TaskStatus.LEASED
         output_ref = manager.artifacts.put_text(json.dumps({
             "schema_version": "1.0",

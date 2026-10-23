@@ -17,6 +17,22 @@ Current-contract update (2026-10-22): section 1.1 item 6 and section 6 describe 
 R2 entrypoint, R4 hypothesis/Finding, and R6 Finding reconciliation contracts, including
 their structural-only assurance boundary.
 
+Current-contract update (2026-10-23): Campaign reports union coordinator-declared
+unreviewed scope with current Batch closure items and derived unresolved non-finding
+hypotheses. `inherited_unreviewed_scope` retains Batch provenance; only coordinator
+scope decisions use the existing approval schema. Inherited items are unresolved,
+not implicit approved exclusions. Resolve them through the existing amendment/recommit
+or declared follow-up workflow, never a higher-level empty array.
+`hypothesis_outcomes` joins canonical Findings by `hypothesis_ids` even if no Finding
+existed at R4; it retains R3/R4/R5 evidence and conservative unresolved outcomes.
+`revival_summaries` distinguishes review from overturn without changing old field
+semantics. `resource_assessment` is separate from CG1-CG10: missing measurements,
+configuration or wall limits mean NOT ASSESSED; an observed deadline overrun means
+FAIL. Elapsed time ends at the last recorded task completion/failure or R6 completion,
+not the sum of concurrent worker durations. Claim deadlines include pauses and do
+not terminate active workers. These additions reuse existing events, not a new ledger
+store or a semantic truth oracle.
+
 ## 1. Scope and Compatibility
 
 This design extends the existing vNext Python package and its canonical Campaign,
@@ -601,6 +617,33 @@ and labels unresolved aliases, dynamic dispatch, generated code, and interproced
 flow as limitations. Other languages remain explicitly `provider_unavailable` until
 their own conformance fixtures exist. Providers must include positive, negative, alias,
 and malformed-source tests before being enabled by default.
+The Go development slice is an exception only through a new Campaign's explicit
+`experimental_go_hotspots` constraint (`init --experimental-go-hotspots`). R1 and both
+R2 modes pass this frozen selection to the provider, together with R0 source digests.
+A trusted bundled Go standard-library parser processes supplied source bytes without
+building target packages or fetching their dependencies. Imported API call hints
+remain candidate-only; missing tools, lexical limitations and malformed source are
+reported. Python remains the sole default provider, and the release-acceptance roster
+does not automatically expand to an unqualified development provider.
+The initial Go hints cover imported command construction (`os/exec.Command` and
+`CommandContext`), whole-reader consumption (`io.ReadAll`, `ioutil.ReadAll`), and
+path transformations (`path.Join/Clean`, `filepath.Join/Clean/Abs/Rel`). These are
+review sites, not proof of injection, unbounded attacker input or traversal.
+Import aliases are resolved; dot imports and lexical shadows are not misidentified
+as package calls. Type, alias-value, interprocedural and taint analysis remain absent.
+Parser bounds are explicit: at most 128 Go files, 1 MiB per file and 4 MiB source per
+Work Unit, bounded helper output and subprocess resources. Files beyond those bounds
+remain reported failures, not reviewed scope.
+
+The optional `run_harness(profile="go-offline")`/JSON `profile` reuses the managed
+execution store and R5 observations. Its explicit 8 GiB address-space default and
+64 MiB per-file build allowance permit Go compilation without enlarging captured
+stdout/stderr or ordinary-runner defaults. Private cache/temp and offline Go fetch
+settings do not replace a host VM/container or network policy. Reports explicitly
+marked empirical-upgrade-ineligible cannot be used to upgrade through R5.
+The compact context also reports `scan_status` as `not_scanned`, `completed`, `partial`
+or `error`, with supported/scanned/unsupported/parse-error counts. Provider availability
+is not a successful scan, and candidate count zero is not evidence of a clean target.
 
 For each Work Unit, R2 schedules all six axes, either as six independently claimable
 tasks or as one compact task containing all axes. Compact mode reduces host CLI/lease
@@ -749,7 +792,7 @@ and writes an abort report. Cleanup failures are surfaced and preserved in that 
 Cancellation uses the latest task state, including failed/released tasks and retries;
 a historical failure does not protect a later active lease from cancellation.
 
-Every completed skill review writes `.audit_vnext/campaigns/<campaign-id>/lessons.md`
+Every completed skill review writes `<state-dir>/campaigns/<campaign-id>/lessons.md`
 with closure `unreviewed_scope`, residual risks, limitations, and lessons. Writes append
 an idempotent digest-marked section and preserve host-authored content. Skill defects are
 stored separately in digest-marked, append-only sections in `skill-issues.md`, preserving

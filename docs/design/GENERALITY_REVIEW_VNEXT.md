@@ -1,7 +1,7 @@
 # Generality and Engineering Review
 
 Initial review: 2026-10-20. Base: `a3b969c` plus that review's uncommitted changes.
-Current reassessment addendum: 2026-10-22, against the present working tree.
+Current reassessment addendum: 2026-10-23, against the present working tree.
 This is a bounded engineering review and repair record, not a security certification,
 exhaustive dead-code proof, Google internal approval, or ISO conformity assessment.
 The historical [quality reassessment](QUALITY_REASSESSMENT_VNEXT.md) is retained as
@@ -374,3 +374,149 @@ all guidance or development/history records.
 These checks establish local implementation and bounded residue-pattern behavior only.
 They do not establish semantic neutrality, dead-code absence, real-target recall,
 Google/internal compliance, ISO conformity, or release qualification.
+
+## 2026-10-23 Pilot-Driven Repair and Reassessment
+
+The supplied development pilot used engine `f1ec0bc`, one Batch, seven Work Units
+and 369 source files. Read-only inspection verified 649 content-addressed artifacts
+against their SHA-256 names and the durable Campaign state. This is artifact-byte
+integrity, not a signed complete evidence manifest or independent target adjudication.
+All 15 Findings were static-only and NEEDS_REVIEW; no confirmed security-vulnerability
+or balanced portfolio-quality claim follows.
+
+### Confirmed repair scope
+
+- **Scope inheritance:** a current R6 report contained unresolved scope while the
+  Campaign submission was empty. Closure previously allowed the final report to say
+  no declared unreviewed scope. The report now unions current Batch items with
+  coordinator scope and preserves Batch provenance, Markdown and lessons. Inherited
+  unresolved items are not silently converted to approved exclusions.
+- **Candidate visibility:** a derived per-hypothesis outcome ledger joins Findings by
+  hypothesis ID even when recorded after R4. It retains stage evidence/rationales and
+  marks non-finding candidates without consistent rejection NEEDS_REVIEW, adding them
+  to unresolved scope. It neither forces a Finding nor adjudicates semantic truth.
+- **Revival semantics:** the old `revived_hypothesis_ids` name actually means reviewed
+  items, including UPHOLD. Empty `adjudicated_hypothesis_ids` is not proof that these
+  reviews lacked required adjudication: that list belongs to the eligible
+  REACHABLE/EDGE_PROVEN refutation path. New summaries explicitly separate reviewed,
+  upheld and actual revivals while preserving the legacy field. Prior claims that all
+  six UPHOLD items were unadjudicated overturns were not justified.
+- **Execution reliability:** task contracts disclose pure source-anchor chains and
+  target-version runtime-semantic assumptions; lease timing does not imply worker
+  liveness. State-directory handling, R6 result shape compatibility and provider
+  scan-coverage reporting are covered by TR-13. The host must still confirm dispatch,
+  release failed dispatches, stop active workers and supply actual provider usage.
+- **Resource honesty:** elapsed completion time and the optional local Campaign
+  deadline are recorded separately from parallel worker-duration sums. Missing
+  attempts, usage/configuration or wall limits cannot become resource PASS. The
+  local deadline blocks new claims, including after a pause; it is not a provider
+  hard cap or an autonomous worker terminator.
+
+### Generality, complexity and standards decision
+
+No target-specific detector, helper list, verdict exception, fixed historical-target
+blacklist or expected-finding quota was added. The pilot target's names remain in
+dated evidence, not active runtime rules. A bounded scan of source, runtime knowledge
+and the main Skill for the two supplied historical target identifiers and private
+root paths found no matches. This cannot prove semantic neutrality of all 150 issues.
+The fixed 15-language/ten-issue scope and unequal automatic provider coverage remain
+explicit product/evidence boundaries, not balanced capability certification.
+
+A Python AST name/attribute/string reference inventory across 75 source/test/tool
+files found no unreferenced candidate among 263 runtime top-level definitions at the
+time of inspection. This is not a control-flow or dynamic dead-code proof. One duplicate
+test import in a touched module was removed. No runtime deletion or wholesale module
+split was justified; orchestration modules remain large and maintenance-heavy.
+The repairs derive new report views from existing events rather than add a second
+state machine, extra mandatory review stages, or a target-specific rule system.
+
+README, Skill, runbook, system/software requirements and design, and test plans now
+name the same structural and host boundaries (SYSR-042, SWDR-048, TR-13). A closed
+workflow with missing usage, unresolved candidates, or no independent reviewer must
+not be advertised as full coverage, confirmed vulnerabilities or capacity qualification.
+The old pilot cannot validate these later repairs; use the updated real-target protocol
+for a new regression run.
+
+Google internal criteria were not supplied and cannot be assessed or claimed.
+ISO/IEC/IEEE 12207 remains a preliminary process-concept mapping: controlled edition,
+organizational tailoring, process ownership, approvals and clause-level independent
+evidence are absent. More code, tests or documentation cannot manufacture conformity.
+The architecture is usable for authorized development pilots; excellent universal
+audit quality, dead-code freedom, absence of bias and release qualification remain
+unproven.
+
+### Final Local Verification (2026-10-23)
+
+- Full suite: `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest tests -o addopts='' -q --tb=short`
+  completed with **385 passed, 1 skipped in 39.96 seconds**. The skip is
+  `protected real held-out manifest is not configured`; no protected labels were
+  fabricated. The two initial reproductions failed on lost scope and missing resource
+  assessment before their repairs.
+- Compatibility scan: PASS, zero findings across 49 runtime Python files, 167
+  knowledge files and one prompt. Python `compileall` and `git diff --check` pass.
+- Pylance reports no diagnostics in the modified closure/workflow modules; task/CLI
+  changes were also checked during implementation. An unused local binding in the
+  touched revival method was removed without removing its prerequisite check.
+- Local Markdown targets resolve across 15 user-facing/design documents; the main
+  Skill remains below 500 lines (470 lines at verification).
+- Read-only replay of the new outcome derivation on the original pilot retains all
+  15 Findings through 18 linked hypotheses (a many-to-many relation, not a 15-item
+  hypothesis quota); the 56 hypotheses receive 18 FINDING_RECORDED, 2 REJECTED and
+  36 NEEDS_REVIEW outcomes. The original R6 supplies four unresolved-scope inheritance
+  inputs. This replay exercises derived reporting, not a new full Campaign or a
+  semantic adjudication. Original evidence was not rewritten or reopened.
+
+These are working-tree implementation checks. Actual host dispatch/termination,
+provider metering, independently reviewed impact, mixed-Batch boundaries and
+large-project capacity still need the updated real-target retest.
+
+## Evidence-Ready Development Increment (2026-10-23)
+
+The Go-heavy pilot permits an experimental automatic-lead implementation and a
+registered Go-runtime probe, not automatic large-file slicing or a universal
+cross-language detector. The new development provider is selected once at Campaign
+creation, uses standard-library AST parsing of supplied snapshot bytes, and emits
+only generic imported-call review hints. It does not add the pilot's helper names,
+historical findings, expected issue counts or platform-specific exploitation rules.
+Python remains the default provider; independently reviewed Go coverage/precision
+and default enablement remain separate acceptance decisions.
+
+R1 and both R2 scheduling modes use the frozen provider opt-in and current R0 digests.
+The report retains the experimental-feature selection. Missing Go tooling is an
+explicit failed/unavailable scan rather than a successful no-candidate result.
+The trusted Go parser source ships as package data, not a path into a developer's
+checkout. TR-14 covers installation, provider contracts and managed runtime evidence.
+
+The R5 work reuses the existing registered harness, explicit resource limits and
+eligible observation refs. A synthetic offline runtime check can establish that the
+execution path works on this host; it cannot confirm a historical target claim or
+replace independent impact review. Large-file reading measurements and actual
+mixed-language boundary miss samples remain unprovided. No broader feature is
+declared complete merely because a development prototype is now permitted.
+
+### Increment Verification and Remaining Gate
+
+- Full suite: **421 passed, 1 skipped in 53.20 seconds**, using
+  `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest tests -o addopts='' -q --tb=short`.
+  The protected held-out manifest remains unconfigured; no real labels were fabricated.
+- This host's `go version go1.26.0 linux/arm64` compiled and executed synthetic Go
+  probes through the registered harness, including hypothesis binding, unchanged
+  source and cleanup. The CLI also executes the explicit `go-offline` profile.
+  The default profile remains unchanged. Complete nonzero-exit observations are
+  eligible for review, not automatic confirmation; timeout/truncation cannot upgrade
+  through the actual R5 evidence validator.
+- An offline wheel build, extraction and smoke run outside this checkout verified
+  packaged Go parser availability and a synthetic imported-call candidate. This is
+  installation evidence, not a new qualified provider identity.
+- Compatibility scan passes with **zero findings** across 50 Python runtime files,
+  167 knowledge files and one prompt. `compileall` and `git diff --check` pass.
+  The main Skill is 476 lines, below the 500-line guideline.
+- Production CLI diagnostics were checked during implementation. Editor import
+  resolution for new pytest files is not a clean type-check claim: the terminal
+  suite succeeds, but the editor reported unresolved pytest/package imports under
+  its selected workspace/interpreter configuration.
+
+No Caddy rerun, independent semantic adjudication, Go Top10 qualification, balanced
+15-language validation, large-file capacity measurement or mixed-language boundary
+study was performed by this increment. Keep the provider opt-in and make those
+claims only after the corresponding real-target evidence is available.

@@ -42,7 +42,20 @@ def run_harness(
     cpu_limit_seconds: int | None = None,
     memory_limit_bytes: int | None = None,
     hypothesis_id: str | None = None,
+    profile: str | None = None,
 ) -> dict[str, object]:
+    """Run explicit argv; ``go-offline`` opts into private, offline Go build settings.
+
+    The Go profile permits 8 GiB virtual address space and 64 MiB build files,
+    not unlimited memory or output. It disables Go downloads, user configuration,
+    telemetry and cgo. These are Go tool settings, not OS network isolation:
+    arbitrary probe network traffic is not blocked or certified sandboxed.
+    Selecting a profile does not grant permission to execute target code.
+    Eligibility means complete, hypothesis-bound capture, not a confirmed result;
+    nonzero exits may represent intentional crash observations.
+    """
+    if profile not in {None, "go-offline"}:
+        raise ModelError("unknown harness profile")
     argv = tuple(str(item) for item in command)
     if not argv or any(not item or "\x00" in item for item in argv):
         raise ModelError("harness command must be a non-empty argv array")
@@ -55,7 +68,7 @@ def run_harness(
     if not 0 < cpu_limit_seconds <= _MAX_TIMEOUT_SECONDS:
         raise ModelError(f"harness CPU limit must be between 1 and {_MAX_TIMEOUT_SECONDS} seconds")
     if memory_limit_bytes is None:
-        memory_limit_bytes = 2 * 1024 * 1024 * 1024
+        memory_limit_bytes = (8 if profile == "go-offline" else 2) * 1024**3
     if memory_limit_bytes <= 0:
         raise ModelError("harness memory limit must be positive")
     if resource is None:
@@ -81,12 +94,32 @@ def run_harness(
     }
     if environment:
         allowed_environment.update({str(key): str(value) for key, value in environment.items()})
+    if profile == "go-offline":
+        # Keep every compiler cache and temporary file Campaign-owned.
+        directories = {
+            key: runtime_directory / name
+            for key, name in (
+                ("HOME", "home"), ("GOCACHE", "go-cache"), ("GOPATH", "go-path"),
+                ("TMPDIR", "go-tmp"), ("GOTMPDIR", "go-tmp"),
+            )
+        }
+        for directory in directories.values():
+            directory.mkdir(exist_ok=True)
+        allowed_environment.update({key: str(path) for key, path in directories.items()})
+        allowed_environment.update({
+            "GOENV": "off", "GOTOOLCHAIN": "local", "GOPROXY": "off",
+            "GOSUMDB": "off", "GOTELEMETRY": "off", "GOWORK": "off",
+            "GO111MODULE": "off", "GOFLAGS": "", "CGO_ENABLED": "0",
+            "GOMAXPROCS": "2", "GOMEMLIMIT": "256MiB",
+        })
     allowed_environment["VNA_HARNESS_TMP"] = str(runtime_directory)
+    file_size_limit_bytes = 64 * 1024**2 if profile == "go-offline" else output_limit_bytes
 
     started = time.monotonic()
     process: subprocess.Popen[bytes] | None = None
     process_resource_id: str | None = None
     timed_out = False
+    output_limit_exceeded = False
     exit_code: int | None = None
     with stdout_path.open("wb") as stdout_handle, stderr_path.open("wb") as stderr_handle:
         try:
@@ -100,7 +133,7 @@ def run_harness(
                 shell=False,
                 start_new_session=True,
                 preexec_fn=_child_limits(
-                    cpu_limit_seconds, memory_limit_bytes, output_limit_bytes
+                    cpu_limit_seconds, memory_limit_bytes, file_size_limit_bytes
                 ),
             )
             try:
@@ -124,7 +157,21 @@ def run_harness(
                     process.wait()
                     raise
             try:
-                exit_code = process.wait(timeout=timeout_seconds)
+                if profile == "go-offline":
+                    deadline = time.monotonic() + timeout_seconds
+                    while process.poll() is None:
+                        if max(stdout_path.stat().st_size, stderr_path.stat().st_size) > output_limit_bytes:
+                            output_limit_exceeded = True
+                            break
+                        if time.monotonic() >= deadline:
+                            raise subprocess.TimeoutExpired(argv, timeout_seconds)
+                        time.sleep(0.01)
+                    if output_limit_exceeded:
+                        assert process_resource_id is not None
+                        release_campaign_resource(manager, campaign_id, process_resource_id)
+                    exit_code = process.wait()
+                else:
+                    exit_code = process.wait(timeout=timeout_seconds)
             except subprocess.TimeoutExpired:
                 timed_out = True
                 if process_resource_id is not None:
@@ -141,11 +188,13 @@ def run_harness(
                     manager, campaign_id, process_resource_id
                 )
 
-    stdout = stdout_path.read_bytes()
-    stderr = stderr_path.read_bytes()
+    with stdout_path.open("rb") as stream:
+        stdout = stream.read(output_limit_bytes + 1)
+    with stderr_path.open("rb") as stream:
+        stderr = stream.read(output_limit_bytes + 1)
     stdout_truncated = len(stdout) > output_limit_bytes
     stderr_truncated = len(stderr) > output_limit_bytes
-    output_limit_exceeded = (
+    output_limit_exceeded = output_limit_exceeded or stdout_truncated or stderr_truncated or (
         (len(stdout) >= output_limit_bytes or len(stderr) >= output_limit_bytes)
         and exit_code not in {0, None}
     )
@@ -156,18 +205,26 @@ def run_harness(
         "campaign_id": campaign_id,
         "snapshot_id": campaign.snapshot_id,
         "hypothesis_id": hypothesis_id,
-        "empirical_upgrade_eligible": hypothesis_id is not None,
-        "empirical_upgrade_note": (
-            None if hypothesis_id is not None
-            else "no hypothesis_id was supplied; this run cannot support an R5 empirical upgrade"
+        "empirical_upgrade_eligible": (
+            hypothesis_id is not None and not timed_out and not output_limit_exceeded
         ),
+        "empirical_upgrade_note": (
+            "no hypothesis_id was supplied; this run cannot support an R5 empirical upgrade"
+            if hypothesis_id is None else (
+                None if not timed_out and not output_limit_exceeded
+                else "timed out or output-limited execution cannot support an R5 empirical upgrade"
+            )
+        ),
+        "profile": profile,
         "command": list(argv),
         "working_directory": working_directory.relative_to(target_root).as_posix() or ".",
         "timeout_seconds": timeout_seconds,
         "resource_limits": {
             "cpu_seconds": cpu_limit_seconds,
             "address_space_bytes": memory_limit_bytes,
-            "file_size_bytes_per_stream": output_limit_bytes,
+            "file_size_bytes": file_size_limit_bytes,
+            "file_size_bytes_per_stream": file_size_limit_bytes,
+            "captured_output_bytes_per_stream": output_limit_bytes,
             "open_files": _MAX_OPEN_FILES,
             "core_dump_bytes": 0,
         },
