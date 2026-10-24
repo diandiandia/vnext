@@ -24,6 +24,7 @@ from reachable_audit.analysis_models import (
 )
 from reachable_audit.campaign_closure import (
     CampaignCloser,
+    _derive_scope_owned_components,
     _derive_category_coverage_gate,
     _derive_batch_completion_gate,
     _derive_closure_content_gate,
@@ -61,6 +62,7 @@ from test_experiments_metrics import _ready_for_r5
 
 def _closable_campaign(
     tmp_path: Path, *, surface_without_hypothesis: bool = False,
+    static_hypothesis: bool = False,
     screening_work_unit: bool = False, not_feasible: bool = False,
     path_dispositions: tuple[PlanPathDisposition, ...] = (),
     path_review_claims: tuple[dict[str, str], ...] = (),
@@ -69,7 +71,7 @@ def _closable_campaign(
 ):  # type: ignore[no-untyped-def]
     manager, workflow = _ready_for_r5(
         tmp_path,
-        static_hypothesis=not_feasible,
+        static_hypothesis=static_hypothesis or not_feasible,
         surface_without_hypothesis=surface_without_hypothesis,
         screening_work_unit=screening_work_unit,
         path_dispositions=path_dispositions,
@@ -88,6 +90,15 @@ def _closable_campaign(
             disposition=R5Disposition.NOT_FEASIBLE,
             evidence_refs=("EVID-environment-blocker",),
             rationale="the required target runtime is unavailable",
+        )])
+    elif static_hypothesis:
+        workflow.record_r5([], [R5Assessment(
+            hypothesis_id="HYP-static",
+            experiment_required=False,
+            experiment_id=None,
+            disposition=R5Disposition.NEEDS_REVIEW,
+            evidence_refs=("LOC-state.py:1",),
+            rationale="retain the static-only uncertainty",
         )])
     else:
         workflow.record_r5([], [])
@@ -939,6 +950,55 @@ def test_campaign_report_separates_agent_path_review_claims(tmp_path: Path) -> N
         manager.close()
 
 
+@pytest.mark.parametrize(
+    ("static_hypothesis", "surface_without_hypothesis", "expected_mapped"),
+    [(True, False, 1), (False, True, 0)],
+)
+def test_campaign_report_measures_high_risk_surface_hypothesis_mapping(
+    tmp_path: Path,
+    static_hypothesis: bool,
+    surface_without_hypothesis: bool,
+    expected_mapped: int,
+) -> None:
+    (tmp_path / "state.py").write_text("STATE = {}\n", encoding="utf-8")
+    work_unit_id = create_audit_plan(
+        campaign_id="CMP-r4",
+        inventory=build_inventory(tmp_path, "fixture:r4"),
+        category_families=["STATE"],
+    ).work_units[0].work_unit_id
+    manager, plan = _closable_campaign(
+        tmp_path,
+        static_hypothesis=static_hypothesis,
+        surface_without_hypothesis=surface_without_hypothesis,
+        path_review_claims=({
+            "work_unit_id": work_unit_id,
+            "path": "state.py",
+            "claim": "AGENT_DECLARED_REVIEWED",
+            "altitude": "INSPECTED",
+            "risk_tier": "HIGH",
+        },),
+    )
+    try:
+        report = CampaignCloser(manager, "CMP-r4", plan).close(CampaignClosure(
+            architecture_overview="One component with a high-risk Surface.",
+            unreviewed_scope=(), residual_risks=(), limitations=(), lessons=(),
+            knowledge_nominations=(), skill_issues=(),
+        ))
+
+        mapping = report["discovery_measurements"][
+            "high_risk_surface_hypothesis_mapping"
+        ]
+        assert mapping["status"] == "EXPLORATORY_NON_GATING"
+        assert mapping["high_risk_surface_count"] == 1
+        assert mapping["surfaces_with_hypotheses"] == expected_mapped
+        assert mapping["surfaces_without_linked_hypotheses"] == 1 - expected_mapped
+        assert mapping["mapping_rate"] == expected_mapped
+        assert "not evidence of a missed vulnerability" in mapping["interpretation"]
+        assert "Exploratory Discovery Measurements" in CampaignCloser._markdown(report)
+    finally:
+        manager.close()
+
+
 def test_campaign_closure_rejects_low_tier_without_inspected_altitude(
     tmp_path: Path,
 ) -> None:
@@ -1327,6 +1387,7 @@ def test_path_scope_gate_reports_component_path_and_evidence_blockers() -> None:
     passing = _derive_path_scope_gate(
         required_components={"COMP-1"},
         owned_components={"COMP-1"},
+        scope_owned_components=set(),
         build_components={"COMP-1"},
         inventory_source_files={"src/a.py"},
         path_state_by_path={"src/a.py": PlanPathState.INCLUDED},
@@ -1345,6 +1406,7 @@ def test_path_scope_gate_reports_component_path_and_evidence_blockers() -> None:
     blocked = _derive_path_scope_gate(
         required_components={"COMP-1", "COMP-2"},
         owned_components={"COMP-1"},
+        scope_owned_components=set(),
         build_components={"COMP-1", "COMP-2"},
         inventory_source_files={"src/a.py"},
         path_state_by_path={},
@@ -1361,6 +1423,68 @@ def test_path_scope_gate_reports_component_path_and_evidence_blockers() -> None:
     assert blocked["detail"]["unowned_components"] == ["COMP-2"]
     assert blocked["detail"]["path_scope_evidence_errors"] == ["invalid path evidence"]
     assert blocked["detail"]["path_review_claim_errors"] == ["missing review claim"]
+
+
+@pytest.mark.parametrize(
+    "scope_state", (PlanPathState.EXCLUDED, PlanPathState.DEFERRED),
+)
+def test_path_scope_gate_accounts_for_fully_scoped_out_component(
+    scope_state: PlanPathState,
+) -> None:
+    result = _derive_path_scope_gate(
+        required_components={"COMP-excluded"},
+        owned_components=set(),
+        scope_owned_components={"COMP-excluded"},
+        build_components={"COMP-excluded"},
+        inventory_source_files={"src/a.cs"},
+        path_state_by_path={"src/a.cs": scope_state},
+        included_source_files=set(),
+        planned_source_files=set(),
+        excluded_source_files=(
+            {"src/a.cs"} if scope_state is PlanPathState.EXCLUDED else set()
+        ),
+        deferred_source_files=(
+            {"src/a.cs"} if scope_state is PlanPathState.DEFERRED else set()
+        ),
+        path_scope_coverage_valid=True,
+        path_scope_evidence_errors=(),
+        duplicate_source_files=(),
+        path_review_claim_errors=(),
+    )
+
+    assert result["pass"] is True
+    assert result["detail"]["unowned_components"] == []
+    assert result["detail"]["unowned_build_units"] == []
+    assert result["detail"]["scope_owned_components"] == ["COMP-excluded"]
+
+
+def test_scope_owned_component_requires_complete_approved_path_scope_and_no_boundary() -> None:
+    source_paths = {
+        "COMP-excluded": {"src/a.cs", "src/b.cs"},
+        "COMP-partial": {"src/c.cs", "src/d.cs"},
+        "COMP-boundary": {"src/e.cs"},
+        "COMP-included": {"src/f.cs"},
+    }
+    path_states = {
+        "src/a.cs": PlanPathState.EXCLUDED,
+        "src/b.cs": PlanPathState.DEFERRED,
+        "src/c.cs": PlanPathState.EXCLUDED,
+        "src/d.cs": PlanPathState.INCLUDED,
+        "src/e.cs": PlanPathState.EXCLUDED,
+        "src/f.cs": PlanPathState.INCLUDED,
+    }
+
+    scoped_out = _derive_scope_owned_components(
+        source_paths, path_states, {"COMP-boundary"}, True, (),
+    )
+    assert scoped_out == {"COMP-excluded"}
+    assert _derive_scope_owned_components(
+        source_paths, path_states, {"COMP-boundary"}, False, (),
+    ) == set()
+    assert _derive_scope_owned_components(
+        source_paths, path_states, {"COMP-boundary"}, True,
+        ("path scope evidence is invalid",),
+    ) == set()
 
 
 def test_campaign_final_report_is_idempotent_but_immutable(tmp_path: Path) -> None:

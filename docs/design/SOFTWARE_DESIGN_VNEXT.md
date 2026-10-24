@@ -1,8 +1,8 @@
 # Reachable Audit vNext Software Design
 
 Status: as-implemented software baseline, initially reviewed 2026-10-17 against commit
-`beaef3b` plus working-tree repairs; contract updates through 2026-10-22 are identified
-below and cross-referenced to the completion plan.
+`beaef3b` plus working-tree repairs; subsequent contract updates are dated below and
+cross-referenced to the completion plan.
 This supersedes the target package/schema descriptions in the previous revision.
 Missing capabilities and known defects below are not supported contracts.
 
@@ -32,6 +32,17 @@ FAIL. Elapsed time ends at the last recorded task completion/failure or R6 compl
 not the sum of concurrent worker durations. Claim deadlines include pauses and do
 not terminate active workers. These additions reuse existing events, not a new ledger
 store or a semantic truth oracle.
+
+Current-contract update (2026-10-24): component build manifests discovered by inventory
+are included in the frozen snapshot baseline and can anchor R1 boundary evidence without
+being treated as reviewed source. CG2 may account for a no-Work-Unit component only
+when every source path has a valid evidence-backed EXCLUDED/DEFERRED disposition and
+the component has no boundary obligation; reports call this scope ownership, not audit
+ownership or a safety approval. Campaign reports also expose an exploratory, non-gating
+mapping from Agent-declared HIGH-risk R1 Surfaces to R2 hypothesis Surface IDs. The
+mapping is not host-observed review or a recall measure. See the current
+[generality review](GENERALITY_REVIEW_VNEXT.md) and [test plan](TEST_PLAN_VNEXT.md);
+the 2026-10-17 baseline below remains historical implementation context.
 
 ## 1. Scope and Compatibility
 
@@ -801,7 +812,8 @@ short-circuit applies to zero-target revival stages.
 
 ### 6.2.1 Evidence Registration and Controlled Resumption
 
-`evidence-register` freezes bounded supporting file digests before the first R0.
+Inventory freezes source files and component build manifests in the R0 baseline.
+`evidence-register` freezes additional bounded supporting file digests before the first R0.
 It rejects runtime/VCS state, unsafe/symlink paths and digest replacement. Concrete
 source/resource LOC validation checks frozen bytes, target containment, line range and
 nonblankness. Supporting resources are neither code-chain ownership nor reviewed scope.

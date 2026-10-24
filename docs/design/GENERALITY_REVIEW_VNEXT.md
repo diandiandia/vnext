@@ -323,7 +323,9 @@ dead-code-free, or release-qualified.
 
 The supplied real-target bundle passed its `SHA256SUMS` checks. Its recorded engine
 revision is `5d7dd33` plus TR-09 worktree changes and its task policy is
-`vnext-task-policy-37`; the current checkout reports `vnext-task-policy-38`.
+`vnext-task-policy-37`; the 2026-10-23 checkout reported
+`vnext-task-policy-38`. The current 2026-10-24 runtime policy is recorded in the
+reassessment addendum below.
 The run is therefore evidence about the earlier contract and is not a retest of the
 current R2/R4/R6 gates.
 
@@ -645,3 +647,36 @@ zero broken targets), and an offline wheel smoke from outside the checkout passe
 The wheel contained and successfully exercised both Java and Go helper resources.
 `SKILL.md` is 486 lines. These checks establish local regression and packaging
 behavior only, not production-scale performance or security-analysis recall.
+
+### Current reassessment addendum (2026-10-24)
+
+The implementation after the historical verification above includes the CG2
+scope-owned component rule for fully and evidentially excluded/deferred components,
+the non-gating HIGH-risk Surface-to-Hypothesis mapping diagnostic, R4 compact bundle
+v2 guidance, and the paired discovery-quality evaluation protocol. These additions
+address bookkeeping/traceability and evaluation design; none is evidence of recall
+improvement. The 11 language pilots remain exploratory workflow observations, not
+held-out ground truth.
+
+The current compatibility scan and targeted residue inspection are bounded evidence
+against accidental historical-project leakage in runtime Python, the main prompt, and
+eligible knowledge. They cannot establish semantic neutrality of all guidance.
+Likewise, the existing AST name/import inventory is not a whole-program dead-code
+proof; no code was removed solely on textual non-reference. Concentrated orchestration
+modules remain measured maintenance debt, not demonstrated dead code or a reason for
+an unmeasured rewrite.
+
+Google internal criteria remain unavailable and unassessed. ISO/IEC/IEEE 12207 is
+addressed only by the preliminary, non-normative process self-assessment in
+[LIFECYCLE_CONFORMANCE_VNEXT.md](LIFECYCLE_CONFORMANCE_VNEXT.md). Neither local tests
+nor document traceability establish organizational conformity or certification.
+
+Validation for this reassessment: **497 passed, 1 skipped**. The skip is the protected
+held-out manifest test, which requires an external manifest intentionally not
+configured in this checkout. `compileall`, `git diff --check`, and Markdown-link
+validation across README/design documents (206 local links) passed. The runtime
+compatibility scan passed with zero findings across 52 Python files, 2 packaged helper
+files, 167 eligible knowledge files, and 1 prompt file. These results establish local
+regression and bounded residue/link checks only; they do not establish dead-code
+absence, recall, production-scale capability, standards conformity, or organizational
+approval.

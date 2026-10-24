@@ -361,6 +361,12 @@ def test_r4_category_plan_runs_as_durable_task(
         assert task_input["knowledge_context"]["issue_entries"]
         assert task_input["knowledge_context"]["knowledge_version"] == "portfolio-2026-09-v1"
         assert bool(task_input["allowed_hypothesis_ids"]) is static_hypothesis
+        assert [
+            item["hypothesis_id"]
+            for item in task_input["r3_verdicts_to_reconcile"]
+        ] == (["HYP-static"] if static_hypothesis else [])
+        if static_hypothesis:
+            assert task_input["r3_verdicts_to_reconcile"][0]["verdict"] == "REACHABLE"
         assert [item["finding_id"] for item in task_input["findings_to_reconcile"]] == (
             ["FND-static"] if static_hypothesis else []
         )
@@ -537,6 +543,41 @@ def test_r4_category_plan_runs_as_durable_task(
         manager.close()
 
 
+def test_cancelled_pending_r4_tasks_can_be_replaced_with_bundle_layout(
+    tmp_path: Path,
+) -> None:
+    manager, workflow, plan = _ready_for_r4(tmp_path)
+    try:
+        catalog = KnowledgeCatalog.load(default_knowledge_root())
+        state_card = next(
+            card for card in catalog.cards.values()
+            if card["family"] == "STATE"
+            and "python" in card["language_applicability"]
+        )
+        category_plans = create_category_audit_plans(
+            plan.work_units, [MechanismCard.from_dict(state_card)], budget={},
+        )
+        workflow.record_category_audit_plan(category_plans)
+        backend = ManualExecutionBackend(manager, workflow.campaign_id)
+        coordinator = DiscoveryCoordinator(workflow, backend, catalog)
+        individual = coordinator.schedule_r4()
+        assert len(individual) == 1
+        backend.cancel(
+            individual[0].task.task_id,
+            reason="operator selected bundled scheduling before any claim",
+        )
+
+        bundled = coordinator.schedule_r4_bundled(max_work_units_per_task=2)
+
+        assert len(bundled) == 1
+        assert bundled[0].task.operation == "run_category_audit_bundle"
+        assert coordinator._active_task_views(
+            operation="run_category_audit",
+        ) == ()
+    finally:
+        manager.close()
+
+
 def test_r4_bundle_schedules_two_work_units_and_commits_each_plan(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -621,6 +662,10 @@ def test_r4_bundle_schedules_two_work_units_and_commits_each_plan(
         assert task_input["bundle_input_version"] == "2.0"
         assert "Example: allowed_hypothesis_ids" in json.dumps(task_input)
         assert task_input["family"] == "STATE"
+        assert all(
+            item["r3_verdicts_to_reconcile"] == []
+            for item in task_input["category_items"]
+        )
         assert len(task_input["discovery_axis_sets"]) == 1
         assert all(
             item["seed_card_ids"] == [state_card["mechanism_id"]]

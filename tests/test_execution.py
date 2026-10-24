@@ -615,7 +615,7 @@ def test_r1_collect_rejects_bad_boundary_anchor_before_terminalizing(
             }],
         }
         invalid_ref = manager.artifacts.put_text(json.dumps(output)).artifact_id
-        with pytest.raises(ModelError, match="boundary source anchor is outside the file"):
+        with pytest.raises(ModelError, match="source anchor line is outside the file"):
             backend.collect(lease, TaskResult(
                 True, invalid_ref, "invalid boundary anchor",
                 {"agent_runs": 1, "wall_seconds": 1},
@@ -1865,6 +1865,44 @@ def test_cancelled_task_cannot_be_claimed(tmp_path: Path) -> None:
         manager.close()
 
 
+def test_unclaimed_cancelled_task_can_be_reauthorized_for_retry(
+    tmp_path: Path,
+) -> None:
+    manager, task = _setup(tmp_path)
+    try:
+        backend = ManualExecutionBackend(manager, task.campaign_id)
+        backend.submit(task)
+        backend.cancel(task.task_id, reason="operator changed the task plan")
+
+        retried = backend.retry(
+            task.task_id, reason="rescheduling the unclaimed task",
+        )
+
+        assert retried.status is TaskStatus.PENDING
+        lease = backend.claim("replacement-worker")
+        assert lease is not None
+        assert lease.attempt == 1
+    finally:
+        manager.close()
+
+
+def test_claimed_cancelled_task_cannot_be_retried_as_unclaimed(
+    tmp_path: Path,
+) -> None:
+    manager, task = _setup(tmp_path)
+    try:
+        backend = ManualExecutionBackend(manager, task.campaign_id)
+        backend.submit(task)
+        lease = backend.claim("worker-a")
+        assert lease is not None
+        backend.cancel(task.task_id, reason="operator changed the task plan")
+
+        with pytest.raises(ConflictError, match="unclaimed cancelled task"):
+            backend.retry(task.task_id, reason="must not erase the claimed attempt")
+    finally:
+        manager.close()
+
+
 def test_collection_rejects_measurements_over_budget(tmp_path: Path) -> None:
     manager, task = _setup(tmp_path)
     try:
@@ -2210,6 +2248,7 @@ def test_compact_r2_runs_all_axes_in_one_task_per_work_unit(tmp_path: Path) -> N
         tasks = coordinator.schedule_r2_compact(entrypoint_checklist=checklist)
         assert len(tasks) == len(plan.work_units) == 1
         task_input = json.loads(manager.artifacts.get_bytes(tasks[0].task.input_refs[0]))
+        assert "STATIC_ANALYSIS_ONLY" in task_input["execution_policy"]
         assert set(task_input["analysis_contract"]) == {axis.value for axis in DiscoveryAxis}
         assert all(
             "SCREENED" in task_input["analysis_contract"][axis.value]
@@ -2219,6 +2258,18 @@ def test_compact_r2_runs_all_axes_in_one_task_per_work_unit(tmp_path: Path) -> N
         assert "same frozen snapshot" in task_input["analysis_contract"]["fix_variant"]
         assert "production/debug" in task_input["analysis_contract"]["differential"]
         assert "serialization" in task_input["analysis_contract"]["boundary"]
+        assert set(task_input["output_example"]) >= {
+            "schema_version", "reviewed_paths", "review_altitude",
+            "axis_runs", "hypotheses", "hypothesis_shape",
+        }
+        assert task_input["output_example"]["hypotheses"] == []
+        assert task_input["output_example"]["hypothesis_shape"]["mechanism"] == {
+            "family": "<planned family>",
+            "variant": "<specific variant>",
+        }
+        assert "replace every placeholder" in task_input["output_example"][
+            "example_contract_note"
+        ]
         assert all(
             "not evidence of non-applicability" in contract
             for contract in task_input["analysis_contract"].values()

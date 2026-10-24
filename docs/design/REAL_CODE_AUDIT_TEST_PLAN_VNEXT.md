@@ -174,11 +174,12 @@ policy-38 run. First execute the bounded TR-13 regressions. For the host retest:
 
 #### Test setup and execution requirements
 
-- Freeze and record the engine commit, runtime task policy (expected baseline:
-  the actual current version, originally `vnext-task-policy-38`), target commit/snapshot, language inventory, authorized paths,
-  categories, model/tools, host limits and budgets before analysis. Use a fresh disposable
-  clone and Campaign with no prior target findings, lessons or regression backlog in
-  discovery inputs.
+- Freeze and record the engine commit, the exact runtime task-policy version and
+  `vnext_policy_digest` read from the current task/Campaign artifacts (never expect a
+  literal policy version from this document), target commit/snapshot, language
+  inventory, authorized paths, categories, model/tools, host limits and budgets before
+  analysis. Use a fresh disposable clone and Campaign with no prior target findings,
+  lessons or regression backlog in discovery inputs.
 - Select the complete authorized project scope if the goal is a whole-project audit.
   Execute every planned Batch in that scope. If only representative slices are run, label
   the result a sampled pilot and list all omitted/deferred scope; do not report it as a

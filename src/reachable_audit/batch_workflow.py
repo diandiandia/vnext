@@ -171,7 +171,13 @@ class BatchWorkflow:
             raise ModelError("Batch manifest lacks a plan ID for boundary evidence validation")
         plan = self.manager.load_audit_plan(self.campaign_id, plan_id)
         inventory = self.manager.load_inventory(self.campaign_id)
-        inventoried_paths = {source.path for source in inventory.source_files}
+        inventoried_paths = {
+            source.path for source in inventory.source_files
+        } | {
+            manifest
+            for component in inventory.components
+            for manifest in component.build_manifests
+        }
         path_review_claim_records = []
         seen_path_review_claims: set[tuple[str, str]] = set()
         for claim in path_review_claims:
@@ -376,15 +382,11 @@ class BatchWorkflow:
                 raise ModelError(
                     f"boundary evidence must use source LOC anchors: {edge_id}"
                 )
-            location = reference.removeprefix("LOC-")
-            source_path, separator, line_text = location.rpartition(":")
-            if not separator or source_path not in inventoried_paths or not line_text.isdigit():
-                raise ModelError(f"invalid boundary source anchor: {reference}")
-            line_count = self._source_line_count(source_path, line_count_cache)
-            if not 1 <= int(line_text) <= line_count:
-                raise ModelError(f"boundary source anchor is outside the file: {reference}")
-            if int(line_text) not in line_count_cache[source_path][1]:
-                raise ModelError(f"boundary source anchor points to a blank line: {reference}")
+            self._validate_source_location(
+                reference,
+                inventoried_paths,
+                line_count_cache=line_count_cache,
+            )
 
     def record_r2(
         self,

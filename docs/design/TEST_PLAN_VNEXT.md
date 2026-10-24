@@ -268,6 +268,25 @@ sample floors in [ACCEPTANCE_PLAN_VNEXT.md](ACCEPTANCE_PLAN_VNEXT.md), independe
 adjudication, and signed evidence; do not pool these exploratory pilots as held-out
 samples.
 
+### TR-17: Discovery-quality paired evaluation
+
+Use [DISCOVERY_QUALITY_EVALUATION_PROTOCOL.md](DISCOVERY_QUALITY_EVALUATION_PROTOCOL.md)
+before treating a proposed discovery aid as a recall improvement. The protocol is a
+design, not evidence that a benchmark exists or has passed. The first implementation
+slice adds a non-gating report metric linking explicitly HIGH-risk R1 Surface
+declarations to R2 hypothesis `surface_ids`; it does not score vulnerability recall,
+validate Agent-declared reading, or interpret unmapped Surfaces as safe or missed.
+
+For an actual paired evaluation, the trusted evaluator must supply frozen vulnerable
+snapshots, separately protected expected labels, independent candidate adjudication,
+and equal baseline/treatment execution budgets. Test one treatment at a time (such as
+an optional sink census); keep issue labels, patches, and expected locations outside
+Campaign/task context. Report per-language and per-mechanism paired recall, reviewed
+false-positive burden, scope coverage, completion, and costs. Record underpowered
+strata and unresolved evaluator disagreements. Do not enable a treatment by default or
+set universal thresholds from the development pilots. Mutation fixtures are secondary
+mechanism tests and cannot substitute for the vulnerable-snapshot benchmark.
+
 **Large-source R2 test-first matrix:** on an authorized representative file, record the
 frozen digest, byte/line counts, task-input bytes, model/context limit, token and wall
 time, inspected line ranges (if available), evidence anchors, and completion/defer

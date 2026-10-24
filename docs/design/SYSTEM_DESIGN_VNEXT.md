@@ -29,6 +29,15 @@ in-tree stores remain recoverable and ambiguous dual stores require an explicit
 selection. Library hosts must explicitly select external state. Physical source-read
 or OS context isolation is still a host responsibility.
 
+Current-contract update (2026-10-24): the runtime policy is `vnext-task-policy-45`.
+CG2's component ownership accounting recognizes complete evidence-backed EXCLUDED or
+DEFERRED path scope for a component without boundary obligations; it does not turn that
+scope decision into an audit or safety claim. Campaign output includes a non-gating
+HIGH-risk Surface-to-Hypothesis mapping diagnostic. A paired discovery-quality
+evaluation protocol is documented, but no held-out dataset or result is supplied.
+These changes do not alter the release status, which remains blocked pending external
+qualification evidence.
+
 ## 1. Purpose
 
 vNext is an experimental reachable-vulnerability audit workflow for mixed-language

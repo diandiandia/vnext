@@ -8,6 +8,8 @@ import pytest
 from reachable_audit.analysis_models import (
     Applicability,
     AxisRun,
+    BoundaryDisposition,
+    BoundaryReview,
     DiscoveryAxis,
     EvidenceGrade,
     Hypothesis,
@@ -22,6 +24,7 @@ from reachable_audit.campaign import CampaignManager
 from reachable_audit.inventory import build_inventory
 from reachable_audit.models import BatchStatus, ModelError
 from reachable_audit.planning import create_audit_plan
+from reachable_audit.plan_models import BoundaryEdge
 from reachable_audit.stage_revisions import (
     STAGE_INVALIDATION_DEPENDENTS,
     active_stage_events,
@@ -1001,6 +1004,77 @@ def test_r1_rejects_a_non_source_or_out_of_range_anchor(tmp_path: Path) -> None:
                 principal="remote",
                 evidence_refs=("LOC-app.py:99",),
             )])
+    finally:
+        manager.close()
+
+
+def test_r1_boundary_review_can_anchor_on_component_build_manifest(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "pom.xml").write_text("<project>\n  <modules/>\n</project>\n", encoding="utf-8")
+    source_path = tmp_path / "module" / "src" / "main" / "java" / "App.java"
+    source_path.parent.mkdir(parents=True)
+    source_path.write_text("class App {}\n", encoding="utf-8")
+    (tmp_path / "module" / "pom.xml").write_text(
+        "<project>\n  <artifactId>module</artifactId>\n</project>\n",
+        encoding="utf-8",
+    )
+    inventory = build_inventory(tmp_path, "fixture:maven-boundary")
+    root_component = next(component for component in inventory.components if component.root == ".")
+    module_component = next(
+        component for component in inventory.components if component.root == "module"
+    )
+    edge = BoundaryEdge(
+        edge_id="EDGE-root-module",
+        source_component_id=root_component.component_id,
+        target_component_id=module_component.component_id,
+        kind="build_dependency",
+        evidence="Root pom declares the module.",
+        target_path="module/src/main/java/App.java",
+    )
+    plan = create_audit_plan(
+        campaign_id="CMP-build-boundary",
+        inventory=inventory,
+        category_families=["INJECTION"],
+        boundary_edges=[edge],
+    )
+    manager = CampaignManager(tmp_path)
+    manager.create_campaign(
+        campaign_id="CMP-build-boundary", snapshot_id=inventory.snapshot_id,
+    )
+    manager.record_inventory(
+        campaign_id="CMP-build-boundary", inventory=inventory,
+    )
+    manager.record_plan(
+        campaign_id="CMP-build-boundary", plan=plan, inventory=inventory,
+    )
+    workflow = BatchWorkflow(
+        manager, "CMP-build-boundary", plan.batches[0].batch_id,
+    )
+    try:
+        workflow.run_r0()
+        endpoint_units = [
+            unit for unit in plan.work_units if edge.edge_id in unit.boundary_edge_ids
+        ]
+        assert any(not unit.source_files for unit in endpoint_units)
+        reviews = [
+            BoundaryReview(
+                edge_id=edge.edge_id,
+                work_unit_id=unit.work_unit_id,
+                disposition=BoundaryDisposition.CONFIRMED,
+                evidence_refs=(
+                    "LOC-pom.xml:2"
+                    if unit.component_id == root_component.component_id
+                    else "LOC-module/src/main/java/App.java:1",
+                ),
+                rationale="The module boundary is anchored to its owning manifest/source.",
+            )
+            for unit in endpoint_units
+        ]
+
+        artifact_id = workflow.record_r1([], reviews)
+
+        assert artifact_id
     finally:
         manager.close()
 

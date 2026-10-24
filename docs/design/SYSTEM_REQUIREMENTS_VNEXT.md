@@ -9,6 +9,14 @@ Current traceability update (2026-10-22): SYSR-041 records the R2/R4/R6 cross-st
 coverage contract and maps to SWDR-047. This update does not claim independent
 semantic validation or lifecycle-standard conformity.
 
+Maintenance update (2026-10-24): the closure implementation now derives scope-owned
+components only from complete, valid, evidence-backed EXCLUDED/DEFERRED source-path
+decisions when no boundary obligation exists (SYSR-019, SYSR-023). A separate
+HIGH-risk Surface-to-Hypothesis report field is exploratory and non-gating; it does not
+assert observed reading or security coverage (SYSR-012, SYSR-027). The discovery
+evaluation protocol is proposed; no held-out quality result is asserted by this
+requirements update.
+
 ## 1. Requirement Conventions
 
 - IDs `SYSR-###` are stable identifiers for this requirements baseline.

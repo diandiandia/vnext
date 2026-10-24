@@ -91,6 +91,13 @@ findings; do not send signing/provider secrets.
   isolation and permissions. The engine cannot prove physical context separation,
   absence of hidden host history, or that a fresh worker has perfect attention.
   If the host cannot isolate contexts, record the limitation rather than claim it.
+- Every durable task input carries a `STATIC_ANALYSIS_ONLY` execution policy. Workers
+  may inspect source and use approved parsers, but must not execute, compile, import,
+  source, or evaluate target-derived code, tests, build scripts, snippets, or probes.
+  Dynamic evidence requires separate explicit host authorization and a Campaign-
+  registered managed R5 harness; worker-local execution is not registered evidence.
+  Static-only Campaigns prohibit dynamic execution entirely. This is a prompt contract,
+  not an OS sandbox or a guarantee against a host that grants broader tool permissions.
 
 Task leases and revisions survive coordinator restart. Resume from durable state,
 not from a host conversation's assertion that a stage was completed:
@@ -130,6 +137,14 @@ this runbook provides the lifecycle and recovery guide.
 | R6 | Required Batch artifacts and scope reconciliation | `task-schedule-r6`, `task-commit-r6` | Surface states, one review per recorded Finding, residual risks, actual coverage, skill issues and Batch gates |
 | Handoffs | Declared boundary, source/receiver ownership and evidence | `handoff-resolve`, `handoff-integrate` | Both endpoint evidence and matching joins; report unresolved/undiscovered boundary limitations |
 | Campaign | All required Batches/Handoffs reconciled | `campaign-close` | CG1-CG10, explicit unreviewed dispositions and cleanup; not proof of exhaustive safety |
+
+CG2 may account for a component with no Work Unit only when the current Plan assigns
+every source path owned by that component an explicit, evidence-backed EXCLUDED or
+DEFERRED disposition and the component has no boundary-edge obligation. The report lists
+such components as scope-owned for plan accounting. This does not mean the component
+was audited or found safe. A partially included component, invalid/incomplete scope
+record, or component with a boundary obligation still requires normal Work Unit/
+boundary ownership.
 
 Use actual returned IDs and stage artifacts. Do not write events directly, synthesize
 empty success payloads, bypass commits, or interpret no hypotheses as proof of safety.
@@ -178,6 +193,20 @@ use `[]` when no items were predeclared. Each checklist item binds an ID to one
 Work Unit, discovery axis, description and current-source anchor. The corresponding
 AxisRun must review each applicable ID exactly once and cite its declared anchor.
 This improves recall of known helpers; it is not an exhaustive entrypoint census.
+
+For unusually long compact R2 work, size the lease explicitly rather than changing the
+global default. For example, a measured task expected to exceed the default 900 seconds
+may use:
+
+```bash
+vnext task-claim "$TARGET" "$CAMPAIGN_ID" r2-worker \
+  --batch-id "$BATCH_ID" --operation generate_hypotheses_compact \
+  --lease-seconds 7200
+```
+
+The longer lease is only an operational allowance, not a task timeout or resource cap.
+Stop known workers and release leases promptly when work ends or dispatch fails. Use
+host/provider limits for actual execution bounds; do not set long durations blindly.
 
 For every allowed R4 hypothesis, emit one `hypothesis_reviews` disposition with evidence
 and rationale. Also reconcile each previously recorded Finding exactly once in the
@@ -238,6 +267,7 @@ cost, never free work. Do not create infinite retry loops.
 | Lease expired | Re-read task state; normal claim can reclaim within attempt budget. Existing completed output requires explicit authorized recovery bound to the unreplaced original attempt; normal collect still rejects expiry | Collect an old result after a replacement claim, terminal result or invalidated revision |
 | Failed/exhausted attempts | Retry within existing budget; exhausted work needs explicit bounded `task-retry --reason` authorization and remaining host budget | Automatically authorize unlimited retries |
 | `task-collect` validation error | If same lease remains live, send exact error and original task contract for task-local repair; bound retries and preserve attempts/logs | Rewrite the schema, fabricate evidence, mark the task successful or restart the whole Campaign |
+| Cancelled task was never claimed | An operator may authorize `task-retry` with a reason, then claim it normally; the retry is refused if any worker claim exists | Reuse an output or erase a worker attempt by retrying a claimed-cancelled task |
 | Source snapshot drift | Pause dependent tasks. Restore the frozen bytes and verify `drift-resolve` with evidence; intentionally changed source needs a new Campaign/snapshot | Resolve drift by accepting changed bytes under the old snapshot |
 | Corrected committed output | Use `task-amend` with reason/evidence; re-read invalidations and reschedule/recommit affected stages | Reuse stale downstream tasks or rewrite events |
 | Runaway process / storage pressure | Pause dispatch; preserve durable artifacts; use `resource-cleanup` only for registered resources and stop known process groups under host control | Kill by process name, delete the evidence store, or treat cleanup as fixing a full disk |
@@ -327,13 +357,16 @@ experiment through the normal R5 task result; an exit code alone is not confirma
 
 ### Supporting resources
 
-After inventory and before the first Batch R0, register required XML, SPI, schema or
-build-file evidence. For example, pass `evidence-register TARGET CAMPAIGN --input FILE`
-an operator-created JSON input:
+Inventory source files and component build manifests are included in the write-once R0
+snapshot baseline. Their LOCs may anchor R1 boundary reviews when the manifest appears
+in the component inventory; this does not make the manifest source-review coverage.
+After inventory and before the first Batch R0, register additional required XML, SPI,
+schema or build evidence not represented by those inventory entries. For example, pass
+`evidence-register TARGET CAMPAIGN --input FILE` an operator-created JSON input:
 
 ```json
 {
-  "paths": ["resources/logging.xml", "pom.xml"],
+  "paths": ["resources/logging.xml", "schemas/auth.xsd"],
   "reason": "Freeze configuration and dependency evidence used by source review"
 }
 ```
@@ -341,17 +374,52 @@ an operator-created JSON input:
 Paths must exist inside the target and outside runtime/VCS state; registration is
 bounded to 1024 unique paths, 16 MiB per file and 64 MiB per request. It records
 digests, not a source-review claim. Content cannot be replaced under the same
-Campaign. Concrete LOC evidence must match the source baseline or a registered
-supporting digest, have a valid nonblank line and remain inside the target. A resource
-does not become a code call-chain step. If a necessary resource was omitted, preserve
-the limitation and prepare a new correctly frozen Campaign instead of deleting evidence
-or rebaselining after R0. Existing Campaigns without registrations are not silently
-certified under the stronger rule.
+Campaign. Concrete LOC evidence must match the frozen source/build-manifest baseline
+or a registered supporting digest, have a valid nonblank line and remain inside the
+target. A resource does not become a code call-chain step. If a necessary resource was
+omitted, preserve the limitation and prepare a new correctly frozen Campaign instead
+of deleting evidence or rebaselining after R0. Existing Campaigns without registrations
+are not silently certified under the stronger rule.
 
 R4 applies the same concrete LOC/artifact checks on individual, bundled, screening
-and direct records, including nested axis and hypothesis-review evidence. Legacy
-symbolic IDs remain reference labels, not verified source anchors. Direct imports do
-not reconstruct lost task attempts or measurements.
+and direct records, including nested axis and hypothesis-review evidence. Current R3
+verdicts for the task's hypotheses are included in R4 input and must be explicitly
+reconciled in the review rationale; they are context, not proof of the mechanism
+disposition. Legacy symbolic IDs remain reference labels, not verified source anchors.
+Direct imports do not reconstruct lost task attempts or measurements.
+
+R4 bundling remains opt-in; one pilot does not justify a universal task-count target.
+Individual and bundled schedules cannot be mixed while either layout has active work.
+Before any individual task is claimed, the operator may cancel those pending tasks and
+schedule the bundled layout instead; cancelled-but-unclaimed tasks do not count as
+active. Do not retry the cancelled individual tasks after changing layouts.
+
+Compact R4 bundle input (`bundle_input_version: "2.0"`) is not the same wire shape as
+an individual `run_category_audit` input. Each `category_items` element includes:
+
+- `category_plan_id`, `work_unit_id`, and `mechanism_variants`;
+- `discovery_axis_set_id`, resolving to an array in top-level `discovery_axis_sets`;
+- `task_context_id`, resolving to a top-level `task_contexts` entry containing language
+  adapters and knowledge context;
+- `seed_card_ids`, `budget`, compact `work_unit` fields (identity, categories and axes
+  are inherited/omitted), and the hypothesis/R3/Finding reconciliation projections.
+
+The bundle-level `family` applies to each item. Shared `mechanism_cards` are sent once;
+each item may use only its `seed_card_ids`. Return one CategoryRun per item and copy the
+item's `category_plan_id` into `CategoryRun.category_plan_id`; the item's `work_unit_id`
+is the canonical scope. Do not copy an individual task schema into a bundle result. The
+exact claimed task's `output_contract` remains authoritative.
+Legacy bundle input version `1.0` embeds `category_plan`, `language_adapters`, and
+`knowledge_context` in each item; do not mix legacy and compact fields.
+
+R6 task input contains an editable `surface_disposition_template` with one
+`UNREVIEWED` entry per R1 Surface. Replace each entry only after review; the template
+is not itself a disposition or review claim. Supply exactly one final disposition per
+Surface, and leave unsupported cases `UNREVIEWED`.
+
+Component IDs are deterministic path-derived labels and can repeat across Campaigns.
+Never join pilot results on `component_id` alone; use at least the Campaign and frozen
+snapshot identity alongside the component ID.
 
 ### Scoped planning
 

@@ -2,7 +2,7 @@
 
 Status: as-implemented software requirements baseline, initially reviewed 2026-10-17
 against commit `beaef3b` plus working-tree repairs, `SOFTWARE_DESIGN_VNEXT.md`, and
-focused behavior checks; updates through 2026-10-22 are cross-referenced below. Existing IDs
+focused behavior checks; subsequent maintenance updates are dated below. Existing IDs
 are retained, but target-only obligations are replaced with bounded current contracts.
 Evidence/status cells retain missing targets and known defects rather than declaring
 them fixed. External capability acceptance is separate from implementation coverage.
@@ -24,6 +24,12 @@ an unchanged historical target specification. They are not a completion percenta
 Tests prove only the paths and inputs they exercise. Empty evidence references, booleans
 in an evaluation manifest, synthetic fixtures, or a passing unit suite are not proof of
 real audit capability.
+
+Maintenance update (2026-10-24): current changes refine path-scope component accounting
+and add an explicitly exploratory HIGH-risk Surface-to-Hypothesis measurement. These
+do not promote Agent declarations into observed review evidence. The discovery
+evaluation protocol is prospective; no benchmark dataset or discovery-quality result
+is claimed.
 
 ## 2. Requirements and Implementation Audit
 

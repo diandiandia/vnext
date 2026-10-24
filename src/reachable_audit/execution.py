@@ -62,6 +62,15 @@ _SURFACE_INSTRUCTIONS = (
     "another file belongs to that file's Work Unit or to a Handoff."
 )
 
+_TASK_EXECUTION_POLICY = (
+    "STATIC_ANALYSIS_ONLY: do not execute, compile, import, source, or evaluate "
+    "target-derived code, tests, build scripts, snippets, or probes in this task "
+    "context. Read-only source inspection and approved parsers are allowed. Dynamic "
+    "evidence requires separate explicit host authorization and a Campaign-registered "
+    "managed R5 harness run; proposals and worker-local runs are not evidence. If the "
+    "Campaign is declared static-only, do not perform dynamic execution."
+)
+
 _AXIS_INSTRUCTIONS = {
     DiscoveryAxis.SURFACE.value: (
         "Trace each Surface toward sensitive operations and record plausible unguarded paths. "
@@ -1482,7 +1491,13 @@ class ManualExecutionBackend:
                 raise ModelError(
                     f"R1 boundary reviews require a recorded Campaign inventory: {task.task_id}"
                 ) from error
-            inventoried_paths = {source.path for source in inventory.source_files}
+            inventoried_paths = {
+                source.path for source in inventory.source_files
+            } | {
+                manifest
+                for component in inventory.components
+                for manifest in component.build_manifests
+            }
             edge_by_id = {str(edge["edge_id"]): edge for edge in edges}
             for review in parsed_reviews:
                 edge = edge_by_id[review.edge_id]
@@ -1813,9 +1828,23 @@ class DiscoveryCoordinator:
                 f"{TASK_OUTPUT_MAX_BYTES} bytes; split or amend the Plan first: "
                 f"{details}"
             )
+        inventory = self.workflow.manager.load_inventory(
+            self.workflow.campaign_id
+        )
         views = []
         for work_unit in work_units:
             boundary_edges = self._boundary_edges_for_work_unit(work_unit)
+            boundary_component_ids = {
+                str(edge[key])
+                for edge in boundary_edges
+                for key in ("source_component_id", "target_component_id")
+            }
+            boundary_evidence_paths = sorted({
+                manifest
+                for component in inventory.components
+                if component.component_id in boundary_component_ids
+                for manifest in component.build_manifests
+            })
             input_ref = self._put_json({
                 "schema_version": "1.0",
                 "operation": "discover_surfaces",
@@ -1825,6 +1854,7 @@ class DiscoveryCoordinator:
                 "hotspot_contract": _HOTSPOT_CONTRACT,
                 "language_adapters": self._language_adapter_context(work_unit),
                 "boundary_edges": boundary_edges,
+                "boundary_evidence_paths": boundary_evidence_paths,
                 "analysis_contract": (
                     _SURFACE_INSTRUCTIONS
                     + " Declare review_altitude as SCREENED for bounded breadth triage "
@@ -2096,6 +2126,43 @@ class DiscoveryCoordinator:
                         "object with required family and variant fields, optional freeform; "
                         "hypothesis_id must be "
                         "HYP-<work_unit_id>-<origin_axis>-<positive ordinal>"
+                    ),
+                    "hypothesis_fields": [
+                        "hypothesis_id", "work_unit_id", "origin_axis", "seed_refs",
+                        "surface_ids", "mechanism", "claim", "status",
+                    ],
+                },
+                "output_example": {
+                    "schema_version": "1.0",
+                    "reviewed_paths": ["<reviewed path from this Work Unit>"],
+                    "review_altitude": "INSPECTED",
+                    "axis_runs": [{
+                        "axis": axes[0],
+                        "applicability": "APPLICABLE",
+                        "evidence_refs": ["LOC-<path>:<line>"],
+                        "rationale": "<specific source-backed review>",
+                        "work_unit_id": work_unit_id,
+                        "review_altitude": "INSPECTED",
+                        "entrypoint_reviews": [],
+                    }],
+                    "hypotheses": [],
+                    "hypothesis_shape": {
+                        "hypothesis_id": f"HYP-{work_unit_id}-{axes[0]}-1",
+                        "work_unit_id": work_unit_id,
+                        "origin_axis": axes[0],
+                        "seed_refs": ["LOC-<path>:<line>"],
+                        "surface_ids": [],
+                        "mechanism": {
+                            "family": "<planned family>",
+                            "variant": "<specific variant>",
+                        },
+                        "claim": "<testable mechanism claim>",
+                        "status": "NEW",
+                    },
+                    "example_contract_note": (
+                        "Shape example only: return all required_axes and every required "
+                        "entrypoint review; replace every placeholder with evidence from "
+                        "this Work Unit. Empty hypotheses means no candidate was produced."
                     ),
                 },
                 "required_axes": axes,
@@ -2749,6 +2816,13 @@ class DiscoveryCoordinator:
             (str(item["work_unit_id"]), str(item["axis"])): item
             for item in r2["axis_runs"]
         }
+        r3_artifact = json.loads(
+            self.workflow.manager.artifacts.get_bytes(r3_event.payload_ref)
+        )
+        r3_verdicts_by_hypothesis = {
+            str(item["hypothesis_id"]): item
+            for item in r3_artifact.get("verdicts", [])
+        }
         hypotheses_by_work_unit: dict[str, list[Mapping[str, Any]]] = {}
         for hypothesis in r2["hypotheses"]:
             hypotheses_by_work_unit.setdefault(
@@ -2822,6 +2896,11 @@ class DiscoveryCoordinator:
             allowed_hypothesis_ids = [
                 str(item["hypothesis_id"]) for item in hypotheses_to_review
             ]
+            r3_verdicts_to_reconcile = [
+                r3_verdicts_by_hypothesis[hypothesis_id]
+                for hypothesis_id in allowed_hypothesis_ids
+                if hypothesis_id in r3_verdicts_by_hypothesis
+            ]
             findings_to_reconcile = [
                 item for item in findings
                 if set(str(value) for value in item["hypothesis_ids"])
@@ -2841,6 +2920,7 @@ class DiscoveryCoordinator:
                 "mechanism_cards": mechanism_cards,
                 "hypotheses_to_review": hypotheses_to_review,
                 "allowed_hypothesis_ids": allowed_hypothesis_ids,
+                "r3_verdicts_to_reconcile": r3_verdicts_to_reconcile,
                 "findings_to_reconcile": findings_to_reconcile,
                 "required_finding_ids": required_finding_ids,
                 "analysis_contract": (
@@ -2858,7 +2938,10 @@ class DiscoveryCoordinator:
                     "Return exactly one hypothesis_reviews record per allowed ID, with "
                     "SUPPORTED, REJECTED, or NEEDS_REVIEW, a specific rationale, and "
                     "evidence_refs that also appear in CategoryRun.evidence_refs. The "
-                    "record is an auditable Agent claim, not proof that the cited lines "
+                    "input supplies each hypothesis's current R3 verdict in "
+                    "r3_verdicts_to_reconcile; explicitly state in the review rationale "
+                    "whether the R4 source review agrees or disagrees and why. "
+                    "Each review is an auditable Agent claim, not proof that the cited lines "
                     "semantically support it. Review every supplied existing Finding "
                     "against its linked hypothesis and report each required_finding_id "
                     "exactly once in finding_ids; flag contradictions in the run rationale. "
@@ -2921,6 +3004,13 @@ class DiscoveryCoordinator:
         axis_runs = {
             (str(item["work_unit_id"]), str(item["axis"])): item
             for item in r2["axis_runs"]
+        }
+        r3_artifact = json.loads(
+            self.workflow.manager.artifacts.get_bytes(r3_event.payload_ref)
+        )
+        r3_verdicts_by_hypothesis = {
+            str(item["hypothesis_id"]): item
+            for item in r3_artifact.get("verdicts", [])
         }
         hypotheses_by_work_unit: dict[str, list[Mapping[str, Any]]] = {}
         for hypothesis in r2["hypotheses"]:
@@ -2989,6 +3079,7 @@ class DiscoveryCoordinator:
                 candidate = [*current, category_plan]
                 candidate_payload = self._r4_bundle_input(
                     family, candidate, work_units, hypotheses_by_work_unit, findings,
+                    r3_verdicts_by_hypothesis=r3_verdicts_by_hypothesis,
                 )
                 candidate_bytes = len(json.dumps(
                     candidate_payload, ensure_ascii=False, sort_keys=True,
@@ -3007,6 +3098,7 @@ class DiscoveryCoordinator:
                         self._r4_bundle_input(
                             family, current, work_units,
                             hypotheses_by_work_unit, findings,
+                            r3_verdicts_by_hypothesis=r3_verdicts_by_hypothesis,
                         ),
                         ensure_ascii=False, sort_keys=True, separators=(",", ":"),
                     ).encode("utf-8"))
@@ -3052,6 +3144,7 @@ class DiscoveryCoordinator:
             unit_ids = tuple(dict.fromkeys(str(item["work_unit_id"]) for item in group))
             task_input = self._r4_bundle_input(
                 family, group, work_units, hypotheses_by_work_unit, findings,
+                r3_verdicts_by_hypothesis=r3_verdicts_by_hypothesis,
             )
             input_ref = self._put_json(task_input)
             budgets: dict[str, int] = {}
@@ -3087,6 +3180,7 @@ class DiscoveryCoordinator:
         hypotheses_by_work_unit: Mapping[str, Sequence[Mapping[str, Any]]],
         findings: Sequence[Mapping[str, Any]] = (),
         *,
+        r3_verdicts_by_hypothesis: Mapping[str, Mapping[str, Any]] | None = None,
         wire_version: str = "2.0",
     ) -> dict[str, Any]:
         if wire_version not in {"1.0", "2.0"}:
@@ -3120,6 +3214,12 @@ class DiscoveryCoordinator:
             required_finding_ids = sorted(
                 str(item["finding_id"]) for item in findings_to_reconcile
             )
+            r3_verdicts_to_reconcile = [
+                r3_verdicts_by_hypothesis[hypothesis_id]
+                for hypothesis_id in allowed_hypothesis_ids
+                if r3_verdicts_by_hypothesis is not None
+                and hypothesis_id in r3_verdicts_by_hypothesis
+            ]
             knowledge_context = self.knowledge_catalog.task_context(
                 work_unit.get("languages", []),
                 families=[family],
@@ -3148,6 +3248,7 @@ class DiscoveryCoordinator:
                 "knowledge_context": knowledge_context,
                 "allowed_hypothesis_ids": allowed_hypothesis_ids,
                 "hypotheses_to_review": hypotheses_to_review,
+                "r3_verdicts_to_reconcile": r3_verdicts_to_reconcile,
                 "findings_to_reconcile": findings_to_reconcile,
                 "required_finding_ids": required_finding_ids,
             })
@@ -3171,6 +3272,7 @@ class DiscoveryCoordinator:
                 },
                 "allowed_hypothesis_ids": allowed_hypothesis_ids,
                 "hypotheses_to_review": hypotheses_to_review,
+                "r3_verdicts_to_reconcile": r3_verdicts_to_reconcile,
                 "findings_to_reconcile": findings_to_reconcile,
                 "required_finding_ids": required_finding_ids,
             })
@@ -3206,6 +3308,9 @@ class DiscoveryCoordinator:
                 "allowlist is empty. Review each supplied finding and return its "
                 "required_finding_id exactly once. Finding and hypothesis IDs are "
                 "reconciliation links, not semantic proof. "
+                "Each category item includes the current R3 verdicts for its allowed "
+                "hypotheses; explicitly state whether the source review agrees or "
+                "disagrees with each verdict and why. "
                 "Never invent IDs for "
                 "late candidates; report them as unresolved risks for explicit follow-up."
             ),
@@ -3511,6 +3616,7 @@ class DiscoveryCoordinator:
             "R4_COMPLETED", "R5_COMPLETED",
         )
         stage_refs = []
+        r1_artifact: Mapping[str, Any] | None = None
         for event_type in (
             "R1_COMPLETED",
             "R2_COMPLETED",
@@ -3523,6 +3629,23 @@ class DiscoveryCoordinator:
             if event.payload_ref is None:
                 raise ModelError(f"{event_type} is missing its artifact")
             stage_refs.append(event.payload_ref)
+            if event_type == "R1_COMPLETED":
+                r1_artifact = json.loads(
+                    self.workflow.manager.artifacts.get_bytes(event.payload_ref)
+                )
+        if r1_artifact is None:
+            raise ModelError("R1 stage is missing its artifact")
+        surface_disposition_template = [
+            {
+                "surface_id": str(item["surface_id"]),
+                "state": "UNREVIEWED",
+                "evidence_refs": [],
+                "rationale": (
+                    "Template only: replace after review; this is not a review claim."
+                ),
+            }
+            for item in r1_artifact.get("surfaces", [])
+        ]
         findings_to_reconcile = []
         for event in self.workflow.manager.store.list_batch_events(
             self.workflow.campaign_id,
@@ -3540,6 +3663,7 @@ class DiscoveryCoordinator:
             "operation": "collect_batch_closure_evidence",
             "snapshot_id": self.workflow.campaign.snapshot_id,
             "batch_id": self.workflow.batch_id,
+            "surface_disposition_template": surface_disposition_template,
             "findings_to_reconcile": findings_to_reconcile,
             "required_finding_ids": sorted(
                 str(item["finding_id"]) for item in findings_to_reconcile
@@ -3555,7 +3679,9 @@ class DiscoveryCoordinator:
                 "task, not source discovery: use the supplied canonical stage artifacts. "
                 "There is intentionally no Work Unit file inventory; do not invent LOC "
                 "anchors or treat that absence as missing audit coverage. Report only "
-                "scope gaps supported by the stage evidence. For each Surface in the R1 "
+                "scope gaps supported by the stage evidence. Use the supplied "
+                "surface_disposition_template as an editable skeleton, not a claim. "
+                "For each Surface in the R1 "
                 "artifact, report exactly one surface_dispositions entry for every R1 "
                 "Surface ID, with state REVIEWED, DEFERRED, NOT_APPLICABLE, or "
                 "UNREVIEWED, plus a rationale. The collector rejects missing, extra, or "
@@ -3840,7 +3966,8 @@ class DiscoveryCoordinator:
         }
         return tuple(
             view for view in views
-            if not any(
+            if view.status is not TaskStatus.CANCELLED
+            and not any(
                 (stage, revision_id) in invalidated_revisions
                 for stage, revision_id in view.task.stage_revision_ids.items()
             )
@@ -3862,7 +3989,11 @@ class DiscoveryCoordinator:
 
     def _put_json(self, value: Mapping[str, Any]) -> str:
         if "output_contract" in value:
-            value = {**value, "output_discipline": _OUTPUT_DISCIPLINE}
+            value = {
+                **value,
+                "output_discipline": _OUTPUT_DISCIPLINE,
+                "execution_policy": _TASK_EXECUTION_POLICY,
+            }
         encoded = json.dumps(
             value, ensure_ascii=False, sort_keys=True, separators=(",", ":")
         )

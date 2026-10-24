@@ -483,6 +483,31 @@ class CampaignManager:
                 raise ValueError(
                     f"inventory source path escapes or is not a regular file: {source.path}"
                 )
+        build_manifests = {
+            manifest
+            for component in inventory.components
+            for manifest in component.build_manifests
+        }
+        for manifest in build_manifests:
+            relative_path = Path(manifest)
+            manifest_path = target_root / relative_path
+            try:
+                resolved_path = manifest_path.resolve(strict=True)
+            except OSError as error:
+                raise ValueError(
+                    f"inventory build manifest is not a readable regular file: {manifest}"
+                ) from error
+            if (
+                relative_path.is_absolute()
+                or ".." in relative_path.parts
+                or relative_path.as_posix() != manifest
+                or manifest_path.is_symlink()
+                or not resolved_path.is_relative_to(target_root)
+                or not resolved_path.is_file()
+            ):
+                raise ValueError(
+                    f"inventory build manifest escapes or is not a regular file: {manifest}"
+                )
         value = asdict(inventory)
         encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
         baseline = {
@@ -490,8 +515,11 @@ class CampaignManager:
             "snapshot_id": inventory.snapshot_id,
             "repository_size_bytes": inventory.repository_size_bytes,
             "files": {
-                source.path: self._file_digest(self.target_root / source.path)
-                for source in inventory.source_files
+                path: self._file_digest(self.target_root / path)
+                for path in sorted(
+                    {source.path for source in inventory.source_files}
+                    | build_manifests
+                )
             },
         }
         baseline_encoded = json.dumps(

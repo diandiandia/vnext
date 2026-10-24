@@ -159,7 +159,9 @@ def test_mechanism_experiment_cannot_empirically_upgrade(tmp_path: Path) -> None
 
 
 def test_empirical_experiment_requires_registered_harness_artifacts(tmp_path: Path) -> None:
-    manager, workflow = _ready_for_r5(tmp_path)
+    manager, workflow = _ready_for_r5(
+        tmp_path, surface_without_hypothesis=True,
+    )
     try:
         fake = Experiment(
             "EXP-fake", "HYP-bound", ExperimentFidelity.REAL_TARGET,
@@ -197,7 +199,9 @@ def test_empirical_experiment_requires_registered_harness_artifacts(tmp_path: Pa
 
 
 def test_clean_r5_and_transmission_metrics_are_non_gating(tmp_path: Path) -> None:
-    manager, workflow = _ready_for_r5(tmp_path)
+    manager, workflow = _ready_for_r5(
+        tmp_path, surface_without_hypothesis=True,
+    )
     try:
         workflow.record_r5([], [])
         coordinator = DiscoveryCoordinator(
@@ -211,6 +215,12 @@ def test_clean_r5_and_transmission_metrics_are_non_gating(tmp_path: Path) -> Non
         assert closure_input["output_contract"]["closure"]["surface_dispositions"] == (
             "array<SurfaceReviewDisposition>"
         )
+        assert closure_input["surface_disposition_template"] == [{
+            "surface_id": "SURF-static",
+            "state": "UNREVIEWED",
+            "evidence_refs": [],
+            "rationale": "Template only: replace after review; this is not a review claim.",
+        }]
         assert "exactly one surface_dispositions entry for every R1 Surface ID" in (
             closure_input["analysis_contract"]
         )

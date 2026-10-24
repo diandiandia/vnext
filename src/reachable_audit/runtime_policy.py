@@ -16,7 +16,7 @@ IMPLEMENTED_RELEASE_GATES = tuple(f"RG{index}" for index in range(1, 16))
 
 
 _POLICY: dict[str, Any] = {
-    "policy_version": "vnext-task-policy-41",
+    "policy_version": "vnext-task-policy-45",
     "task_collection": {
         "go_hotspots": "campaign_frozen_opt_in_trusted_offline_ast_helper_candidates_only_not_release_qualified",
         "java_hotspots": "campaign_frozen_opt_in_jdk_parse_only_unresolved_method_candidates_not_release_qualified",
@@ -27,6 +27,7 @@ _POLICY: dict[str, Any] = {
         "wall_amendment": "append_only_monotone_limit_extension_original_clock_and_breach_retained",
         "go_harness_profile": "explicit_go_offline_environment_and_bounded_build_file_size;captured_output_limits_independent;ineligible_runs_cannot_upgrade",
         "shell_execution_by_scheduler": False,
+        "task_execution_policy": "static_analysis_by_worker;dynamic_execution_requires_explicit_host_authorization_and_registered_r5_harness;not_os_enforced",
         "required_measurements": ["agent_runs", "wall_seconds"],
         "delegated_agent_runs": "optional_measurement_required_when_task_budgeted_and_bounded_by_agent_runs",
         "successful_task_measurements_positive": True,
@@ -70,12 +71,18 @@ _POLICY: dict[str, Any] = {
         "plan_path_scope": "inventory_exact_path_states_only_included_paths_assigned_exclusions_deferments_visible",
         "r4_hypothesis_references": "exactly_once_reconciliation_of_task_input_work_unit_family_allowlist_at_collect",
         "r4_hypothesis_reviews": "one_evidence_linked_review_per_hypothesis; existing_scoped_findings_injected_and_exactly_reconciled; semantic_validity_remains_agent_asserted",
+        "r4_current_r3_verdicts": "inject_exact_work_unit_family_verdicts_and_require_agent_rationale_reconciliation",
         "r2_predeclared_entrypoints": "explicit_checklist_per_axis_requires_source_anchored_agent_disposition; checklist_empty_is_explicit",
         "r6_finding_reconciliation": "all_recorded_findings_supplied_and_agent_reviewed_exactly_once; conflicts_reported; no_independent_human_review_claim",
         "r5_proposed_experiment": "unexecuted_inconclusive_empty_observations_needs_review_no_empirical_upgrade",
         "finding_classification": "security_vulnerability_requires_structured_impact_and_resolvable_evidence;nonsecurity_classifications_excluded_from_vulnerability_counts",
         "r1_surface_anchors": "collect_entry_path_and_nonblank_source_line",
         "r1_surface_identity": "collect_unique_id_task_work_unit_and_component_match",
+        "r1_boundary_evidence": "registered_source_or_component_build_manifest_LOC_anchor_with_frozen_digest_validation",
+        "r6_surface_template": "per_r1_surface_default_unreviewed_editable_template_not_a_review_claim",
+        "cancelled_unclaimed_task_retry": "explicit_reason_authorization_only_when_no_worker_attempt_exists",
+        "high_risk_surface_hypothesis_mapping": "derived_from_r1_agent_risk_tier_and_r2_surface_ids_exploratory_non_gating_not_review_or_safety_proof",
+        "cg2_component_ownership": "all_paths_explicitly_excluded_or_deferred_can_account_for_component_without_work_unit_only_with_valid_scope_evidence_and_no_boundary_obligation_not_audit_approval",
         "r1_oversize_work_unit_guard": "block_scheduling_when_minimum_valid_output_exceeds_hard_limit",
         "planner_boundary_edge_sharding": "r1_minimum_output_floor_v1_per_endpoint_exact_once",
         "r1_path_review_claims": "persist_task_validated_scope_as_agent_declared_not_host_observed",

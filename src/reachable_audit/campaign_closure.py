@@ -324,6 +324,7 @@ def _derive_discovery_coverage_gate(
 def _derive_path_scope_gate(
     required_components: set[str],
     owned_components: set[str],
+    scope_owned_components: set[str],
     build_components: set[str],
     inventory_source_files: set[str],
     path_state_by_path: Mapping[str, PlanPathState],
@@ -337,8 +338,13 @@ def _derive_path_scope_gate(
     path_review_claim_errors: Sequence[str],
 ) -> dict[str, Any]:
     detail = {
-        "unowned_components": sorted(required_components - owned_components),
-        "unowned_build_units": sorted(build_components - owned_components),
+        "unowned_components": sorted(
+            required_components - owned_components - scope_owned_components
+        ),
+        "unowned_build_units": sorted(
+            build_components - owned_components - scope_owned_components
+        ),
+        "scope_owned_components": sorted(scope_owned_components),
         "unclassified_source_files": sorted(
             inventory_source_files - set(path_state_by_path)
         ),
@@ -359,13 +365,39 @@ def _derive_path_scope_gate(
     if path_review_claim_errors:
         detail["path_review_claim_errors"] = list(path_review_claim_errors)
     return {
-        "pass": required_components.issubset(owned_components)
+        "pass": required_components.issubset(
+            owned_components | scope_owned_components
+        )
         and path_scope_coverage_valid
         and not path_scope_evidence_errors
         and not path_review_claim_errors
         and included_source_files == planned_source_files
         and not duplicate_source_files,
         "detail": detail,
+    }
+
+
+def _derive_scope_owned_components(
+    source_paths_by_component: Mapping[str, set[str]],
+    path_state_by_path: Mapping[str, PlanPathState],
+    boundary_components: set[str],
+    path_scope_coverage_valid: bool,
+    path_scope_evidence_errors: Sequence[str],
+) -> set[str]:
+    if not path_scope_coverage_valid or path_scope_evidence_errors:
+        return set()
+    return {
+        component_id
+        for component_id, paths in source_paths_by_component.items()
+        if paths
+        and component_id not in boundary_components
+        and all(
+            path_state_by_path.get(path) in {
+                PlanPathState.EXCLUDED,
+                PlanPathState.DEFERRED,
+            }
+            for path in paths
+        )
     }
 
 
@@ -662,13 +694,27 @@ class CampaignCloser:
             state.value: sum(item.state is state for item in path_dispositions)
             for state in PlanPathState
         }
-        required_components = build_components | boundary_components | included_components
+        required_components = (
+            build_components | boundary_components | included_components
+        )
         path_scope_coverage_valid = (
             len(path_dispositions) == len(path_state_by_path)
             and set(path_state_by_path) == inventory_source_files
         )
         path_scope_evidence_errors = self._path_scope_evidence_errors(
             inventory_source_files
+        )
+        source_paths_by_component: dict[str, set[str]] = {}
+        for source in inventory.source_files:
+            source_paths_by_component.setdefault(source.component_id, set()).add(
+                source.path
+            )
+        scope_owned_components = _derive_scope_owned_components(
+            source_paths_by_component,
+            path_state_by_path,
+            boundary_components,
+            path_scope_coverage_valid,
+            path_scope_evidence_errors,
         )
         surfaces = []
         boundary_reviews = []
@@ -904,6 +950,43 @@ class CampaignCloser:
             for hypothesis in hypotheses
             for surface_id in hypothesis["surface_ids"]
         }
+        risk_tier_by_work_unit_path = {
+            (str(item["work_unit_id"]), str(item["path"])): str(item["risk_tier"])
+            for item in path_review_claims
+        }
+        hypotheses_by_surface: dict[tuple[str, str], set[str]] = {}
+        for hypothesis in hypotheses:
+            for surface_id in hypothesis["surface_ids"]:
+                key = (
+                    str(hypothesis["work_unit_id"]),
+                    str(surface_id),
+                )
+                hypotheses_by_surface.setdefault(key, set()).add(
+                    str(hypothesis["hypothesis_id"])
+                )
+        high_risk_surface_hypothesis_mapping = [
+            {
+                "surface_id": str(surface["surface_id"]),
+                "work_unit_id": str(surface["work_unit_id"]),
+                "entry_path": str(surface["entry_path"]),
+                "hypothesis_ids": sorted(
+                    hypotheses_by_surface.get(
+                        (str(surface["work_unit_id"]), str(surface["surface_id"])),
+                        set(),
+                    )
+                ),
+            }
+            for surface in surfaces
+            if risk_tier_by_work_unit_path.get(
+                (str(surface["work_unit_id"]), str(surface["entry_path"])),
+                PathRiskTier.UNASSESSED.value,
+            ) == PathRiskTier.HIGH.value
+        ]
+        high_risk_surface_count = len(high_risk_surface_hypothesis_mapping)
+        high_risk_surface_with_hypotheses = sum(
+            bool(item["hypothesis_ids"])
+            for item in high_risk_surface_hypothesis_mapping
+        )
         surface_work_units = {str(item["work_unit_id"]) for item in surfaces}
         reviewed_surface_work_units = {
             str(item["work_unit_id"])
@@ -949,6 +1032,7 @@ class CampaignCloser:
         gates["CG2"] = _derive_path_scope_gate(
             required_components,
             owned_components,
+            scope_owned_components,
             build_components,
             inventory_source_files,
             path_state_by_path,
@@ -1322,6 +1406,28 @@ class CampaignCloser:
                 "kinds": _counts(item["kind"] for item in surfaces),
                 "principals": _counts(item["principal"] for item in surfaces),
             },
+            "discovery_measurements": {
+                "high_risk_surface_hypothesis_mapping": {
+                    "status": "EXPLORATORY_NON_GATING",
+                    "high_risk_surface_count": high_risk_surface_count,
+                    "surfaces_with_hypotheses": high_risk_surface_with_hypotheses,
+                    "surfaces_without_linked_hypotheses": (
+                        high_risk_surface_count - high_risk_surface_with_hypotheses
+                    ),
+                    "mapping_rate": (
+                        high_risk_surface_with_hypotheses / high_risk_surface_count
+                        if high_risk_surface_count
+                        else None
+                    ),
+                    "surfaces": high_risk_surface_hypothesis_mapping,
+                    "interpretation": (
+                        "Links R1 HIGH-risk Agent declarations to R2 hypothesis "
+                        "surface_ids. An unlinked Surface is not evidence of a missed "
+                        "vulnerability or a safety conclusion; declarations are not "
+                        "host-observed review."
+                    ),
+                },
+            },
             "discovery_axes": {
                 axis: {
                     applicability: sum(
@@ -1652,6 +1758,22 @@ class CampaignCloser:
         lines.extend(
             f"- {name}: {count}" for name, count in coverage.items()
         )
+        mapping = report.get("discovery_measurements", {}).get(
+            "high_risk_surface_hypothesis_mapping", {}
+        )
+        if mapping:
+            lines.extend([
+                "",
+                "### Exploratory Discovery Measurements",
+                "",
+                "- HIGH-risk Surface → Hypothesis mapping: "
+                f"{mapping.get('surfaces_with_hypotheses', 0)} / "
+                f"{mapping.get('high_risk_surface_count', 0)} "
+                f"(rate: {mapping.get('mapping_rate')})",
+                "- This non-gating mapping links Agent-declared R1 risk tiers to R2 "
+                "Surface IDs. An unlinked Surface is not a missed vulnerability or "
+                "a safety conclusion.",
+            ])
         if report.get("finding_review_state_counts"):
             lines.extend([
                 "",
@@ -1758,6 +1880,17 @@ class CampaignCloser:
             "",
         ])
         lines.extend(["### Path Scope", ""])
+        scope_owned_components = report.get("gates", {}).get(
+            "CG2", {}
+        ).get("detail", {}).get("scope_owned_components", [])
+        if scope_owned_components:
+            lines.extend([
+                "Components without Work Unit ownership are accounted for only because "
+                "all of their source paths have explicit EXCLUDED/DEFERRED dispositions. "
+                "This is plan-scope ownership, not an audit or safety approval.",
+                "- Scope-owned components: "
+                + ", ".join(f"`{cell(item)}`" for item in scope_owned_components),
+            ])
         if path_scope:
             lines.extend(
                 f"- **{item['state']}** `{cell(item['path'])}`. {cell(item['rationale'])}"

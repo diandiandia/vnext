@@ -93,11 +93,16 @@ not evidence of safety. Neither experimental provider expands the release roster
 `init --static-challenges` also opts static-only REACHABLE hypotheses into the existing
 two-perspective R3.5 process; retained claims remain static-only.
 
-Before the first R0, register supporting XML/SPI/configuration/build evidence through
-`evidence-register`; source references must match their frozen digests. Scope-aware
-planning removes wholly out-of-scope graph work but retains cross-scope boundary
-obligations. See the runbook for explicit late-output recovery and budget amendment;
-neither operation resets elapsed time or fabricates missing usage.
+Before the first R0, inventory source files and component build manifests are included
+in the frozen snapshot baseline. Register additional supporting XML/SPI/configuration
+files not represented by those inventory entries through `evidence-register`; source
+references must match their frozen digests. Scope-aware planning removes wholly
+out-of-scope graph work but retains cross-scope boundary obligations. Campaign closure
+can account for a component with no Work Unit only when all its source paths have
+valid, evidence-backed EXCLUDED/DEFERRED dispositions and it has no boundary
+obligation; this is scope accounting, not an audit or safety approval. See the runbook
+for explicit late-output recovery and budget amendment; neither operation resets elapsed
+time or fabricates missing usage.
 
 The runtime uses its own Campaign state and canonical schemas. Use an explicit
 absolute `--state-dir` outside the frozen target for source-search isolation; pass the
@@ -192,6 +197,8 @@ not semantic proof that no historical bias or project-specific guidance remains.
 - [System requirements](docs/design/SYSTEM_REQUIREMENTS_VNEXT.md)
 - [Software requirements and implementation status](docs/design/SOFTWARE_REQUIREMENTS_VNEXT.md)
 - [Release acceptance plan](docs/design/ACCEPTANCE_PLAN_VNEXT.md)
+- [Discovery quality evaluation protocol](docs/design/DISCOVERY_QUALITY_EVALUATION_PROTOCOL.md)
+- [Test plan](docs/design/TEST_PLAN_VNEXT.md)
 - [Repair roadmap](docs/design/REPAIR_ROADMAP_VNEXT.md)
 - [ISO/IEC/IEEE 12207 lifecycle self-assessment](docs/design/LIFECYCLE_CONFORMANCE_VNEXT.md)
 - [Quality reassessment and remaining acceptance gaps](docs/design/QUALITY_REASSESSMENT_VNEXT.md)
