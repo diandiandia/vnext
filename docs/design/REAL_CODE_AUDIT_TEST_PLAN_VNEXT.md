@@ -12,6 +12,12 @@ This plan complements [TEST_PLAN_VNEXT.md](TEST_PLAN_VNEXT.md),
 [ACCEPTANCE_PLAN_VNEXT.md](ACCEPTANCE_PLAN_VNEXT.md), and the operator steps in
 [LOCAL_TEST_HANDOFF.md](../LOCAL_TEST_HANDOFF.md).
 
+For the selected QuickJS pilot, also use the
+[QuickJS audit supplement](QUICKJS_REAL_AUDIT_SUPPLEMENT_PLAN.md) to define
+production-relevant scope, keep test code as supporting evidence unless it is part of
+the deployed trust boundary, and assess deferred improvement ideas without changing
+baseline discovery prompts.
+
 ## 1. Required Inputs and Responsibilities
 
 Sections 1 and 2 list the full **host-integration/release qualification** requirements.

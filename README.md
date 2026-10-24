@@ -198,6 +198,7 @@ not semantic proof that no historical bias or project-specific guidance remains.
 - [Software requirements and implementation status](docs/design/SOFTWARE_REQUIREMENTS_VNEXT.md)
 - [Release acceptance plan](docs/design/ACCEPTANCE_PLAN_VNEXT.md)
 - [Discovery quality evaluation protocol](docs/design/DISCOVERY_QUALITY_EVALUATION_PROTOCOL.md)
+- [QuickJS real-audit supplement plan](docs/design/QUICKJS_REAL_AUDIT_SUPPLEMENT_PLAN.md)
 - [Test plan](docs/design/TEST_PLAN_VNEXT.md)
 - [Repair roadmap](docs/design/REPAIR_ROADMAP_VNEXT.md)
 - [ISO/IEC/IEEE 12207 lifecycle self-assessment](docs/design/LIFECYCLE_CONFORMANCE_VNEXT.md)
