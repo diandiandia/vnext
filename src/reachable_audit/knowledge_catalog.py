@@ -33,6 +33,9 @@ _EVIDENCE_STATES = frozenset({
 
 
 def default_knowledge_root() -> Path:
+    packaged_root = Path(__file__).resolve().with_name("knowledge_assets")
+    if packaged_root.is_dir():
+        return packaged_root
     return Path(__file__).resolve().parents[2] / "knowledge"
 
 
@@ -59,6 +62,9 @@ class KnowledgeTaskContext:
                 "an exhaustive security checklist. Establish applicability from target evidence "
                 "before assuming a framework, platform, privilege, API, or deployment mode. "
                 "Historical evidence states describe training provenance, not this target. "
+                "Source and sink cues are optional search examples, not target evidence. "
+                "Rank, card presence, and evidence state do not establish target risk; "
+                "prioritize using current-target control, reachability, and security impact. "
                 "Test counterevidence; absent preconditions may justify NOT_APPLICABLE. "
                 "Do not force a finding or discard source-evidenced mechanisms outside these entries."
             ),
@@ -309,6 +315,10 @@ def _validate_profile_references(
                 if card is None:
                     raise ModelError(
                         f"unknown Mechanism Card {card_id}: {entry['issue_id']}"
+                    )
+                if str(card["family"]).upper() != str(entry["family"]).upper():
+                    raise ModelError(
+                        f"card {card_id} family does not match profile issue {entry['issue_id']}"
                     )
                 applicability = set(card["language_applicability"])
                 if language not in applicability and "any" not in applicability:

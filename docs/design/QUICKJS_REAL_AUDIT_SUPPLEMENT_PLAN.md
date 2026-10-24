@@ -5,6 +5,10 @@ plan defines a production-relevant audit scope and records evidence questions fo
 deferred workflow improvements. It is not a vulnerability checklist, a held-out
 benchmark, or authorization to change the baseline prompts.
 
+This project-specific development record is not a requirement on other targets and
+must not be supplied as discovery guidance to unrelated fresh Campaigns. The generic
+procedure is [REAL_CODE_AUDIT_TEST_PLAN_VNEXT.md](REAL_CODE_AUDIT_TEST_PLAN_VNEXT.md).
+
 ## 1. Objective and Audit Completeness
 
 Audit all production-relevant code and configuration in the selected QuickJS snapshot,

@@ -29,7 +29,7 @@ in-tree stores remain recoverable and ambiguous dual stores require an explicit
 selection. Library hosts must explicitly select external state. Physical source-read
 or OS context isolation is still a host responsibility.
 
-Current-contract update (2026-10-24): the runtime policy is `vnext-task-policy-45`.
+Current-contract update (2026-10-24): the runtime policy is `vnext-task-policy-46`.
 CG2's component ownership accounting recognizes complete evidence-backed EXCLUDED or
 DEFERRED path scope for a component without boundary obligations; it does not turn that
 scope decision into an audit or safety claim. Campaign output includes a non-gating
@@ -37,6 +37,12 @@ HIGH-risk Surface-to-Hypothesis mapping diagnostic. A paired discovery-quality
 evaluation protocol is documented, but no held-out dataset or result is supplied.
 These changes do not alter the release status, which remains blocked pending external
 qualification evidence.
+
+Maintenance update (2026-10-24): path-scope validation accepts
+`EMPTY-FILE:<path>:sha256:<digest>` only for an excluded/deferred zero-byte
+inventoried source whose path and digest match the disposition and frozen snapshot
+baseline. This is file identity/emptiness evidence, not a LOC anchor, review claim,
+or safety finding.
 
 ## 1. Purpose
 
@@ -443,8 +449,9 @@ R5 recipes/probes, and signed RG1-RG15 evaluation logic. These are implementatio
 capabilities, not evidence that language recall, automatic cross-language discovery,
 or 20GB+ operation has passed real acceptance.
 
-RG12 checks provider conformance evidence, but the current runtime has one provider and
-no independent real precision/coverage acceptance. RG13 validates signed clean-room
+RG12 checks conformance evidence for the default enabled Python provider; experimental
+Go/Java opt-ins do not expand that release roster. Independent real provider
+precision/coverage acceptance is absent. RG13 validates signed clean-room
 provenance fields and digest-linked R1/R2 task inputs, but does not independently
 observe host prompt/session contents. RG14 validates digest-backed screening counts/
 fraction against the Campaign-frozen ceiling and rejects overrides; it cannot prove
@@ -455,8 +462,15 @@ acceptance. These checks do not certify provider quality or actual clean-room is
 Release policy checks RG1-RG15 and remains fail closed on any missing or failed evidence.
 RG15's evaluator gate is implemented, but promotion remains blocked until qualifying
 scale fixture and real Campaign evidence are supplied.
-Passing RG1-RG15 sets implemented_subset_status=PASS but leaves status=BLOCKED and
-eligible_for_promotion=false. No signed extra field waives an unavailable check.
+If any required gate fails or is unavailable, status is BLOCKED and
+eligible_for_promotion=false. If all required gates pass, the evaluator returns
+status=ACCEPTED, eligible_for_promotion=true and implemented_subset_status=PASS.
+These are evaluator results on supplied signed evidence, not independently verified
+release approval. External policy still requires independent review of the real bundle.
+No signed extra field waives an unavailable check.
+Release policy `vnext-release-policy-7` also requires nonzero local source, knowledge
+and main-prompt scan coverage at RG8/RG9. Run qualification from the full checkout;
+the standalone wheel lacks the host prompt and cannot qualify through empty scans.
 
 Remaining implementation gaps include recognition of arbitrary unknown-language
 syntax, compiler-wide call-graph resolution, broader automatic FFI/RPC/IPC and

@@ -110,7 +110,7 @@ subsequently questioned; independent human review was not performed, and no dyna
 experiment ran. The second Batch was not started. Treat these as explicit limitations,
 not full-audit success or proof that any finding is exploitable.
 
-This evidence predates the current `vnext-task-policy-38` R2/R4/R6 cross-stage
+This evidence predates the `vnext-task-policy-38` R2/R4/R6 cross-stage
 traceability contract. Therefore it neither validates nor invalidates that newer
 contract. The next development pilot should execute `RTA-38-LARGE-01` from
 [REAL_CODE_AUDIT_TEST_PLAN_VNEXT.md](REAL_CODE_AUDIT_TEST_PLAN_VNEXT.md) against the

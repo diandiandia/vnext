@@ -29,7 +29,7 @@ The plan complements [IMPLEMENTATION_COMPLETION_PLAN.md](IMPLEMENTATION_COMPLETI
 Run from the checkout under test and record the commit SHA and worktree state first.
 
 ```bash
-cd /root/vnext
+cd /path/to/vnext
 git rev-parse HEAD
 git status --short
 env -u PYTHONPATH python3 -m pytest tests -o addopts='' -q --tb=short
@@ -231,13 +231,37 @@ real-target workflow coverage, and language qualification as separate assertions
 Update unsupported-provider expectations only when that provider's implementation and
 the corresponding tests actually change.
 
-### TR-16: Remaining Top-15 Language Development Pilots
+**Large-source R2 test-first matrix:** on an authorized representative file, record the
+frozen digest, byte/line counts, task-input bytes, model/context limit, token and wall
+time, inspected line ranges (if available), evidence anchors, and completion/defer
+decision. Predeclare helper/entrypoint and sink anchors. A qualifying result requires
+all source ranges accounted for without overlap or gaps, or an explicit approved
+deferred disposition; `reviewed_scope: ALL_SOURCE_FILES` alone is not measured line
+coverage. Use the observed failure mode to define slice boundaries and reconciliation
+before writing implementation tests. The current planner test is only an advisory-
+warning test.
 
-The operator reports real-project tests for C, C++, Go and Java. Record their Campaign
-and evidence references in the run ledger; do not infer provider certification from
-those workflow pilots. The remaining development-pilot set is **C#, Rust, Python,
-JavaScript, TypeScript, Kotlin, Scala, PHP, Ruby, Swift and Shell**. The detailed
-sequence, project markers and run protocol are in
+**Cross-language boundary test-first matrix:** in a representative mixed-language
+target, inventory actual FFI, RPC, IPC, serialization, generated-code, and shared-data
+mechanisms. For each sampled edge, retain source and destination anchors, language pair,
+protocol/framework, direction, trust boundary, expected owner and route, and whether
+current discovery found it. Include negative/unrelated dependency cases. Only then
+specify detector behavior and add synthetic regression fixtures; measure misses and
+false positives on a separate reviewed sample.
+
+**Pass before implementation:** the target/sample, labels, metrics, known limitations,
+and acceptance thresholds are predeclared and retained as an evidence bundle. If an
+authorized representative sample is unavailable, mark the capability **BLOCKED on
+target evidence**; do not implement a speculative detector or report a synthetic pass
+as capability evidence.
+
+### TR-16: Top-15 Language Development Pilot Coverage
+
+Use the approved 15-language portfolio and the current evidence ledger to select
+missing qualification samples. Completed runs, their limitations and remaining work
+belong in that ledger, not a hard-coded remaining-language list in this generic plan.
+Do not infer provider certification from workflow pilots. Representative project
+markers and the run protocol are in
 [REAL_CODE_AUDIT_TEST_PLAN_VNEXT.md](REAL_CODE_AUDIT_TEST_PLAN_VNEXT.md).
 
 For each language, use a distinct fresh Campaign on a legally authorized, frozen
@@ -261,7 +285,7 @@ loss, unsafe execution, or unsupported claim occurs. **Blocked:** authorization,
 representative source, evidence, or required toolchain is unavailable. None of these
 pilot outcomes is a release qualification.
 
-After the 11 pilots, run a separate mixed-language Campaign with at least one
+For portfolio qualification, run a separate mixed-language Campaign with at least one
 source-to-destination boundary in scope, and separately measure large-project
 capacity. Release qualification still requires the per-language/per-issue held-out
 sample floors in [ACCEPTANCE_PLAN_VNEXT.md](ACCEPTANCE_PLAN_VNEXT.md), independent
@@ -287,29 +311,15 @@ strata and unresolved evaluator disagreements. Do not enable a treatment by defa
 set universal thresholds from the development pilots. Mutation fixtures are secondary
 mechanism tests and cannot substitute for the vulnerable-snapshot benchmark.
 
-**Large-source R2 test-first matrix:** on an authorized representative file, record the
-frozen digest, byte/line counts, task-input bytes, model/context limit, token and wall
-time, inspected line ranges (if available), evidence anchors, and completion/defer
-decision. Predeclare helper/entrypoint and sink anchors. A qualifying result requires
-all source ranges accounted for without overlap or gaps, or an explicit approved
-deferred disposition; `reviewed_scope: ALL_SOURCE_FILES` alone is not measured line
-coverage. Use the observed failure mode to define slice boundaries and reconciliation
-before writing implementation tests. The current planner test is only an advisory-
-warning test.
+### TR-18: Zero-byte path-scope evidence
 
-**Cross-language boundary test-first matrix:** in a representative mixed-language
-target, inventory actual FFI, RPC, IPC, serialization, generated-code, and shared-data
-mechanisms. For each sampled edge, retain source and destination anchors, language pair,
-protocol/framework, direction, trust boundary, expected owner and route, and whether
-current discovery found it. Include negative/unrelated dependency cases. Only then
-specify detector behavior and add synthetic regression fixtures; measure misses and
-false positives on a separate reviewed sample.
-
-**Pass before implementation:** the target/sample, labels, metrics, known limitations,
-and acceptance thresholds are predeclared and retained as an evidence bundle. If an
-authorized representative sample is unavailable, mark the capability **BLOCKED on
-target evidence**; do not implement a speculative detector or report a synthetic pass
-as capability evidence.
+For an excluded/deferred zero-byte inventoried source, validate the explicit
+`EMPTY-FILE:<path>:sha256:<digest>` evidence form. Positive coverage must prove that the
+path matches the disposition and the digest matches both the zero-byte file and the
+R0 frozen snapshot baseline. Negative cases must reject a mismatched path, malformed or
+wrong digest, non-empty file, and file changed after snapshot. The evidence must not be
+accepted as a `LOC-<path>:<line>` anchor or as proof that the file was reviewed.
+Reject symlink/outside-root or non-empty replacements before reading their content.
 
 ### TR-11: Cross-Stage Coverage and Finding Reconciliation
 
@@ -467,6 +477,23 @@ packaged Go/Java helpers as well as Python, main Skill and eligible knowledge.
 **Qualification still external:** real-host interruption/termination, authentic approval,
 usage truth, Java lead precision/recall, mixed-language misses and representative large
 source/20GB+ behavior. This local contract is not Google approval or ISO conformity.
+
+### TR-19: Runtime Distribution and Knowledge Consistency
+
+Build the wheel using the declared setuptools backend, then load its default catalog
+from an extracted installation outside the checkout using Python isolated mode. Verify
+15 languages, 150 cards, all 167 runtime JSON assets, and both parser helpers; development
+plans, migration reports and host instructions must not enter the runtime catalog.
+The host must provision Skill/runbooks separately. Verify that loading rejects a
+profile/card family mismatch instead of supplying an unrelated card to a family-filtered
+task. Task guidance must state that catalog cues, rank, presence and provenance are not
+target-risk evidence. See [test_distribution.py](../../tests/test_distribution.py) and
+[test_knowledge_catalog.py](../../tests/test_knowledge_catalog.py). Distribution tests
+require the setuptools build dependency; they must not fetch target dependencies.
+Release evaluation must fail RG8/RG9 when any local source, knowledge or prompt surface
+is absent, even if the partial scan has zero findings and the signed manifest claims
+PASS. A wheel-only installation is not a qualifying source checkout. See
+[test_evaluation.py](../../tests/test_evaluation.py).
 
 ## 5. Evidence Record
 

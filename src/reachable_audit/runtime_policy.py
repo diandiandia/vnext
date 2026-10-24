@@ -10,13 +10,13 @@ from typing import Any
 TASK_OUTPUT_MAX_BYTES = 4 * 1024 * 1024
 TASK_OUTPUT_TARGET_BYTES = 1024 * 1024
 R2_LARGE_SOURCE_FILE_WARNING_BYTES = 1024 * 1024
-RELEASE_POLICY_VERSION = "vnext-release-policy-6"
+RELEASE_POLICY_VERSION = "vnext-release-policy-7"
 REQUIRED_RELEASE_GATES = tuple(f"RG{index}" for index in range(1, 16))
 IMPLEMENTED_RELEASE_GATES = tuple(f"RG{index}" for index in range(1, 16))
 
 
 _POLICY: dict[str, Any] = {
-    "policy_version": "vnext-task-policy-45",
+    "policy_version": "vnext-task-policy-46",
     "task_collection": {
         "go_hotspots": "campaign_frozen_opt_in_trusted_offline_ast_helper_candidates_only_not_release_qualified",
         "java_hotspots": "campaign_frozen_opt_in_jdk_parse_only_unresolved_method_candidates_not_release_qualified",
@@ -35,7 +35,7 @@ _POLICY: dict[str, Any] = {
         "source_anchors_required": True,
         "evidence_artifacts_content_addressed": True,
         "held_out_knowledge_runtime_access": False,
-        "knowledge_guidance": "conditional_target_evidence_not_expected_findings_or_exhaustive_checklist",
+        "knowledge_guidance": "conditional_target_evidence_not_expected_findings_or_exhaustive_checklist;catalog_rank_presence_and_provenance_not_target_risk",
         "r2_axis_heuristics": "source_evidenced_six_axis_triggers_conditional_history_no_candidate_does_not_imply_inapplicable",
         "r35_revival_guidance": "independent_guard_bypass_and_boundary_contract_review_preserve_valid_counterevidence",
         "r35_human_review": "explicit_operator_approval_bound_to_current_output_digest_not_worker_label_or_verified_identity",
@@ -69,6 +69,7 @@ _POLICY: dict[str, Any] = {
         "r6_evidence_context": "canonical_stage_artifacts_not_work_unit_source_inventory",
         "r6_surface_dispositions": "collect_exact_one_per_r1_surface_projection_defaults_missing_to_unreviewed_agent_reported",
         "plan_path_scope": "inventory_exact_path_states_only_included_paths_assigned_exclusions_deferments_visible",
+        "empty_file_scope_evidence": "EMPTY-FILE:path:sha256:digest_bound_to_zero_byte_inventory_source_and_frozen_snapshot_baseline",
         "r4_hypothesis_references": "exactly_once_reconciliation_of_task_input_work_unit_family_allowlist_at_collect",
         "r4_hypothesis_reviews": "one_evidence_linked_review_per_hypothesis; existing_scoped_findings_injected_and_exactly_reconciled; semantic_validity_remains_agent_asserted",
         "r4_current_r3_verdicts": "inject_exact_work_unit_family_verdicts_and_require_agent_rationale_reconciliation",

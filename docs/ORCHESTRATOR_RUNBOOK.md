@@ -431,6 +431,10 @@ not claim excluded code was reviewed. A fully excluded/deferred repository can h
 zero Batches. That is an empty declared audit scope, not evidence of repository safety.
 Truly empty repositories and manifest-only components retain their existing behavior.
 Tests/generated files are not automatically inapplicable; use evidenced axis dispositions.
+For an excluded or deferred zero-byte inventory source, path-scope evidence may use
+`EMPTY-FILE:<path>:sha256:<64-lowercase-hex-digest>`. Closure accepts it only when the
+path matches that disposition and the digest matches both the empty file and its frozen
+snapshot baseline; it is not a source LOC anchor or proof of review.
 
 ### Experimental Java leads and static challenges
 

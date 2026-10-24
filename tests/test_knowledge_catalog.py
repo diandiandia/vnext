@@ -137,6 +137,8 @@ def test_shipped_catalog_preserves_portfolio_without_deployment_assumptions() ->
     assert "truststore.Install" not in guidance
     assert "target evidence" in context["guidance"]
     assert "not expected findings" in context["guidance"]
+    assert "optional search examples" in context["guidance"]
+    assert "do not establish target risk" in context["guidance"]
     assert "provenance" not in context
 
 
@@ -182,4 +184,15 @@ def test_catalog_rejects_tampered_provenance_digest(tmp_path: Path) -> None:
     provenance_path.write_text(json.dumps(provenance), encoding="utf-8")
 
     with pytest.raises(ModelError, match="source digest mismatch"):
+        KnowledgeCatalog.load(tmp_path)
+
+
+def test_catalog_rejects_profile_card_family_mismatch(tmp_path: Path) -> None:
+    _write_catalog(tmp_path)
+    card_path = tmp_path / "cards" / f"MECH-{LANGUAGES[0]}-1.json"
+    card = json.loads(card_path.read_text(encoding="utf-8"))
+    card["family"] = "INJECTION"
+    card_path.write_text(json.dumps(card), encoding="utf-8")
+
+    with pytest.raises(ModelError, match="family does not match profile issue"):
         KnowledgeCatalog.load(tmp_path)

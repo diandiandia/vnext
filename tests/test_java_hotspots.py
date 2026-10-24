@@ -261,7 +261,8 @@ def test_java_wheel_resource_parses_outside_source_checkout(tmp_path, jdk):
     project.mkdir()
     for name in ("pyproject.toml", "README.md"):
         shutil.copyfile(root / name, project / name)
-    shutil.copytree(root / "src", project / "src", ignore=shutil.ignore_patterns("__pycache__", "*.egg-info"))
+    for name in ("src", "knowledge"):
+        shutil.copytree(root / name, project / name, ignore=shutil.ignore_patterns("__pycache__", "*.egg-info"))
     wheels = tmp_path / "wheels"
     wheels.mkdir()
     environment = dict(os.environ, TMPDIR=str(tmp_path))

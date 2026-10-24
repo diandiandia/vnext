@@ -407,8 +407,11 @@ Use the schema and example in the [software design Handoff contract](./docs/desi
 evidence_refs}` records. `state` is `INCLUDED`, `EXCLUDED`, or `DEFERRED`; paths
 omitted from the file default to `INCLUDED`. EXCLUDED/DEFERRED records require an
 approver declaration and evidence refs that resolve at Campaign closure to current
-inventory LOC anchors or artifacts owned by that Campaign. Only INCLUDED paths enter
-Work Units; all inventory paths and their decisions remain in the Plan and final report.
+inventory LOC anchors or artifacts owned by that Campaign. For an inventoried
+zero-byte source, use `EMPTY-FILE:<path>:sha256:<64-lowercase-hex-digest>` with an exact
+path and digest matching the current empty file and frozen snapshot.
+Only INCLUDED paths enter Work Units; all inventory paths
+and their decisions remain in the Plan and final report.
 The approver string is not authenticated identity, and a scope decision does not prove
 that a host or Agent reviewed the path.
 

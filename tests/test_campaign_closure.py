@@ -1,5 +1,6 @@
 import json
 import datetime as dt
+import hashlib
 import os
 from dataclasses import replace
 from pathlib import Path
@@ -855,6 +856,150 @@ def test_campaign_closure_rejects_invalid_path_scope_evidence(tmp_path: Path) ->
                 unreviewed_scope=(), residual_risks=(), limitations=(),
                 lessons=(), knowledge_nominations=(), skill_issues=(),
             ))
+    finally:
+        manager.close()
+
+
+@pytest.mark.parametrize("state", (PlanPathState.EXCLUDED, PlanPathState.DEFERRED))
+def test_campaign_closure_accepts_digest_bound_empty_file_disposition(
+    tmp_path: Path, state: PlanPathState,
+) -> None:
+    (tmp_path / "empty.js").write_bytes(b"")
+    empty_digest = hashlib.sha256(b"").hexdigest()
+    manager, plan = _closable_campaign(
+        tmp_path,
+        path_dispositions=(PlanPathDisposition(
+            path="empty.js",
+            state=state,
+            rationale="Empty test fixture is outside the production audit scope.",
+            approved_by="scope-owner",
+            evidence_refs=(
+                f"EMPTY-FILE:empty.js:sha256:{empty_digest}",
+            ),
+        ),),
+    )
+    try:
+        report = CampaignCloser(manager, "CMP-r4", plan).close(CampaignClosure(
+            architecture_overview="A source-only development pilot.",
+            unreviewed_scope=(), residual_risks=(), limitations=(), lessons=(),
+            knowledge_nominations=(), skill_issues=(),
+        ))
+        assert report["status"] == "PASS"
+        assert report["gates"]["CG2"]["detail"]["path_scope_evidence_errors"] == []
+        disposition = next(
+            item for item in report["path_scope_dispositions"]
+            if item["path"] == "empty.js"
+        )
+        assert disposition["evidence_refs"] == [
+            f"EMPTY-FILE:empty.js:sha256:{empty_digest}"
+        ]
+    finally:
+        manager.close()
+
+
+@pytest.mark.parametrize(
+    ("content", "evidence_path", "digest"),
+    (
+        (b"", "other.js", hashlib.sha256(b"").hexdigest()),
+        (b"", "empty.js", "g" * 64),
+        (b"", "empty.js", "0" * 64),
+        (b"not empty\n", "empty.js", hashlib.sha256(b"not empty\n").hexdigest()),
+    ),
+    ids=("path-mismatch", "malformed-digest", "wrong-digest", "non-empty-file"),
+)
+def test_campaign_closure_rejects_invalid_empty_file_evidence(
+    tmp_path: Path, content: bytes, evidence_path: str, digest: str,
+) -> None:
+    (tmp_path / "empty.js").write_bytes(content)
+    manager, plan = _closable_campaign(
+        tmp_path,
+        path_dispositions=(PlanPathDisposition(
+            path="empty.js",
+            state=PlanPathState.EXCLUDED,
+            rationale="File is outside the production audit scope.",
+            approved_by="scope-owner",
+            evidence_refs=(
+                f"EMPTY-FILE:{evidence_path}:sha256:{digest}",
+            ),
+        ),),
+    )
+    try:
+        with pytest.raises(ModelError, match="CG2"):
+            CampaignCloser(manager, "CMP-r4", plan).close(CampaignClosure(
+                architecture_overview="A source-only development pilot.",
+                unreviewed_scope=(), residual_risks=(), limitations=(), lessons=(),
+                knowledge_nominations=(), skill_issues=(),
+            ))
+    finally:
+        manager.close()
+
+
+def test_campaign_closure_rejects_empty_file_evidence_after_snapshot_drift(
+    tmp_path: Path,
+) -> None:
+    empty_path = tmp_path / "empty.js"
+    empty_path.write_bytes(b"")
+    empty_digest = hashlib.sha256(b"").hexdigest()
+    manager, plan = _closable_campaign(
+        tmp_path,
+        path_dispositions=(PlanPathDisposition(
+            path="empty.js",
+            state=PlanPathState.EXCLUDED,
+            rationale="Empty test fixture is outside the production audit scope.",
+            approved_by="scope-owner",
+            evidence_refs=(
+                f"EMPTY-FILE:empty.js:sha256:{empty_digest}",
+            ),
+        ),),
+    )
+    try:
+        empty_path.write_bytes(b"no longer empty\n")
+        with pytest.raises(ModelError, match="CG2"):
+            CampaignCloser(manager, "CMP-r4", plan).close(CampaignClosure(
+                architecture_overview="A source-only development pilot.",
+                unreviewed_scope=(), residual_risks=(), limitations=(), lessons=(),
+                knowledge_nominations=(), skill_issues=(),
+            ))
+    finally:
+        manager.close()
+
+
+@pytest.mark.parametrize("replacement", ("non-empty", "external-symlink"))
+def test_empty_file_evidence_rejects_changed_path_before_hashing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, replacement: str,
+) -> None:
+    empty_path = tmp_path / "empty.js"
+    empty_path.write_bytes(b"")
+    manager, plan = _closable_campaign(
+        tmp_path,
+        path_dispositions=(PlanPathDisposition(
+            path="empty.js",
+            state=PlanPathState.EXCLUDED,
+            rationale="Empty fixture is outside the production scope.",
+            approved_by="scope-owner",
+            evidence_refs=(f"EMPTY-FILE:empty.js:sha256:{hashlib.sha256(b'').hexdigest()}",),
+        ),),
+    )
+    try:
+        baseline = manager.load_snapshot_baseline("CMP-r4")
+        if replacement == "external-symlink":
+            external = tmp_path.parent / f"{tmp_path.name}-external.js"
+            external.write_bytes(b"")
+            empty_path.unlink()
+            empty_path.symlink_to(external)
+        else:
+            empty_path.write_bytes(b"no longer empty\n")
+
+        def unexpected_digest(path: Path) -> str:
+            pytest.fail(f"Invalid empty-file evidence must not read {path}")
+
+        monkeypatch.setattr(manager, "_file_digest", unexpected_digest)
+        assert not CampaignCloser(manager, "CMP-r4", plan)._valid_empty_file_evidence(
+            plan.path_dispositions[0].evidence_refs[0],
+            "empty.js",
+            {"empty.js"},
+            baseline["files"],
+        )
     finally:
         manager.close()
 

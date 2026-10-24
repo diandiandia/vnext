@@ -2,6 +2,7 @@ import pytest
 import hashlib
 import hmac
 import json
+from pathlib import Path
 
 from reachable_audit.evaluation import ShadowRun, evaluate_release, sign_manifest
 from reachable_audit.knowledge_catalog import KnowledgeCatalog, default_knowledge_root
@@ -258,6 +259,38 @@ def _rewrite_measurement_artifact(
     ).encode("utf-8")).hexdigest()
 
 
+@pytest.mark.parametrize("missing_surface", ("src", "knowledge", "SKILL.md"))
+def test_release_blocks_incomplete_local_runtime_scan(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, missing_surface: str,
+) -> None:
+    import reachable_audit.evaluation as evaluation
+
+    root = tmp_path / "runtime"
+    for relative, content in (
+        ("src/runtime.py", "VALUE = 1\n"),
+        ("knowledge/portfolio.json", "{}"),
+        ("SKILL.md", "Generic audit instructions.\n"),
+    ):
+        if relative.split("/", 1)[0] == missing_surface:
+            continue
+        path = root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+    monkeypatch.setattr(
+        evaluation, "__file__", str(root / "src" / "reachable_audit" / "evaluation.py"),
+    )
+
+    report = evaluate_release(_manifest(), signing_key=_TEST_SIGNING_KEY)
+
+    assert report["status"] == "BLOCKED"
+    assert report["eligible_for_promotion"] is False
+    for gate_id in ("RG8", "RG9"):
+        gate = report["gates"][gate_id]
+        assert gate["pass"] is False
+        assert gate["detail"]["required_runtime_surfaces_present"] is False
+        assert gate["detail"]["runtime_scan"]["passed"] is True
+
+
 def test_release_accepts_when_all_implemented_gate_evidence_is_valid() -> None:
     manifest = _manifest()
     report = evaluate_release(manifest, signing_key=_TEST_SIGNING_KEY)
@@ -268,7 +301,7 @@ def test_release_accepts_when_all_implemented_gate_evidence_is_valid() -> None:
     assert report["failed_gates"] == []
     assert report["verified_evidence_refs"] == sorted(manifest["evidence_artifacts"])
     assert set(report["gates"]) == {f"RG{index}" for index in range(1, 16)}
-    assert report["policy"]["release_policy_version"] == "vnext-release-policy-6"
+    assert report["policy"]["release_policy_version"] == "vnext-release-policy-7"
     assert report["gates"]["RG6"]["pass"] is True
     assert report["gates"]["RG12"]["pass"] is True
     provider_metric = report["gates"]["RG12"]["detail"]["provider_metrics"]["python-ast-hotspots-v1"]
@@ -418,12 +451,15 @@ def test_rg8_rejects_manifest_claim_when_runtime_scan_finds_residue(
             "passed": False,
             "findings": [{"path": "knowledge/profiles/sample.json", "value": "acme-widget"}],
             "scanned_knowledge_files": 1,
+            "scanned_python_files": 1,
+            "scanned_prompt_files": 1,
         },
     )
 
     report = evaluate_release(_manifest(), signing_key=_TEST_SIGNING_KEY)
 
     assert report["gates"]["RG8"]["pass"] is False
+    assert report["gates"]["RG8"]["detail"]["required_runtime_surfaces_present"] is True
     assert report["status"] == "BLOCKED"
     assert report["gates"]["RG8"]["detail"]["runtime_scan"]["findings"]
 

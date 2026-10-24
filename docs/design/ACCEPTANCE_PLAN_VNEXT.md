@@ -115,8 +115,8 @@ verified answer-store facts. No gate independently proves the truth of signer as
 | RG5 | Every Handoff in every real run is reconciled. |
 | RG6 | Exactly the 15 approved languages are certified; missing, duplicate, extra, or failed languages block release. |
 | RG7 | The worst family, language, and language/issue recall delta stays within policy; per-language and per-cell confidence intervals are reported. |
-| RG8 | Runtime knowledge passes provenance and deprojecting scans, including evaluator-supplied `forbidden_residue_tokens` from the signed manifest. |
-| RG9 | Runtime AST import/legacy-format checks and source/main-prompt/eligible-knowledge residue scans pass. Full documentation consistency and semantic neutrality remain separate review obligations. |
+| RG8 | Runtime knowledge passes provenance and deprojecting scans, including evaluator-supplied `forbidden_residue_tokens` from the signed manifest. Local source, knowledge and main-prompt surfaces must all be present; an empty/partial scan cannot qualify. |
+| RG9 | Runtime AST import/legacy-format checks and source/main-prompt/eligible-knowledge residue scans pass, with all three local surfaces present. Full documentation consistency and semantic neutrality remain separate review obligations. |
 | RG10 | Real vNext run records attest evidence_traceable=true. Artifact reference/digest validation is a separate mandatory evaluator preflight, not a semantic proof of traceability. |
 | RG11 | All 150 language/issue cells meet the frozen sample floor and at least one real held-out mixed-language Campaign has fully reconciled boundary cases. |
 | RG12 | Every enabled hotspot provider passes positive, negative, alias, and malformed-source conformance fixtures; held-out evaluation reports candidate coverage/precision separately from Agent finding recall. Missing providers and unsupported paths are explicit, never counted as clean coverage. |

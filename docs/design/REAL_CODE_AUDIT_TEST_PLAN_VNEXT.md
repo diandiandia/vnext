@@ -12,11 +12,13 @@ This plan complements [TEST_PLAN_VNEXT.md](TEST_PLAN_VNEXT.md),
 [ACCEPTANCE_PLAN_VNEXT.md](ACCEPTANCE_PLAN_VNEXT.md), and the operator steps in
 [LOCAL_TEST_HANDOFF.md](../LOCAL_TEST_HANDOFF.md).
 
-For the selected QuickJS pilot, also use the
-[QuickJS audit supplement](QUICKJS_REAL_AUDIT_SUPPLEMENT_PLAN.md) to define
-production-relevant scope, keep test code as supporting evidence unless it is part of
-the deployed trust boundary, and assess deferred improvement ideas without changing
-baseline discovery prompts.
+This is the target-independent procedure. Keep project-specific supplements and dated
+pilot records separate from these entry gates and from fresh R1/R2 discovery input.
+Scope the production-relevant code and configuration explicitly. Test-only code is
+normally supporting evidence rather than the main production audit scope; include it
+when it is shipped or forms part of a build, release, privileged, or deployed security
+boundary. Never infer exclusion from a directory name alone: retain explicit
+evidence-backed path dispositions and do not count excluded tests as reviewed source.
 
 ## 1. Required Inputs and Responsibilities
 
@@ -274,30 +276,33 @@ and per-issue coverage, unsupported paths, unresolved cases, Handoffs, duplicate
 
 #### Top-15 language pilot matrix
 
-The operator reports that real-project tests have been run for C, C++, Go and Java.
-Retain their existing Campaign/evidence references in the test ledger; this status
-records development workflow testing only and does not certify a provider or language.
-Test the remaining 11 portfolio languages next. The order below is a practical
-sequencing suggestion based on distinct runtime/build ecosystems, not a popularity
-ranking or a capability claim. Use a separate fresh Campaign per language, even when
-two languages share a repository; do not merge JavaScript and TypeScript evidence into
-one language result.
+This is a sampling guide for the approved portfolio, not a completion ledger, fixed
+execution order or prerequisite to every target audit. Keep completed Campaign IDs,
+dated observations and remaining qualification evidence in the run ledger; do not
+encode one development campaign's remaining-language list as a universal procedure.
+Use separate fresh Campaigns for independent per-language samples, even when two
+languages share a repository. Ordinary mixed-language audits retain the declared scope;
+they do not require artificial per-language Campaign splitting.
 
-| Suggested order | Language | Select a representative authorized project/component with | Pilot-specific questions |
-|---:|---|---|---|
-| 1 | Python | `pyproject.toml`, `setup.cfg` or an established application package | Does the workflow inventory runtime/package boundaries, framework entrypoints and dynamic imports without treating missing static resolution as coverage? |
-| 2 | C# | `.sln`/`.slnx` and `.csproj`, preferably a multi-project application | Are solution/project references, generated code and framework-specific entrypoints represented and scoped? |
-| 3 | Rust | `Cargo.toml` workspace and lockfile, preferably a service or library with features | Are workspace members, feature-gated code, macros/build scripts and unsafe blocks represented without claiming macro expansion was reviewed when it was not? |
-| 4 | JavaScript | `package.json` plus lockfile and a maintained server or client application | Are module format, runtime version, dependency boundaries, framework routes and dynamic loading handled or explicitly limited? |
-| 5 | TypeScript | `tsconfig.json`/project references plus package metadata and runtime application | Are TS/JS source boundaries, path aliases, generated output and the actual deployed runtime distinguished? Keep it separate from JavaScript pilot scoring. |
-| 6 | Kotlin | Gradle or Maven multi-module project, with Kotlin/JVM or Android platform recorded | Are Kotlin source sets, platform boundaries, generated code and Java interop represented? Record JVM/Android distinctions. |
-| 7 | Scala | `build.sbt` or equivalent multi-module build, with Scala version recorded | Are Scala version, macros/compiler plugins, JVM interop and module boundaries explicit? |
-| 8 | PHP | `composer.json`/lockfile and a maintained web or CLI application | Are autoloading, framework routes/middleware, configuration and PHP/runtime-version assumptions represented? |
-| 9 | Ruby | `Gemfile`/lockfile and a maintained web or background-job application | Are Rails/Rack/job entrypoints, autoloading and gem boundaries represented without assuming framework behavior? |
-| 10 | Swift | `Package.swift` or an authorized Xcode project, with platform recorded | Are package targets, platform-specific code, generated sources and Objective-C/C interop boundaries represented? |
-| 11 | Shell | A maintained repository of scripts with declared interpreters and invocation paths | Are shebangs, sourced scripts, environment/config inputs, CI/container entrypoints and shell dialects in scope? Do not execute scripts merely to inspect them. |
+| Language | Select a representative authorized project/component with | Pilot-specific questions |
+|---|---|---|
+| C | Make/CMake or equivalent build and recorded compiler/platform | Are native entrypoints, buffer/length contracts, generated code and enabled build branches represented? |
+| C++ | Native build metadata and declared language standard/toolchain | Are ownership/lifetime, templates, exception paths and native bindings assessed without claiming compiler-wide resolution? |
+| C# | `.sln`/`.slnx` and `.csproj`, preferably a multi-project application | Are solution/project references, generated code and framework-specific entrypoints represented and scoped? |
+| Go | `go.mod` and declared toolchain/build tags | Are package boundaries, build constraints, goroutine/resource lifetimes and optional candidate-provider gaps explicit? |
+| Java | Maven/Gradle metadata and declared JDK/runtime | Are modules, classloader/configuration contracts and reflection/native boundaries represented without treating parse-only leads as resolved calls? |
+| Rust | `Cargo.toml` workspace and lockfile, preferably a service or library with features | Are workspace members, feature-gated code, macros/build scripts and unsafe blocks represented without claiming macro expansion was reviewed when it was not? |
+| Python | `pyproject.toml`, `setup.cfg` or an established application package | Does the workflow inventory runtime/package boundaries, framework entrypoints and dynamic imports without treating missing static resolution as coverage? |
+| JavaScript | `package.json` plus lockfile and a maintained server or client application | Are module format, runtime version, dependency boundaries, framework routes and dynamic loading handled or explicitly limited? |
+| TypeScript | `tsconfig.json`/project references plus package metadata and runtime application | Are TS/JS source boundaries, path aliases, generated output and the actual deployed runtime distinguished? Keep it separate from JavaScript pilot scoring. |
+| Kotlin | Gradle or Maven multi-module project, with Kotlin/JVM or Android platform recorded | Are Kotlin source sets, platform boundaries, generated code and Java interop represented? Record JVM/Android distinctions. |
+| Scala | `build.sbt` or equivalent multi-module build, with Scala version recorded | Are Scala version, macros/compiler plugins, JVM interop and module boundaries explicit? |
+| PHP | `composer.json`/lockfile and a maintained web or CLI application | Are autoloading, framework routes/middleware, configuration and PHP/runtime-version assumptions represented? |
+| Ruby | `Gemfile`/lockfile and a maintained web or background-job application | Are Rails/Rack/job entrypoints, autoloading and gem boundaries represented without assuming framework behavior? |
+| Swift | `Package.swift` or an authorized Xcode project, with platform recorded | Are package targets, platform-specific code, generated sources and Objective-C/C interop boundaries represented? |
+| Shell | A maintained repository of scripts with declared interpreters and invocation paths | Are shebangs, sourced scripts, environment/config inputs, CI/container entrypoints and shell dialects in scope? Do not execute scripts merely to inspect them. |
 
-For all 11:
+For each selected per-language qualification sample:
 
 1. Freeze authorization, target commit, language/framework/version, project marker
    files, scope, budgets and stop owner before R0. Use a disposable clean clone,
@@ -344,7 +349,7 @@ contains multiple portfolio languages, keep a separate language-specific Campaig
 for each and add a later mixed-language Campaign to assess boundary ownership and
 handoff behavior. This avoids attributing mixed-run results to an individual language.
 
-**After the 11 pilots:** run at least one separate mixed-language Campaign with
+**Separate portfolio qualification:** run at least one mixed-language Campaign with
 predeclared source/destination boundary cases, then a representative large-project
 capacity run. These development pilots do not satisfy the release evaluator's
 per-language/per-issue held-out sample floors (default three samples for each of the
@@ -396,16 +401,15 @@ held-out qualification:
    exists. Default enablement, general slicing/detector claims and release qualification
    still need independently reviewed representative evidence.
 
-The Go pilot unlocks the experimental provider and managed synthetic runtime probe
-under TR-14. Test Go lead quality on a new frozen Campaign with
+The experimental Go provider and managed offline probe path have local tests under
+TR-14. To qualify Go lead quality, use a new frozen Campaign with
 `--experimental-go-hotspots`; retain scan failures and source-backed false positives.
 Keep expected historical issues outside fresh discovery inputs. The synthetic probe
 establishes harness mechanics only, not that any prior target candidate is exploitable.
 
-The Java module pilot on `9d513e7` additionally unlocks the bounded TR-15 infrastructure
-repairs, supporting-resource digests, audited resumption and opt-in static challenges,
-plus an explicit experimental Java parser. These are now local implementation features,
-not Java quality certification. For the next targeted retest:
+Supporting-resource digests, audited resumption, opt-in static challenges and the
+experimental Java parser have local tests under TR-15, not Java quality certification.
+When those features are part of the qualification scope:
 
 - Use a new Campaign and register needed XML/SPI/build evidence before first R0.
 - Retain an included-to-excluded module edge and verify an explicit boundary gap;

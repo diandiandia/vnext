@@ -14,11 +14,26 @@ dependencies = []
 [project.scripts]
 reachable-audit = "reachable_audit.cli:main"
 
-[tool.setuptools.packages.find]
-where = ["src"]
+[tool.setuptools]
+packages = [
+    "reachable_audit",
+    "reachable_audit.adapters",
+    "reachable_audit.adapters.builds",
+    "reachable_audit.adapters.languages",
+    "reachable_audit.discovery",
+    "reachable_audit.experiments",
+    "reachable_audit.knowledge_assets",
+]
+package-dir = {"" = "src", "reachable_audit.knowledge_assets" = "knowledge"}
 
 [tool.setuptools.package-data]
 "reachable_audit.discovery" = ["*.go", "*.java"]
+"reachable_audit.knowledge_assets" = [
+    "portfolio.json",
+    "provenance.json",
+    "profiles/*.json",
+    "cards/*/*.json",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

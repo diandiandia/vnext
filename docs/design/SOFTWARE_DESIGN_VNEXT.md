@@ -44,6 +44,12 @@ mapping is not host-observed review or a recall measure. See the current
 [generality review](GENERALITY_REVIEW_VNEXT.md) and [test plan](TEST_PLAN_VNEXT.md);
 the 2026-10-17 baseline below remains historical implementation context.
 
+Maintenance update (2026-10-24): excluded/deferred zero-byte inventory sources may use
+`EMPTY-FILE:<path>:sha256:<digest>` as path-scope evidence. Closure requires an exact
+disposition-path match and verifies that the digest matches both the empty file and
+the frozen snapshot baseline. This exception is restricted to path dispositions; it
+does not make `LOC-<path>:1` valid for an empty file or change source-anchor semantics.
+
 ## 1. Scope and Compatibility
 
 This design extends the existing vNext Python package and its canonical Campaign,
@@ -76,10 +82,13 @@ release-certification claim. The as-implemented sections below remain the baseli
   establish byte identity, not semantic truth or reviewer independence.
 3. New candidates found after R2 require a bounded follow-up through hypothesis,
   verification, refutation, and applicable experiments before becoming Findings.
-  Until revision-aware reopening is implemented, use a separately identified,
-  explicitly declared follow-up Campaign, record the unresolved candidate in the originating report,
-  and do not relabel the original scope as fully verified. Budget exhaustion retains
-  an explicit unresolved disposition rather than silently dropping the candidate.
+  Supported committed R1-R5 task corrections now use append-only `task-amend`,
+  dependent-stage invalidation and revision-bound recommit (section 6.3). This is not
+  arbitrary scope expansion or host-input recomputation. If a new candidate cannot
+  be represented through that supported path, use a separately identified, declared
+  follow-up Campaign and retain the unresolved candidate in the originating report.
+  Do not relabel the original scope as fully verified; budget exhaustion retains an
+  explicit unresolved disposition rather than silently dropping the candidate.
 4. Ownership coverage, declared review execution, and evidenced security paths are
   separate metrics. Task-coordinated R1 preserves Agent-declared per-path review claims
   and reports them separately from Plan ownership; neither a file assignment, AxisRun,
@@ -478,7 +487,8 @@ source anchors or a reproducible interface contract.
 ## 4. Knowledge Loading and Task Assembly
 
 `knowledge_catalog.py` loads the approved release, validates catalog fields/references,
-and rejects held-out/deprecated cards. It does not learn or modify the catalog during
+including profile/card family consistency, and rejects held-out/deprecated cards.
+It does not learn or modify the catalog during
 an audit. The first coordinator stores a full content-addressed catalog snapshot and
 KNOWLEDGE_BOUND event; later coordinators reject different content/version. Coordinator
 inputs are deep-copied from the supplied catalog; their exposed nested mappings are not
@@ -490,6 +500,19 @@ selects round-robin across languages, and resolves full referenced cards. Versio
 selected entries/cards, omitted IDs, unsupported languages, and limitations are retained
 in the content-addressed task input. Surface/plan context is assembled separately;
 the selector does not prioritize semantically from confirmed boundaries.
+
+Task guidance explicitly distinguishes optional source/sink search examples and catalog
+rank, presence or provenance from current-target risk evidence. The rank-based fallback
+and equal-count language selection are policy choices, not measured neutral or optimal
+discovery. Source-backed attacker control, reachability and impact determine target risk.
+
+The wheel maps the reviewed catalog into `reachable_audit.knowledge_assets`, packaging
+only portfolio/provenance, profiles and cards. Runtime lookup uses this packaged directory
+when present and the repository knowledge directory for a source checkout. Migration
+reports, pilot plans, tests and host instructions are not installed as runtime knowledge.
+The Skill and runbooks must be provisioned separately by the host; the wheel alone is
+not a complete host installation. Distribution regression loads all 15 profiles and
+150 cards from an extracted wheel outside the checkout with Python isolation enabled.
 
 An empty knowledge match is an explicit task limitation. It must not silently be treated
 as a successful knowledge-guided run. The Agent may still use general reasoning, but the
@@ -939,14 +962,21 @@ projects while preserving the 150 language-issue strata. Minimum sample counts a
 promotion thresholds are frozen in policy before running the benchmark; they are not
 chosen after observing results.
 
-Implemented evaluator checks are RG1-RG15. RG12 checks provider conformance evidence,
-but the runtime currently has one provider and no independent real candidate-quality
-acceptance. RG13 checks signed provenance and task-input artifact links, not actual host
+Implemented evaluator checks are RG1-RG15. RG12 checks the default enabled Python
+provider; experimental Go/Java opt-ins are outside that release roster. Independent
+real candidate-quality acceptance is absent. RG13 checks signed provenance and task-input artifact links, not actual host
 prompt/session isolation; RG14 cannot prove host-observed reading activity; RG15 checks
 signed fixture/run evidence, not actual scale performance.
-The versioned policy in runtime_policy.py owns the full required set. Passing the
-implemented subset sets implemented_subset_status=PASS, not release eligibility;
-status remains BLOCKED. Extra signed fields cannot enable or waive missing checks.
+The versioned policy in runtime_policy.py owns the full required set. Any missing or
+failed required gate yields status=BLOCKED and eligible_for_promotion=false. When all
+required gates pass, the evaluator returns status=ACCEPTED, eligible_for_promotion=true
+and implemented_subset_status=PASS. Independent real-bundle review remains an external
+release-policy requirement; evaluator success is not certification. Extra signed fields
+cannot enable or waive missing checks.
+Release policy `vnext-release-policy-7` requires local source, knowledge and main-prompt
+scan counts to be nonzero for RG8/RG9. Low-level scan helpers still support partial
+fixtures, but partial/empty scans cannot qualify a release. Evaluation must run from
+the complete source checkout, not a wheel-only installation.
 
 ## 9. Acceptance and Test Design
 

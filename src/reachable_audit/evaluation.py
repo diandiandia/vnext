@@ -488,12 +488,20 @@ def evaluate_release(
     runtime_root = Path(__file__).resolve().parents[2]
     forbidden_tokens = [str(item) for item in value.get("forbidden_residue_tokens", [])]
     actual_deproject = scan_runtime_deproject(runtime_root, forbidden_tokens)
+    required_runtime_surfaces_present = all(
+        actual_deproject[field] > 0
+        for field in (
+            "scanned_python_files", "scanned_knowledge_files", "scanned_prompt_files",
+        )
+    )
     gates["RG8"] = {
         "pass": deproject.get("passed") is True
         and bool(deproject.get("evidence_refs"))
+        and required_runtime_surfaces_present
         and actual_deproject["passed"],
         "detail": {
             "evidence_refs": list(deproject.get("evidence_refs", [])),
+            "required_runtime_surfaces_present": required_runtime_surfaces_present,
             "runtime_scan": actual_deproject,
         },
     }
@@ -502,9 +510,11 @@ def evaluate_release(
     gates["RG9"] = {
         "pass": bool(compatibility.get("passed"))
         and bool(compatibility.get("evidence_refs"))
+        and required_runtime_surfaces_present
         and actual_compatibility["passed"],
         "detail": {
             "evidence_refs": list(compatibility.get("evidence_refs", [])),
+            "required_runtime_surfaces_present": required_runtime_surfaces_present,
             "runtime_scan": actual_compatibility,
         },
     }

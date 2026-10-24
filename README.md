@@ -130,6 +130,15 @@ Requirements: Python 3.11 or newer. The runtime has no third-party Python depend
 pytest is required for development tests. A host Agent and model/runtime are required to
 perform the audit work.
 
+The built wheel includes the runtime knowledge catalog and parser helpers; the
+host-facing Skill and runbooks remain in this checkout and must be made available to
+the host separately. A Python package install alone does not install a host Skill or
+establish its permissions. Building/testing the distribution also requires the
+setuptools build dependency declared in [pyproject.toml](pyproject.toml).
+Run release evaluation from the complete source checkout: RG8/RG9 require local source,
+knowledge and main-prompt scan coverage. A wheel-only installation cannot satisfy that
+qualification requirement.
+
 For a working-directory-independent CLI, use
 `python3 /path/to/vnext/tools/vnext.py --help` without setting `PYTHONPATH`.
 The [orchestrator runbook](docs/ORCHESTRATOR_RUNBOOK.md) covers fresh task-local
@@ -181,7 +190,7 @@ and use `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1` with the same test selection. A kille
 incomplete run is not a passing result.
 
 The compatibility scan checks legacy imports/formats and generic residue patterns in
-runtime Python source, the main skill prompt, and runtime-eligible knowledge. It reports
+runtime Python/helper source, the main skill prompt, and runtime-eligible knowledge. It reports
 the actual file counts; development/history documents and test fixtures are not runtime
 knowledge. Project-specific residue tokens are caller-supplied rather than taken from a
 built-in list of past targets. The offline legacy-knowledge migration tool also requires
@@ -198,12 +207,20 @@ not semantic proof that no historical bias or project-specific guidance remains.
 - [Software requirements and implementation status](docs/design/SOFTWARE_REQUIREMENTS_VNEXT.md)
 - [Release acceptance plan](docs/design/ACCEPTANCE_PLAN_VNEXT.md)
 - [Discovery quality evaluation protocol](docs/design/DISCOVERY_QUALITY_EVALUATION_PROTOCOL.md)
-- [QuickJS real-audit supplement plan](docs/design/QUICKJS_REAL_AUDIT_SUPPLEMENT_PLAN.md)
 - [Test plan](docs/design/TEST_PLAN_VNEXT.md)
 - [Repair roadmap](docs/design/REPAIR_ROADMAP_VNEXT.md)
 - [ISO/IEC/IEEE 12207 lifecycle self-assessment](docs/design/LIFECYCLE_CONFORMANCE_VNEXT.md)
-- [Quality reassessment and remaining acceptance gaps](docs/design/QUALITY_REASSESSMENT_VNEXT.md)
+- [Historical quality reassessment](docs/design/QUALITY_REASSESSMENT_VNEXT.md)
 - [Current generality and architecture review](docs/design/GENERALITY_REVIEW_VNEXT.md)
+
+### Project-Specific Development Evidence
+
+The [QuickJS audit supplement](docs/design/QUICKJS_REAL_AUDIT_SUPPLEMENT_PLAN.md)
+and dated pilot records are development/evaluation material, not universal audit
+requirements or discovery input. Do not load a prior target's plan, results or lessons
+into a fresh discovery worker merely because a repository document links to them.
+
+### Assurance Boundaries
 
 The lifecycle document is a preliminary engineering self-assessment, not an ISO/IEC/IEEE
 12207 conformity claim or certification. Formal assessment requires an authorized,

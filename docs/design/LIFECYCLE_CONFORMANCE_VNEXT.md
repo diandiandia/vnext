@@ -52,3 +52,23 @@ Statuses mean:
 The current evidence supports **partial alignment of the tool's engineering workflow** with selected lifecycle process concepts. It does not establish ISO/IEC/IEEE 12207 conformity, organizational compliance, or certification. A formal assessment needs the controlled applicable edition, a tailored process set, accountable process owners, objective work-product evidence, independent audit, and closure of the gaps above. Passing tests or adding a traceability table cannot substitute for those process outcomes.
 
 Google internal engineering/security requirements are not publicly available to this assessment and were not supplied as controlled criteria. No claim of meeting them is made. A comparison requires the authorized requirement set and evidence mapping.
+
+## Outstanding Assessment Inputs
+
+These are adopter/authority deliverables, not issues that repository code can
+self-approve. Role names below are required responsibilities, not assigned people
+or evidence that approval has occurred.
+
+| Missing input | Responsible role | Evidence needed before a conformity decision |
+|---|---|---|
+| Applicable controlled edition and tailored process set | Adopter's process owner | Edition identification, scope/applicability decisions and tailoring rationale approved for the actual deployment |
+| Accountable people and acceptance decisions | Project sponsor and quality owner | Named process/work-product owners, review records, decision authority and recorded acceptance/rejection |
+| Objective lifecycle outcomes | Engineering and operations owners | Requirement-to-verification records, configuration/change records, operational/recovery evidence and applicable supplier/data-retention/disposal controls |
+| Independent assessment and closure | Authorized assessor | Assessment against the controlled criteria, findings, corrective-action evidence and approval under the adopter's assessment procedure |
+| Any Google-specific comparison | Authorized criteria owner | Supplied, authorized criteria and evidence mapping; general software practice is not a substitute for internal approval |
+
+The 2026-10-24 follow-up repairs wheel knowledge delivery, profile/card family
+consistency, empty-file scope evidence, incomplete release-scan acceptance, and
+misleading current-contract documentation.
+TR-18/TR-19 record local verification boundaries. These maintenance work products do
+not supply any of the missing organizational inputs above.

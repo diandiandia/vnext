@@ -1,11 +1,14 @@
 # Generality and Engineering Review
 
 Initial review: 2026-10-20. Base: `a3b969c` plus that review's uncommitted changes.
-Current reassessment addendum: 2026-10-23, against the present working tree.
+Latest reassessment: 2026-10-24, base `d31420d` plus the repairs recorded in
+[the latest review](#latest-review-2026-10-24-packaging-and-contract-boundaries).
 This is a bounded engineering review and repair record, not a security certification,
 exhaustive dead-code proof, Google internal approval, or ISO conformity assessment.
 The historical [quality reassessment](QUALITY_REASSESSMENT_VNEXT.md) is retained as
 dated evidence, not as the current implementation backlog.
+Earlier sections retain their dated review evidence; the latest linked section is
+authoritative for this reassessment, not a new per-target audit procedure.
 
 ## Product Objective and Decision
 
@@ -680,3 +683,107 @@ files, 167 eligible knowledge files, and 1 prompt file. These results establish 
 regression and bounded residue/link checks only; they do not establish dead-code
 absence, recall, production-scale capability, standards conformity, or organizational
 approval.
+
+QuickJS pilot follow-up: Campaign closure exposed a reproduced CG2 failure for a
+zero-byte excluded inventory source, because a nonexistent `LOC-<path>:1` could not
+serve as evidence. The path-scope contract now supports a path-bound empty-file digest
+that must match the file and frozen snapshot baseline; focused positive and drift
+regressions cover it. This restores valid scope evidence without weakening source-line
+anchors or treating the excluded file as reviewed.
+
+## Latest Review (2026-10-24): Packaging and Contract Boundaries
+
+### Conclusion and scope
+
+vNext is a usable experimental orchestration Skill with substantial evidence and
+recovery controls, not a demonstrated excellent universal vulnerability analyzer.
+The architecture separates language/build adapters, catalog selection, task execution,
+state/artifacts, evidence, closure and evaluation. That separation is meaningful for
+long-running mixed-language audits; it does not make the implementation small, neutral,
+fully qualified or semantically correct.
+
+This review inspected active guidance/catalogs, runtime catalog selection, distribution,
+inventory/graph boundaries, revision/closure/evaluation contracts, requirements/designs
+and operational/test plans. It used local reproductions, bounded AST inventories and
+the full regression suite; it was not line-by-line verification of every branch or
+independent adjudication of all 150 mechanisms. No target audit was launched and no
+historical target report was promoted to confirmed vulnerability evidence.
+
+### Confirmed defects and repairs
+
+Priorities below are engineering priorities, not vulnerability severities.
+
+| Priority | Reproduced or directly verified issue | Repair and discriminating evidence |
+|---|---|---|
+| P1 | The wheel contained zero catalog JSON files. Default catalog loading outside the checkout raised `ModelError` for the missing portfolio; the earlier helper-only wheel smoke did not test this. | Package the 167 reviewed runtime JSON assets under `reachable_audit.knowledge_assets`; preserve source-checkout lookup. The isolated wheel test checks every runtime Python module, CLI/coordinator imports, 15 profiles, 150 cards and both helper resources. History, migration reports and host instructions are not runtime catalog assets. |
+| P1 | A STATE profile could reference an INJECTION card and still load; family-filtered tasks then received the wrong mechanism. | Reject profile/card family mismatch in the shared loader; retain language/provenance checks and add a discriminating negative regression. |
+| P1 | RG8/RG9 could consume an empty/partial local runtime scan as clean; a wheel-only installation has no source-checkout prompt/catalog layout to inspect. | Release policy 7 requires nonzero local source, knowledge and prompt coverage. Low-level partial scan helpers remain usable, but missing any required surface blocks both release gates; qualification requires the complete checkout. |
+| P1 | CG2 rejected a legitimate zero-byte excluded source because `LOC-<path>:1` cannot exist. | Add only path-disposition `EMPTY-FILE` evidence, bound to the exact inventory path, current zero-byte regular file and snapshot digest. Test exclusion/deferment, wrong path/digest/format, non-empty/drift and symlink replacement; reject invalid paths before content reads. LOC semantics remain unchanged. |
+| P2 | The generic real-target procedure directed readers into one selected project's supplement and retained a stale "remaining 11 languages" execution sequence. | Keep entry/scope rules target-independent and the sampling guide portfolio-wide; completion status belongs in the run ledger. Identify the project supplement as development evidence and separate its README listing from normative operating documents. Preserve the requested pilot record without loading it as fresh discovery input. |
+| P2 | Current system/software designs incorrectly claimed every required release gate could pass while the evaluator still returned BLOCKED, and described only one runtime provider. A core contract still treated supported committed amendments as absent. | Match actual evaluator fields: all required gates passing yields ACCEPTED/eligible; independent real-bundle approval remains external. Distinguish default Python from experimental Go/Java providers, and supported amendment/recommit from arbitrary new-scope reopening. No release check is weakened. |
+| P2 | Catalog cues and ranks could be read as target-risk evidence, and test-first matrices were nested under unrelated test requirements. | Clarify optional cue/rank/presence/provenance boundaries in shared worker context; restore large-source/boundary matrices to TR-10 and add the distribution contract TR-19. No ranking algorithm or discovery-quality improvement is claimed. |
+
+The pending empty-file repair from the preceding task is included in this change set.
+No target-specific detector, expected finding, target API, sink list or verdict rule
+was added to active runtime guidance.
+
+### Cleanliness, bias and complexity limits
+
+- No observed target names or private pilot paths were introduced into active guidance.
+  Target-specific plans and dated evaluations remain intentionally identifiable in the
+  development documents, not erased or presented as universal requirements. A fresh
+  worker must not import them just because a document links to them.
+- The fixed portfolio, ranked top-ten entries, seeded/observed selection, training
+  provenance and Python-first default can bias attention. They are disclosed policy
+  and capability asymmetries; clearer wording is not evidence that bias is eliminated.
+  Equal-budget paired, independently labeled results remain necessary.
+- A local AST name/attribute/import inventory found no unreferenced top-level runtime
+  function/class candidate. Exact AST function-body comparison found no duplicate
+  groups of at least 12 lines. These are syntactic screens only: public entrypoints,
+  dynamic use, unreachable branches, equivalent algorithms and method-level dead code
+  need different evidence. No deletion was justified from a text match alone.
+- The catalog remains materially templated, with repeated profile/card guidance.
+  The two forms have different consumers; repetition alone does not establish a
+  removable mechanism or a false-positive rule. Per-card consumer/counterexample
+  review and context-cost measurement remain debt, not completed cleanup.
+- Large orchestration modules remain maintenance debt (execution roughly 4.1k lines,
+  Batch workflow 2.3k, closure 2.1k). This increment fixes shared producers and reuses
+  existing validation rather than adding a second state/experiment/report engine.
+  A wholesale split without a measured interface/test plan is not justified here.
+
+### Standards and remaining acceptance
+
+No controlled Google internal criteria were supplied, so compliance is **not assessed**,
+not implied by a style comparison or passing tests. ISO/IEC/IEEE 12207 conformity is
+**not established**: a selected controlled edition, organizational tailoring, accountable
+owners, objective lifecycle outcomes and independent assessment remain missing. The
+[lifecycle self-assessment](LIFECYCLE_CONFORMANCE_VNEXT.md) identifies responsible roles
+and required evidence without inventing approvals.
+
+Remaining qualification work is independent language/mechanism quality, mixed-language
+boundary completeness, representative large-project recovery, host identity/isolation,
+provider-enforced budgets, and per-card semantic review. Local repairs do not complete
+those outcomes or justify replacing the production baseline.
+
+### Verification of this change set
+
+- Full suite: **511 passed, 1 skipped**. The skip is the protected held-out acceptance
+  test: no external signed manifest was configured. It remains an acceptance gap.
+- The first full run exposed an existing Java wheel-smoke fixture that copied only
+  source code. It now copies the newly required catalog as well; the successful full
+  rerun includes actual parse-only Java helper execution outside the source checkout.
+- Three release-scan regressions separately omit source, knowledge or main prompt.
+  Each blocks RG8/RG9 despite a clean partial scan and a signed PASS declaration.
+  Release policy is `vnext-release-policy-7`; task policy is `vnext-task-policy-46`.
+- Distribution regression verifies all 52 runtime Python files, 167 catalog JSON
+  files, both parser helpers and isolated default-catalog/CLI/coordinator imports.
+- Runtime compatibility/residue scan: PASS, zero findings over 52 Python files,
+  two helpers, 167 knowledge files and one prompt. This includes caller-supplied tokens
+  for the recent pilot, local pilot program, older target and project-plan/backlog
+  filenames. These bounded patterns do not establish universal semantic neutrality.
+- `compileall` and `git diff --check` passed. README, Skill and documentation link
+  validation checked 237 local targets across 19 documents, with zero missing files.
+  The main Skill remains 500 lines: within the current guideline, but not a small prompt.
+
+The historical helper-only wheel success and earlier test totals above remain dated
+records; they must not be substituted for this broader distribution verification.

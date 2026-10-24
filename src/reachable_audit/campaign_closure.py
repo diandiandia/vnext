@@ -521,6 +521,20 @@ class CampaignCloser:
     def _path_scope_evidence_errors(
         self, inventory_source_files: set[str]
     ) -> list[str]:
+        errors: list[str] = []
+        has_empty_file_evidence = any(
+            item.state is not PlanPathState.INCLUDED
+            and any(ref.startswith("EMPTY-FILE:") for ref in item.evidence_refs)
+            for item in self.plan.path_dispositions
+        )
+        snapshot_file_digests: Mapping[str, Any] | None = None
+        if has_empty_file_evidence:
+            try:
+                snapshot_file_digests = self.manager.load_snapshot_baseline(
+                    self.campaign_id
+                )["files"]
+            except (OSError, ValueError, KeyError, TypeError) as error:
+                errors.append(f"empty-file evidence snapshot baseline is unavailable: {error}")
         evidence_refs = {
             ref
             for item in self.plan.path_dispositions
@@ -529,7 +543,6 @@ class CampaignCloser:
             if ref.startswith("sha256:")
         }
         artifact_owners = self.manager.store.artifact_campaign_owners(evidence_refs)
-        errors = []
         for item in self.plan.path_dispositions:
             if item.state is PlanPathState.INCLUDED:
                 continue
@@ -538,6 +551,14 @@ class CampaignCloser:
                 if ref.startswith("LOC-"):
                     if not self._valid_source_anchor(ref, inventory_source_files):
                         errors.append(f"{label} has an invalid source anchor")
+                elif ref.startswith("EMPTY-FILE:"):
+                    if not self._valid_empty_file_evidence(
+                        ref,
+                        item.path,
+                        inventory_source_files,
+                        snapshot_file_digests,
+                    ):
+                        errors.append(f"{label} has invalid empty-file evidence")
                 elif ref.startswith("sha256:"):
                     try:
                         self.manager.artifacts.get_bytes(ref)
@@ -550,9 +571,49 @@ class CampaignCloser:
                         )
                 else:
                     errors.append(
-                        f"{label} evidence must be a LOC anchor or Campaign artifact"
+                        f"{label} evidence must be a LOC anchor, empty-file proof, "
+                        "or Campaign artifact"
                     )
         return errors
+
+    def _valid_empty_file_evidence(
+        self,
+        evidence_ref: str,
+        expected_path: str,
+        inventory_source_files: set[str],
+        snapshot_file_digests: Mapping[str, Any] | None,
+    ) -> bool:
+        path_text, separator, digest = evidence_ref.removeprefix(
+            "EMPTY-FILE:"
+        ).rpartition(":sha256:")
+        if (
+            not separator
+            or path_text != expected_path
+            or path_text not in inventory_source_files
+            or snapshot_file_digests is None
+            or len(digest) != 64
+            or any(char not in "0123456789abcdef" for char in digest)
+        ):
+            return False
+        relative_path = Path(path_text)
+        target_root = self.manager.target_root.resolve()
+        source_path = target_root / relative_path
+        try:
+            resolved_path = source_path.resolve(strict=True)
+            if (
+                relative_path.is_absolute()
+                or ".." in relative_path.parts
+                or relative_path.as_posix() != path_text
+                or source_path.is_symlink()
+                or not resolved_path.is_relative_to(target_root)
+                or not resolved_path.is_file()
+                or resolved_path.stat().st_size != 0
+                or snapshot_file_digests.get(path_text) != digest
+            ):
+                return False
+            return self.manager._file_digest(resolved_path) == digest
+        except (OSError, ValueError, KeyError, TypeError):
+            return False
 
     def close(self, closure: CampaignClosure) -> dict[str, Any]:
         events = self.manager.store.list_events(self.campaign_id)
