@@ -521,6 +521,11 @@ class BatchWorkflow:
                 "one of principal/configuration/deployment/impact",
             ],
             "excluded_context": ["other refuter verdicts", "other refuter rationale"],
+            "evidence_boundary": (
+                "Challenge the supplied source and premises; static_only remains static_only. "
+                "Refuter labels do not prove independent host identities, and retained "
+                "reachability is not empirical confirmation."
+            ),
         }
 
     def record_refutation(self, refutation: Refutation) -> str:
@@ -696,8 +701,7 @@ class BatchWorkflow:
         eligible = {
             item["hypothesis_id"]
             for item in verdicts
-            if item["verdict"] == VerdictKind.REACHABLE.value
-            and item["evidence_grade"] == EvidenceGrade.EDGE_PROVEN.value
+            if self.refutation_eligible(item)
         }
         adjudicated = {
             event.entity_id
@@ -863,6 +867,7 @@ class BatchWorkflow:
             )
         for run in runs:
             plan = plans[run.category_plan_id]
+            self.validate_category_evidence(run)
             work_unit_id = str(plan["work_unit_id"])
             expected_axes = tuple(str(axis) for axis in plan["discovery_axes"])
             expected_axis_runs = [
@@ -926,6 +931,23 @@ class BatchWorkflow:
         )
         return artifact_id
 
+    def validate_category_evidence(self, run: CategoryRun) -> None:
+        """Validate concrete references on every R4 entry path."""
+        CategoryRun.from_dict({
+            **asdict(run), "axis_runs": [asdict(axis) for axis in run.axis_runs],
+        })
+        references = set(run.evidence_refs)
+        for axis in run.axis_runs:
+            references.update(axis.evidence_refs)
+        for review in run.hypothesis_reviews:
+            references.update(review.evidence_refs)
+        line_cache: dict[str, tuple[int, frozenset[int]]] = {}
+        for reference in sorted(references):
+            if reference.startswith(("LOC-", "sha256:")):
+                self._validate_evidence_reference(
+                    reference, None, line_count_cache=line_cache,
+                )
+
     def record_r4(
         self,
         runs: Sequence[CategoryRun],
@@ -954,6 +976,7 @@ class BatchWorkflow:
             if event.payload_ref is not None
         }
         for run in runs:
+            self.validate_category_evidence(run)
             plan = plans[run.category_plan_id]
             if run.work_unit_id != plan["work_unit_id"] or run.family != plan["family"]:
                 raise ModelError(f"CategoryRun does not match plan: {run.category_run_id}")
@@ -1968,6 +1991,21 @@ class BatchWorkflow:
         ):
             raise ModelError(f"source anchor file is outside the target or missing: {source_path}")
         cache = line_count_cache if line_count_cache is not None else {}
+        if source_path not in cache:
+            baseline = self.manager.load_snapshot_baseline(self.campaign_id)
+            expected = baseline["files"].get(source_path)
+            if expected is None:
+                for event in self.manager.store.list_events(
+                    self.campaign_id, event_type="EVIDENCE_FILES_REGISTERED",
+                ):
+                    expected = event.payload["file_digests"].get(source_path, expected)
+            if expected is None:
+                raise ModelError(
+                    f"evidence file is not registered in the frozen snapshot; "
+                    f"register supporting files before R0: {source_path}"
+                )
+            if self.manager._file_digest(resolved_path) != expected:
+                raise ModelError(f"registered evidence file changed: {source_path}")
         line_number = int(line_text)
         line_count, nonblank_lines = self._source_line_index(source_path, cache)
         if not 1 <= line_number <= line_count:
@@ -2068,8 +2106,7 @@ class BatchWorkflow:
         eligible = {
             str(item["hypothesis_id"])
             for item in verdicts
-            if item["verdict"] == VerdictKind.REACHABLE.value
-            and item["evidence_grade"] == EvidenceGrade.EDGE_PROVEN.value
+            if self.refutation_eligible(item)
         }
         events = self._active_events(event_types={
             "REFUTATION_SUBMITTED",
@@ -2168,13 +2205,20 @@ class BatchWorkflow:
         verdict = verdicts.get(hypothesis_id)
         if hypothesis is None or verdict is None:
             raise ModelError(f"unknown R3 hypothesis: {hypothesis_id}")
-        if verdict["verdict"] != VerdictKind.REACHABLE.value or verdict[
-            "evidence_grade"
-        ] != EvidenceGrade.EDGE_PROVEN.value:
+        if not self.refutation_eligible(verdict):
             raise ModelError(
                 f"refutation requires REACHABLE edge-proven hypothesis: {hypothesis_id}"
             )
         return hypothesis, verdict
+
+    def refutation_eligible(self, verdict: Mapping[str, Any]) -> bool:
+        grades = {EvidenceGrade.EDGE_PROVEN.value}
+        if "static_challenges" in self.campaign.constraints:
+            grades.add(EvidenceGrade.STATIC_ONLY.value)
+        return (
+            verdict["verdict"] == VerdictKind.REACHABLE.value
+            and verdict["evidence_grade"] in grades
+        )
 
     def _stage_event(self, event_type: str) -> EventRecord | None:
         events = active_stage_events(self._events(), event_type)

@@ -471,7 +471,7 @@ def test_go_hard_candidate_retention_limit_preserves_total(tmp_path, go_toolchai
 @pytest.mark.parametrize("output", [b"{}", b"[{}]", b"not json"])
 def test_go_invalid_helper_responses_are_errors(tmp_path, monkeypatch, output) -> None:
     (tmp_path / "main.go").write_bytes(b"package x\n")
-    monkeypatch.setattr(go_provider, "_helper", lambda: (tmp_path / "helper", tmp_path))
+    monkeypatch.setattr(go_provider, "_helper", lambda *_: (tmp_path / "helper", tmp_path))
     monkeypatch.setattr(go_provider, "_run_bounded", lambda *args: output)
     report = scan_work_unit_hotspots(tmp_path, ["main.go"], enable_go=True)
     assert report["scan_status"] == "error"

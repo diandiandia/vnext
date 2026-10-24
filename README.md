@@ -69,8 +69,8 @@ a security-impact declaration as validated or release-ready.
   profiles, and provenance-backed Mechanism Cards.
 - Signed paired-run evaluation contracts and release gates.
 
-Adapter presence is not language certification. The current static hotspot provider is
-an advisory Python AST implementation; other language providers and balanced held-out
+Adapter presence is not language certification. The default static hotspot provider is
+an advisory Python AST implementation; broader providers and balanced held-out
 quality evidence remain incomplete. Build and import edges are not a complete security
 call graph. Unsupported syntax, unresolved boundaries, and missing tools must remain
 visible as limitations, not be treated as evidence of safety.
@@ -85,6 +85,19 @@ Go-compatible bounded builds/probes with private caches and offline fetch settin
 It changes neither ordinary harness defaults nor the need for host approval/isolation.
 See the [Go execution example](docs/ORCHESTRATOR_RUNBOOK.md#7-evidence-ready-go-development-slice)
 and TR-14 before claiming empirical evidence.
+
+`init --experimental-java-hotspots` opts into bounded JDK parse-only Java method-site
+leads; target packages are never compiled or loaded. Receiver types remain unresolved,
+so same-name false positives are possible. Missing tools and unparsed files are gaps,
+not evidence of safety. Neither experimental provider expands the release roster.
+`init --static-challenges` also opts static-only REACHABLE hypotheses into the existing
+two-perspective R3.5 process; retained claims remain static-only.
+
+Before the first R0, register supporting XML/SPI/configuration/build evidence through
+`evidence-register`; source references must match their frozen digests. Scope-aware
+planning removes wholly out-of-scope graph work but retains cross-scope boundary
+obligations. See the runbook for explicit late-output recovery and budget amendment;
+neither operation resets elapsed time or fabricates missing usage.
 
 The runtime uses its own Campaign state and canonical schemas. Use an explicit
 absolute `--state-dir` outside the frozen target for source-search isolation; pass the

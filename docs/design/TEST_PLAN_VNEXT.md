@@ -225,9 +225,48 @@ strings, and lookalikes), alias/import, malformed-source, encoding, and snapshot
 cases. Measure candidate coverage and precision against reviewed labels; retain each
 sample's language, framework, rule, expected sites, observed candidates, and evidence
 reference. Synthetic fixtures must pass first; held-out results are reported separately
-and cannot be inferred from the fixtures. `test_hotspots.py` currently asserts that
-Java, Go, C, and C++ remain explicitly unsupported; replace that characterization for
-each language only when its provider is actually implemented and coverage is reported.
+and cannot be inferred from the fixtures. Go and Java currently have experimental
+opt-in providers; that does not imply default enablement. Keep provider availability,
+real-target workflow coverage, and language qualification as separate assertions.
+Update unsupported-provider expectations only when that provider's implementation and
+the corresponding tests actually change.
+
+### TR-16: Remaining Top-15 Language Development Pilots
+
+The operator reports real-project tests for C, C++, Go and Java. Record their Campaign
+and evidence references in the run ledger; do not infer provider certification from
+those workflow pilots. The remaining development-pilot set is **C#, Rust, Python,
+JavaScript, TypeScript, Kotlin, Scala, PHP, Ruby, Swift and Shell**. The detailed
+sequence, project markers and run protocol are in
+[REAL_CODE_AUDIT_TEST_PLAN_VNEXT.md](REAL_CODE_AUDIT_TEST_PLAN_VNEXT.md).
+
+For each language, use a distinct fresh Campaign on a legally authorized, frozen
+representative repository/component, run R0-R6, and select the language's ten issue
+profiles from the versioned catalog. Review each profile as applicable, not applicable
+or deferred with a current-snapshot rationale; do not target a finding count. Record
+source/build inventory, component/path coverage, unsupported or unparsed files, R1/R2
+evidence, R3/R3.5/R4 decisions, R5/R6 results, handoffs, resource use, and independently
+reviewed source-backed candidate/false-positive dispositions. A project with no
+vulnerability candidates may still pass workflow checks; it cannot establish recall
+without independent expected labels. A candidate count or successful Campaign alone
+does not establish language capability.
+
+**Pilot pass:** scope is fully accounted for or explicitly deferred; required stages
+complete without bypassing contracts; build/component boundaries and language paths
+are not silently lost; all ten issue profiles have recorded dispositions; evidence and
+resource records are reviewable; every surfaced candidate has a source anchor and
+independent disposition or is clearly unresolved; limitations and unsupported paths
+are explicit. **Fail:** a reproducible contract/data-integrity defect, silent scope
+loss, unsafe execution, or unsupported claim occurs. **Blocked:** authorization,
+representative source, evidence, or required toolchain is unavailable. None of these
+pilot outcomes is a release qualification.
+
+After the 11 pilots, run a separate mixed-language Campaign with at least one
+source-to-destination boundary in scope, and separately measure large-project
+capacity. Release qualification still requires the per-language/per-issue held-out
+sample floors in [ACCEPTANCE_PLAN_VNEXT.md](ACCEPTANCE_PLAN_VNEXT.md), independent
+adjudication, and signed evidence; do not pool these exploratory pilots as held-out
+samples.
 
 **Large-source R2 test-first matrix:** on an authorized representative file, record the
 frozen digest, byte/line counts, task-input bytes, model/context limit, token and wall
@@ -355,6 +394,60 @@ Run `tests/test_go_harness_runner.py`, `tests/test_harness_runner.py`,
 on predeclared frozen scopes before enabling Go by default or claiming measured
 precision/recall. Retest the actual host's harness registration, isolation and resource
 policy. Synthetic Go probes establish execution mechanics, not target exploitability.
+
+### TR-15: Scope, Evidence and Interrupted Java-Pilot Work
+
+**Scope projection:** synthetic mixed-scope fixtures must prune wholly outside edges
+and otherwise empty obligations, retain both directions of cross-scope dependencies,
+respect concrete endpoints, and round-trip/amend plans without losing exclusions.
+Keep truly empty roots and manifest-only behavior; explicitly excluded/deferred-only
+inventories may produce zero Batches. Read-only replay of a prior probe is planning
+evidence only, not a newly executed full audit.
+
+**Evidence:** register supporting files before first R0 with safe paths and bounded
+sizes; reject replacement, post-R0 registration, source/resource digest drift, invalid
+LOC lines, blank lines and missing artifacts. Test concrete references nested inside
+axis and hypothesis reviews, on direct, individual, bundle and screening paths.
+Legacy symbolic IDs are not verified source proof. R3 must expose the true nested
+contract and an example parseable as a VerdictSubmission, without preselecting a
+positive verdict. Test the resource CLI as well as manager APIs.
+
+**Recovery and budget:** ordinary expired collection stays rejected. Explicit recovery
+must bind original claim/worker/attempt/output, preserve attestation and normal
+schema/measurement/budget checks, reject stale/superseded/terminal/closed work, and
+consume authorization transactionally with rollback on failure. A deadline must not
+block collecting existing results. Monotone approved extensions retain original start
+time/budget and breach history; test actual resumed claims and final report FAIL
+against the original limit separately from the approved limit.
+
+**Static challenge:** default behavior remains edge-proven only. Frozen opt-in must
+schedule both perspectives for static-only REACHABLE, require normal adjudication
+coverage and preserve the static grade. Disabled static challenges must be visible.
+
+**Java provider:** use trusted JDK parse-only synthetic fixtures for generic command,
+deserialization and stream/archive call sites; comments/string lookalikes must not
+match. Explicitly retain unresolved-receiver/same-name limitations. Test default-off,
+all R1/R2 paths, unavailable tools, UTF-8/parser failures, snapshot drift, caps and
+installed wheel resources outside the checkout. Run `tests/test_provider_workspace.py`
+with both target root and `TMPDIR` set to the audit tree; assert Go/Java helper caches
+and temporary workspaces stay outside it, target paths/content do not change, private
+permissions and cleanup hold, and filesystem/file-descriptor limits are applied.
+Unsafe scratch-root availability must fail explicitly. Never compile/load target
+classes or run processors. Go behavior must survive shared process-runner extraction.
+
+Run `tests/test_planning.py`, `tests/test_plan_amendment.py`,
+`tests/test_resource_evidence.py`, `tests/test_category_runs.py`,
+`tests/test_task_recovery.py`, `tests/test_budget_amendment.py`,
+`tests/test_refutation.py`, `tests/test_execution.py`, `tests/test_campaign_closure.py`,
+`tests/test_java_hotspots.py`, `tests/test_hotspots.py`,
+`tests/test_go_provider_integration.py`, `tests/test_provider_workspace.py` and
+`tests/test_helper_residue.py`.
+Full suite and compatibility scan remain required. Runtime residue scanning includes
+packaged Go/Java helpers as well as Python, main Skill and eligible knowledge.
+
+**Qualification still external:** real-host interruption/termination, authentic approval,
+usage truth, Java lead precision/recall, mixed-language misses and representative large
+source/20GB+ behavior. This local contract is not Google approval or ISO conformity.
 
 ## 5. Evidence Record
 

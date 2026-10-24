@@ -194,6 +194,59 @@ def test_held_out_card_cannot_enter_runtime_category_plan(tmp_path: Path) -> Non
         manager.close()
 
 
+@pytest.mark.parametrize("reference", [
+    "LOC-missing.py:1", "LOC-state.py:99", "sha256:" + "0" * 64,
+])
+def test_r4_rejects_unresolvable_concrete_evidence_before_commit(
+    tmp_path: Path, reference: str,
+) -> None:
+    manager, workflow, plan = _ready_for_r4(tmp_path)
+    try:
+        category_plan = replace(
+            create_category_audit_plans(plan.work_units, [_card()], budget={})[0],
+            seed_card_ids=(),
+        )
+        workflow.record_category_audit_plan([category_plan])
+        run = CategoryRun(
+            category_run_id="CR-concrete-evidence", category_plan_id=category_plan.category_plan_id,
+            work_unit_id=category_plan.work_unit_id, family=category_plan.family,
+            mechanism_variants_examined=category_plan.mechanism_variants,
+            axis_runs=tuple(AxisRun(
+                axis=DiscoveryAxis(axis), applicability=Applicability.APPLICABLE,
+                evidence_refs=(reference,), rationale="synthetic concrete evidence",
+                review_altitude=ReviewAltitude.INSPECTED,
+            ) for axis in category_plan.discovery_axes),
+            applicability=Applicability.APPLICABLE, status=CategoryRunStatus.COMPLETE,
+            evidence_refs=("LOC-state.py:1",), rationale="check nested axis references",
+            hypothesis_ids=(), finding_ids=(),
+        )
+        with pytest.raises(ModelError):
+            workflow.record_r4([run])
+        assert workflow._stage_event("R4_COMPLETED") is None
+        backend = ManualExecutionBackend(manager, "CMP-r4")
+        coordinator = DiscoveryCoordinator(workflow, backend)
+        task = coordinator.schedule_r4()[0].task
+        with pytest.raises(ModelError):
+            backend._validate_category_run(task, {"category_run": asdict(run)})
+        bundle_input = manager.artifacts.put_text(json.dumps({
+            "category_items": [{
+                "category_plan": asdict(category_plan),
+                "allowed_hypothesis_ids": [], "required_finding_ids": [],
+            }],
+        })).artifact_id
+        bundle_task = replace(
+            task, required_output="category-run-bundle/v1",
+            input_refs=(bundle_input,), work_unit_ids=(run.work_unit_id,),
+            bundle_item_ids=(run.category_plan_id,),
+        )
+        with pytest.raises(ModelError):
+            backend._validate_category_run_bundle(
+                bundle_task, {"category_runs": [asdict(run)]},
+            )
+    finally:
+        manager.close()
+
+
 def test_r4_rejects_missing_discovery_axis(tmp_path: Path) -> None:
     manager, workflow, plan = _ready_for_r4(tmp_path)
     try:

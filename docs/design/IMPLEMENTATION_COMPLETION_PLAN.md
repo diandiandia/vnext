@@ -20,7 +20,7 @@ The following work is deliberately separated by what evidence can establish:
 |---|---|---|
 | Offline migration residue policy | **Fixed in this iteration.** The migration tool no longer embeds a blacklist of historical project names; it requires a reviewer/evaluator-supplied token file and uses it for candidate exclusion and output validation. | Retain the explicit token input and pattern-based limitation; do not reintroduce project-specific defaults. Verify with TR-12. |
 | Finding classification gate and large-source preflight | **Locally implemented and covered by synthetic regression tests (TR-09).** The planner warns at the configured threshold; it does not measure R2 read coverage. A 2026-10-22 development audit completed one >1 MiB source-file R2 task, but also recorded helper-level recall gaps and Agent classifications that were not independently reviewed. | Do not treat structural Finding validation as semantic classification. In the next authorized pilot, predeclare helper entries under the current policy, reconcile actual R2/R6 dispositions, and independently review each security-impact declaration. Keep uncovered source explicitly unreviewed/deferred; do not infer line coverage from a completed task. |
-| Additional language hotspot providers (SWDR-031) | Python AST provider is active. The Go pilot established an automatic-lead gap, permitting a bounded experimental Go AST slice, not portfolio-wide enablement. | Use explicit Campaign-frozen opt-in for development only; verify positive/negative/alias/shadow/malformed-source and snapshot identity fixtures before trial. Independently reviewed candidate coverage and precision remain required before qualification. |
+| Additional language hotspot providers (SWDR-031) | Python AST is default. Go and Java pilots permitted bounded explicit opt-in AST candidate slices; both are implemented, not release-qualified. Java receiver types remain unresolved. | Trial frozen selections with independent candidate/counterexample review. Default enablement, measured quality and portfolio-wide coverage remain separate gates. |
 | Large-source R2 slicing and completeness claims (N-6) | Preflight warning and bounded-read guidance exist; no line-range coverage ledger or automatic slicing contract exists. | First measure an authorized representative large file's task input size, runtime, context use, candidate/evidence distribution, and full-scope result. Then specify slices and reconciliation rules from observed failure modes; add regression tests before implementing them. |
 | Automatic cross-language boundary discovery (SWDR-010) | Typed boundary records, build/import proposals, owner review, and Handoff proof exist; automatic FFI/RPC/IPC/serialization discovery is incomplete. | First inventory real boundary mechanisms and observed misses in an authorized mixed-language target. Define framework-specific evidence and false-positive expectations before adding detectors. |
 | Host identity/key custody, provider-enforced hard limits, authority keys, and independent held-out release evidence | Repository mechanisms are partial or intentionally rely on external authorities. | Remain blocked on the named host, provider, or evaluation authority; repository-only code and mocks cannot close these items. |
@@ -53,6 +53,43 @@ FFI detector or automatic large-file slicing is unlocked by this single-Batch tr
 it had no qualifying large-source flags or measured mixed-language boundary misses.
 Collect those specific observations rather than require another undirected full audit.
 The executable local acceptance for this increment is TR-14.
+
+#### Evidence-ready development after the Java pilot
+
+The 2026-10-23/24 static module pilot on engine `9d513e7` covered 397 Java source
+files, seven Work Units and one Batch. Its 618 artifacts and 397 source digests
+were verified. Durable task events show 159 claims, 149 completions and ten final
+cancellations, not the self-evaluation's 155 collected results. All 21 Findings
+remain static-only NEEDS_REVIEW; no target code was executed. Original evidence
+is read-only and is not reopened or rewritten by the repairs below.
+
+Locally implemented in task policy 41:
+
+1. Scope projection removes wholly out-of-scope graph obligations, preserving both
+   directions of cross-scope boundaries. Read-only replay reduces the abandoned full
+   repository probe from 71 WUs/16,495 edges/9,990 Handoffs to 50 WUs/1,662 edges/723
+   Handoffs while retaining all 397 included files. The 43 remaining source-empty
+   units have boundary responsibilities, not fabricated source coverage.
+2. R4 shares concrete LOC/artifact and CategoryRun schema validation across task,
+   bundle, screening and direct recording. The pre-repair missing-anchor acceptance
+   was reproduced in isolation. Legacy symbolic evidence labels are not source proof.
+3. Explicit attempt/output-bound late collection reuses ordinary validation; audited
+   wall-budget extensions preserve creation time, original limit and breach history.
+4. Supporting resource/build files can be digest-registered before the first R0.
+   Cited source/resources must match frozen bytes. R3's nested output contract and
+   complete shape example separate code call chains from supporting resource evidence.
+5. New Campaigns may opt static-only REACHABLE claims into the existing R3.5 protocol.
+   Neither retained challenges nor reviewer labels create empirical or trusted-identity
+   evidence.
+6. New Campaigns may opt into bounded JDK parse-only Java method-site candidates.
+   Receiver types and dataflow remain unresolved; no target compilation or execution.
+
+TR-15 is the local regression contract. This trial does not unlock automatic
+large-file slicing (no >1 MiB Java source), universal mixed-language detection
+(one language/Batch and no Handoffs in the formal run), Java dynamic confirmation,
+or balanced portfolio/20GB+ qualification. No further undirected audit is required
+before these demonstrated infrastructure fixes; collect targeted real-host recovery,
+candidate quality and boundary evidence for the remaining claims.
 
 #### Latest real-target evidence and version boundary
 

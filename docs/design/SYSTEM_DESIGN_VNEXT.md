@@ -290,6 +290,14 @@ R1/R2 task context. A hotspot is a review lead, never a vulnerability verdict. E
 provider reports scanned paths, unsupported paths, rule IDs, and known blind spots;
 no match or no registered provider must never be presented as evidence of safety.
 Provider coverage and candidate quality are evaluated separately from Agent verdicts.
+Python remains default; Go/Java development providers require frozen explicit opt-in.
+Java parses without compiling targets and labels receiver types unresolved. Scoped
+plans drop wholly out-of-scope graph work, not cross-scope risks. Supporting resource
+digests must be registered before R0 and do not enlarge reviewed-source coverage.
+Explicit late-output recovery retains original attempts and normal validation;
+approved wall-budget extensions preserve creation time and original breach reporting.
+Static-only challenges are optional at Campaign creation and cannot promote evidence
+grade. These mechanisms support SYSR-043, not a new host/semantic trust boundary.
 NOT_FEASIBLE is valid only when an experiment is required, no attempt was run, the
 experiment ID is null, and blocker evidence/rationale are supplied. An attempted but
 inconclusive experiment remains NEEDS_REVIEW with its experiment artifact. NOT_FEASIBLE

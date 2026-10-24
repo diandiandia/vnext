@@ -16,6 +16,7 @@ import uuid
 
 from .artifacts import ArtifactStore
 from .models import (
+    AppendResult,
     BatchRecord,
     BatchStatus,
     CampaignAuditMode,
@@ -392,6 +393,67 @@ class CampaignManager:
         )
         self._write_batch_export(record)
         return record
+
+    def effective_wall_limit_seconds(self, campaign_id: str) -> int | None:
+        return self.store.effective_wall_limit_seconds(campaign_id)
+
+    def authorize_expired_task_recovery(
+        self,
+        campaign_id: str,
+        *,
+        task_id: str,
+        worker_id: str,
+        attempt: int,
+        output_ref: str,
+        lease_expires_at: str,
+        reason: str,
+        evidence_refs: tuple[str, ...],
+        actor: str = "operator",
+        now: str | None = None,
+    ) -> AppendResult:
+        if not evidence_refs or isinstance(evidence_refs, (str, bytes)):
+            raise ValueError("expired-lease recovery requires evidence references")
+        self.artifacts.get_bytes(output_ref)
+        for evidence_ref in evidence_refs:
+            self.artifacts.get_bytes(evidence_ref)
+        return self.store.authorize_expired_task_recovery(
+            campaign_id=campaign_id,
+            task_id=task_id,
+            worker_id=worker_id,
+            attempt=attempt,
+            output_ref=output_ref,
+            lease_expires_at=lease_expires_at,
+            actor=actor,
+            reason=reason,
+            evidence_refs=evidence_refs,
+            now=now or dt.datetime.now(dt.UTC).isoformat(),
+        )
+
+    def amend_wall_budget(
+        self,
+        campaign_id: str,
+        approved_max_wall_seconds: int,
+        *,
+        reason: str,
+        evidence_refs: tuple[str, ...] | list[str],
+        actor: str = "operator",
+        now: str | None = None,
+    ) -> AppendResult:
+        if isinstance(evidence_refs, (str, bytes)):
+            raise ValueError("wall-budget amendment requires evidence references")
+        normalized_evidence = tuple(evidence_refs)
+        if not normalized_evidence:
+            raise ValueError("wall-budget amendment requires evidence references")
+        for evidence_ref in normalized_evidence:
+            self.artifacts.get_bytes(evidence_ref)
+        return self.store.amend_campaign_wall_budget(
+            campaign_id=campaign_id,
+            approved_max_wall_seconds=approved_max_wall_seconds,
+            actor=actor,
+            reason=reason,
+            evidence_refs=normalized_evidence,
+            now=now or dt.datetime.now(dt.UTC).isoformat(),
+        )
 
     def record_inventory(self, *, campaign_id: str, inventory: ProjectInventory) -> str:
         campaign = self.store.get_campaign(campaign_id)
@@ -1089,6 +1151,64 @@ class CampaignManager:
         if not path.exists() or path.read_text(encoding="utf-8") != exported:
             self._atomic_json(path, value)
         return value
+
+    def register_evidence_files(
+        self, campaign_id: str, paths: list[str], *, reason: str,
+    ) -> str:
+        campaign = self.store.get_campaign(campaign_id)
+        if campaign.status is CampaignStatus.COMPLETE or self.store.list_events(
+            campaign_id, event_type="R0_COMPLETED",
+        ):
+            raise ValueError("supporting evidence must be registered before the first R0")
+        if (
+            not reason.strip() or not paths or len(paths) > 1024
+            or any(not isinstance(path, str) for path in paths)
+            or len(paths) != len(set(paths))
+        ):
+            raise ValueError("evidence registration requires reason and 1..1024 unique paths")
+        baseline = self.load_snapshot_baseline(campaign_id)
+        existing = dict(baseline["files"])
+        for event in self.store.list_events(
+            campaign_id, event_type="EVIDENCE_FILES_REGISTERED",
+        ):
+            existing.update(event.payload["file_digests"])
+        digests = {}
+        total_bytes = 0
+        for path in sorted(paths):
+            relative = Path(path)
+            resolved = (self.target_root / relative).resolve()
+            if (
+                relative.is_absolute() or ".." in relative.parts
+                or relative.as_posix() != path
+                or any(part in {".git", ".hg", ".svn", ".audit_vnext", ".audit_results"}
+                       for part in relative.parts)
+                or (self.target_root / relative).is_symlink()
+                or not resolved.is_relative_to(self.target_root)
+                or resolved == self.state_dir or self.state_dir in resolved.parents
+                or not resolved.is_file() or resolved.stat().st_size > 16 * 1024**2
+            ):
+                raise ValueError(f"supporting evidence path is unsafe, missing or oversized: {path}")
+            total_bytes += resolved.stat().st_size
+            if total_bytes > 64 * 1024**2:
+                raise ValueError("supporting evidence registration exceeds 64 MiB")
+            digest = self._file_digest(resolved)
+            if path in existing and existing[path] != digest:
+                raise ValueError(f"registered evidence content changed: {path}")
+            digests[path] = digest
+        value = {
+            "schema_version": "1.0", "snapshot_id": campaign.snapshot_id,
+            "file_digests": digests, "reason": reason.strip(),
+        }
+        encoded = json.dumps(value, sort_keys=True, separators=(",", ":"))
+        artifact = self.artifacts.put_text(encoded)
+        self.store.append_event(
+            campaign_id=campaign_id, batch_id=None,
+            entity_type="supporting_evidence", entity_id=campaign_id,
+            event_type="EVIDENCE_FILES_REGISTERED",
+            idempotency_key=f"evidence-files:{campaign_id}:{artifact.artifact_id}",
+            actor="operator", payload=value, payload_ref=artifact.artifact_id,
+        )
+        return artifact.artifact_id
 
     def write_campaign_report_exports(
         self, campaign_id: str, report: Mapping[str, Any], markdown: str

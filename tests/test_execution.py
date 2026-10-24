@@ -2682,6 +2682,9 @@ def test_discovery_coordinator_schedules_and_commits_r3(
     (tmp_path / "schema.yaml").write_text("entry: generated\n", encoding="utf-8")
     manager, workflow, plan = _workflow(tmp_path, "CMP-r3-tasks")
     try:
+        manager.register_evidence_files(
+            "CMP-r3-tasks", ["schema.yaml"], reason="supporting schema evidence",
+        )
         work_unit = plan.work_units[0]
         workflow.run_r0()
         workflow.record_r1([Surface(
@@ -2711,12 +2714,16 @@ def test_discovery_coordinator_schedules_and_commits_r3(
         task_input = json.loads(
             manager.artifacts.get_bytes(lease.task.input_refs[0])
         )
-        assert "caller-to-callee" in task_input["output_contract"]["call_chain"]
-        assert "pure LOC-path:line" in task_input["output_contract"]["call_chain"]
-        assert "descriptions" in task_input["output_contract"]["call_chain"]
-        assert "matched to the exact target version" in task_input["output_contract"]["rationale"]
+        verdict_contract = task_input["output_contract"]["verdict"]
+        assert "caller-to-callee" in verdict_contract["call_chain"]
+        assert "pure LOC-path:line" in verdict_contract["call_chain"]
+        assert "descriptions" in verdict_contract["call_chain"]
+        assert "matched to the exact target version" in verdict_contract["rationale"]
         assert "NEEDS_REVIEW" in task_input["analysis_contract"]
         assert "worker's runtime" in task_input["analysis_contract"]
+        example = task_input["output_example"]
+        assert example["verdict"]["hypothesis_id"] == "HYP-r3"
+        VerdictSubmission.from_dict(example["verdict"])
         schema_evidence_ref = "LOC-schema.yaml:1"
         bad_output_ref = manager.artifacts.put_text(json.dumps({
             "schema_version": "1.0",

@@ -148,8 +148,9 @@ def _handle_init(arguments: argparse.Namespace) -> int:
             audit_mode=CampaignAuditMode(arguments.audit_mode),
             history_source_campaign_ids=tuple(arguments.history_source),
             constraints=(
-                ("experimental_go_hotspots",)
-                if arguments.experimental_go_hotspots else ()
+                (("experimental_go_hotspots",) if arguments.experimental_go_hotspots else ())
+                + (("experimental_java_hotspots",) if arguments.experimental_java_hotspots else ())
+                + (("static_challenges",) if arguments.static_challenges else ())
             ),
         )
         _print(asdict(campaign))
@@ -171,6 +172,24 @@ def _handle_status(arguments: argparse.Namespace) -> int:
     return 0
 
 
+def _handle_wall_budget_amend(arguments: argparse.Namespace) -> int:
+    with CampaignManager(arguments.target, arguments.state_dir) as manager:
+        result = manager.amend_wall_budget(
+            arguments.campaign_id,
+            arguments.approved_max_wall_seconds,
+            reason=arguments.reason,
+            evidence_refs=tuple(arguments.evidence_ref),
+            actor=arguments.actor,
+        )
+        _print({
+            **asdict(result),
+            "effective_max_wall_seconds": manager.effective_wall_limit_seconds(
+                arguments.campaign_id
+            ),
+        })
+    return 0
+
+
 def _handle_skill_backlog(arguments: argparse.Namespace) -> int:
     with CampaignManager(arguments.target, arguments.state_dir) as manager:
         campaign = manager.store.get_campaign(arguments.campaign_id)
@@ -184,6 +203,20 @@ def _handle_skill_backlog(arguments: argparse.Namespace) -> int:
             "campaign_id": campaign.campaign_id,
             "pending_issues": manager.load_skill_regression_backlog(source_ids),
         })
+    return 0
+
+
+def _handle_evidence_register(arguments: argparse.Namespace) -> int:
+    value = json.loads(Path(arguments.input).read_text(encoding="utf-8"))
+    if not isinstance(value, dict) or not isinstance(value.get("paths"), list):
+        raise ValueError("evidence registration input requires a paths array and reason")
+    if not isinstance(value.get("reason"), str):
+        raise ValueError("evidence registration requires a reason string")
+    with CampaignManager(arguments.target, arguments.state_dir) as manager:
+        artifact_id = manager.register_evidence_files(
+            arguments.campaign_id, value["paths"], reason=value["reason"],
+        )
+        _print({"artifact_id": artifact_id})
     return 0
 
 
@@ -771,9 +804,28 @@ def _handle_task(arguments: argparse.Namespace) -> int:
             )
             _print(None if lease is None else backend.describe_lease(lease))
         elif arguments.command == "task-collect":
+            if arguments.recovery:
+                if (
+                    not arguments.reason or not arguments.reason.strip()
+                    or not arguments.evidence_ref or arguments.attempt is None
+                    or arguments.attempt <= 0
+                ):
+                    raise ValueError(
+                        "recovery requires --reason, --evidence-ref and original --attempt"
+                    )
+            elif arguments.reason or arguments.evidence_ref or arguments.attempt is not None:
+                raise ValueError("recovery options require explicit --recovery")
             value = json.loads(Path(arguments.input).read_text(encoding="utf-8"))
             if not isinstance(value, dict):
                 raise ValueError("task result input must be a JSON object")
+            if arguments.recovery and (
+                type(value.get("succeeded")) is not bool
+                or not isinstance(value.get("measurements"), dict)
+                or not isinstance(value.get("configuration", {}), dict)
+            ):
+                raise ValueError(
+                    "recovery requires a boolean succeeded and explicit measurement/configuration objects"
+                )
             succeeded = bool(value.get("succeeded", False))
             output_ref = None
             if value.get("output") is not None:
@@ -784,11 +836,13 @@ def _handle_task(arguments: argparse.Namespace) -> int:
                     separators=(",", ":"),
                 )).artifact_id
             lease = backend.current_lease(arguments.task_id, arguments.worker_id)
-            _print(asdict(backend.collect(lease, TaskResult(
+            if arguments.recovery and lease.attempt != arguments.attempt:
+                raise ValueError("recovery original attempt is stale or superseded")
+            result = TaskResult(
                 succeeded=succeeded,
                 output_ref=output_ref,
                 summary=str(value.get("summary", "")),
-                measurements={
+                measurements=value.get("measurements", {}) if arguments.recovery else {
                     str(key): int(amount)
                     for key, amount in value.get("measurements", {}).items()
                 },
@@ -796,7 +850,13 @@ def _handle_task(arguments: argparse.Namespace) -> int:
                     str(key): str(item)
                     for key, item in value.get("configuration", {}).items()
                 },
-            ))))
+            )
+            _print(asdict(backend.collect(
+                lease, result,
+                recovery_reason=arguments.reason if arguments.recovery else None,
+                recovery_evidence_refs=tuple(arguments.evidence_ref),
+                recovery_actor=arguments.actor,
+            )))
         elif arguments.command == "task-amend":
             value = json.loads(Path(arguments.input).read_text(encoding="utf-8"))
             if not isinstance(value, dict) or not isinstance(value.get("output"), dict):
@@ -963,6 +1023,26 @@ def _parser() -> argparse.ArgumentParser:
         "--experimental-go-hotspots", action="store_true",
         help="opt into offline Go AST candidate hints; requires local Go, not release-qualified",
     )
+    init.add_argument(
+        "--experimental-java-hotspots", action="store_true",
+        help="opt into bounded offline Java AST candidate hints; not release-qualified",
+    )
+    init.add_argument(
+        "--static-challenges", action="store_true",
+        help="freeze opt-in static R3.5 challenge generation for this Campaign",
+    )
+
+    wall_amend = subparsers.add_parser(
+        "campaign-wall-budget-amend",
+        help="authorize a monotone Campaign wall-budget extension without resetting its clock",
+    )
+    wall_amend.add_argument("target")
+    wall_amend.add_argument("campaign_id")
+    wall_amend.add_argument("--approved-max-wall-seconds", required=True, type=int)
+    wall_amend.add_argument("--reason", required=True)
+    wall_amend.add_argument("--evidence-ref", required=True, action="append")
+    wall_amend.add_argument("--actor", default="operator")
+    wall_amend.add_argument("--state-dir", default=".audit_vnext")
 
     status = subparsers.add_parser("status", help="show Campaign and Batch state")
     status.add_argument("target")
@@ -1059,6 +1139,14 @@ def _parser() -> argparse.ArgumentParser:
         ),
     )
     plan.add_argument("--state-dir", default=".audit_vnext")
+
+    evidence_register = subparsers.add_parser(
+        "evidence-register", help="freeze supporting resource file digests before the first R0",
+    )
+    evidence_register.add_argument("target")
+    evidence_register.add_argument("campaign_id")
+    evidence_register.add_argument("--input", required=True)
+    evidence_register.add_argument("--state-dir", default=".audit_vnext")
 
     amend = subparsers.add_parser(
         "amend", help="repack an unstarted plan at Work Unit boundaries"
@@ -1324,6 +1412,14 @@ def _parser() -> argparse.ArgumentParser:
     task_collect.add_argument("worker_id")
     task_collect.add_argument("--input", required=True)
     task_collect.add_argument("--state-dir", default=".audit_vnext")
+    task_collect.add_argument(
+        "--recovery", action="store_true",
+        help="explicitly authorize collection of existing output from an expired lease",
+    )
+    task_collect.add_argument("--attempt", type=int, help="original expired lease attempt")
+    task_collect.add_argument("--reason", help="operator recovery authorization reason")
+    task_collect.add_argument("--evidence-ref", action="append", default=[])
+    task_collect.add_argument("--actor", default="operator")
 
     task_amend = subparsers.add_parser(
         "task-amend", help="append an evidence-backed correction to a collected stage output"
@@ -1398,10 +1494,14 @@ def main(argv: list[str] | None = None) -> int:
 
         if arguments.command == "status":
             return _handle_status(arguments)
+        if arguments.command == "campaign-wall-budget-amend":
+            return _handle_wall_budget_amend(arguments)
 
         if arguments.command == "skill-backlog":
             return _handle_skill_backlog(arguments)
 
+        if arguments.command == "evidence-register":
+            return _handle_evidence_register(arguments)
         if arguments.command == "skill-review":
             return _handle_skill_review(arguments)
 

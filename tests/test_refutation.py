@@ -62,6 +62,7 @@ def test_revival_summary_separates_review_from_overturn(
 
 def _reachable_workflow(
     tmp_path: Path, *, verdict_kind: VerdictKind = VerdictKind.REACHABLE,
+    static_challenges: bool = False, static_only: bool = False,
 ):  # type: ignore[no-untyped-def]
     (tmp_path / "app.py").write_text("def run(value): return value\n", encoding="utf-8")
     inventory = build_inventory(tmp_path, "fixture:refute")
@@ -71,7 +72,10 @@ def _reachable_workflow(
         category_families=["STATE"],
     )
     manager = CampaignManager(tmp_path)
-    manager.create_campaign(campaign_id="CMP-refute", snapshot_id="fixture:refute")
+    manager.create_campaign(
+        campaign_id="CMP-refute", snapshot_id="fixture:refute",
+        constraints=("static_challenges",) if static_challenges else (),
+    )
     manager.record_inventory(campaign_id="CMP-refute", inventory=inventory)
     manager.record_plan(campaign_id="CMP-refute", plan=plan, inventory=inventory)
     workflow = BatchWorkflow(manager, "CMP-refute", plan.batches[0].batch_id)
@@ -98,13 +102,45 @@ def _reachable_workflow(
     edge_ref = manager.artifacts.put_text("state edge evidence").artifact_id
     workflow.record_r3([VerdictSubmission(
         "HYP-state", verdict_kind,
-        EvidenceGrade.EDGE_PROVEN if verdict_kind is VerdictKind.REACHABLE else EvidenceGrade.STATIC_ONLY,
+        EvidenceGrade.EDGE_PROVEN if verdict_kind is VerdictKind.REACHABLE and not static_only else EvidenceGrade.STATIC_ONLY,
         "remote", (), ("LOC-app.py:1",) if verdict_kind is VerdictKind.REACHABLE else (),
         (edge_ref,) if verdict_kind is VerdictKind.REACHABLE else (),
         (edge_ref,) if verdict_kind is VerdictKind.UNREACHABLE else (), (),
         "state edge is reachable" if verdict_kind is VerdictKind.REACHABLE else "blocking guard applies",
     )])
     return manager, workflow
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+def test_static_challenges_are_frozen_opt_in(tmp_path: Path, enabled: bool) -> None:
+    manager, workflow = _reachable_workflow(
+        tmp_path, static_only=True, static_challenges=enabled,
+    )
+    try:
+        backend = ManualExecutionBackend(manager, "CMP-refute")
+        coordinator = DiscoveryCoordinator(workflow, backend)
+        tasks = coordinator.schedule_r35_refutations()
+        assert len(tasks) == (2 if enabled else 0)
+        if not enabled:
+            with pytest.raises(ModelError, match="edge-proven"):
+                workflow.build_refutation_brief("HYP-state", refuter_id="a")
+            return
+        for refuter, angle in [("a", AttackAngle.CALL_CHAIN), ("b", AttackAngle.PRINCIPAL)]:
+            workflow.record_refutation(Refutation(
+                f"REF-{refuter}", "HYP-state", refuter, VerdictKind.REACHABLE,
+                angle, ("LOC-app.py:1",), "static source challenge retains the hypothesis",
+            ))
+        workflow.record_adjudication(Adjudication(
+            "ADJ-static", "HYP-state", ("REF-a", "REF-b"), VerdictKind.REACHABLE,
+            AdjudicationActor.AUTO, (), "no observed blocker; no empirical proof",
+        ))
+        workflow.record_revival_selection(
+            [], rationale="no unreachable hypotheses", evidence_refs=("LOC-app.py:1",),
+        )
+        workflow.complete_r35()
+        assert workflow._r3_verdicts()[0]["evidence_grade"] == "static_only"
+    finally:
+        manager.close()
 
 
 def test_r35_requires_independent_perspectives_and_source_verified_demotion(

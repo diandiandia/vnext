@@ -520,3 +520,128 @@ No Caddy rerun, independent semantic adjudication, Go Top10 qualification, balan
 15-language validation, large-file capacity measurement or mixed-language boundary
 study was performed by this increment. Keep the provider opt-in and make those
 claims only after the corresponding real-target evidence is available.
+
+## Java-Pilot Repair and Generality Reassessment (2026-10-24)
+
+### Evidence and decision boundary
+
+Read-only inspection verified all 618 content-addressed artifacts and all 397 frozen
+Java source digests in the supplied module pilot on `9d513e7`. The archived module
+digest matches its protocol. Exported Campaign JSON matches the registered artifact
+apart from its added self `artifact_id`. The formal run has one Batch, seven Work
+Units, zero Handoffs and no target execution; no >1 MiB Java file exists. It cannot
+establish whole-project, mixed-language, large-file or empirical Java capability.
+
+Task events record 159 claims, 149 completions and ten cancellations, not the self
+evaluation's 155 collected results. All 49 R4 runs were eventually imported directly;
+39 task outputs had completed normally. Therefore do not treat this as a completed
+task-only recovery exercise. All 21 Findings remain static-only NEEDS_REVIEW, with
+26 linked hypotheses, nine rejected hypotheses and 43 unresolved hypotheses. Source
+review declarations and classification labels are not independent semantic review.
+Original resource elapsed time is 38,979 seconds against 21,600 declared: FAIL.
+
+The full-repository probe independently confirms planning fanout (71 WUs, 64 empty,
+16,495 edges, 9,990 Handoffs). Two isolated validator probes established that both
+task R4 and direct R4 accepted nonexistent concrete anchors. Another probe established
+that R3 already accepted resource supporting references but rejected them as code
+call-chain steps. The latter was a contract/provenance problem, not a universal
+Java-only evidence restriction.
+
+### Implemented repairs and intentionally rejected shortcuts
+
+- Project scoped plans instead of stripping all excluded endpoints. Read-only replay
+  produces 50 WUs, 1,662 edges and 723 Handoffs, with all 397 included files retained.
+  The 43 remaining empty units have cross-scope boundary obligations. These counts
+  measure a planning projection, not execution savings or security recall.
+- Share concrete LOC/artifact and CategoryRun schema validation across individual,
+  bundled, screening and direct R4; include nested axis/review evidence. Legacy
+  symbolic labels remain compatibility references, not verified source proof.
+- Freeze supporting evidence by explicit bounded pre-R0 registration and check
+  source/resource digests at concrete LOC validation. Preserve resource provenance
+  separately from reviewed-source coverage; do not discard anchors to pass a validator.
+- Supply an actually nested R3 contract and a complete shape example. The example
+  uses NEEDS_REVIEW with an instruction to replace the rationale, not a positive
+  finding template or expected result.
+- Reuse existing task finalization for explicit output/attempt-bound late collection,
+  including normal output, attestation and measurement checks. Transactional
+  authorization cannot rescue superseded, terminal or invalidated attempts. Unknown
+  usage stays unknown; an output's schema does not authenticate its author.
+- Reuse Campaign budget/events for monotone extensions, preserving creation time,
+  original limit and breach FAIL. Do not silently subtract pauses or rewrite budgets.
+- Reuse R3.5's two-perspective protocol through a frozen static-challenge opt-in;
+  do not add a second challenge engine or promote static grade.
+- Add a bounded opt-in JDK parse-only provider with three generic method-site families,
+  not target-specific detections. Receiver/type/import/shadowing resolution is absent;
+  same-name false positives must remain explicit. Default/release roster is unchanged.
+- Share the bounded parser subprocess implementation between Java and Go. Review also
+  identified relative-cwd helper caches as an audit-tree pollution risk. Both now use
+  private external temporary roots, ignore ambient target-local TMPDIR, and reject
+  cached helper paths inside a target. Regression runs verify unchanged target
+  paths/content, private permissions, cleanup, file-size and descriptor caps.
+
+Do not auto-exempt test directories, fuzzy-match mechanism text, create a second
+experiment engine or store historical expected findings in runtime rules. Existing
+evidenced NOT_APPLICABLE dispositions already support reduced R4 work. Host-supplied
+output path verification remains a host responsibility. No new undirected full audit
+is needed before repairing demonstrated infrastructure failures; the unmeasured
+capacity/recall claims still require their specific evidence.
+
+### Cleanliness, bias, dead code and complexity
+
+This is a general workflow for the approved 15-language/150-priority-issue portfolio,
+not a certified universal analyzer. The portfolio and its training selection can bias
+attention; ten entries are review guidance, never finding quotas or permission to omit
+other evidenced mechanisms. Python-only defaults and experimental Go/Java slices are
+unequal capabilities and are explicitly labeled rather than disguised as parity.
+
+No target names, private pilot paths, target APIs, historical vulnerability IDs or
+expected finding counts were added to active rules. Historical targets appear here as
+dated evaluation provenance, not discovery inputs. Runtime residue scanning now covers
+packaged Go/Java source as well as Python, the main Skill and eligible knowledge.
+Operator-supplied forbidden tokens remain inputs, not a new embedded target blacklist.
+A clean bounded scan does not prove absence of every semantic historical influence.
+
+The AST name/import inventory found no unreferenced top-level definition or unused
+non-reexport import candidate in its source/test name scope. It is not a whole-program
+dead-code proof: dynamic registration, unreachable branches, method-level dead paths,
+redundant algorithms and all 150 knowledge mechanisms were not exhaustively verified.
+No speculative deletion or unrelated rewrite was made.
+
+The system is not a minimal prompt: durable state, ownership, handoffs, revision
+invalidation, bounded recovery and evidence provenance support the stated long-running
+large-project requirement. This increment reuses those mechanisms rather than replacing
+them with parallel systems. However core modules remain concentrated (roughly 4k lines
+in execution, 2.3k in workflow and 1.9k in closure). This is real maintenance debt,
+not proof of dead code or a reason for a risky wholesale rewrite during validation.
+Keep new runtime features opt-in where they change cost/coverage; prioritize measured
+extraction opportunities rather than inventing more layers.
+
+### Documentation and standards conclusion
+
+README, main Skill, runbook, completion/real-test plans and system/software requirements
+and designs now distinguish scoped graph projection, supporting evidence, authorized
+resumption, static challenges, parser candidates and qualification. SYSR-043/SWDR-049
+and TR-15 trace the increment. The main Skill remains below the 500-line guideline and
+delegates operation examples to the runbook.
+
+The evidence supports a usable, improving development audit workflow, not a claim of
+an excellent/neutral/dead-code-free universal skill. Google internal criteria were
+not supplied; conformity cannot be inferred from general engineering practice.
+ISO/IEC/IEEE 12207 conformity remains unestablished without a controlled applicable
+edition, organizational tailoring, accountable process owners, approvals, objective
+work-product evidence and independent assessment. The lifecycle document is a partial
+process-concept mapping, not certification. Code repairs and passing tests do not close
+those governance gaps.
+
+### Verification record
+
+Final implementation regression: **488 passed, 1 skipped**. The skip is the
+protected held-out manifest test whose external manifest is intentionally not
+configured; it was not replaced with synthetic labels. The runtime compatibility
+scan passed with zero findings across 52 Python files, two packaged parser helpers,
+167 eligible knowledge files and one prompt, including pilot-specific forbidden-token
+inputs. `compileall`, `git diff --check`, local Markdown-link validation (17 files,
+zero broken targets), and an offline wheel smoke from outside the checkout passed.
+The wheel contained and successfully exercised both Java and Go helper resources.
+`SKILL.md` is 486 lines. These checks establish local regression and packaging
+behavior only, not production-scale performance or security-analysis recall.

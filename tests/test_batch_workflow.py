@@ -706,6 +706,9 @@ def test_r3_accepts_anchor_in_inventory_build_manifest(tmp_path: Path) -> None:
     manager, workflow, plan = _workflow(tmp_path, "CMP-build-anchor")
     work_unit = plan.work_units[0]
     try:
+        manager.register_evidence_files(
+            "CMP-build-anchor", ["BUILD.gn"], reason="freeze build declaration",
+        )
         workflow.run_r0()
         workflow.record_r1([Surface(
             "SURF-build-anchor", work_unit.work_unit_id, work_unit.component_id,
@@ -743,6 +746,9 @@ def test_r3_allows_noninventory_schema_as_evidence_not_call_chain(
     manager, workflow, plan = _workflow(tmp_path, "CMP-schema-evidence")
     work_unit = plan.work_units[0]
     try:
+        manager.register_evidence_files(
+            "CMP-schema-evidence", ["schema.yaml"], reason="freeze schema evidence",
+        )
         workflow.run_r0()
         workflow.record_r1([Surface(
             "SURF-schema-evidence", work_unit.work_unit_id, work_unit.component_id,
@@ -790,6 +796,9 @@ def test_evidence_only_anchor_rejects_audit_and_vcs_state(tmp_path: Path) -> Non
     (tmp_path / ".git" / "config").write_text("repository metadata\n", encoding="utf-8")
     manager, workflow, _ = _workflow(tmp_path, "CMP-evidence-state")
     try:
+        manager.register_evidence_files(
+            "CMP-evidence-state", ["schema.yaml"], reason="freeze schema evidence",
+        )
         inventoried = {source.path for source in manager.load_inventory(
             workflow.campaign_id
         ).source_files}

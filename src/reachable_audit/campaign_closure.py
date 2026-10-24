@@ -1140,6 +1140,14 @@ class CampaignCloser:
             if completion_times else None
         )
         wall_limit = self.campaign.budget.get("max_wall_seconds")
+        wall_amendments = [
+            event for event in events
+            if event.event_type == "CAMPAIGN_WALL_BUDGET_AMENDED"
+        ]
+        approved_wall_limit = (
+            wall_amendments[-1].payload["approved_max_wall_seconds"]
+            if wall_amendments else wall_limit
+        )
         resource_limitations = []
         if elapsed_wall_seconds is not None and elapsed_wall_seconds < 0:
             raise ModelError("Campaign completion timestamp precedes its creation")
@@ -1158,15 +1166,30 @@ class CampaignCloser:
             and elapsed_wall_seconds is not None
             and elapsed_wall_seconds > wall_limit
         )
+        historical_wall_breach = any(
+            event.payload["original_limit_breached"] for event in wall_amendments
+        )
         resource_assessment = {
             "status": (
-                "FAIL" if wall_limit_exceeded
+                "FAIL" if wall_limit_exceeded or historical_wall_breach
                 else "NOT_ASSESSED" if resource_limitations else "PASS"
             ),
             "basis": "Local declared measurements; not provider-side enforcement.",
             "elapsed_wall_seconds": elapsed_wall_seconds,
             "max_wall_seconds": wall_limit,
             "wall_limit_exceeded": wall_limit_exceeded,
+            "original_limit_breached_at_amendment": historical_wall_breach,
+            "approved_max_wall_seconds": approved_wall_limit,
+            "approved_wall_limit_exceeded": (
+                elapsed_wall_seconds > approved_wall_limit
+                if elapsed_wall_seconds is not None and approved_wall_limit is not None
+                else None
+            ),
+            "wall_budget_amendments": [
+                {"event_id": event.event_id, "actor": event.actor,
+                 "created_at": event.created_at, **dict(event.payload)}
+                for event in wall_amendments
+            ],
             "limitations": resource_limitations,
             "provider_enforcement": "NOT_ASSESSED",
         }
@@ -1437,10 +1460,35 @@ class CampaignCloser:
             },
             "resource_cleanup": resource_cleanup,
             "resource_assessment": resource_assessment,
-            "experimental_features": (
-                ["go_ast_hotspots"]
-                if "experimental_go_hotspots" in self.campaign.constraints else []
-            ),
+            "supporting_evidence": [
+                {
+                    "registration_artifact_id": event.payload_ref,
+                    "file_digests": event.payload["file_digests"],
+                    "reason": event.payload["reason"],
+                    "review_coverage_claim": False,
+                }
+                for event in events if event.event_type == "EVIDENCE_FILES_REGISTERED"
+            ],
+            "refutation_policy": {
+                "static_challenges_enabled": "static_challenges" in self.campaign.constraints,
+                "skipped_static_reachable_hypothesis_ids": [
+                    item["hypothesis_id"] for item in hypothesis_outcomes
+                    if item["r3_verdict"].get("verdict") == "REACHABLE"
+                    and item["r3_verdict"].get("evidence_grade") == "static_only"
+                    and "static_challenges" not in self.campaign.constraints
+                ],
+                "skip_reason": (
+                    "Legacy default challenges edge_proven REACHABLE only; opt in at "
+                    "Campaign creation to require static-only challenges as well."
+                ),
+            },
+            "experimental_features": [
+                feature for constraint, feature in (
+                    ("experimental_go_hotspots", "go_ast_hotspots"),
+                    ("experimental_java_hotspots", "java_ast_hotspots"),
+                    ("static_challenges", "static_challenges"),
+                ) if constraint in self.campaign.constraints
+            ],
         }
         encoded = json.dumps(
             report, ensure_ascii=False, sort_keys=True, separators=(",", ":")
@@ -1789,6 +1837,9 @@ class CampaignCloser:
             "- This is separate from workflow closure PASS and does not certify provider limits.",
             f"- Elapsed wall seconds: {resource_assessment.get('elapsed_wall_seconds')}",
             f"- Configured wall limit: {resource_assessment.get('max_wall_seconds')}",
+            f"- Approved wall limit: {resource_assessment.get('approved_max_wall_seconds')}",
+            "- Original limit breached at amendment: "
+            f"{resource_assessment.get('original_limit_breached_at_amendment', False)}",
         ])
         lines.extend(
             f"- {item}" for item in resource_assessment.get("limitations", [])

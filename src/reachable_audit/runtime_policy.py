@@ -16,9 +16,15 @@ IMPLEMENTED_RELEASE_GATES = tuple(f"RG{index}" for index in range(1, 16))
 
 
 _POLICY: dict[str, Any] = {
-    "policy_version": "vnext-task-policy-40",
+    "policy_version": "vnext-task-policy-41",
     "task_collection": {
         "go_hotspots": "campaign_frozen_opt_in_trusted_offline_ast_helper_candidates_only_not_release_qualified",
+        "java_hotspots": "campaign_frozen_opt_in_jdk_parse_only_unresolved_method_candidates_not_release_qualified",
+        "supporting_resources": "explicit_pre_r0_digest_registration;concrete_loc_refs_match_frozen_bytes;not_call_chain_or_review_coverage",
+        "r3_wire_contract": "nested_verdict_with_complete_example",
+        "r35_static_challenges": "campaign_frozen_opt_in_same_two_perspective_protocol_no_evidence_grade_upgrade",
+        "late_collection": "explicit_operator_authorization_original_attempt_and_output_normal_validation_no_new_dispatch",
+        "wall_amendment": "append_only_monotone_limit_extension_original_clock_and_breach_retained",
         "go_harness_profile": "explicit_go_offline_environment_and_bounded_build_file_size;captured_output_limits_independent;ineligible_runs_cannot_upgrade",
         "shell_execution_by_scheduler": False,
         "required_measurements": ["agent_runs", "wall_seconds"],
@@ -44,9 +50,9 @@ _POLICY: dict[str, Any] = {
         "r4_bundle": "opt-in_same-family_preserve_per_plan_results",
         "r4_bundle_default_work_units": 1,
         "r4_bundle_max_input_bytes": 524288,
-        "empty_component_planning": "omit_only_without_source_manifest_or_boundary_obligation",
+        "empty_component_planning": "scope_project_edges_prune_wholly_excluded_obligations_preserve_cross_scope_boundaries_and_truly_empty_root",
         "r2_hypothesis_id": "HYP-work_unit_id-origin_axis-positive_ordinal",
-        "r4_category_run_validation": "collect_plan_scope_axes_and_verbatim_variants",
+        "r4_category_run_validation": "collect_direct_bundle_shared_concrete_loc_and_artifact_validation_plan_scope_axes_verbatim_variants",
         "r4_axis_run_work_unit_id": "optional_on_wire_inherited_from_category_run_explicit_must_match",
         "r4_bundle_mechanism_cards": "serialized_once_at_bundle_scope_seed_card_ids_remain_per_item",
         "released_exhausted_lease_retry": "explicit_bounded_operator_authorization",

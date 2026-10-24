@@ -176,6 +176,39 @@ def test_campaign_resource_result_records_exceeded_deadline(tmp_path: Path) -> N
         manager.close()
 
 
+def test_campaign_report_retains_original_wall_budget_breach_after_amendment(
+    tmp_path: Path,
+) -> None:
+    manager, plan = _closable_campaign(tmp_path)
+    try:
+        # The fixture has no wall cap, so install an original cap in its durable
+        # Campaign row before exercising the public append-only amendment API.
+        manager.store._connection.execute(
+            "UPDATE campaigns SET budget_json=?, created_at=? WHERE campaign_id=?",
+            ('{"max_wall_seconds":1}', "2020-01-01T00:00:00+00:00", "CMP-r4"),
+        )
+        manager.store._connection.commit()
+        evidence = manager.artifacts.put_text("operator approved bounded extension").artifact_id
+        manager.amend_wall_budget(
+            "CMP-r4", 10**10, reason="explicit development resumption",
+            evidence_refs=[evidence],
+        )
+        report = CampaignCloser(manager, "CMP-r4", plan).close(CampaignClosure(
+            architecture_overview="Resumed audit with original resource breach retained.",
+            unreviewed_scope=(), residual_risks=(), limitations=(), lessons=(),
+            knowledge_nominations=(), skill_issues=(),
+        ))
+        resources = report["resource_assessment"]
+        assert resources["status"] == "FAIL"
+        assert resources["max_wall_seconds"] == 1
+        assert resources["approved_max_wall_seconds"] == 10**10
+        assert resources["original_limit_breached_at_amendment"] is True
+        assert resources["approved_wall_limit_exceeded"] is False
+        assert len(resources["wall_budget_amendments"]) == 1
+    finally:
+        manager.close()
+
+
 def test_hypothesis_outcomes_join_late_findings_and_preserve_conflicts() -> None:
     hypotheses = [{"hypothesis_id": name} for name in (
         "HYP-finding", "HYP-finding-sibling", "HYP-conflict",
@@ -337,6 +370,10 @@ def test_campaign_report_preserves_not_feasible_r5_as_unresolved(tmp_path: Path)
             skill_issues=(),
         ))
         assert report["not_feasible_experiment_hypothesis_ids"] == ["HYP-static"]
+        assert report["refutation_policy"]["static_challenges_enabled"] is False
+        assert report["refutation_policy"]["skipped_static_reachable_hypothesis_ids"] == [
+            "HYP-static",
+        ]
         assert report["gates"]["CG7"]["pass"] is True
         markdown = CampaignCloser._markdown(report)
         assert "Required Experiments Not Feasible" in markdown
@@ -689,6 +726,7 @@ def test_campaign_closure_waits_for_amended_r6_task_projection(tmp_path: Path) -
 
 
 def test_campaign_report_preserves_excluded_path_scope(tmp_path: Path) -> None:
+    (tmp_path / "included.py").write_text("VALUE = 1\n")
     manager, plan = _closable_campaign(
         tmp_path,
         path_dispositions=(PlanPathDisposition(
@@ -707,11 +745,13 @@ def test_campaign_report_preserves_excluded_path_scope(tmp_path: Path) -> None:
         ))
 
         assert report["gates"]["CG2"]["pass"] is True
-        assert report["coverage"]["inventory_source_files"] == 1
-        assert report["coverage"]["included_source_files"] == 0
+        assert report["coverage"]["inventory_source_files"] == 2
+        assert report["coverage"]["included_source_files"] == 1
         assert report["coverage"]["excluded_source_files"] == 1
         assert report["path_scope_counts"]["EXCLUDED"] == 1
-        assert report["path_scope_dispositions"] == [{
+        assert [
+            item for item in report["path_scope_dispositions"] if item["state"] == "EXCLUDED"
+        ] == [{
             "path": "state.py",
             "state": "EXCLUDED",
             "rationale": "outside the approved audit boundary",
@@ -786,6 +826,7 @@ def test_campaign_closure_repairs_plan_file_from_recorded_artifact(
 
 
 def test_campaign_closure_rejects_invalid_path_scope_evidence(tmp_path: Path) -> None:
+    (tmp_path / "included.py").write_text("VALUE = 1\n")
     manager, plan = _closable_campaign(
         tmp_path,
         path_dispositions=(PlanPathDisposition(

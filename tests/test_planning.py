@@ -14,6 +14,8 @@ from reachable_audit.plan_models import (
     ComponentGraph,
     PlanPathDisposition,
     PlanPathState,
+    ProjectInventory,
+    SourceFile,
 )
 from reachable_audit.planning import (
     amend_plan,
@@ -720,6 +722,136 @@ def test_plan_retains_nonincluded_path_without_work_unit_assignment(
     assert [
         path for unit in plan.work_units for path in unit.source_files
     ] == ["included.py"]
+
+
+@pytest.mark.parametrize("scope_state", (PlanPathState.EXCLUDED, PlanPathState.DEFERRED))
+def test_plan_projects_scope_without_losing_boundary_obligations(
+    scope_state: PlanPathState,
+) -> None:
+    inventory = ProjectInventory(
+        "1.0", "fixture:scope-projection",
+        tuple(Component(name, name, (f"{name}/build.xml",), ("java",), count)
+              for name, count in (("active", 2), ("boundary", 1), ("unrelated", 1))),
+        tuple(SourceFile(path, "java", owner) for path, owner in (
+            ("active/Included.java", "active"),
+            ("active/Outside.java", "active"),
+            ("boundary/Outside.java", "boundary"),
+            ("unrelated/Outside.java", "unrelated"),
+        )),
+        (),
+    )
+    dispositions = tuple(
+        PlanPathDisposition(
+            source.path, scope_state, "Outside approved scope.", "scope-owner",
+            ("LOC-active/Included.java:1",),
+        )
+        for source in inventory.source_files if source.path != "active/Included.java"
+    )
+    edges = (
+        BoundaryEdge(
+            "EDGE-outgoing", "active", "boundary", "call", "included to outside",
+            source_path="active/Included.java", target_path="boundary/Outside.java",
+        ),
+        BoundaryEdge(
+            "EDGE-incoming", "boundary", "active", "call", "outside to included",
+            source_path="boundary/Outside.java", target_path="active/Included.java",
+        ),
+        BoundaryEdge(
+            "EDGE-unrelated", "boundary", "unrelated", "build", "outside only",
+        ),
+        BoundaryEdge(
+            "EDGE-concrete-outside", "active", "unrelated", "call", "outside paths only",
+            source_path="active/Outside.java", target_path="unrelated/Outside.java",
+        ),
+        BoundaryEdge(
+            "EDGE-component", "active", "boundary", "build", "component dependency",
+        ),
+    )
+
+    plan = create_audit_plan(
+        campaign_id="CMP-scope-projection", inventory=inventory,
+        category_families=["STATE"], path_dispositions=dispositions,
+        boundary_edges=edges, max_work_units_per_batch=1,
+    )
+
+    assert {edge.edge_id for edge in plan.boundary_edges} == {
+        "EDGE-outgoing", "EDGE-incoming", "EDGE-component",
+    }
+    assert plan.omitted_empty_component_ids == ("unrelated",)
+    assert {unit.component_id for unit in plan.work_units} == {"active", "boundary"}
+    assert [path for unit in plan.work_units for path in unit.source_files] == [
+        "active/Included.java",
+    ]
+    boundary_unit = next(unit for unit in plan.work_units if unit.component_id == "boundary")
+    assert boundary_unit.source_files == ()
+    assert set(boundary_unit.boundary_edge_ids) == {
+        "EDGE-outgoing", "EDGE-incoming", "EDGE-component",
+    }
+    assert {handoff.edge_id for handoff in plan.handoffs} == {
+        edge.edge_id for edge in plan.boundary_edges
+    }
+    assert create_audit_plan(
+        campaign_id="CMP-scope-projection", inventory=inventory,
+        category_families=["STATE"], path_dispositions=dispositions,
+        boundary_edges=tuple(edge for edge in edges if edge.edge_id in {
+            "EDGE-outgoing", "EDGE-incoming", "EDGE-component",
+        }),
+        max_work_units_per_batch=1,
+    ) == plan
+    assert type(plan).from_dict(asdict(plan)) == plan
+    validate_plan(plan, inventory)
+    amended, _ = amend_plan(
+        plan, reason="Repack scope projection.", max_source_files_per_batch=10,
+        max_work_units_per_batch=2,
+    )
+    assert amended.boundary_edges == plan.boundary_edges
+    assert amended.omitted_empty_component_ids == ("unrelated",)
+    assert amended.path_dispositions == plan.path_dispositions
+    assert amended.handoffs == ()
+    validate_plan(amended, inventory)
+
+
+def test_fully_nonincluded_components_do_not_create_empty_analysis_work() -> None:
+    inventory = ProjectInventory(
+        "1.0", "fixture:fully-outside",
+        (Component("outside", "outside", ("outside/build.xml",), ("java",), 1),),
+        (SourceFile("outside/Source.java", "java", "outside"),), (),
+    )
+    plan = create_audit_plan(
+        campaign_id="CMP-fully-outside", inventory=inventory, category_families=["STATE"],
+        path_dispositions=(PlanPathDisposition(
+            "outside/Source.java", PlanPathState.EXCLUDED, "Outside scope.",
+            "scope-owner", ("LOC-outside/Source.java:1",),
+        ),),
+    )
+    assert plan.work_units == plan.batches == ()
+    assert plan.omitted_empty_component_ids == ("outside",)
+    validate_plan(plan, inventory)
+
+
+def test_scope_projection_retains_truly_manifest_only_components() -> None:
+    inventory = ProjectInventory(
+        "1.0", "fixture:manifest-only-with-scope",
+        (
+            Component("outside", "outside", (), ("java",), 1),
+            Component("manifest", "manifest", ("manifest/build.xml",), (), 0),
+        ),
+        (SourceFile("outside/Source.java", "java", "outside"),), (),
+    )
+    plan = create_audit_plan(
+        campaign_id="CMP-manifest-only-with-scope", inventory=inventory,
+        category_families=["STATE"],
+        path_dispositions=(PlanPathDisposition(
+            "outside/Source.java", PlanPathState.DEFERRED, "Outside current scope.",
+            "scope-owner", ("LOC-outside/Source.java:1",),
+        ),),
+    )
+
+    assert len(plan.work_units) == len(plan.batches) == 1
+    assert plan.work_units[0].component_id == "manifest"
+    assert plan.work_units[0].source_files == ()
+    assert plan.omitted_empty_component_ids == ("outside",)
+    validate_plan(plan, inventory)
 
 
 @pytest.mark.parametrize("extra_fields", (

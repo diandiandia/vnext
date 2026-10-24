@@ -12,17 +12,12 @@ import base64
 import json
 import os
 from pathlib import Path
-import selectors
 import shutil
-import signal
 import subprocess
 import threading
-import time
-import uuid
 from typing import Any
 
-if os.name == "posix":
-    import resource
+from .bounded_process import child_limits as _child_limits, create_workspace, run_bounded
 
 
 GO_HOTSPOT_PROVIDER_ID = "go-ast-hotspots-v1"
@@ -52,21 +47,6 @@ def _cleanup() -> None:
 atexit.register(_cleanup)
 
 
-def _child_limits() -> None:
-    for kind, limit in (
-        (resource.RLIMIT_CPU, 60),
-        (resource.RLIMIT_AS, 4 * 1024**3),
-        (resource.RLIMIT_FSIZE, 64 * 1024**2),
-        (resource.RLIMIT_NOFILE, 128),
-    ):
-        soft, hard = resource.getrlimit(kind)
-        if soft != resource.RLIM_INFINITY:
-            limit = min(limit, soft)
-        if hard != resource.RLIM_INFINITY:
-            limit = min(limit, hard)
-        resource.setrlimit(kind, (limit, limit))
-
-
 def _environment(workspace: Path) -> dict[str, str]:
     return {
         "PATH": os.defpath,
@@ -90,60 +70,14 @@ def _environment(workspace: Path) -> dict[str, str]:
 def _run_bounded(
     command: list[str], workspace: Path, input_bytes: bytes, timeout: int,
 ) -> bytes:
-    """Drain both pipes with a shared hard output cap and kill the process group."""
-    input_path = workspace / f"request-{uuid.uuid4().hex}.json"
-    try:
-        input_path.write_bytes(input_bytes)
-        with input_path.open("rb") as stdin:
-            process = subprocess.Popen(
-                command, cwd=workspace, env=_environment(workspace),
-                stdin=stdin, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                shell=False, start_new_session=True, preexec_fn=_child_limits,
-            )
-        output = bytearray()
-        size = 0
-        deadline = time.monotonic() + timeout
-        try:
-            with selectors.DefaultSelector() as selector:
-                assert process.stdout is not None and process.stderr is not None
-                selector.register(process.stdout, selectors.EVENT_READ, True)
-                selector.register(process.stderr, selectors.EVENT_READ, False)
-                while selector.get_map():
-                    remaining = deadline - time.monotonic()
-                    if remaining <= 0:
-                        raise GoProviderError("Go helper timed out")
-                    for key, _ in selector.select(min(remaining, 0.1)):
-                        chunk = os.read(key.fd, 65536)
-                        if not chunk:
-                            selector.unregister(key.fileobj)
-                            continue
-                        size += len(chunk)
-                        if size > _OUTPUT_LIMIT:
-                            raise GoProviderError("Go helper output limit exceeded")
-                        if key.data:
-                            output.extend(chunk)
-                try:
-                    status = process.wait(timeout=max(0.001, deadline - time.monotonic()))
-                except subprocess.TimeoutExpired as error:
-                    raise GoProviderError("Go helper timed out") from error
-                if status:
-                    raise GoProviderError(f"Go helper exited with status {status}")
-        finally:
-            try:
-                os.killpg(process.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-            process.wait()
-            if process.stdout is not None:
-                process.stdout.close()
-            if process.stderr is not None:
-                process.stderr.close()
-        return bytes(output)
-    finally:
-        input_path.unlink(missing_ok=True)
+    return run_bounded(
+        command, workspace, input_bytes, timeout,
+        environment=_environment(workspace), child_limits=_child_limits,
+        error_type=GoProviderError, label="Go", output_limit=_OUTPUT_LIMIT,
+    )
 
 
-def _helper() -> tuple[Path, Path]:
+def _helper(target_root: Path | None = None) -> tuple[Path, Path]:
     global _WORKSPACE, _BINARY
     if os.name != "posix":
         raise GoProviderError("bounded Go provider requires a POSIX host")
@@ -152,11 +86,11 @@ def _helper() -> tuple[Path, Path]:
         raise GoProviderError("optional Go toolchain is unavailable")
     with _LOCK:
         if _BINARY is not None and _WORKSPACE is not None:
+            if target_root is not None and _WORKSPACE.is_relative_to(target_root.resolve()):
+                raise GoProviderError("cached Go helper is inside the target")
             return _BINARY, _WORKSPACE
         # Never use target modules, ambient Go configuration, or shared binaries.
-        workspace = Path(f".reachable-audit-go-{uuid.uuid4().hex}")
-        workspace.mkdir(mode=0o700)
-        workspace = workspace.resolve()
+        workspace = create_workspace("reachable-audit-go-", target_root)
         try:
             source = workspace / "helper.go"
             source.write_bytes(Path(__file__).with_name("go_hotspots.go").read_bytes())
@@ -173,7 +107,7 @@ def _helper() -> tuple[Path, Path]:
 
 
 def scan_go_bytes(
-    sources: dict[str, bytes], *, max_candidates: int,
+    sources: dict[str, bytes], *, max_candidates: int, target_root: Path | None = None,
 ) -> list[dict[str, Any]]:
     """Parse a single verified, bounded Work Unit batch in one helper process."""
     if (
@@ -184,7 +118,7 @@ def scan_go_bytes(
     ):
         raise GoProviderError("Go parser input limit exceeded")
     try:
-        binary, workspace = _helper()
+        binary, workspace = _helper(target_root) if target_root is not None else _helper()
         payload = json.dumps({
             "files": [
                 {"path": path, "source": base64.b64encode(source).decode("ascii")}

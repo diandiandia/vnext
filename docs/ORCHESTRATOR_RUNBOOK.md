@@ -235,7 +235,7 @@ cost, never free work. Do not create infinite retry loops.
 | Symptom | Correct action | Do not do |
 |---|---|---|
 | Worker exit/timeout, lease still live | Stop its known process through the host, then `task-release ... --reason ...` for its owner/attempt. A replacement worker claims a new lease | Run duplicate workers or collect after lease loss |
-| Lease expired | Re-read task state; normal claim can reclaim within attempt budget. Reject any late output from the old attempt | Assume `task-release` is necessary or valid after expiry |
+| Lease expired | Re-read task state; normal claim can reclaim within attempt budget. Existing completed output requires explicit authorized recovery bound to the unreplaced original attempt; normal collect still rejects expiry | Collect an old result after a replacement claim, terminal result or invalidated revision |
 | Failed/exhausted attempts | Retry within existing budget; exhausted work needs explicit bounded `task-retry --reason` authorization and remaining host budget | Automatically authorize unlimited retries |
 | `task-collect` validation error | If same lease remains live, send exact error and original task contract for task-local repair; bound retries and preserve attempts/logs | Rewrite the schema, fabricate evidence, mark the task successful or restart the whole Campaign |
 | Source snapshot drift | Pause dependent tasks. Restore the frozen bytes and verify `drift-resolve` with evidence; intentionally changed source needs a new Campaign/snapshot | Resolve drift by accepting changed bytes under the old snapshot |
@@ -243,7 +243,7 @@ cost, never free work. Do not create infinite retry loops.
 | Runaway process / storage pressure | Pause dispatch; preserve durable artifacts; use `resource-cleanup` only for registered resources and stop known process groups under host control | Kill by process name, delete the evidence store, or treat cleanup as fixing a full disk |
 | Required experiment cannot start | Record NOT_FEASIBLE, `experiment_required: true`, `experiment_id: null`, blocker evidence and NEEDS_REVIEW semantics | Claim empirical confirmation/refutation or hide a required experiment |
 | Experiment actually ran but timed out/inconclusive | Preserve registered run/output, use NEEDS_REVIEW and reassess within limits | Label an attempted experiment NOT_FEASIBLE or infer safety from timeout |
-| Budget/permission exhausted or unsafe cleanup | Pause, retain leases/state/evidence; explicitly abort with skill issues if abandoning | Invent usage, bypass host controls, or force Campaign PASS |
+| Budget/permission exhausted or unsafe cleanup | Pause and retain evidence; an approved wall-budget extension must append an amendment without resetting creation time. Abort with skill issues if abandoning | Invent usage, subtract pauses silently, bypass host controls, or force resource PASS |
 
 ## 6. Coverage and Closing Work
 
@@ -322,3 +322,102 @@ Do not copy these limits without checking host approval. Do not create or alter 
 probe inside an already frozen source snapshot; prepare the approved copy first.
 After the run, inspect actual output and eligibility, then register the appropriate
 experiment through the normal R5 task result; an exit code alone is not confirmation.
+
+## 8. Evidence and Scope Controls After the Java Pilot
+
+### Supporting resources
+
+After inventory and before the first Batch R0, register required XML, SPI, schema or
+build-file evidence. For example, pass `evidence-register TARGET CAMPAIGN --input FILE`
+an operator-created JSON input:
+
+```json
+{
+  "paths": ["resources/logging.xml", "pom.xml"],
+  "reason": "Freeze configuration and dependency evidence used by source review"
+}
+```
+
+Paths must exist inside the target and outside runtime/VCS state; registration is
+bounded to 1024 unique paths, 16 MiB per file and 64 MiB per request. It records
+digests, not a source-review claim. Content cannot be replaced under the same
+Campaign. Concrete LOC evidence must match the source baseline or a registered
+supporting digest, have a valid nonblank line and remain inside the target. A resource
+does not become a code call-chain step. If a necessary resource was omitted, preserve
+the limitation and prepare a new correctly frozen Campaign instead of deleting evidence
+or rebaselining after R0. Existing Campaigns without registrations are not silently
+certified under the stronger rule.
+
+R4 applies the same concrete LOC/artifact checks on individual, bundled, screening
+and direct records, including nested axis and hypothesis-review evidence. Legacy
+symbolic IDs remain reference labels, not verified source anchors. Direct imports do
+not reconstruct lost task attempts or measurements.
+
+### Scoped planning
+
+Use explicit per-path INCLUDED/EXCLUDED/DEFERRED decisions; unspecified paths remain
+INCLUDED. Plans project wholly out-of-scope graph edges away while retaining incoming
+and outgoing cross-scope boundary obligations. A boundary-only Work Unit can therefore
+remain without included source files; it must explain unresolved external premises,
+not claim excluded code was reviewed. A fully excluded/deferred repository can have
+zero Batches. That is an empty declared audit scope, not evidence of repository safety.
+Truly empty repositories and manifest-only components retain their existing behavior.
+Tests/generated files are not automatically inapplicable; use evidenced axis dispositions.
+
+### Experimental Java leads and static challenges
+
+Create a new Campaign with `--experimental-java-hotspots` to opt into trusted local JDK
+Tree API parsing of verified bytes. No target compilation, class loading or annotation
+processing runs. The three generic method-site families are command/process creation,
+object deserialization, and whole-stream/archive iteration. Receiver types, imports,
+shadowing and dataflow are unresolved: a same-name ordinary method can be a false
+positive. These are review leads, not a Java Top10 analyzer or a vulnerability verdict.
+
+Bounds are 128 Java files, 1 MiB per file, 4 MiB per Work Unit, 200 retained candidates,
+15-second parse/30-second helper-build timeouts and bounded process output/resources.
+The helper uses host-JDK syntax and UTF-8 only. Unsupported syntax, missing tools,
+over-limit and unparsed files are explicit gaps. Default providers and the qualified
+release roster remain unchanged. Helper caches and temporary workspaces are created
+under a private external temporary root, never in the target or current working
+directory; target-local `TMPDIR` is ignored. If no safe external root is available,
+the scan fails explicitly rather than falling back into the audit tree.
+
+An optional `--static-challenges` requires the existing two-perspective R3.5 protocol
+for static-only REACHABLE claims as well as edge-proven claims. Both scheduling and
+completion use the same frozen selection. Adjudication still requires separate refuter
+labels, call-chain plus premise perspectives, human handling of splits and source
+verification of demotion. Labels are not authenticated identities. Retention cannot
+promote evidence grade, and default static-only skips are exposed in the final JSON.
+
+### Authorized late collection and wall-budget extension
+
+Normal collection rejects expired leases. When a stopped worker left complete output,
+the operator may use:
+
+```text
+task-collect TARGET CAMPAIGN TASK WORKER --input RESULT.json --recovery \
+  --attempt ORIGINAL_ATTEMPT --reason "operator-verified recovery reason" \
+  --evidence-ref sha256:RECOVERY_EVIDENCE
+```
+
+Use the original worker/attempt and actual result envelope/measurements. Preserve the
+output digest, outage/termination evidence and unreported usage; do not invent zeros.
+Recovery binds the exact output digest and original claim, rejects replacement attempts,
+terminal tasks and stale revisions, and still runs normal validation/attestation.
+Authorization consumption plus finalization are atomic. A schema-compatible output is
+not independent authorship proof; the operator must verify its provenance. This recovers
+existing output after a wall deadline, not permission to launch replacement work.
+
+To approve further dispatch under an existing wall limit:
+
+```text
+campaign-wall-budget-amend TARGET CAMPAIGN --approved-max-wall-seconds NEW_TOTAL \
+  --reason "approved extension reason" --evidence-ref sha256:APPROVAL_EVIDENCE
+```
+
+The new limit is total seconds from original creation, not additional seconds from now.
+The event records the prior/original/approved limits, elapsed time, original breach,
+actor, reason and resolvable evidence. It cannot silently reset pauses or reopen a
+completed Campaign. Reports retain original-budget FAIL when breached, separately from
+approved-limit conformance and incomplete usage. Local actor/evidence assertions do not
+prove external approval authority or provider hard-cap enforcement.

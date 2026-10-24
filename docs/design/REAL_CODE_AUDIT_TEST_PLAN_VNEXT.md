@@ -265,6 +265,85 @@ capability samples. Follow-up Campaigns are labeled as regression-only. Record p
 and per-issue coverage, unsupported paths, unresolved cases, Handoffs, duplicates,
 `NEEDS_REVIEW`, false positives, scope limitations and actual spend.
 
+#### Top-15 language pilot matrix
+
+The operator reports that real-project tests have been run for C, C++, Go and Java.
+Retain their existing Campaign/evidence references in the test ledger; this status
+records development workflow testing only and does not certify a provider or language.
+Test the remaining 11 portfolio languages next. The order below is a practical
+sequencing suggestion based on distinct runtime/build ecosystems, not a popularity
+ranking or a capability claim. Use a separate fresh Campaign per language, even when
+two languages share a repository; do not merge JavaScript and TypeScript evidence into
+one language result.
+
+| Suggested order | Language | Select a representative authorized project/component with | Pilot-specific questions |
+|---:|---|---|---|
+| 1 | Python | `pyproject.toml`, `setup.cfg` or an established application package | Does the workflow inventory runtime/package boundaries, framework entrypoints and dynamic imports without treating missing static resolution as coverage? |
+| 2 | C# | `.sln`/`.slnx` and `.csproj`, preferably a multi-project application | Are solution/project references, generated code and framework-specific entrypoints represented and scoped? |
+| 3 | Rust | `Cargo.toml` workspace and lockfile, preferably a service or library with features | Are workspace members, feature-gated code, macros/build scripts and unsafe blocks represented without claiming macro expansion was reviewed when it was not? |
+| 4 | JavaScript | `package.json` plus lockfile and a maintained server or client application | Are module format, runtime version, dependency boundaries, framework routes and dynamic loading handled or explicitly limited? |
+| 5 | TypeScript | `tsconfig.json`/project references plus package metadata and runtime application | Are TS/JS source boundaries, path aliases, generated output and the actual deployed runtime distinguished? Keep it separate from JavaScript pilot scoring. |
+| 6 | Kotlin | Gradle or Maven multi-module project, with Kotlin/JVM or Android platform recorded | Are Kotlin source sets, platform boundaries, generated code and Java interop represented? Record JVM/Android distinctions. |
+| 7 | Scala | `build.sbt` or equivalent multi-module build, with Scala version recorded | Are Scala version, macros/compiler plugins, JVM interop and module boundaries explicit? |
+| 8 | PHP | `composer.json`/lockfile and a maintained web or CLI application | Are autoloading, framework routes/middleware, configuration and PHP/runtime-version assumptions represented? |
+| 9 | Ruby | `Gemfile`/lockfile and a maintained web or background-job application | Are Rails/Rack/job entrypoints, autoloading and gem boundaries represented without assuming framework behavior? |
+| 10 | Swift | `Package.swift` or an authorized Xcode project, with platform recorded | Are package targets, platform-specific code, generated sources and Objective-C/C interop boundaries represented? |
+| 11 | Shell | A maintained repository of scripts with declared interpreters and invocation paths | Are shebangs, sourced scripts, environment/config inputs, CI/container entrypoints and shell dialects in scope? Do not execute scripts merely to inspect them. |
+
+For all 11:
+
+1. Freeze authorization, target commit, language/framework/version, project marker
+   files, scope, budgets and stop owner before R0. Use a disposable clean clone,
+   separate state directory and fresh Campaign. Do not supply prior findings or
+   expected-answer labels to R1/R2.
+2. Run Inventory, ComponentGraph and Plan first. Reconcile source files, generated
+   files, build units, language tags, included/excluded/deferred paths, unsupported
+   extensions, Work Units, Batches and cross-component boundaries against an
+   independently sampled file/build inventory. Missing or misclassified paths must
+   be recorded, not silently dropped.
+3. Run the normal R0-R6 workflow on a representative component and evaluate all ten
+   versioned issue profiles for that language. For each profile, retain applicability
+   disposition and reason, relevant current-source areas examined, evidence refs,
+   hypotheses, counterevidence and unresolved questions. Do not force a finding for
+   each profile and do not use catalog prose as proof of a target condition.
+4. Independently review candidate and non-candidate samples against source. Record
+   whether entrypoint, guard, dataflow/call path and sink claims are supported,
+   misclassified, false positive or unresolved. Keep the reviewer outside the
+   discovery context. Where no independent expected-answer set exists, label recall
+   **NOT MEASURED**; do not infer it from successful completion or zero findings.
+5. Record stage/task/artifact refs; source/build coverage; all unsupported, skipped,
+   malformed and over-limit files; R3.5/refutation coverage; R4 validation; R5/R6
+   outcomes; Handoffs; interruption/recovery; input size, elapsed time and actual
+   usage. Preserve exact limitations and approved deferrals in closure.
+6. Never compile, execute, install or run target code/dependencies as part of static
+   inspection unless the target owner separately authorizes a specific isolated test.
+   Any such test uses a disposable sandbox and its own explicit resource/network
+   policy. Do not expose secrets, protected labels or private source in reports.
+
+**Development-pilot pass:** each requested stage completes under its contract; all
+authorized paths are accounted for or explicitly deferred; project/build boundaries
+are plausible on independent spot-check; all ten profiles have reviewable dispositions;
+every reported candidate is source-anchored and independently adjudicated or marked
+unresolved; resource use and limitations are recorded. **Fail** on reproducible
+contract/data-integrity defects, silent scope loss, unsafe behavior or unsupported
+claims. **Blocked** if authorization, a representative project, required evidence or
+toolchain is unavailable. A clean-looking result, no findings, one project, or a
+passing adapter test is not evidence of language recall or release readiness.
+
+**Recommended sequence:** start with Python as the existing default-provider
+reference, then C# and Rust; test JavaScript and TypeScript in separate Campaigns;
+continue Kotlin, Scala, PHP, Ruby, Swift and Shell. If a candidate test repository
+contains multiple portfolio languages, keep a separate language-specific Campaign
+for each and add a later mixed-language Campaign to assess boundary ownership and
+handoff behavior. This avoids attributing mixed-run results to an individual language.
+
+**After the 11 pilots:** run at least one separate mixed-language Campaign with
+predeclared source/destination boundary cases, then a representative large-project
+capacity run. These development pilots do not satisfy the release evaluator's
+per-language/per-issue held-out sample floors (default three samples for each of the
+150 cells); do not pool exploratory, follow-up or same-target regression runs as
+independent held-out evidence.
+
 For large repositories, measure v1/v2 R4 bundle input bytes, provider token usage, latency,
 per-item coverage and canonical artifact size at representative bundle counts. Synthetic
 30k/1k fixtures remain implementation tests, not substitutes for this measurement.
@@ -315,6 +394,28 @@ under TR-14. Test Go lead quality on a new frozen Campaign with
 `--experimental-go-hotspots`; retain scan failures and source-backed false positives.
 Keep expected historical issues outside fresh discovery inputs. The synthetic probe
 establishes harness mechanics only, not that any prior target candidate is exploitable.
+
+The Java module pilot on `9d513e7` additionally unlocks the bounded TR-15 infrastructure
+repairs, supporting-resource digests, audited resumption and opt-in static challenges,
+plus an explicit experimental Java parser. These are now local implementation features,
+not Java quality certification. For the next targeted retest:
+
+- Use a new Campaign and register needed XML/SPI/build evidence before first R0.
+- Retain an included-to-excluded module edge and verify an explicit boundary gap;
+  do not shrink the snapshot merely to avoid graph fanout.
+- Exercise a controlled host interruption and original-attempt recovery, recording
+  actual failed-attempt usage and worker termination. Budget extension is explicit;
+  retain original breach and approved-limit results separately.
+- If testing Java leads, opt in with `--experimental-java-hotspots`; predeclare source
+  sites/counterexamples for independent post-run adjudication, outside fresh discovery
+  input. To test static challenges, freeze `--static-challenges` at creation.
+- Preserve original evidence; do not reopen completed pilot Campaigns or replace their
+  findings, task counts or resource result with repaired output.
+
+No new full audit is required to justify defects already reproduced. Automatic slicing
+still requires measured large-file failures/coverage, generic boundary detectors need
+real mixed-language mechanisms/misses, and Java execution needs an authorized actual
+probe. No static module pilot supplies those missing observations.
 
 If the pilot cannot measure physical reads or exact line ranges, record that limitation
 and treat the result as workflow/skill evidence only. Never convert missing observations

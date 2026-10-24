@@ -286,6 +286,148 @@ class AuditStore(AbstractContextManager["AuditStore"]):
             )
         return self.get_campaign(campaign_id)
 
+    def effective_wall_limit_seconds(self, campaign_id: str) -> int | None:
+        campaign = self.get_campaign(campaign_id)
+        original_limit = campaign.budget.get("max_wall_seconds")
+        if original_limit is None:
+            return None
+        if type(original_limit) is not int or original_limit <= 0:
+            raise StoreError("Campaign max_wall_seconds budget must be a positive integer")
+        effective_limit = original_limit
+        amendments = self.list_events(
+            campaign_id,
+            entity_type="campaign_wall_budget",
+            entity_id=campaign_id,
+            event_type="CAMPAIGN_WALL_BUDGET_AMENDED",
+        )
+        for event in amendments:
+            payload = event.payload
+            if (
+                payload.get("original_max_wall_seconds") != original_limit
+                or payload.get("previous_approved_max_wall_seconds") != effective_limit
+                or type(payload.get("approved_max_wall_seconds")) is not int
+                or payload["approved_max_wall_seconds"] <= effective_limit
+            ):
+                raise StoreError("Campaign wall-budget amendment history is invalid")
+            effective_limit = payload["approved_max_wall_seconds"]
+        return effective_limit
+
+    def amend_campaign_wall_budget(
+        self,
+        *,
+        campaign_id: str,
+        approved_max_wall_seconds: int,
+        actor: str,
+        reason: str,
+        evidence_refs: Sequence[str],
+        now: str,
+    ) -> AppendResult:
+        if type(approved_max_wall_seconds) is not int or approved_max_wall_seconds <= 0:
+            raise ValueError("approved wall limit must be a positive integer")
+        if not actor.strip() or not reason.strip():
+            raise ValueError("wall-budget amendment requires actor and reason")
+        if isinstance(evidence_refs, (str, bytes)):
+            raise ValueError("wall-budget amendment requires evidence references")
+        normalized_evidence = tuple(evidence_refs)
+        if (
+            not normalized_evidence
+            or any(not isinstance(item, str) or not item.strip() for item in normalized_evidence)
+            or len(set(normalized_evidence)) != len(normalized_evidence)
+        ):
+            raise ValueError("wall-budget amendment requires unique evidence references")
+        try:
+            self._connection.execute("BEGIN IMMEDIATE")
+            campaign_row = self._connection.execute(
+                "SELECT * FROM campaigns WHERE campaign_id = ?", (campaign_id,)
+            ).fetchone()
+            if campaign_row is None:
+                raise NotFoundError(f"campaign not found: {campaign_id}")
+            campaign = self._campaign_from_row(campaign_row)
+            if campaign.status is CampaignStatus.COMPLETE:
+                raise ConflictError("completed Campaign wall budget cannot be amended")
+            original_limit = campaign.budget.get("max_wall_seconds")
+            if type(original_limit) is not int or original_limit <= 0:
+                raise ConflictError("Campaign has no amendable max_wall_seconds budget")
+            amendment_rows = self._connection.execute(
+                """
+                SELECT * FROM events
+                WHERE campaign_id = ? AND entity_type = 'campaign_wall_budget'
+                    AND entity_id = ? AND event_type = 'CAMPAIGN_WALL_BUDGET_AMENDED'
+                ORDER BY sequence
+                """,
+                (campaign_id, campaign_id),
+            ).fetchall()
+            amendments = [self._event_from_row(row) for row in amendment_rows]
+            effective_limit = original_limit
+            for event in amendments:
+                payload = event.payload
+                if (
+                    payload.get("original_max_wall_seconds") != original_limit
+                    or payload.get("previous_approved_max_wall_seconds") != effective_limit
+                    or type(payload.get("approved_max_wall_seconds")) is not int
+                    or payload["approved_max_wall_seconds"] <= effective_limit
+                ):
+                    raise StoreError("Campaign wall-budget amendment history is invalid")
+                effective_limit = payload["approved_max_wall_seconds"]
+
+            if approved_max_wall_seconds == effective_limit and amendments:
+                previous = amendments[-1]
+                if (
+                    previous.actor == actor
+                    and previous.payload.get("reason") == reason
+                    and previous.payload.get("evidence_refs") == list(normalized_evidence)
+                ):
+                    self._connection.commit()
+                    return AppendResult(event_id=previous.event_id, inserted=False)
+            if approved_max_wall_seconds <= effective_limit:
+                raise ConflictError(
+                    "approved wall limit must monotonically exceed the current limit"
+                )
+
+            created_at = dt.datetime.fromisoformat(campaign.created_at)
+            approval_at = dt.datetime.fromisoformat(now)
+            if created_at.tzinfo is None:
+                created_at = created_at.replace(tzinfo=dt.UTC)
+            if approval_at.tzinfo is None:
+                approval_at = approval_at.replace(tzinfo=dt.UTC)
+            elapsed_seconds = max(
+                0.0,
+                (
+                    approval_at.astimezone(dt.UTC) - created_at.astimezone(dt.UTC)
+                ).total_seconds(),
+            )
+            payload = {
+                "original_max_wall_seconds": original_limit,
+                "previous_approved_max_wall_seconds": effective_limit,
+                "approved_max_wall_seconds": approved_max_wall_seconds,
+                "extension_seconds": approved_max_wall_seconds - effective_limit,
+                "elapsed_at_approval_seconds": round(elapsed_seconds, 1),
+                "original_limit_breached": elapsed_seconds > original_limit,
+                "reason": reason,
+                "evidence_refs": list(normalized_evidence),
+            }
+            result = self._append_event_tx(
+                campaign_id=campaign_id,
+                batch_id=None,
+                entity_type="campaign_wall_budget",
+                entity_id=campaign_id,
+                event_type="CAMPAIGN_WALL_BUDGET_AMENDED",
+                idempotency_key=(
+                    f"campaign:wall-budget-amend:{campaign_id}:"
+                    f"{effective_limit}:{approved_max_wall_seconds}"
+                ),
+                actor=actor,
+                payload=payload,
+                payload_ref=None,
+                created_at=now,
+            )
+            self._connection.commit()
+            return result
+        except Exception:
+            if self._connection.in_transaction:
+                self._connection.rollback()
+            raise
+
     def add_batch(
         self,
         *,
@@ -810,6 +952,89 @@ class AuditStore(AbstractContextManager["AuditStore"]):
                 self._connection.rollback()
             raise
 
+    def authorize_expired_task_recovery(
+        self,
+        *,
+        campaign_id: str,
+        task_id: str,
+        worker_id: str,
+        attempt: int,
+        output_ref: str,
+        lease_expires_at: str,
+        actor: str,
+        reason: str,
+        evidence_refs: Sequence[str],
+        now: str,
+    ) -> AppendResult:
+        if not actor.strip() or not reason.strip():
+            raise ValueError("expired-lease recovery requires operator actor and reason")
+        if (
+            not evidence_refs or isinstance(evidence_refs, (str, bytes))
+            or any(not isinstance(item, str) or not item.strip() for item in evidence_refs)
+            or len(set(evidence_refs)) != len(evidence_refs)
+        ):
+            raise ValueError("expired-lease recovery requires unique evidence references")
+        if not output_ref:
+            raise ValueError("expired-lease recovery requires the original output artifact")
+        try:
+            self._connection.execute("BEGIN IMMEDIATE")
+            campaign = self.get_campaign(campaign_id)
+            if campaign.status is CampaignStatus.COMPLETE:
+                raise ConflictError("completed Campaign cannot recover task output")
+            events = self.list_events(
+                campaign_id, entity_type="execution_task", entity_id=task_id,
+            )
+            if not events:
+                raise NotFoundError(f"execution task not found: {task_id}")
+            if self._task_inputs_invalidated(events[0]):
+                raise ConflictError("execution task inputs refer to an invalidated stage revision")
+            state_events = [
+                event for event in events if event.event_type in {
+                    "TASK_CLAIMED", "TASK_LEASE_RELEASED", "TASK_COMPLETED",
+                    "TASK_FAILED", "TASK_RETRY_AUTHORIZED", "TASK_CANCELLED",
+                }
+            ]
+            if not state_events or state_events[-1].event_type != "TASK_CLAIMED":
+                raise ConflictError("only a currently leased task can recover expired output")
+            claim = state_events[-1]
+            if claim.payload["attempt"] != attempt:
+                raise ConflictError("execution task lease attempt is stale")
+            if claim.actor != worker_id:
+                raise ConflictError("execution task lease belongs to another worker")
+            if claim.payload["lease_expires_at"] != lease_expires_at:
+                raise ConflictError("execution task lease expiration binding is stale")
+            if dt.datetime.fromisoformat(lease_expires_at) > dt.datetime.fromisoformat(now):
+                raise ConflictError("execution task lease has not expired")
+            result = self._append_event_tx(
+                campaign_id=campaign_id,
+                batch_id=events[0].batch_id,
+                entity_type="execution_task_recovery",
+                entity_id=task_id,
+                event_type="TASK_EXPIRED_RECOVERY_AUTHORIZED",
+                idempotency_key=(
+                    f"task:expired-recovery:{campaign_id}:{task_id}:"
+                    f"{claim.event_id}:{output_ref}"
+                ),
+                actor=actor,
+                payload={
+                    "claim_event_id": claim.event_id,
+                    "attempt": attempt,
+                    "worker_id": worker_id,
+                    "lease_expires_at": lease_expires_at,
+                    "output_ref": output_ref,
+                    "reason": reason,
+                    "evidence_refs": list(evidence_refs),
+                },
+                payload_ref=output_ref,
+                created_at=now,
+            )
+            self._connection.commit()
+            return result
+        except Exception:
+            if self._connection.in_transaction:
+                self._connection.rollback()
+            raise
+
     def finalize_task(
         self,
         *,
@@ -821,10 +1046,16 @@ class AuditStore(AbstractContextManager["AuditStore"]):
         payload: Mapping[str, Any],
         payload_ref: str | None,
         now: str,
+        recovery_authorization_id: str | None = None,
     ) -> AppendResult:
         self.get_campaign(campaign_id)
         try:
             self._connection.execute("BEGIN IMMEDIATE")
+            if (
+                recovery_authorization_id is not None
+                and self.get_campaign(campaign_id).status is CampaignStatus.COMPLETE
+            ):
+                raise ConflictError("completed Campaign cannot recover task output")
             rows = self._connection.execute(
                 """
                 SELECT * FROM events
@@ -854,6 +1085,38 @@ class AuditStore(AbstractContextManager["AuditStore"]):
                 "TASK_FAILED", "TASK_RETRY_AUTHORIZED", "TASK_CANCELLED",
             }]
             latest_state = state_events[-1] if state_events else None
+            if recovery_authorization_id is not None:
+                if latest_state is None or latest_state.event_id != claim.event_id:
+                    raise ConflictError("only a currently leased task can recover expired output")
+                authorization = self._connection.execute(
+                    """
+                    SELECT * FROM events WHERE event_id = ? AND campaign_id = ?
+                        AND entity_type = 'execution_task_recovery' AND entity_id = ?
+                        AND event_type = 'TASK_EXPIRED_RECOVERY_AUTHORIZED'
+                    """,
+                    (recovery_authorization_id, campaign_id, task_id),
+                ).fetchone()
+                if authorization is None:
+                    raise ConflictError("expired-lease recovery authorization not found")
+                authorized = self._event_from_row(authorization)
+                binding = authorized.payload
+                if (
+                    not succeeded or payload_ref is None
+                    or binding.get("claim_event_id") != claim.event_id
+                    or binding.get("attempt") != attempt
+                    or binding.get("worker_id") != worker_id
+                    or binding.get("lease_expires_at") != claim.payload["lease_expires_at"]
+                    or binding.get("output_ref") != payload_ref
+                    or dt.datetime.fromisoformat(claim.payload["lease_expires_at"])
+                    > dt.datetime.fromisoformat(now)
+                ):
+                    raise ConflictError("expired-lease recovery does not match original lease/output")
+                consumed = self._connection.execute(
+                    "SELECT 1 FROM events WHERE idempotency_key = ?",
+                    (f"task:expired-recovery-consumed:{recovery_authorization_id}",),
+                ).fetchone()
+                if consumed:
+                    raise ConflictError("expired-lease recovery authorization already consumed")
             if latest_state is not None and latest_state.event_type in {
                 "TASK_COMPLETED", "TASK_FAILED", "TASK_CANCELLED",
             }:
@@ -868,7 +1131,28 @@ class AuditStore(AbstractContextManager["AuditStore"]):
                 and latest_state is not None
                 and latest_state.event_type == "TASK_CLAIMED"
             ):
-                raise ConflictError(f"execution task lease expired: {task_id}")
+                if recovery_authorization_id is None:
+                    raise ConflictError(f"execution task lease expired: {task_id}")
+            if recovery_authorization_id is not None:
+                self._append_event_tx(
+                    campaign_id=campaign_id,
+                    batch_id=events[0].batch_id,
+                    entity_type="execution_task_recovery",
+                    entity_id=task_id,
+                    event_type="TASK_EXPIRED_RECOVERY_CONSUMED",
+                    idempotency_key=(
+                        f"task:expired-recovery-consumed:{recovery_authorization_id}"
+                    ),
+                    actor=worker_id,
+                    payload={
+                        "authorization_event_id": recovery_authorization_id,
+                        "claim_event_id": claim.event_id,
+                        "attempt": attempt,
+                        "output_ref": payload_ref,
+                    },
+                    payload_ref=payload_ref,
+                    created_at=now,
+                )
             result = self._append_event_tx(
                 campaign_id=campaign_id,
                 batch_id=events[0].batch_id,

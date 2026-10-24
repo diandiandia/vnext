@@ -57,8 +57,9 @@ def test_cli_go_profile_uses_registered_offline_harness(
 
 
 @pytest.mark.parametrize("enabled", [False, True])
-def test_cli_freezes_experimental_go_provider_choice(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str], enabled: bool,
+@pytest.mark.parametrize("language", ["go", "java"])
+def test_cli_freezes_experimental_provider_choice(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], enabled: bool, language: str,
 ) -> None:
     target = tmp_path / "target"
     target.mkdir()
@@ -68,20 +69,21 @@ def test_cli_freezes_experimental_go_provider_choice(
         "--campaign-id", "CMP-provider", "--snapshot-id", "fixture:provider",
     ]
     if enabled:
-        args.append("--experimental-go-hotspots")
+        args.append(f"--experimental-{language}-hotspots")
     assert main(args) == 0
     record = json.loads(capsys.readouterr().out)
-    assert ("experimental_go_hotspots" in record["constraints"]) is enabled
+    assert (f"experimental_{language}_hotspots" in record["constraints"]) is enabled
     with CampaignManager(target, state) as manager:
         assert (
-            "experimental_go_hotspots"
+            f"experimental_{language}_hotspots"
             in manager.store.get_campaign("CMP-provider").constraints
         ) is enabled
 
 
 @pytest.mark.parametrize("enabled", [False, True])
-def test_r1_and_both_r2_modes_receive_frozen_go_provider_choice(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, enabled: bool,
+@pytest.mark.parametrize("language", ["go", "java"])
+def test_r1_and_both_r2_modes_receive_frozen_provider_choice(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, enabled: bool, language: str,
 ) -> None:
     import reachable_audit.execution as execution
 
@@ -94,7 +96,7 @@ def test_r1_and_both_r2_modes_receive_frozen_go_provider_choice(
     with CampaignManager(tmp_path) as manager:
         manager.create_campaign(
             campaign_id="CMP-provider", snapshot_id="fixture:provider",
-            constraints=("experimental_go_hotspots",) if enabled else (),
+            constraints=(f"experimental_{language}_hotspots",) if enabled else (),
         )
         manager.record_inventory(campaign_id="CMP-provider", inventory=inventory)
         manager.record_plan(campaign_id="CMP-provider", plan=plan, inventory=inventory)
@@ -120,5 +122,5 @@ def test_r1_and_both_r2_modes_receive_frozen_go_provider_choice(
         coordinator.schedule_r2(entrypoint_checklist=())
         coordinator.schedule_r2_compact(entrypoint_checklist=())
         assert len(calls) == 3
-        assert all(call["enable_go"] is enabled for call in calls)
+        assert all(call[f"enable_{language}"] is enabled for call in calls)
         assert all(set(call["expected_digests"]) == {"app.py"} for call in calls)

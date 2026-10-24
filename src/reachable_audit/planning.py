@@ -311,6 +311,23 @@ def create_audit_plan(
     validate_boundary_edge_endpoints(
         boundary_edges, known_components, source_owner_by_path,
     )
+    source_components = set(source_owner_by_path.values())
+    included_components = {
+        source_owner_by_path[path] for path, state in path_state_by_path.items()
+        if state is PlanPathState.INCLUDED
+    }
+
+    def endpoint_in_scope(component_id: str, path: str | None) -> bool:
+        if path:
+            return path_state_by_path[path] is PlanPathState.INCLUDED
+        return component_id in included_components or component_id not in source_components
+
+    # Keep both endpoint reviews for cross-scope risks, but not unrelated outside edges.
+    boundary_edges = tuple(
+        edge for edge in boundary_edges
+        if endpoint_in_scope(edge.source_component_id, edge.source_path)
+        or endpoint_in_scope(edge.target_component_id, edge.target_path)
+    )
 
     files_by_component: dict[str, list[tuple[str, str]]] = {
         component_id: [] for component_id in known_components
@@ -334,10 +351,13 @@ def create_audit_plan(
         component_id
         for component_id, paths in files_by_component.items()
         if not paths
-        and not components_by_id[component_id].build_manifests
+        and (
+            component_id in source_components
+            or not components_by_id[component_id].build_manifests
+        )
         and not edges_by_component[component_id]
     ))
-    if known_components and len(omitted_empty_component_ids) == len(known_components):
+    if not inventory.source_files and len(omitted_empty_component_ids) == len(known_components):
         omitted_empty_component_ids = omitted_empty_component_ids[1:]
     omitted_empty = set(omitted_empty_component_ids)
 
@@ -592,9 +612,13 @@ def validate_plan(plan: AuditPlan, inventory: ProjectInventory) -> None:
         source.component_id for source in inventory.source_files
         if path_state_by_path[source.path] is PlanPathState.INCLUDED
     }
+    inventory_source_components = set(source_owner_by_path.values())
     invalid_omissions = sorted(
         component_id for component_id in omitted
-        if components[component_id].build_manifests
+        if (
+            components[component_id].build_manifests
+            and component_id not in inventory_source_components
+        )
         or component_id in boundary_components
         or component_id in source_components
     )

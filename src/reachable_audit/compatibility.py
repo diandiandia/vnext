@@ -100,6 +100,7 @@ def scan_runtime_compatibility(root: str | Path, forbidden_tokens: Sequence[str]
         "passed": not findings,
         "findings": [asdict(item) for item in findings],
         "scanned_python_files": residue_report["scanned_python_files"],
+        "scanned_helper_files": residue_report["scanned_helper_files"],
         "scanned_knowledge_files": residue_report["scanned_knowledge_files"],
         "scanned_prompt_files": residue_report["scanned_prompt_files"],
     }
@@ -124,8 +125,13 @@ def scan_runtime_deproject(root: str | Path, forbidden_tokens: Sequence[str] = (
             paths.extend(candidate.rglob("*.json"))
     knowledge_count = len(paths)
     source_paths = list((base / "src").rglob("*.py"))
+    helper_paths = [
+        path for path in (base / "src").rglob("*")
+        if path.is_file() and path.suffix in {".go", ".java"}
+    ]
     prompt_paths = [base / "SKILL.md"] if (base / "SKILL.md").is_file() else []
     paths.extend(source_paths)
+    paths.extend(helper_paths)
     paths.extend(prompt_paths)
     for path in sorted(paths):
         try:
@@ -144,5 +150,6 @@ def scan_runtime_deproject(root: str | Path, forbidden_tokens: Sequence[str] = (
         "findings": [asdict(item) for item in findings],
         "scanned_knowledge_files": knowledge_count,
         "scanned_python_files": len(source_paths),
+        "scanned_helper_files": len(helper_paths),
         "scanned_prompt_files": len(prompt_paths),
     }

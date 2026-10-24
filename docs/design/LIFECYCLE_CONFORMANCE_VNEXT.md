@@ -19,6 +19,14 @@ observability. These are tool maintenance/verification work products, not a new
 clause-level conformance assessment. Host/provider controls and organizational
 approval gaps below remain open.
 
+2026-10-24 maintenance update: SYSR-043/SWDR-049 and TR-15 record scope projection,
+frozen resource evidence, shared R4 validation, explicit task recovery and budget
+amendment, and optional static challenges. Experimental Java parser tests demonstrate
+bounded implementation mechanics, not target semantic quality. Verified pilot digests,
+reproduction tests and retained original resource failures support maintenance and
+configuration-management evidence only; they do not close organizational approvals,
+trusted host/authority, independent validation or clause-level conformity gaps.
+
 Statuses mean:
 
 - **Implemented in tool:** a tested software mechanism exists.

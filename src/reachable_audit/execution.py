@@ -559,9 +559,19 @@ class ManualExecutionBackend:
             )
         return None
 
-    def collect(self, lease: TaskLease, result: TaskResult) -> TaskView:
+    def collect(
+        self, lease: TaskLease, result: TaskResult, *,
+        recovery_reason: str | None = None,
+        recovery_evidence_refs: Sequence[str] = (),
+        recovery_actor: str = "operator",
+        recovery_authorization_id: str | None = None,
+    ) -> TaskView:
         if lease.task.campaign_id != self.campaign_id:
             raise ModelError("execution lease belongs to another Campaign")
+        if recovery_reason is not None or recovery_authorization_id is not None:
+            current = self.current_lease(lease.task.task_id, lease.worker_id)
+            if current != lease:
+                raise ModelError("recovery must match the original current task lease and attempt")
         if self._task_revision_is_stale(lease.task):
             raise ModelError("execution task inputs refer to an invalidated stage revision")
         self._validate_host_worker_attestation(lease, result)
@@ -590,6 +600,25 @@ class ManualExecutionBackend:
         }
         if exceeded:
             raise ModelError(f"execution task exceeded budget: {exceeded}")
+        if recovery_authorization_id is not None and recovery_reason is not None:
+            raise ModelError("supply recovery authorization ID or reason, not both")
+        if recovery_reason is None and recovery_evidence_refs:
+            raise ModelError("recovery evidence requires an explicit operator reason")
+        if recovery_reason is not None:
+            if not result.succeeded or result.output_ref is None:
+                raise ModelError("expired-lease recovery requires an existing complete output")
+            recovery_authorization_id = self.manager.authorize_expired_task_recovery(
+                self.campaign_id,
+                task_id=lease.task.task_id,
+                worker_id=lease.worker_id,
+                attempt=lease.attempt,
+                output_ref=result.output_ref,
+                lease_expires_at=lease.lease_expires_at,
+                reason=recovery_reason,
+                evidence_refs=tuple(recovery_evidence_refs),
+                actor=recovery_actor,
+                now=self._now(),
+            ).event_id
         self.manager.store.finalize_task(
             campaign_id=self.campaign_id,
             task_id=lease.task.task_id,
@@ -606,6 +635,7 @@ class ManualExecutionBackend:
             },
             payload_ref=result.output_ref,
             now=self._now(),
+            recovery_authorization_id=recovery_authorization_id,
         )
         return self.poll(lease.task.task_id)
 
@@ -1085,6 +1115,9 @@ class ManualExecutionBackend:
         if not isinstance(category_plan, dict):
             raise ModelError(f"R4 task input is missing its CategoryAuditPlan: {task.task_id}")
         run = CategoryRun.from_dict(run_value)
+        BatchWorkflow(
+            self.manager, task.campaign_id, task.batch_id,
+        ).validate_category_evidence(run)
         self._validate_category_run_plan(
             run, category_plan, task.task_id,
             allowed_hypothesis_ids=task_input.get("allowed_hypothesis_ids"),
@@ -1183,6 +1216,9 @@ class ManualExecutionBackend:
             if run.category_plan_id in actual:
                 raise ModelError(f"duplicate CategoryRun in bundle: {run.category_plan_id}")
             actual.add(run.category_plan_id)
+            BatchWorkflow(
+                self.manager, task.campaign_id, task.batch_id,
+            ).validate_category_evidence(run)
             category_plan = expected.get(run.category_plan_id)
             if category_plan is None:
                 raise ModelError(f"CategoryRun is outside bundle scope: {run.category_run_id}")
@@ -1498,7 +1534,12 @@ class ManualExecutionBackend:
     ) -> None:
         verdict_value = output.get("verdict")
         if not isinstance(verdict_value, dict):
-            raise ModelError(f"task output requires a verdict object: {task.task_id}")
+            raise ModelError(
+                "task output requires a nested verdict object, not a verdict string; "
+                "put hypothesis_id, verdict, evidence_grade, principal, preconditions, "
+                "call_chain, edge_evidence_ids, blocking_evidence_ids, experiment_ids "
+                f"and rationale inside output.verdict: {task.task_id}"
+            )
         call_chain = verdict_value.get("call_chain")
         if not isinstance(call_chain, list) or any(
             not isinstance(reference, str) for reference in call_chain
@@ -1647,6 +1688,7 @@ class ManualExecutionBackend:
             type(max_wall_seconds) is not int or max_wall_seconds <= 0
         ):
             raise ModelError("Campaign max_wall_seconds budget must be a positive integer")
+        max_wall_seconds = self.manager.effective_wall_limit_seconds(self.campaign_id)
         created_at = dt.datetime.fromisoformat(campaign.created_at)
         current_time = dt.datetime.fromisoformat(now)
         if created_at.tzinfo is None:
@@ -2239,18 +2281,42 @@ class DiscoveryCoordinator:
                 "snapshot_id": self.workflow.campaign.snapshot_id,
                 "hypothesis": hypothesis,
                 "analysis_contract": _VERIFICATION_INSTRUCTIONS,
+                "output_example": {
+                    "schema_version": "1.0",
+                    "verdict": {
+                        "hypothesis_id": hypothesis_id,
+                        "verdict": "NEEDS_REVIEW",
+                        "evidence_grade": "static_only",
+                        "principal": "replace with the evidenced principal",
+                        "preconditions": [],
+                        "call_chain": [],
+                        "edge_evidence_ids": [],
+                        "blocking_evidence_ids": [],
+                        "experiment_ids": [],
+                        "rationale": "Replace with current-source evidence and unresolved premises.",
+                    },
+                },
                 "output_contract": {
                     "schema_version": "1.0",
-                    "verdict": "VerdictSubmission",
-                    "call_chain": (
-                        "ordered array of pure LOC-path:line source anchors, "
-                        "caller-to-callee; no descriptions or other prose"
-                    ),
-                    "rationale": (
-                        "separate explanation of the call-chain steps and supporting "
-                        "edge evidence; target-runtime claims require actual evidence "
-                        "matched to the exact target version or verdict NEEDS_REVIEW"
-                    ),
+                    "verdict": {
+                        "hypothesis_id": hypothesis_id,
+                        "verdict": "REACHABLE | UNREACHABLE | NEEDS_REVIEW",
+                        "evidence_grade": "static_only | edge_proven (never empirical at R3)",
+                        "principal": "evidenced caller/principal",
+                        "preconditions": "array of explicit premises",
+                        "call_chain": (
+                            "ordered array of pure LOC-path:line source anchors, "
+                            "caller-to-callee; no descriptions or other prose"
+                        ),
+                        "edge_evidence_ids": "array of LOC or sha256 evidence refs",
+                        "blocking_evidence_ids": "array of LOC or sha256 blocker refs",
+                        "experiment_ids": "array of registered experiment IDs, normally []",
+                        "rationale": (
+                            "separate explanation of the call-chain steps and supporting "
+                            "edge evidence; target-runtime claims require actual evidence "
+                            "matched to the exact target version or verdict NEEDS_REVIEW"
+                        ),
+                    },
                 },
             })
             views.append(self.backend.submit(TaskSpec(
@@ -3598,8 +3664,7 @@ class DiscoveryCoordinator:
         return {
             str(item["hypothesis_id"]): work_units[str(item["hypothesis_id"])]
             for item in r3["verdicts"]
-            if item["verdict"] == "REACHABLE"
-            and item["evidence_grade"] == "edge_proven"
+            if self.workflow.refutation_eligible(item)
         }
 
     def _normalize_entrypoint_checklist(
@@ -3850,6 +3915,12 @@ class DiscoveryCoordinator:
                 expected_digests=receipt["file_digests"],
                 enable_go=(
                     "experimental_go_hotspots"
+                    in self.workflow.manager.store.get_campaign(
+                        self.workflow.campaign_id
+                    ).constraints
+                ),
+                enable_java=(
+                    "experimental_java_hotspots"
                     in self.workflow.manager.store.get_campaign(
                         self.workflow.campaign_id
                     ).constraints

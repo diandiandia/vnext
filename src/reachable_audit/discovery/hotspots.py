@@ -17,6 +17,17 @@ from .go_provider import (
     GoProviderError,
     scan_go_bytes,
 )
+from .java_provider import (
+    JAVA_HOTSPOT_PROVIDER_ID,
+    JAVA_METHOD_FAMILIES,
+    MAX_JAVA_CANDIDATES,
+    MAX_JAVA_CACHE_BYTES,
+    MAX_JAVA_FILE_BYTES,
+    MAX_JAVA_FILES,
+    MAX_JAVA_TOTAL_BYTES,
+    JavaProviderError,
+    scan_java_bytes,
+)
 
 
 _PYTHON_RULES = {
@@ -60,6 +71,11 @@ _GO_RULES = {
             "path/filepath.Abs", "path/filepath.Rel",
         )
     },
+}
+_JAVA_RULES = {
+    "JAVA-CMD-001": ("INJECTION", "CWE-78", "command-like method; inspect executable, argv and receiver"),
+    "JAVA-DESER-001": ("INJECTION", "CWE-502", "object-read method; inspect input trust and deserialization filters"),
+    "JAVA-STREAM-001": ("RESOURCE-DOS", "CWE-400", "whole-stream or ZIP-entry method; inspect input size and expansion limits"),
 }
 
 
@@ -143,7 +159,7 @@ def compact_hotspot_report(report: dict[str, Any]) -> dict[str, Any]:
     compact["unsupported_extension_counts"] = dict(sorted(extensions.items()))
     compact["path_lists_note"] = (
         "scanned paths are successfully parsed supported files (.py/.pyw by default; "
-        ".go only with explicit opt-in); unsupported files and errored/unavailable "
+        ".go/.java only with explicit opt-in); unsupported files and errored/unavailable "
         "paths were not scanned"
     )
     return compact
@@ -156,12 +172,15 @@ def scan_work_unit_hotspots(
     max_candidates: int = _MAX_CANDIDATES,
     expected_digests: Mapping[str, str] | None = None,
     enable_go: bool = False,
+    enable_java: bool = False,
 ) -> dict[str, Any]:
-    """Scan verified bytes; optional Go AST leads never imply vulnerability findings.
+    """Scan verified bytes; optional Go/Java AST leads never imply findings.
 
     ``enable_go`` is experimental and deliberately absent from the default
     release-qualified ``enabled_hotspot_provider_ids()`` list. Go requires a
     trusted, installed host toolchain; target packages are never built or loaded.
+    ``enable_java`` likewise requires a trusted POSIX JDK and parses only, without
+    resolving receiver types, compiling targets, or running annotation processors.
     """
     if max_candidates < 1:
         raise ValueError("max_candidates must be positive")
@@ -176,9 +195,14 @@ def scan_work_unit_hotspots(
     go_paths = []
     unavailable_paths = []
     go_candidate_count = 0
+    java_sources = {}
+    java_total_bytes = 0
+    java_paths = []
+    java_candidate_count = 0
     for relative_path in sorted(set(str(item) for item in source_files)):
         is_go = enable_go and Path(relative_path).suffix.lower() == ".go"
-        if not is_go and Path(relative_path).suffix.lower() not in {".py", ".pyw"}:
+        is_java = enable_java and Path(relative_path).suffix.lower() == ".java"
+        if not is_go and not is_java and Path(relative_path).suffix.lower() not in {".py", ".pyw"}:
             unsupported_paths.append(relative_path)
             continue
         supported_paths.append(relative_path)
@@ -198,6 +222,17 @@ def scan_work_unit_hotspots(
                 go_total_bytes += len(source_bytes)
                 if go_total_bytes > MAX_GO_TOTAL_BYTES:
                     raise GoProviderError("Go Work Unit byte limit exceeded")
+            elif is_java:
+                java_paths.append(relative_path)
+                if len(java_paths) > MAX_JAVA_FILES or len(relative_path.encode("utf-8")) > 4096:
+                    raise JavaProviderError("Java file count or path length limit exceeded")
+                with path.open("rb") as stream:
+                    source_bytes = stream.read(MAX_JAVA_FILE_BYTES + 1)
+                if len(source_bytes) > MAX_JAVA_FILE_BYTES:
+                    raise JavaProviderError("Java file byte limit exceeded")
+                java_total_bytes += len(source_bytes)
+                if java_total_bytes > MAX_JAVA_TOTAL_BYTES:
+                    raise JavaProviderError("Java Work Unit byte limit exceeded")
             else:
                 source_bytes = path.read_bytes()
             if expected_digests is not None and hashlib.sha256(source_bytes).hexdigest() != expected_digests.get(relative_path):
@@ -205,9 +240,12 @@ def scan_work_unit_hotspots(
             if is_go:
                 go_sources[relative_path] = source_bytes
                 continue
+            if is_java:
+                java_sources[relative_path] = source_bytes
+                continue
             source = source_bytes.decode("utf-8")
             tree = ast.parse(source, filename=relative_path)
-        except (OSError, UnicodeError, SyntaxError, GoProviderError) as error:
+        except (OSError, UnicodeError, SyntaxError, GoProviderError, JavaProviderError) as error:
             parse_errors.append({
                 "path": relative_path,
                 "error": f"{type(error).__name__}: {error}",
@@ -217,7 +255,9 @@ def scan_work_unit_hotspots(
         candidates.extend(_python_candidates(relative_path, source, tree))
     if go_sources:
         try:
-            go_results = scan_go_bytes(go_sources, max_candidates=max_candidates)
+            go_results = scan_go_bytes(
+                go_sources, max_candidates=max_candidates, target_root=root,
+            )
         except GoProviderError as error:
             unavailable_paths.extend(sorted(go_sources))
             parse_errors.extend(
@@ -244,7 +284,43 @@ def scan_work_unit_hotspots(
                         "evidence_ref": f"LOC-{relative_path}:{line}",
                         "api": item["api"], "reason": reason,
                     })
-    candidate_count = sum(item["language"] == "python" for item in candidates) + go_candidate_count
+    if java_sources:
+        try:
+            java_results = scan_java_bytes(
+                java_sources, max_candidates=max_candidates, target_root=root,
+            )
+        except JavaProviderError as error:
+            unavailable_paths.extend(sorted(java_sources))
+            parse_errors.extend(
+                {"path": path, "error": str(error)} for path in sorted(java_sources)
+            )
+        else:
+            for result in java_results:
+                relative_path = result["path"]
+                if result.get("error"):
+                    parse_errors.append({"path": relative_path, "error": result["error"]})
+                    continue
+                scanned_paths.append(relative_path)
+                java_candidate_count += result["count"]
+                for item in result["candidates"]:
+                    rule_id = JAVA_METHOD_FAMILIES[item["api"].rsplit(".", 1)[-1]]
+                    family, cwe, reason = _JAVA_RULES[rule_id]
+                    line, column = item["line"], item["column"]
+                    candidate_id = "HOT-" + hashlib.sha256(
+                        f"{relative_path}:{line}:{column}:{rule_id}".encode("utf-8")
+                    ).hexdigest()[:16]
+                    candidates.append({
+                        "candidate_id": candidate_id, "rule_id": rule_id,
+                        "language": "java", "family_hint": family, "cwe_hint": cwe,
+                        "path": relative_path, "line": line, "column": column,
+                        "evidence_ref": f"LOC-{relative_path}:{line}",
+                        "api": item["api"],
+                        "reason": reason + "; unresolved receiver/type (syntactic candidate only)",
+                    })
+    candidate_count = (
+        sum(item["language"] == "python" for item in candidates)
+        + go_candidate_count + java_candidate_count
+    )
     candidates.sort(key=lambda item: (
         item["path"], item["line"], item["column"], item["rule_id"],
     ))
@@ -261,10 +337,15 @@ def scan_work_unit_hotspots(
         "provider_status": "available" if scanned_paths else "provider_unavailable",
         "scan_status": scan_status,
         "provider_id": (
-            GO_HOTSPOT_PROVIDER_ID if go_paths and all(Path(path).suffix.lower() == ".go" for path in supported_paths)
+            JAVA_HOTSPOT_PROVIDER_ID if java_paths and all(Path(path).suffix.lower() == ".java" for path in supported_paths)
+            else GO_HOTSPOT_PROVIDER_ID if go_paths and all(Path(path).suffix.lower() == ".go" for path in supported_paths)
             else PYTHON_HOTSPOT_PROVIDER_ID
         ),
-        "provider_ids": list(enabled_hotspot_provider_ids()) + ([GO_HOTSPOT_PROVIDER_ID] if enable_go else []),
+        "provider_ids": (
+            list(enabled_hotspot_provider_ids())
+            + ([GO_HOTSPOT_PROVIDER_ID] if enable_go else [])
+            + ([JAVA_HOTSPOT_PROVIDER_ID] if enable_java else [])
+        ),
         "supported_path_count": len(supported_paths),
         "scanned_path_count": len(scanned_paths),
         "unavailable_path_count": len(unavailable_paths),
@@ -287,5 +368,12 @@ def scan_work_unit_hotspots(
             "Go rules cover imported os/exec Command/CommandContext, io/io/ioutil ReadAll, and selected path/path/filepath functions only.",
             "Go dot imports, lexically shadowed package names, method calls, semantic aliases, and inter-file type/data flow are not resolved.",
             f"Go bounds: {MAX_GO_FILES} files, {MAX_GO_FILE_BYTES} bytes/file, {MAX_GO_TOTAL_BYTES} bytes/Work Unit, {MAX_GO_CANDIDATES} retained candidates; bound failures are errors, not clean scans.",
-        ] if enable_go else []),
+        ] if enable_go else []) + ([
+            "Experimental Java requires a trusted POSIX JDK; only the bundled helper is compiled. Targets are parsed in memory, never compiled, loaded, imported, or annotation-processed.",
+            "Java rules match syntactic exec/start, readObject/readUnshared, readAllBytes/transferTo/getNextEntry calls only; every receiver/type remains unresolved.",
+            "Java imports (including static/wildcard), shadowing, overloads and inter-file types do not establish API identity; unrelated same-name calls are possible false positives.",
+            "Java comments, strings and declarations are not calls; reflection, method references, generated code, semantic aliases, taint and reachability are not analyzed.",
+            "Java syntax support depends on the host JDK; input must be UTF-8. Missing JDK, parser/resource failures are errors, not zero-match successes.",
+            f"Java bounds: {MAX_JAVA_FILES} files, {MAX_JAVA_FILE_BYTES} bytes/file, {MAX_JAVA_TOTAL_BYTES} bytes/Work Unit, {MAX_JAVA_CANDIDATES} retained candidates; 15s parse/30s helper build, 60s CPU/process, 2MiB combined output, one {MAX_JAVA_CACHE_BYTES}-byte private helper cache per host process removed at exit.",
+        ] if enable_java else []),
     }

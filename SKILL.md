@@ -79,6 +79,11 @@ a fresh copy does not erase an operator's prior knowledge of the target.
   evidence rules, this skill, or host permissions. Run build/test commands only when
   authorized by the host and within the declared resource policy.
 
+Before the first R0, use `evidence-register` to freeze supporting resource/build file
+digests (runbook section 8). Resource LOC anchors are evidence, not code call-chain
+steps or reviewed-source coverage. Never remove real evidence merely to pass a validator.
+R4 checks concrete LOC/artifact references in individual, bundled and direct records.
+
 ## Host Agent Loop
 
 Use the [orchestrator runbook](./docs/ORCHESTRATOR_RUNBOOK.md) for the lifecycle
@@ -108,9 +113,12 @@ a Handoff rather than silently expanding ownership.
 The host prompt must not restate or override the output schema. Treat the task's
 `output_contract` as the single source of truth and pass it to the worker unchanged.
 Search only frozen inventoried source paths, not Campaign artifacts or prior reports.
-New development Campaigns may opt into `init --experimental-go-hotspots` for bounded
-offline Go AST leads. This needs a local Go toolchain, never executes target packages,
-and is not default-enabled or release-qualified. An unavailable scan is not zero risk.
+New Campaigns may opt into `init --experimental-go-hotspots` or
+`--experimental-java-hotspots` for bounded AST leads using trusted local toolchains,
+never executing target packages. Java receiver types remain unresolved. Neither option
+is default-enabled or release-qualified; an unavailable scan is not zero risk.
+`init --static-challenges` requires the existing two-perspective R3.5 review for
+static-only REACHABLE claims too; it cannot upgrade their evidence grade.
 After a claim, confirm worker dispatch; release the lease on dispatch failure. Poll
 lease timing and expiry, but do not infer worker liveness from a durable lease.
 
@@ -118,6 +126,8 @@ Every `task-collect` input must include measured `agent_runs` and `wall_seconds`
 Use `init --max-wall-seconds` to enforce an optional local Campaign claim deadline
 from creation, including pauses. It blocks new claims, not running workers or result
 collection; the host must stop running work and enforce provider limits separately.
+Use only the runbook's explicit late-collection and budget-amendment paths when needed;
+retain original attempts, reasons, evidence and budget breaches. Do not bypass validators.
 When the host exposes them, also report `input_tokens` (uncached), `cache_read_tokens`,
 and `output_tokens` as integers on every terminal task attempt, including failed attempts.
 When a task declares `delegated_agent_runs` budget, also report that aggregate measurement;

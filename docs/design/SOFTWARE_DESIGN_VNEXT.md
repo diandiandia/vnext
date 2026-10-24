@@ -383,10 +383,13 @@ before collection succeeds. Its default width is one (the existing task mode); i
 limits can force a smaller group or individual scheduling. Bundling reduces session
 startup/context replay but does not merge WU ownership, findings, or evidence records.
 
-Planning may omit a component only when it owns no source files, build manifests, or
-boundary-edge obligations; manifest-only and boundary-only components remain planned.
-Omitted component IDs are persisted in the plan. If every component is otherwise empty,
-one Work Unit is retained so the Campaign still has a closure path. Forecasts and bundling
+Planning projects the graph onto declared INCLUDED paths: wholly out-of-scope edges and
+their otherwise empty analysis work are omitted. Concrete endpoint paths take precedence
+over component membership. Both directions of cross-scope edges retain endpoint review
+and Handoff obligations; an empty boundary-only WU is not source coverage. Manifest-only
+components and truly empty roots retain existing behavior. Omitted component IDs are
+persisted; a fully excluded/deferred inventory can have zero Batches, which is not
+evidence of safety. Forecasts and bundling
 are advisory/opt-in controls: their cost and quality effects require measured paired runs.
 Before persistence, the Plan is revalidated against its inventory snapshot/digest,
 component/path and language ownership, normalized categories, all-six axis coverage,
@@ -635,6 +638,20 @@ Parser bounds are explicit: at most 128 Go files, 1 MiB per file and 4 MiB sourc
 Work Unit, bounded helper output and subprocess resources. Files beyond those bounds
 remain reported failures, not reviewed scope.
 
+The Java development slice uses a new Campaign's `experimental_java_hotspots`
+constraint (`init --experimental-java-hotspots`) on the same R1/R2 path. A bundled
+trusted helper uses the host JDK compiler Tree API's parse operation only: no target
+compilation, class loading, dependency resolution or annotation processing. It emits
+unresolved-receiver method-site leads for command creation, object deserialization
+and whole-stream/archive iteration. Import, type, shadowing and interprocedural
+resolution are absent, so same-name unrelated methods can match. Comments and strings
+are not call nodes. Missing JDK/unsupported syntax/UTF-8 failures remain explicit gaps.
+The bounded process runner is shared with Go, not a second execution engine; the
+qualified/default provider roster remains Python-only. Helper caches and temporary
+workspaces use private external temporary roots, not the target or current working
+directory; target-local `TMPDIR` is ignored and unsafe-root failure is explicit. See
+TR-15 and the runbook for resource limits and installed-package checks.
+
 The optional `run_harness(profile="go-offline")`/JSON `profile` reuses the managed
 execution store and R5 observations. Its explicit 8 GiB address-space default and
 64 MiB per-file build allowance permit Go compilation without enlarging captured
@@ -773,9 +790,37 @@ release-ready claims require a qualified independent reviewer to inspect source,
 evidence relevance, attacker assumptions, impact, and severity and retain a disposition.
 
 R3.5 schedulers derive refutation/adjudication targets from the committed R3 artifact.
+Default eligibility remains edge-proven REACHABLE. The frozen `static_challenges`
+constraint extends the same protocol and coverage gates to static-only REACHABLE:
+two separate labels/perspectives, source-verified demotion and human handling of splits.
+The grade is unchanged. Final reports expose disabled static-only challenges explicitly;
+neither labels nor successful challenge completion prove identity or empirical truth.
 When there are no eligible targets, schedule/commit records explicit empty-stage results
 without enumerating unrelated Campaign tasks or reloading unrelated plan state. The same
 short-circuit applies to zero-target revival stages.
+
+### 6.2.1 Evidence Registration and Controlled Resumption
+
+`evidence-register` freezes bounded supporting file digests before the first R0.
+It rejects runtime/VCS state, unsafe/symlink paths and digest replacement. Concrete
+source/resource LOC validation checks frozen bytes, target containment, line range and
+nonblankness. Supporting resources are neither code-chain ownership nor reviewed scope.
+Registrations appear with artifact provenance in final JSON; old Campaigns are not
+silently rebaselined. R3 exposes an actually nested contract and a complete shape example.
+R4 uses shared concrete LOC/artifact/schema checks for individual/bundled tasks,
+screening and direct records, including nested axis and hypothesis-review evidence.
+Legacy symbolic reference labels retain their compatibility meaning, not verified
+source evidence. Host evidence relevance and continuous read monitoring remain external.
+
+Ordinary late collection remains rejected. Explicit recovery binds operator reason,
+resolvable evidence, original claim/worker/attempt/expiry and exact output digest;
+normal schema, attestation, measurements and task-budget checks still run. Superseded,
+terminal or invalidated attempts and completed Campaigns cannot be recovered. Consumption
+and finalization are transactional. Recovery does not dispatch work or recreate unknown
+usage, and a matching output schema alone is not authenticated authorship.
+Wall-budget extensions append authorization records; they increase an existing limit
+without resetting creation time. Claims use the approved effective limit. Reports retain
+original breach FAIL separately from approved-limit conformance and incomplete usage.
 
 ### 6.3 Campaign Abort, Cleanup, and Lessons
 
