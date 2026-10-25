@@ -16,7 +16,7 @@ IMPLEMENTED_RELEASE_GATES = tuple(f"RG{index}" for index in range(1, 16))
 
 
 _POLICY: dict[str, Any] = {
-    "policy_version": "vnext-task-policy-51",
+    "policy_version": "vnext-task-policy-52",
     "task_collection": {
         "go_hotspots": "campaign_frozen_opt_in_trusted_offline_ast_helper_candidates_only_not_release_qualified",
         "java_hotspots": "campaign_frozen_opt_in_jdk_parse_only_unresolved_method_candidates_not_release_qualified",
@@ -74,7 +74,7 @@ _POLICY: dict[str, Any] = {
         "r5_external_observation_refs": "optional_assessment_refs_must_name_registered_same_batch_hypothesis_observation;never_confirms_or_refutes",
         "late_stage_amendment": "r1_r6_precommit_r1_r5_postcommit_atomic_dependent_invalidation_and_terminal_r6_recommit_before_campaign_close",
         "r5_empirical_contract": "host_registered_harness_for_same_hypothesis_and_snapshot",
-        "r5_interpretation_guidance": "existing_rationale_and_preconditions_separate_claim_observation_failure_owner_harness_actions_build_conditions_and_unproven_impact;registration_not_semantic_confirmation;no_schema_or_gate_change",
+        "r5_interpretation_guidance": "language_and_mechanism_neutral;existing_rationale_and_preconditions_separate_claim_observation_failure_owner_harness_actions_build_conditions_and_unproven_impact;registration_not_semantic_confirmation;no_schema_or_gate_change",
         "experiment_recipe_prerequisites": "optional_tooling_scoped_to_memory_safety_and_numeric_families",
         "r6_evidence_context": "canonical_stage_artifacts_not_work_unit_source_inventory",
         "r6_surface_dispositions": "collect_exact_one_per_r1_surface_projection_defaults_missing_to_unreviewed_agent_reported",

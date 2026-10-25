@@ -541,6 +541,9 @@ execution, refutation, category-run, harness, CLI and Campaign closure regressio
   ordinary and replacement-Batch end-to-end tests in `test_deferred_review.py`.
   These assertions test task guidance, not semantic correctness or Agent compliance;
   the existing Experiment schema and empirical provenance gates remain unchanged.
+  Universal interpretation guidance must use language/mechanism-neutral observations,
+  not unconditional sanitizer, memory-corruption or sandbox examples. This checks
+  the shared analysis contract, not the legitimately scoped language/recipe context.
 
 **Real-host follow-up:** run a fresh authorized Campaign with explicit frozen choices;
 do not relabel old sealed Campaigns. Verify that the host enforces the static-only

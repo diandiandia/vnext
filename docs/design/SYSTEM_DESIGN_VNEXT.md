@@ -29,7 +29,7 @@ in-tree stores remain recoverable and ambiguous dual stores require an explicit
 selection. Library hosts must explicitly select external state. Physical source-read
 or OS context isolation is still a host responsibility.
 
-Current-contract update (2026-10-25): the runtime policy is `vnext-task-policy-51`.
+Current-contract update (2026-10-25): the runtime policy is `vnext-task-policy-52`.
 CG2's component ownership accounting recognizes complete evidence-backed EXCLUDED or
 DEFERRED path scope for a component without boundary obligations; it does not turn that
 scope decision into an audit or safety claim. Campaign output includes a non-gating

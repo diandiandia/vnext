@@ -282,15 +282,16 @@ assessment rationale; no additional output fields are required.
 - State the exact claim tested separately from actual observations and cite the logs.
   Identify whether the failing operation is in target code, embedding host or harness.
 - Describe harness-injected actions and retain instrumentation, fault injection,
-  build options and runtime conditions. Running a real library does not establish an
+  build options and runtime conditions. Running a real component does not establish an
   end-to-end target path. A manually modeled path remains `mechanism` fidelity unless
-  equivalence is evidenced; do not promote it merely because the library is real.
-- A sanitizer diagnostic or nonzero exit alone does not confirm the claim. Do not
-  infer a write from a read, corruption from allocation failure, or refutation from
-  a timeout/non-reproduction. Record unproven implications explicitly.
-- Separate behavior reproduction, memory-safety failure, security impact and
-  disclosure eligibility. A resource-limit bypass is not automatically a sandbox
-  escape. Keep material unproven parts `NEEDS_REVIEW`, rather than confirming a
+  equivalence is evidenced; do not promote it merely because the component is real.
+- Tool diagnostics, exceptions, exit status or output changes alone do not confirm
+  the claim. Match conclusions to the operation, path, conditions and impact actually
+  observed, without extrapolating partial behavior into unverified security
+  consequences. Timeout or non-reproduction alone is not refutation.
+- Separate behavior reproduction, claim confirmation, security impact and
+  disclosure eligibility. Record unproven implications explicitly.
+  Keep material unproven parts `NEEDS_REVIEW`, rather than confirming a
   broader claim than the evidence supports.
 
 These are Agent reasoning requirements, not semantic checks implemented by the

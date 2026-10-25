@@ -333,7 +333,7 @@ for `assessment.experiment_id`; non-null IDs must name an experiment in the same
 Invalid structure, scope or IDs fail collection and leave the lease available for repair.
 Fidelity/evidence are revalidated at commit. In rationale/preconditions, separate claim,
 observations, failure owner (target/host/harness), injected actions and build conditions.
-State unproven implications; sanitizer errors prove neither target path nor security impact. Follow the runbook's R5 rules.
+State unproven implications; tool diagnostics alone prove neither the claim nor security impact. Follow the runbook's R5 rules.
 
 Use `NOT_FEASIBLE` only when an experiment is required but cannot be attempted because
 of a documented environment, tooling, or authorization blocker. Set

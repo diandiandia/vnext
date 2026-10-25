@@ -554,12 +554,18 @@ def test_deferred_split_closes_workflow_without_semantic_resolution(
             "exact claim tested",
             "target code, embedding host, or harness",
             "instrumentation, fault injection, build options",
-            "real library does not prove an end-to-end target path",
-            "sanitizer diagnostic or nonzero exit alone",
+            "real component does not prove an end-to-end target path",
+            "Tool diagnostics, exceptions, exit status or output changes alone",
+            "operation, path, conditions and impact actually observed",
             "disclosure eligibility",
             "Structural validation cannot decide semantic truth",
         ):
             assert guidance in contract
+        for mechanism_specific_example in (
+            "sanitizer", "ASAN", "memory-safety", "writes from reads",
+            "allocation failure", "sandbox escape",
+        ):
+            assert mechanism_specific_example not in contract
         workflow.record_r5([], [R5Assessment(
             "HYP-split", False, None, R5Disposition.NEEDS_REVIEW,
             ("EVID-r5",), "no experiment resolves the split",
