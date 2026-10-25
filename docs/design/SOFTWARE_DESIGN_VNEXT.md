@@ -56,7 +56,7 @@ Current default (2026-10-25, task policy 49): new CLI Campaigns and library crea
 with omitted constraints freeze `defer_r35_splits`. CLI BooleanOptionalAction allows
 `--no-defer-r35-splits`; explicit library constraints remain exact overrides.
 Omitted selection on retry uses the existing record, never migrates an old Campaign.
-This supersedes the earlier opt-in default below; unresolved semantics are unchanged.
+This supersedes historical opt-in defaults; unresolved semantics are unchanged.
 
 Reliability contract (2026-10-24; extended by task policy 48 on 2026-10-25): `BatchWorkflow` shares concrete
 evidence validation across R2 collection/direct commit and R4 paths, including
@@ -74,6 +74,9 @@ definitive split resolution. A deterministic adjudication binds both refutations
 and the current R3 revision. `deferred_review.py` derives current evidence packets
 and unresolved R3 task context without altering verifier evidence. Campaign reports
 retain these provisional candidates even when structural gates pass.
+Policy 50 makes the shared Batch packet derivation return no current packets for
+a `BATCH_SUPERSEDED` Batch. It does not remove historical events/artifacts or hide
+unresolved packets from a merely DEFERRED Batch.
 `stage_recovery_plan` derives instructions from invalidation markers; existing
 revision dependencies and stale-task rejection are retained, not bypassed.
 See TR-20 and [the runbook](../ORCHESTRATOR_RUNBOOK.md) for command boundaries.

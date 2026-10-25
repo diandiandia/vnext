@@ -21,7 +21,7 @@ requirements update.
 
 Reliability traceability (2026-10-24): SYSR-012/013 concrete R2 references fail early;
 SYSR-021 includes atomic ordinary/bundled R4 scheduling; SYSR-014/023 include frozen
-opt-in unresolved split deferral and derived provisional review packets; SYSR-015
+frozen unresolved split deferral and derived provisional review packets; SYSR-015
 includes explicit STATIC_ONLY enforcement at the managed harness boundary.
 SYSR-019 recovery guidance retains the revision cascade without automatic reuse.
 These refinements map to SWDR-012/013/014/015/017/019 and TR-20; legacy defaults and
@@ -30,6 +30,10 @@ The 2026-10-25 reassessment refines SYSR-014/019/021: preserve human decisions o
 deferral retries, compare full durable task ownership/revision identity and match
 invalidation replacements to their original entities. TR-20 includes the negative
 identity and retry cases; no target-specific rule or qualification approval is added.
+Current policy 50: new CLI Campaigns and library creation with omitted constraints
+default to deferral; explicit opt-out/exact constraints and legacy frozen selections
+remain authoritative. SYSR-014/023 current review packets exclude superseded Batch
+history, but not unresolved evidence merely because a Batch is DEFERRED.
 
 - IDs `SYSR-###` are stable identifiers for this requirements baseline.
 - The current contract describes managed runtime behavior, not every earlier target.

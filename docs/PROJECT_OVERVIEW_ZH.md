@@ -493,7 +493,9 @@ R5 的实验评估需要覆盖 R3 的每条假设，但不是每条假设都要�
 新 Campaign 默认冻结分歧保留策略（`--defer-r35-splits`），
 将分歧保留为 `NEEDS_REVIEW` 并继续流程，不假装已经人工批准。
 可用 `--no-defer-r35-splits` 显式改为人工裁定；旧 Campaign 的冻结策略不变。
-`review-queue` 从当前材料派生未决包。支持的任务修订会使依赖失效，
+`review-queue` 从当前材料派生未决包；已被 Plan Amendment 替换的旧 Batch
+只保留为历史证据，不再进入当前队列，单纯 DEFERRED 的 Batch 不因此被隐藏。
+支持的任务修订会使依赖失效，
 需要重新审阅并提交；不支持任意历史自动重开或复用旧输出。
 晚到候选仍应保留为剩余风险，在显式 follow-up 中重新验证。
 

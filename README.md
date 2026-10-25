@@ -44,7 +44,8 @@ New Campaigns may freeze `init --static-only` to prohibit dynamic execution, inc
 managed harnesses. New Campaigns default to `--defer-r35-splits` to retain split
 refutations as provisional `NEEDS_REVIEW` without blocking on human adjudication.
 Use `--no-defer-r35-splits` to require human split adjudication instead.
-Existing Campaigns retain their frozen policy. `review-queue` derives evidence packets;
+Existing Campaigns retain their frozen policy. `review-queue` derives current evidence
+packets, excluding superseded Batches without deleting their historical records;
 `recovery-plan` lists invalidated projections without reusing stale results. See the
 [orchestrator runbook](docs/ORCHESTRATOR_RUNBOOK.md) for defaults and limitations.
 

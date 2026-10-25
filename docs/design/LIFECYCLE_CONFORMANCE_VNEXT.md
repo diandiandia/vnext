@@ -30,11 +30,17 @@ trusted host/authority, independent validation or clause-level conformity gaps.
 2026-10-25 maintenance update: TR-20 records early concrete evidence validation,
 atomic task/screening scheduling, explicit frozen static-only/split-deferral choices,
 derived review/recovery views, and retry/ownership/entity-matching corrections.
-The [latest generality review](GENERALITY_REVIEW_VNEXT.md#latest-review-2026-10-25-retry-identity-and-documentation)
+The [retry generality review](GENERALITY_REVIEW_VNEXT.md#latest-review-2026-10-25-retry-identity-and-documentation)
 retains failures, corrections, verification and remaining architecture/knowledge debt.
 These add maintenance and verification evidence only; no controlled standard edition,
 organizational tailoring, acceptance owner, Google internal criteria or independent
 assessment was supplied. No conformity decision or approval is inferred.
+
+The subsequent policy 50 review on the same date verifies that Plan Amendment
+supersession excludes historical Batch packets from current decision queues without
+deleting evidence or hiding merely DEFERRED Batches. It also reconciles the current
+default-deferral requirements and operating guidance. These are additional local
+maintenance/verification records, not a change to the standards conclusion.
 
 Statuses mean:
 

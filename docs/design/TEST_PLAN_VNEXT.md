@@ -525,7 +525,10 @@ execution, refutation, category-run, harness, CLI and Campaign closure regressio
   R4/R5 inputs and final R6/Campaign JSON/Markdown must retain uncertainty even with
   all workflow gates passing; unmodified R3 verifier evidence remains accessible.
 - Review packets retain canonical artifact refs and full recorded premises; invalidated
-  history must not supply current packets. Recovery output is read-only, preserves
+  history must not supply current packets. A real Plan Amendment must remove superseded
+  Batch packets from the current queue without deleting their events/artifacts or
+  changing the queue on read; a merely DEFERRED Batch must retain its packets.
+  Recovery output is read-only, preserves
   old target-event refs, removes resolved stage markers and prohibits automatic reuse.
   Same-Batch/type evidence for a different hypothesis cannot clear its marker.
   Same task ID with different Batch, bundled ownership/items or upstream revisions

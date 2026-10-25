@@ -9,6 +9,8 @@ from .campaign import CampaignManager
 
 
 def batch_review_queue(workflow: BatchWorkflow) -> list[dict[str, Any]]:
+    if any(event.event_type == "BATCH_SUPERSEDED" for event in workflow._events()):
+        return []
     r2 = workflow._stage_event("R2_COMPLETED")
     r3 = workflow._stage_event("R3_COMPLETED")
     if r2 is None or r3 is None:

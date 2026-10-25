@@ -35,13 +35,18 @@ from reachable_audit.batch_workflow import BatchWorkflow
 from reachable_audit.campaign import CampaignManager
 from reachable_audit.campaign_closure import CampaignCloser, _derive_hypothesis_outcomes
 from reachable_audit.cli import main
-from reachable_audit.deferred_review import derive_review_queue, review_aware_r3_verdicts
+from reachable_audit.deferred_review import (
+    batch_review_queue,
+    derive_review_queue,
+    review_aware_r3_verdicts,
+)
 from reachable_audit.execution import DiscoveryCoordinator, ManualExecutionBackend
 from reachable_audit.graph import build_component_graph
 from reachable_audit.inventory import build_inventory
 from reachable_audit.knowledge import create_category_audit_plans
-from reachable_audit.models import ModelError
-from reachable_audit.planning import create_audit_plan
+from reachable_audit.models import BatchStatus, ModelError
+from reachable_audit.plan_models import AuditPlan
+from reachable_audit.planning import amend_plan, create_audit_plan
 from reachable_audit.stage_revisions import STAGE_INVALIDATION_DEPENDENTS, active_stage_events
 
 
@@ -64,6 +69,11 @@ def _workflow(path: Path, *, deferred: bool | None = None):
         campaign_id="CMP-deferred", graph=build_component_graph(path, inventory),
     )
     workflow = BatchWorkflow(manager, "CMP-deferred", plan.batches[0].batch_id)
+    _record_discovery(workflow, plan)
+    return manager, workflow, plan
+
+
+def _record_discovery(workflow: BatchWorkflow, plan: AuditPlan) -> None:
     unit = plan.work_units[0]
     workflow.run_r0()
     workflow.record_r1([Surface(
@@ -78,13 +88,12 @@ def _workflow(path: Path, *, deferred: bool | None = None):
         ("SURF-run",), Mechanism("STATE", "stale-owner"),
         "owner can become stale across the entry boundary", HypothesisStatus.NEW,
     )], axis_evidence=evidence, axis_runs=axis_runs_from_evidence(evidence))
-    edge_ref = manager.artifacts.put_text("observed state edge").artifact_id
+    edge_ref = workflow.manager.artifacts.put_text("observed state edge").artifact_id
     workflow.record_r3([VerdictSubmission(
         "HYP-split", VerdictKind.REACHABLE, EvidenceGrade.EDGE_PROVEN,
         "remote", ("owner can transition",), ("LOC-app.py:1",),
         (edge_ref,), (), (), "source and edge evidence support the candidate",
     )])
-    return manager, workflow, plan
 
 
 def _refute(workflow: BatchWorkflow, suffix: str = "") -> None:
@@ -409,6 +418,50 @@ def test_queue_excludes_invalidated_historical_stages(tmp_path: Path, stage: str
         manager.close()
 
 
+def test_queue_excludes_superseded_batches_but_preserves_history(tmp_path: Path) -> None:
+    manager, workflow, plan = _workflow(tmp_path)
+    try:
+        _refute(workflow)
+        _coordinator(manager, workflow).schedule_r35_adjudications()
+        packet, = derive_review_queue(manager, workflow.campaign_id)
+        history = workflow._events()
+        amended, amendment = amend_plan(
+            plan, reason="replay under a revised batch layout",
+            max_source_files_per_batch=1, max_work_units_per_batch=1,
+        )
+        manager.record_plan_amendment(
+            campaign_id=workflow.campaign_id, base_plan=plan,
+            amended_plan=amended, amendment=amendment,
+            inventory=manager.load_inventory(workflow.campaign_id),
+        )
+        events = workflow._events()
+        assert events[:len(history)] == history
+        assert packet["adjudication_artifact_ref"] in {
+            event.payload_ref for event in events
+        }
+        before = manager.store.list_events(workflow.campaign_id)
+        assert batch_review_queue(workflow) == []
+        assert derive_review_queue(manager, workflow.campaign_id) == []
+        assert manager.store.list_events(workflow.campaign_id) == before
+    finally:
+        manager.close()
+
+
+def test_queue_keeps_deferred_batch_without_supersession(tmp_path: Path) -> None:
+    manager, workflow, _ = _workflow(tmp_path)
+    try:
+        _refute(workflow)
+        _coordinator(manager, workflow).schedule_r35_adjudications()
+        packets = derive_review_queue(manager, workflow.campaign_id)
+        manager.store.transition_batch(
+            workflow.campaign_id, workflow.batch_id, BatchStatus.DEFERRED,
+        )
+        assert len(packets) == 1
+        assert derive_review_queue(manager, workflow.campaign_id) == packets
+    finally:
+        manager.close()
+
+
 def test_queue_uses_only_replacement_refutations_and_adjudication(tmp_path: Path) -> None:
     manager, workflow, _ = _workflow(tmp_path)
     try:
@@ -436,9 +489,29 @@ def test_queue_uses_only_replacement_refutations_and_adjudication(tmp_path: Path
         manager.close()
 
 
-def test_deferred_split_closes_workflow_without_semantic_resolution(tmp_path: Path) -> None:
+@pytest.mark.parametrize("supersede", [False, True])
+def test_deferred_split_closes_workflow_without_semantic_resolution(
+    tmp_path: Path, supersede: bool,
+) -> None:
     manager, workflow, plan = _workflow(tmp_path)
     try:
+        if supersede:
+            _refute(workflow)
+            _coordinator(manager, workflow).schedule_r35_adjudications()
+            amended, amendment = amend_plan(
+                plan, reason="replay the current source in a replacement batch",
+                max_source_files_per_batch=1, max_work_units_per_batch=1,
+            )
+            manager.record_plan_amendment(
+                campaign_id=workflow.campaign_id, base_plan=plan,
+                amended_plan=amended, amendment=amendment,
+                inventory=manager.load_inventory(workflow.campaign_id),
+            )
+            plan = amended
+            workflow = BatchWorkflow(
+                manager, workflow.campaign_id, plan.batches[0].batch_id,
+            )
+            _record_discovery(workflow, plan)
         _refute(workflow)
         coordinator = _coordinator(manager, workflow)
         coordinator.schedule_r35_adjudications()
@@ -492,6 +565,7 @@ def test_deferred_split_closes_workflow_without_semantic_resolution(tmp_path: Pa
         ))
         assert report["status"] == "PASS"
         packet, = report["review_queue"]
+        assert packet["batch_id"] == workflow.batch_id
         assert report["review_queue"] == derive_review_queue(manager, workflow.campaign_id)
         outcome, = report["hypothesis_outcomes"]
         assert outcome["state"] == "NEEDS_REVIEW"

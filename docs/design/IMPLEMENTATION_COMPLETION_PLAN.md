@@ -14,11 +14,14 @@ The real-target pilot and release qualification procedure is in
 
 ### Current Maintenance Baseline (2026-10-25)
 
-Task policy 48 includes early R2 concrete-reference checks, atomic ordinary/bundled
-R4 scheduling, frozen static-only and optional unresolved split deferral, and derived
+Task policy 50 includes early R2 concrete-reference checks, atomic ordinary/bundled
+R4 scheduling, frozen static-only and default unresolved split deferral for new
+Campaigns (explicit overrides/legacy selections retained), and derived
 review/recovery views (TR-20). Retry fixes preserve human decisions, full task
-ownership/revision identity and per-entity invalidation markers. The
-[latest review](GENERALITY_REVIEW_VNEXT.md#latest-review-2026-10-25-retry-identity-and-documentation)
+ownership/revision identity and per-entity invalidation markers. Current review
+packets exclude superseded Batches without deleting their historical evidence or
+hiding packets from merely DEFERRED Batches. The
+[latest review](GENERALITY_REVIEW_VNEXT.md#latest-review-2026-10-25-supersession-and-current-policy)
 records bounded evidence and remaining limits. The dated pilot subsections below
 explain development entry decisions, not extra requirements or discovery input for
 every target. No pilot's scope, candidates, expected findings or audit plan is loaded

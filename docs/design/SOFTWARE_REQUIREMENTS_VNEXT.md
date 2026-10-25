@@ -41,7 +41,7 @@ distribution, catalog and evaluator regressions verify those bounded contracts.
 
 Reliability refinement (2026-10-24): SWDR-012/013 validate concrete R2 axis/seed refs
 at collection and direct commit; symbolic IDs are not promoted to source proof.
-SWDR-014 supports frozen opt-in split deferral to AUTO NEEDS_REVIEW, with two
+SWDR-014 supports frozen split deferral to AUTO NEEDS_REVIEW, with two
 independent perspectives retained and no synthetic human approval. SWDR-015 rejects
 managed harness execution for frozen STATIC_ONLY before side effects without hiding
 a required experiment. SWDR-017 includes atomic R4 task/screening event writes and a
@@ -56,6 +56,11 @@ human decision for the same refutations; same-ID task resubmission rejects chang
 Batch/bundled ownership/revision pins; recovery does not treat another hypothesis's
 event as its replacement. Tests in `test_deferred_review.py`, `test_execution.py`
 and `test_batch_workflow.py` reproduce the previous failures and verify non-mutation.
+Current policy 50: SWDR-014 defaults new Campaigns to deferral when selection is
+omitted, preserving explicit overrides and existing frozen selections. SWDR-019
+excludes superseded Batch evidence from current packets while retaining archive
+artifacts and packets for merely DEFERRED Batches. TR-20 tests a real Plan Amendment
+and distinguishes these two lifecycle states.
 
 | ID | Current software contract | System reqs | Software design | Implementation evidence, remaining target, or known defect |
 |---|---|---|---|---|

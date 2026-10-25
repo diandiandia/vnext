@@ -64,8 +64,10 @@ vnext review-queue "$TARGET" "$CAMPAIGN_ID"
 vnext recovery-plan "$TARGET" "$CAMPAIGN_ID"
 ```
 
-The review queue is JSON derived from active R2/R3/refutation/adjudication artifacts,
-with claim, seed refs, principal, preconditions, evidence grade, both objections,
+The review queue is JSON derived from active R2/R3/refutation/adjudication artifacts.
+Superseded Batches are historical, not current queue entries; their evidence remains
+in the store. A merely DEFERRED Batch remains eligible for unresolved review packets.
+Packets include claim, seed refs, principal, preconditions, evidence grade, both objections,
 artifact references and unresolved rationale. Campaign JSON includes these packets;
 Markdown summarizes them. They are provisional decision inputs, not confirmed
 vulnerabilities or a new evidence ledger. A passed Campaign can still have unresolved
@@ -196,7 +198,7 @@ New runners should consume `tasks`, not count an unknown JSON shape as an empty 
 
 ### Human adjudication is a separate operator action
 
-A definitive split disposition requires actual human review; frozen opt-in deferral
+A definitive split disposition requires actual human review; default frozen deferral
 above preserves uncertainty instead of deciding the split. A Worker must not turn itself into
 a human by choosing `actor=human`, a `human:*` worker ID, or a standing-delegation
 label. The human worker label remains necessary for the existing task path but is
@@ -522,7 +524,7 @@ An optional `--static-challenges` requires the existing two-perspective R3.5 pro
 for static-only REACHABLE claims as well as edge-proven claims. Both scheduling and
 completion use the same frozen selection. Adjudication still requires separate refuter
 labels, call-chain plus premise perspectives, human handling of definitive splits
-(or frozen opt-in unresolved deferral) and source
+(or default frozen unresolved deferral) and source
 verification of demotion. Labels are not authenticated identities. Retention cannot
 promote evidence grade, and default static-only skips are exposed in the final JSON.
 

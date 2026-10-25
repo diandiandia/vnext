@@ -29,7 +29,7 @@ in-tree stores remain recoverable and ambiguous dual stores require an explicit
 selection. Library hosts must explicitly select external state. Physical source-read
 or OS context isolation is still a host responsibility.
 
-Current-contract update (2026-10-25): the runtime policy is `vnext-task-policy-49`.
+Current-contract update (2026-10-25): the runtime policy is `vnext-task-policy-50`.
 CG2's component ownership accounting recognizes complete evidence-backed EXCLUDED or
 DEFERRED path scope for a component without boundary obligations; it does not turn that
 scope decision into an audit or safety claim. Campaign output includes a non-gating
@@ -49,8 +49,9 @@ per-axis/compact collection and direct stage commit against the shared frozen-so
 and artifact validators. Symbolic provenance IDs are not source proof. Both R4
 schedulers atomically persist task and screening events or roll the call back.
 `init --static-only` freezes a dynamic-execution prohibition; legacy Campaigns are
-UNDECLARED, not authorized. Independently, `--defer-r35-splits` permits only unresolved
-AUTO NEEDS_REVIEW for split refutations; default human handling is unchanged.
+UNDECLARED, not authorized. Independently, new Campaigns default to split deferral,
+which permits only unresolved AUTO NEEDS_REVIEW for split refutations. Explicit
+`--no-defer-r35-splits` retains the human-review split rule; legacy selections stay frozen.
 Active canonical artifacts derive provisional review packets and report summaries.
 The read-only recovery plan preserves dependent invalidation and never automatically
 reuses old results. See TR-20 and the [runbook](../ORCHESTRATOR_RUNBOOK.md).
@@ -61,7 +62,7 @@ instead of reapplying unresolved split deferral. Durable task identity also incl
 Batch, bundled ownership and upstream revision pins; same-ID resubmission cannot
 silently substitute those identities. Recovery-marker replacement compares the
 original event's entity, not just its Batch/type. See the
-[latest review](GENERALITY_REVIEW_VNEXT.md#latest-review-2026-10-25-retry-identity-and-documentation)
+[retry review](GENERALITY_REVIEW_VNEXT.md#latest-review-2026-10-25-retry-identity-and-documentation)
 for reproductions, remaining debt and standards limits.
 
 ## 1. Purpose
@@ -71,6 +72,9 @@ with omitted constraints enable split deferral. CLI `--no-defer-r35-splits` and 
 library constraints can opt out. Existing Campaigns retain their frozen behavior;
 this supersedes earlier opt-in descriptions, without permitting automatic definitive
 split decisions or synthetic human approval.
+Policy 50 excludes `BATCH_SUPERSEDED` history from current review queues and their
+derived report uncertainty; merely DEFERRED Batches remain visible. Archived
+artifacts and current replacement-Batch review requirements are unchanged.
 
 vNext is an experimental reachable-vulnerability audit workflow for mixed-language
 repositories. It combines resumable Campaign/Batch execution with approved security

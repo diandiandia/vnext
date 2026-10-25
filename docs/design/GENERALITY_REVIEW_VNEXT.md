@@ -1,9 +1,8 @@
 # Generality and Engineering Review
 
 Initial review: 2026-10-20. Base: `a3b969c` plus that review's uncommitted changes.
-Latest reassessment: 2026-10-25, base `178dbcc` plus the pending workflow repairs
-and reassessment fixes recorded in
-[the latest review](#latest-review-2026-10-25-retry-identity-and-documentation).
+Latest reassessment: 2026-10-25, base `d9c01f4` plus the policy 50 repairs recorded in
+[the latest review](#latest-review-2026-10-25-supersession-and-current-policy).
 This is a bounded engineering review and repair record, not a security certification,
 exhaustive dead-code proof, Google internal approval, or ISO conformity assessment.
 The historical [quality reassessment](QUALITY_REASSESSMENT_VNEXT.md) is retained as
@@ -896,3 +895,83 @@ Neither this table nor passing tests closes those gaps.
 These results establish bounded local behavior on this environment. They do not
 establish all supported Python versions/platforms, dead-code absence, unbiased
 discovery, provider hard caps, real-host static-only enforcement or lifecycle conformity.
+
+## Latest Review (2026-10-25): Supersession and Current Policy
+
+### Scope and decision
+
+Reviewed base `d9c01f4` after default split deferral was committed. The working tree
+was clean at the start. This review directly inspected default creation/retry rules,
+decision-packet producers and report consumers, Plan Amendment lifecycle records,
+catalog selection and a representative state card, distribution configuration,
+the main Skill/README/runbook and current requirements/design/lifecycle documents.
+It did not perform a new target audit or alter sealed audit evidence.
+
+The conclusion remains **usable experimental security-audit orchestration**, not an
+independently qualified excellent universal analyzer. This is a bounded engineering
+assessment, not a line-by-line review of every runtime path or semantic review of
+all knowledge cards. No public-source style comparison can establish private approval.
+
+### Reproduced defects and repairs
+
+Priorities below concern workflow correctness, not exploitable vulnerabilities.
+
+| Priority | Verified defect | Repair and evidence boundary |
+|---|---|---|
+| P1 | After a real Plan Amendment, `derive_review_queue` still included superseded Batch evidence. The report consumes those hypothesis IDs as unresolved, so old packets could contaminate current report uncertainty. | The shared Batch packet producer honors the durable `BATCH_SUPERSEDED` event. Archive events/artifacts remain intact. A merely DEFERRED Batch retains its packets. No guessed reachability, deletion, new ledger or target-specific rule is introduced. |
+| P2 | Current operational/requirements text still described deferral as opt-in or the default human handling as unchanged; the current completion summary still named policy 48. Superseding paragraphs elsewhere did not make those local instructions unambiguous. | Reconcile current README/Skill/runbook, Chinese overview, system/software requirements/designs and completion/test records with default deferral and supersession boundaries. Dated historical verification totals and policy decisions remain history, not current instructions. |
+
+Before the fix, the supersession/control regressions produced **1 failed, 1 passed**.
+The passing control confirms that DEFERRED alone must not hide uncertainty. The
+expanded end-to-end case replays discovery under a replacement Batch, reuses
+Work Unit/hypothesis identities and closes R4/R5/R6/Campaign reporting: only the
+replacement packet appears, and its unresolved state remains explicit. Queue reads
+do not append events. Task policy is now **50**; release policy remains **7**.
+
+### Cleanliness, bias and architecture
+
+- The compatibility/residue check found zero findings across runtime Python,
+  packaged helpers, eligible knowledge and the main Skill. Recent target/plan/report
+  tokens were supplied by the reviewer, not embedded as runtime exceptions.
+  Historical project documents remain evaluation provenance, not universal audit
+  requirements. Host-controlled context can still leak history if operating rules
+  are ignored; a clean pattern scan is not semantic isolation.
+- Catalog loading validates 15 profiles and 150 cards. Selection is family-filtered,
+  rank-ordered and round-robin across requested languages under an entry-count cap.
+  This is transparent guidance selection, not evidence of neutral or balanced recall.
+  Fixed roster/ranks, templated cards (including repeated precondition/transition
+  wording), training selection and unequal language-provider depth remain genuine
+  bias/quality risks. They require independently reviewed counterexamples and
+  equal-budget held-out measurements, not speculative rewriting during this repair.
+- A fresh AST screen found no unreferenced top-level runtime definition candidate,
+  unused non-reexport import candidate, or exact function-body duplicate group of
+  at least 12 source lines. This does not prove branch/method liveness, equivalent
+  algorithm absence or absence of redundant design. No speculative deletion was made.
+- Architecture still separates catalog, planning, state/artifacts, execution,
+  evidence, closure and evaluation. The repair reuses the existing lifecycle event
+  in the shared packet producer. Core module concentration remains approximately
+  4.2k lines in execution, 2.3k in Batch workflow, 2.2k in closure and 1.5k in store.
+  That is real maintenance debt, not grounds for an unmeasured wholesale rewrite.
+  The 500-line main Skill is also a context-cost concern, not a minimal prompt.
+
+### Verification and standards
+
+- Python **3.14.4**; full command
+  `env -u PYTHONPATH python3 -m pytest tests -o addopts='' -q -rs --tb=short`:
+  **579 passed, 1 skipped**, 65.45 seconds. The protected real held-out manifest is
+  not configured; the skip remains an external acceptance gap.
+- Focused decision-packet and Plan Amendment modules: **32 passed**.
+- Compatibility/residue scan: **PASS**, zero findings across **53 Python files,
+  2 helpers, 167 eligible knowledge JSON files and 1 main prompt**.
+- Compilation, whitespace, main Skill metadata/500-line bound and local Markdown
+  file-link checks passed. These establish bounded local regression and document
+  delivery, not prose infallibility, whole-program correctness or audit recall.
+
+**Google internal requirements: NOT ASSESSED.** No authorized controlled requirement
+set or internal acceptance authority was supplied. **ISO/IEC/IEEE 12207 conformity:
+NOT ESTABLISHED.** The standard concerns lifecycle processes/outcomes, not a code
+quality score. The applicable controlled edition, organizational tailoring,
+accountable owners, objective outcomes and assessment/approval evidence remain
+missing. See the lifecycle self-assessment for adopter responsibilities. This
+repair adds maintenance/verification evidence; it supplies no organizational
+approval, certification or independent real-project quality evidence.
