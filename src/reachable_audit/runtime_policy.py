@@ -16,7 +16,7 @@ IMPLEMENTED_RELEASE_GATES = tuple(f"RG{index}" for index in range(1, 16))
 
 
 _POLICY: dict[str, Any] = {
-    "policy_version": "vnext-task-policy-52",
+    "policy_version": "vnext-task-policy-53",
     "task_collection": {
         "go_hotspots": "campaign_frozen_opt_in_trusted_offline_ast_helper_candidates_only_not_release_qualified",
         "java_hotspots": "campaign_frozen_opt_in_jdk_parse_only_unresolved_method_candidates_not_release_qualified",
@@ -45,6 +45,7 @@ _POLICY: dict[str, Any] = {
         "knowledge_guidance": "conditional_target_evidence_not_expected_findings_or_exhaustive_checklist;catalog_rank_presence_and_provenance_not_target_risk",
         "r2_axis_heuristics": "source_evidenced_six_axis_triggers_conditional_history_no_candidate_does_not_imply_inapplicable",
         "r35_revival_guidance": "independent_guard_bypass_and_boundary_contract_review_preserve_valid_counterevidence",
+        "shared_guidance_scope": "revival_target_evidenced_not_fixed_mechanisms;registered_version_probes_not_target_runtime_facts;recipes_advisory_not_mandatory_toolchains;go_race_tooling_optional_race_family_only;script_recipes_target_declared_host",
         "r35_human_review": "explicit_operator_approval_bound_to_current_output_digest_not_worker_label_or_verified_identity",
         "max_output_bytes": TASK_OUTPUT_MAX_BYTES,
         "soft_output_target_bytes": TASK_OUTPUT_TARGET_BYTES,

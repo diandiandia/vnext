@@ -1804,6 +1804,11 @@ class DiscoveryCoordinator:
                 "import_pattern": adapter.import_pattern,
                 "boundary_markers": list(adapter.boundary_markers),
                 "toolchain_probe": list(adapter.toolchain_probe),
+                "toolchain_probe_contract": (
+                    "Registered version-check candidates, not experiment prerequisites "
+                    "or evidence of the target's actual runtime. Select the target-declared "
+                    "environment; missing candidates do not establish an audit blocker."
+                ),
                 "generated_path_markers": list(adapter.generated_path_markers),
             })
         return output
@@ -2797,10 +2802,11 @@ class DiscoveryCoordinator:
                 "analysis_contract": (
                     "Attempt to revive the rejected hypothesis using an alternate path, "
                     "principal, configuration, or deployment premise. Independently check "
-                    "whether each blocking guard dominates every relevant path and handles "
-                    "decoding, regex anchoring, string slicing, canonicalization and error cases. "
-                    "For cross-language or serialization boundaries verify both endpoint "
-                    "contracts and type/length conversions. Treat high-impact labels as "
+                    "whether each blocking guard dominates every relevant path. Verify "
+                    "target-evidenced guard semantics, transformations, state and failure "
+                    "behavior; do not assume a particular language, API or bypass mechanism. "
+                    "For evidenced boundaries verify both endpoint contracts and relevant "
+                    "data/control mappings. Treat high-impact labels as "
                     "review priorities, not proof. Preserve rejection when counterevidence holds."
                 ),
                 "output_contract": {
@@ -3603,7 +3609,10 @@ class DiscoveryCoordinator:
                     hypothesis_id, []
                 ),
                 "analysis_contract": (
-                    "Decide whether an experiment is required. Empirical confirmation "
+                    "Decide whether an experiment is required. Harness recipes are scoped "
+                    "planning suggestions, not mandatory tools or an exhaustive experiment "
+                    "list. Derive actual runtime/tooling from the target and tested path, "
+                    "not the source language alone. Empirical confirmation "
                     "requires a real-target or equivalence-proven confirmed experiment "
                     "backed by a host-registered harness-run for this hypothesis and snapshot. "
                     "In Experiment.rationale, separate the exact claim tested from actual "

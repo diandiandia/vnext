@@ -1,8 +1,8 @@
 # Generality and Engineering Review
 
 Initial review: 2026-10-20. Base: `a3b969c` plus that review's uncommitted changes.
-Latest reassessment: 2026-10-25, base `d9c01f4` plus the policy 50 repairs recorded in
-[the latest review](#latest-review-2026-10-25-supersession-and-current-policy).
+Latest reassessment: 2026-10-25, base `c90664f` plus the policy 53 repairs recorded in
+[the latest review](#latest-review-2026-10-25-shared-guidance-scope).
 This is a bounded engineering review and repair record, not a security certification,
 exhaustive dead-code proof, Google internal approval, or ISO conformity assessment.
 The historical [quality reassessment](QUALITY_REASSESSMENT_VNEXT.md) is retained as
@@ -975,3 +975,57 @@ accountable owners, objective outcomes and assessment/approval evidence remain
 missing. See the lifecycle self-assessment for adopter responsibilities. This
 repair adds maintenance/verification evidence; it supplies no organizational
 approval, certification or independent real-project quality evidence.
+
+## Latest Review (2026-10-25): Shared Guidance Scope
+
+### Scope and finding
+
+The preceding bounded cleanliness checks did not establish semantic neutrality:
+this review found additional scope leaks after the R5 sanitizer wording was removed.
+Starting from clean base `c90664f`, it directly inspected shared R1/R2/R3/R3.5/R4/R5/R6
+task contracts, the main Skill and operational runbook, recipe prerequisites,
+adapter/probe context, hotspot coverage declarations and catalog applicability
+guidance. It did not independently qualify every language, review every card's
+semantics, or audit a new target. Prior passing scans must not be read as evidence
+that these omissions were absent.
+
+| Surface | Confirmed scope problem | Correction |
+|---|---|---|
+| Shared R3.5 revival task | Every hypothesis received fixed regex/string-processing bypass guidance, including mechanisms without those operations. An existing test explicitly required that wording. | Use target-evidenced guard semantics, transformations, state/failure behavior and boundary contracts, preserving valid rejection without assuming a language/API/bypass. |
+| Go experiment prerequisites | Every family received `-race` advice, without an optional marker, not just concurrency recipes. | Retain optional race-detector advice for RACE and remove it from unrelated families. Existing optional sanitizer controls remain scoped to applicable families/languages. |
+| JavaScript/TypeScript experiment prerequisites | Node.js was a fixed prerequisite even for other target runtimes/hosts. | Select target-declared runtime/host; TypeScript tooling is conditional. Shared R5 guidance labels all recipes as suggestions, not mandatory toolchains inferred from a language. Registered adapter version probes are explicitly candidates, not target-runtime facts or automatic blockers. |
+| General operating instructions | Generic scope/deep-review sections singled out Java profile/JNDI guidance; a universal evidence section retained the Java-pilot heading. | Make current operational rules target/profile-neutral. Keep actual Java provider instructions and dated pilot evidence in their scoped sections. |
+
+These are instruction/applicability defects, not findings of exploitable
+vulnerabilities. The pre-fix focused command produced **7 failures**. After repair,
+the execution/experiment modules passed **102 tests**; the additional emitted-task
+assertions and full suite also pass. No new result schema, state, approval mechanism,
+language knowledge asset or target exception was added. Task policy is **53**.
+
+### Retained distinctions and limits
+
+Language adapters, scoped API rules, family-specific recipes and conditional
+boundary examples are not defects solely because they mention a language/tool.
+For example, JNI/CGO examples remain explicitly conditional on their presence;
+the optional Go/Java providers retain their actual toolchain limits. The default
+Python-only hotspot depth remains an acknowledged capability imbalance, not a
+claim of balanced coverage or a reason to silently enable unqualified providers.
+
+The fixed portfolio, ranked/templated training knowledge, model attention and
+semantic applicability still require independent evaluation. Recipe methods remain
+family-level suggestions rather than target-specific experiment designs. This
+review does not prove that all historical influence or language bias is gone.
+It improves explicit selection boundaries, not semantic truth or audit recall.
+
+### Verification
+
+- Full command:
+  `env -u PYTHONPATH python3 -m pytest tests -o addopts='' -q -rs --tb=short`.
+  **585 passed, 1 skipped**, 62.89 seconds. The external protected real held-out
+  manifest remains unconfigured; it was not replaced with synthetic acceptance.
+- Compatibility scan: PASS, zero findings across 53 runtime Python files, 2 helpers,
+  167 eligible knowledge files and 1 main prompt. This is bounded residue evidence.
+- Compilation and whitespace checks passed. Main Skill remains 500 lines; language
+  knowledge assets and sealed target-audit materials were not changed.
+- Documentation links and metadata were checked separately. No Google internal
+  approval, ISO/IEC/IEEE 12207 conformity or independent qualification is inferred.

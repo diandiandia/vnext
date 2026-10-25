@@ -88,8 +88,8 @@ provide an external location themselves. Source workers may search only inventor
 source paths, not arbitrary files under the target root.
 
 Select categories from the applicable language profiles and threat model before
-planning. Categories are hard scope: a Java Top10 audit must not silently use only
-the three categories in an example or only deserialization/JNDI leads. Record any
+planning. Categories are hard scope: an audit must not silently narrow the approved
+families to the three categories in an example or a provider's available leads. Record any
 excluded family as a limitation and obtain scope approval.
 
 ```bash
@@ -98,8 +98,8 @@ vnext plan "$TARGET" "$CAMPAIGN_ID" --categories "$CATEGORIES"
 vnext status "$TARGET"
 ```
 
-The categories above are an illustrative limited scope, not the complete Java
-profile. Read the plan's actual Batch IDs and scope summaries, and set `BATCH_ID`
+The categories above are an illustrative limited scope, not the complete applicable
+language profiles. Read the plan's actual Batch IDs and scope summaries, and set `BATCH_ID`
 to one of them before the stage loop. Do not paste angle-bracket command templates
 as literal shell input.
 
@@ -278,6 +278,10 @@ empirical upgrades still require the registered evidence described above.
 
 Use existing `Experiment.rationale`, `observation_refs`, `preconditions_tested` and
 assessment rationale; no additional output fields are required.
+Recipes are scoped planning suggestions, not mandatory tools or an exhaustive list.
+Choose actual runtime/tooling from the target and tested path, not language alone.
+Adapter version probes are registered candidates, not proof of the target runtime;
+an unavailable candidate does not by itself make an experiment infeasible.
 
 - State the exact claim tested separately from actual observations and cite the logs.
   Identify whether the failing operation is in target code, embedding host or harness.
@@ -301,8 +305,8 @@ observations are a separate, non-confirming evidence path.
 
 ## 4. Six-Axis Deep Review
 
-All triggers are conditional on current source evidence. For Java, consult the
-Java profile's ten issues rather than treating a few high-profile APIs as complete.
+All triggers are conditional on current source evidence. Consult the applicable
+language profiles rather than treating a few high-profile APIs as complete.
 
 | Axis | Review questions / evidence |
 |---|---|
@@ -323,8 +327,8 @@ Use `scan_status` (`not_scanned`, `completed`, `partial`, or `error`) and the
 safe-source result.
 
 R3.5 defaults to full initial-UNREACHABLE revival, not random sampling. Examine
-regex anchoring, slicing, canonicalization, decoding order and cross-language guard
-assumptions as potential rejection errors, not predetermined bypasses. A keyword,
+target-evidenced guard semantics, transformations, state, failure behavior and boundary
+contracts as potential rejection errors, not predetermined bypasses. A keyword,
 severity label or boundary name does not prove exploitability. If budget cannot
 cover the recorded review set, stop/report the unmet work instead of quietly sampling
 or weakening selection. Weighted policies need prospective cost/recall evaluation.
@@ -444,15 +448,15 @@ probe inside an already frozen source snapshot; prepare the approved copy first.
 After the run, inspect actual output and eligibility, then register the appropriate
 experiment through the normal R5 task result; an exit code alone is not confirmation.
 
-## 8. Evidence and Scope Controls After the Java Pilot
+## 8. Evidence and Scope Controls
 
 ### Supporting resources
 
 Inventory source files and component build manifests are included in the write-once R0
 snapshot baseline. Their LOCs may anchor R1 boundary reviews when the manifest appears
 in the component inventory; this does not make the manifest source-review coverage.
-After inventory and before the first Batch R0, register additional required XML, SPI,
-schema or build evidence not represented by those inventory entries. For example, pass
+After inventory and before the first Batch R0, register additional required configuration,
+schema or other supporting evidence not represented by those inventory entries. For example, pass
 `evidence-register TARGET CAMPAIGN --input FILE` an operator-created JSON input:
 
 ```json

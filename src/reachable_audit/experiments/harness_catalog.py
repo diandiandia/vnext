@@ -68,15 +68,22 @@ def _prerequisites(language: str, family: str) -> tuple[str, ...]:
         base = ("rustc/cargo",)
         return base + (("optional sanitizer or Miri where supported",)
                        if family in sanitizer_families else ())
+    if language == "go":
+        return ("go",) + (
+            ("optional -race where supported for concurrency probes",)
+            if family == "RACE" else ()
+        )
     return {
-        "go": ("go", "-race for concurrency probes"),
         "java": ("JDK", "project test runner"),
         "kotlin": ("JDK and Kotlin compiler",),
         "scala": ("JDK and sbt",),
         "csharp": (".NET SDK",),
         "python": ("python3",),
-        "javascript": ("Node.js",),
-        "typescript": ("Node.js and TypeScript compiler",),
+        "javascript": ("target-declared JavaScript runtime or host",),
+        "typescript": (
+            "target-declared JavaScript runtime or host",
+            "target-declared TypeScript tooling if required",
+        ),
         "php": ("PHP CLI",),
         "ruby": ("Ruby",),
         "swift": ("Swift toolchain",),

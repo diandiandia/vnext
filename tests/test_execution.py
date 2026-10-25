@@ -2170,7 +2170,10 @@ def test_revival_task_accepts_worker_not_prebound_to_reviewer_id(tmp_path: Path)
         tasks = coordinator.schedule_r35_revivals()
         assert len(tasks) == 1
         task_input = json.loads(manager.artifacts.get_bytes(tasks[0].task.input_refs[0]))
-        assert "regex anchoring" in task_input["analysis_contract"]
+        assert "target-evidenced guard semantics" in task_input["analysis_contract"]
+        assert "do not assume a particular language, API or bypass mechanism" in task_input["analysis_contract"]
+        assert "regex anchoring" not in task_input["analysis_contract"]
+        assert "string slicing" not in task_input["analysis_contract"]
         assert "Preserve rejection when counterevidence holds" in task_input["analysis_contract"]
         lease = backend.claim("available-reviewer")
         assert lease is not None

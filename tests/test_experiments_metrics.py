@@ -56,6 +56,26 @@ def test_harness_catalog_scopes_optional_sanitizers_by_family() -> None:
                 assert any("optional" in item.lower() for item in recipe.prerequisites)
 
 
+@pytest.mark.parametrize("family", ["INJECTION", "STATE", "AUTHN", "RACE"])
+def test_go_race_tooling_is_scoped_to_race_recipes(family: str) -> None:
+    for recipe in HarnessCatalog().recipes(("go",), family):
+        race_prerequisites = [
+            item for item in recipe.prerequisites if "-race" in item
+        ]
+        assert bool(race_prerequisites) is (family == "RACE")
+        assert all("optional" in item for item in race_prerequisites)
+
+
+@pytest.mark.parametrize("language", ["javascript", "typescript"])
+def test_script_recipes_require_target_runtime_not_assumed_node(language: str) -> None:
+    for recipe in HarnessCatalog().recipes((language,), "STATE"):
+        prerequisites = " ".join(recipe.prerequisites)
+        assert "target-declared" in prerequisites
+        assert "Node.js" not in prerequisites
+        if language == "typescript":
+            assert "if required" in prerequisites
+
+
 def _ready_for_r5(
     tmp_path: Path,
     *,
@@ -358,7 +378,14 @@ def test_r5_assessment_runs_as_durable_task(
         assert task_input["harness_recipes"]
         assert all(recipe["family"] == "STATE" for recipe in task_input["harness_recipes"])
         assert task_input["language_adapters"]
+        assert all(
+            "not experiment prerequisites" in adapter["toolchain_probe_contract"]
+            and "not establish an audit blocker" in adapter["toolchain_probe_contract"]
+            for adapter in task_input["language_adapters"]
+        )
         assert task_input["registered_harness_executions"] == []
+        assert "planning suggestions, not mandatory tools" in task_input["analysis_contract"]
+        assert "not the source language alone" in task_input["analysis_contract"]
         assert "host-registered harness-run" in task_input["analysis_contract"]
         assert "NOT_FEASIBLE only when an experiment is required" in task_input["analysis_contract"]
         assert "not evidence of safety, confirmation, or refutation" in task_input["analysis_contract"]

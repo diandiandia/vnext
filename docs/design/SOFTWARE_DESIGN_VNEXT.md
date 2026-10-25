@@ -787,7 +787,15 @@ R3, R3.5, and R5 validate their implemented evidence models, not universal stric
 R5's HarnessCatalog generates recipes with recipe ID, language, family, method,
 prerequisites, isolation, fidelity guidance, and cleanup guidance. Optional sanitizer
 tooling is suggested only for memory-safety/numeric families in languages with supported
-tools; it is not a prerequisite for unrelated experiment classes. Recipes have no
+tools; it is not a prerequisite for unrelated experiment classes.
+Go race-detector advice is optional and scoped to RACE recipes. JavaScript/TypeScript
+recipes require the target-declared runtime/host rather than assuming Node.js;
+TypeScript tooling is conditional on the target's execution model. Adapter version
+probes remain registered candidates, explicitly not target-runtime facts or experiment
+prerequisites. Shared R3.5 revival guidance follows target-evidenced guard and boundary
+semantics instead of a fixed language/mechanism checklist. All recipe prerequisites
+are planning suggestions, not mandatory tools inferred from the source language;
+the R5 task contract requires selection against the target and tested path. Recipes have no
 separate release-version, setup, input-class, or expected-observation fields. Managed
 execution produces an experiment artifact, not a card-authored claim of confirmation.
 

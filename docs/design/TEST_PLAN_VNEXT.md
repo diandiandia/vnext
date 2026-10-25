@@ -544,6 +544,14 @@ execution, refutation, category-run, harness, CLI and Campaign closure regressio
   Universal interpretation guidance must use language/mechanism-neutral observations,
   not unconditional sanitizer, memory-corruption or sandbox examples. This checks
   the shared analysis contract, not the legitimately scoped language/recipe context.
+- Shared revival task guidance follows target-evidenced guard/boundary semantics,
+  not an unconditional regex/string-processing checklist. Go recipes expose optional
+  `-race` advice only for RACE, retaining its availability there. JavaScript/TypeScript
+  recipes select the target-declared host and conditional tooling, not an assumed
+  Node.js runtime. Adapter probe context distinguishes version-check candidates from
+  target-runtime facts or experiment prerequisites. Test emitted tasks in
+  `test_execution.py` and `test_experiments_metrics.py`; retain the existing scoped
+  sanitizer-family controls.
 
 **Real-host follow-up:** run a fresh authorized Campaign with explicit frozen choices;
 do not relabel old sealed Campaigns. Verify that the host enforces the static-only
