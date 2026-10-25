@@ -27,6 +27,15 @@ reproduction tests and retained original resource failures support maintenance a
 configuration-management evidence only; they do not close organizational approvals,
 trusted host/authority, independent validation or clause-level conformity gaps.
 
+2026-10-25 maintenance update: TR-20 records early concrete evidence validation,
+atomic task/screening scheduling, explicit frozen static-only/split-deferral choices,
+derived review/recovery views, and retry/ownership/entity-matching corrections.
+The [latest generality review](GENERALITY_REVIEW_VNEXT.md#latest-review-2026-10-25-retry-identity-and-documentation)
+retains failures, corrections, verification and remaining architecture/knowledge debt.
+These add maintenance and verification evidence only; no controlled standard edition,
+organizational tailoring, acceptance owner, Google internal criteria or independent
+assessment was supplied. No conformity decision or approval is inferred.
+
 Statuses mean:
 
 - **Implemented in tool:** a tested software mechanism exists.

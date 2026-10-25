@@ -52,6 +52,33 @@ does not make `LOC-<path>:1` valid for an empty file or change source-anchor sem
 
 ## 1. Scope and Compatibility
 
+Reliability contract (2026-10-24; extended by task policy 48 on 2026-10-25): `BatchWorkflow` shares concrete
+evidence validation across R2 collection/direct commit and R4 paths, including
+frozen bytes and nonblank LOC lines; legacy symbolic IDs remain provenance only.
+`AuditStore.atomic_events` uses nested SQLite savepoints so inner event appends
+cannot commit an outer R4 scheduling operation. Both schedulers include all task and
+screening writes; failed calls may retain unreferenced immutable artifact bytes.
+This does not promise a distributed transaction over host dispatch.
+
+The frozen `static_only` Campaign constraint derives `dynamic_execution_policy`;
+absence means UNDECLARED. Worker context carries it and `run_harness` rejects
+STATIC_ONLY before side effects without changing `experiment_required`.
+The independent `defer_r35_splits` constraint permits AUTO NEEDS_REVIEW only, never
+definitive split resolution. A deterministic adjudication binds both refutations
+and the current R3 revision. `deferred_review.py` derives current evidence packets
+and unresolved R3 task context without altering verifier evidence. Campaign reports
+retain these provisional candidates even when structural gates pass.
+`stage_recovery_plan` derives instructions from invalidation markers; existing
+revision dependencies and stale-task rejection are retained, not bypassed.
+See TR-20 and [the runbook](../ORCHESTRATOR_RUNBOOK.md) for command boundaries.
+Retries retain a current human split adjudication for the same refutations.
+Task-ID identity includes Batch, primary/bundled Work Units, bundle item IDs and
+revision pins, not just operation/primary Work Unit/output contract. Prompt/budget
+changes still return the first authoritative spec. Invalidation resolution compares
+the target event's entity when available; coverage gates independently check the
+complete current hypothesis/refutation set. These are shared contracts, not target
+exceptions or automatic evidence reuse.
+
 This design extends the existing vNext Python package and its canonical Campaign,
 Batch, event, artifact, Work Unit, and Handoff models. It does not introduce v3 runtime
 compatibility. Existing vNext schemas remain the starting point; schema changes require
@@ -826,7 +853,8 @@ evidence relevance, attacker assumptions, impact, and severity and retain a disp
 R3.5 schedulers derive refutation/adjudication targets from the committed R3 artifact.
 Default eligibility remains edge-proven REACHABLE. The frozen `static_challenges`
 constraint extends the same protocol and coverage gates to static-only REACHABLE:
-two separate labels/perspectives, source-verified demotion and human handling of splits.
+two separate labels/perspectives, source-verified demotion and human handling of
+definitive splits (or frozen `defer_r35_splits` unresolved deferral).
 The grade is unchanged. Final reports expose disabled static-only challenges explicitly;
 neither labels nor successful challenge completion prove identity or empirical truth.
 When there are no eligible targets, schedule/commit records explicit empty-stage results

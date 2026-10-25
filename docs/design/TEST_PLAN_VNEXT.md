@@ -495,6 +495,49 @@ is absent, even if the partial scan has zero findings and the signed manifest cl
 PASS. A wheel-only installation is not a qualifying source checkout. See
 [test_evaluation.py](../../tests/test_evaluation.py).
 
+### TR-20: Early Evidence, Atomic Scheduling and Explicit Unresolved Work
+
+**Required tests:** [test_pilot_repairs.py](../../tests/test_pilot_repairs.py),
+[test_static_policy.py](../../tests/test_static_policy.py), and
+[test_deferred_review.py](../../tests/test_deferred_review.py), together with existing
+execution, refutation, category-run, harness, CLI and Campaign closure regressions.
+
+- R2 per-axis and compact collection reject blank/trailing-blank, malformed `LOC/`,
+  out-of-range/traversing and unavailable-artifact references without succeeding the
+  task. Valid replacement succeeds under the same live lease. Direct R2 submission
+  validates aggregate, AxisRun and hypothesis-seed concrete references too.
+- With mixed screening/active Work Units, inject a failure after writing a task or
+  screening event in both R4 scheduling layouts. The full pre-call event history
+  must remain unchanged, no task may survive, and retry must be exact and idempotent.
+- `init --static-only` survives reopen/export/status/report and task input creation.
+  No declaration is inferred from text or unrelated constraints. Both library and
+  CLI harness attempts must fail before resources/artifacts/processes are created.
+  Legacy authorized harness tests still pass; required experiments remain required.
+- `init --defer-r35-splits` preserves legacy defaults and other init options. A split
+  yields only AUTO NEEDS_REVIEW, both refutation records, source/premise evidence and
+  a deterministic revision-bound identity; repeated/interrupted commit does not
+  fabricate tasks or human approval. Definitive AUTO split resolution remains invalid.
+  A later human disposition for the same refutations must survive schedule/commit
+  retries, both with and without an earlier deferred record.
+  R4/R5 inputs and final R6/Campaign JSON/Markdown must retain uncertainty even with
+  all workflow gates passing; unmodified R3 verifier evidence remains accessible.
+- Review packets retain canonical artifact refs and full recorded premises; invalidated
+  history must not supply current packets. Recovery output is read-only, preserves
+  old target-event refs, removes resolved stage markers and prohibits automatic reuse.
+  Same-Batch/type evidence for a different hypothesis cannot clear its marker.
+  Same task ID with different Batch, bundled ownership/items or upstream revisions
+  must fail without changing history; prompt/budget-only retries retain the original
+  authoritative spec. These identity cases also run in `test_execution.py` and
+  `test_batch_workflow.py`.
+
+**Real-host follow-up:** run a fresh authorized Campaign with explicit frozen choices;
+do not relabel old sealed Campaigns. Verify that the host enforces the static-only
+prohibition outside the managed harness, that split packets are independently useful
+to a reviewer, and record actual recovery time/usage. Local regression success proves
+the structural contracts, not discovery quality, cost reduction, human identity or
+safe automatic reuse. Large-file slicing, sink census, red-team sweeps, mandatory
+cards and cross-language provider claims retain their separate evidence gates.
+
 ## 5. Evidence Record
 
 Every test report records:

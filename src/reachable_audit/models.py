@@ -94,6 +94,11 @@ class CampaignRecord:
     updated_at: str
 
 
+def dynamic_execution_policy(campaign: CampaignRecord) -> str:
+    """Derive only explicit Campaign constraints, never host execution permission."""
+    return "STATIC_ONLY" if "static_only" in campaign.constraints else "UNDECLARED"
+
+
 @dataclass(frozen=True)
 class BatchRecord:
     campaign_id: str

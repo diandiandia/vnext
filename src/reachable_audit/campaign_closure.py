@@ -19,7 +19,8 @@ from .analysis_models import (
     ScopeDispositionKind,
 )
 from .campaign import CampaignManager
-from .models import BatchStatus, CampaignStatus, ModelError
+from .deferred_review import derive_review_queue
+from .models import BatchStatus, CampaignStatus, ModelError, dynamic_execution_policy
 from .plan_models import AuditPlan, PlanPathState
 from .resource_cleanup import cleanup_campaign_resources
 from .runtime_policy import execution_policy_digest
@@ -40,6 +41,7 @@ def _derive_hypothesis_outcomes(
     assessments: Sequence[Mapping[str, Any]],
     findings: Sequence[Mapping[str, Any]],
     actual_revived_ids: Sequence[str] = (),
+    unresolved_ids: Sequence[str] = (),
 ) -> list[dict[str, Any]]:
     verdict_by_id = {item["hypothesis_id"]: item for item in verdicts}
     assessment_by_id = {item["hypothesis_id"]: item for item in assessments}
@@ -55,6 +57,7 @@ def _derive_hypothesis_outcomes(
             findings_by_id.setdefault(hypothesis_id, []).append(finding["finding_id"])
     outcomes = []
     revived = set(actual_revived_ids)
+    unresolved = set(unresolved_ids)
     for hypothesis in sorted(hypotheses, key=lambda item: item["hypothesis_id"]):
         hypothesis_id = hypothesis["hypothesis_id"]
         verdict = verdict_by_id.get(hypothesis_id, {})
@@ -62,7 +65,9 @@ def _derive_hypothesis_outcomes(
         reviews = reviews_by_id.get(hypothesis_id, [])
         finding_ids = sorted(findings_by_id.get(hypothesis_id, []))
         review_states = {item["disposition"] for item in reviews}
-        if finding_ids:
+        if hypothesis_id in unresolved:
+            state = "NEEDS_REVIEW"
+        elif finding_ids:
             state = "FINDING_RECORDED"
         elif hypothesis_id in revived:
             state = "NEEDS_REVIEW"
@@ -1141,6 +1146,7 @@ class CampaignCloser:
             if event.payload_ref
         ]
         merged_findings = self._deduplicate_findings(findings)
+        review_queue = derive_review_queue(self.manager, self.campaign_id)
         hypothesis_outcomes = _derive_hypothesis_outcomes(
             hypotheses, verdicts, category_runs, r5_assessments, findings,
             [
@@ -1150,9 +1156,10 @@ class CampaignCloser:
                     summary.get("revived_hypothesis_ids", []),
                 )
             ],
+            [item["hypothesis_id"] for item in review_queue],
         )
         unresolved_hypothesis_scope = [
-            f"Hypothesis {item['hypothesis_id']} has no canonical Finding and "
+            f"Hypothesis {item['hypothesis_id']} remains NEEDS_REVIEW and "
             "requires a final evidence-backed disposition."
             for item in hypothesis_outcomes if item["state"] == "NEEDS_REVIEW"
         ]
@@ -1417,6 +1424,7 @@ class CampaignCloser:
             "repository_size_bytes": inventory.repository_size_bytes,
             "status": "PASS",
             "audit_mode": self.campaign.audit_mode.value,
+            "dynamic_execution_policy": dynamic_execution_policy(self.campaign),
             "history_source_campaign_ids": list(
                 self.campaign.history_source_campaign_ids
             ),
@@ -1538,6 +1546,11 @@ class CampaignCloser:
             "unreviewed_scope": effective_unreviewed_scope,
             "inherited_unreviewed_scope": inherited_unreviewed_scope,
             "hypothesis_outcomes": hypothesis_outcomes,
+            "review_queue": review_queue,
+            "review_queue_note": (
+                "Provisional unresolved stage evidence. PASS means workflow completion, "
+                "not semantic resolution or human approval."
+            ),
             "hypothesis_outcome_counts": _counts(
                 item["state"] for item in hypothesis_outcomes
             ),
@@ -1638,6 +1651,7 @@ class CampaignCloser:
             ],
             "refutation_policy": {
                 "static_challenges_enabled": "static_challenges" in self.campaign.constraints,
+                "split_deferral_enabled": "defer_r35_splits" in self.campaign.constraints,
                 "skipped_static_reachable_hypothesis_ids": [
                     item["hypothesis_id"] for item in hypothesis_outcomes
                     if item["r3_verdict"].get("verdict") == "REACHABLE"
@@ -1784,6 +1798,7 @@ class CampaignCloser:
             f"- Snapshot: `{report['snapshot_id']}`",
             f"- Status: **{report['status']}**",
             f"- Audit mode: `{audit_mode}`",
+            f"- Dynamic execution policy: `{report.get('dynamic_execution_policy', 'UNDECLARED')}`",
             f"- Scope completeness: `{scope_completeness}`",
             "- Experimental development features: "
             + (", ".join(report.get("experimental_features", [])) or "none recorded"),
@@ -2011,6 +2026,20 @@ class CampaignCloser:
                 f"Findings: {', '.join(item['finding_ids']) or 'none'}. "
                 "See the JSON report for stage-specific evidence and rationales."
             )
+        lines.extend([
+            "", "### Provisional / Unresolved Review Queue", "",
+            "PASS means workflow completion, not semantic resolution. "
+            "These packets remain unresolved; no human approval is implied.",
+        ])
+        for item in report.get("review_queue", []):
+            lines.append(
+                f"- `{item['campaign_id']}` / `{item['batch_id']}` / "
+                f"`{item['work_unit_id']}` / `{item['hypothesis_id']}`: "
+                f"NEEDS_REVIEW (provisional). {item['unresolved_rationale']} "
+                "See the JSON report or review-queue for the complete evidence packet."
+            )
+        if not report.get("review_queue"):
+            lines.append("- None derived from active stage evidence.")
         lines.extend([
             "", "### Revival Review Summaries", "",
             "Legacy revived_hypothesis_ids lists reviewed items, including UPHOLD; "

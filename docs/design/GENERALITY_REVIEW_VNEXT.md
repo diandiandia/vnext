@@ -1,8 +1,9 @@
 # Generality and Engineering Review
 
 Initial review: 2026-10-20. Base: `a3b969c` plus that review's uncommitted changes.
-Latest reassessment: 2026-10-24, base `d31420d` plus the repairs recorded in
-[the latest review](#latest-review-2026-10-24-packaging-and-contract-boundaries).
+Latest reassessment: 2026-10-25, base `178dbcc` plus the pending workflow repairs
+and reassessment fixes recorded in
+[the latest review](#latest-review-2026-10-25-retry-identity-and-documentation).
 This is a bounded engineering review and repair record, not a security certification,
 exhaustive dead-code proof, Google internal approval, or ISO conformity assessment.
 The historical [quality reassessment](QUALITY_REASSESSMENT_VNEXT.md) is retained as
@@ -787,3 +788,106 @@ those outcomes or justify replacing the production baseline.
 
 The historical helper-only wheel success and earlier test totals above remain dated
 records; they must not be substituted for this broader distribution verification.
+
+## Latest Review (2026-10-25): Retry Identity and Documentation
+
+### Decision and scope
+
+vNext remains a usable **experimental audit orchestration Skill**, not an independently
+qualified excellent universal analyzer. Durable workflow, frozen scope, content-bound
+evidence and conservative unresolved states are strengths. Large orchestration
+modules, templated knowledge, uneven language-provider depth and substantial
+unmeasured host/cost/semantic assumptions prevent a stronger quality claim.
+
+This review includes the pending R2/R4 reliability, static-only, optional split-deferral
+and derived review/recovery changes from the preceding task. It directly inspected
+their producers/consumers and tests, active Skill/runbook/README, catalog selection,
+distribution/residue boundaries, requirements/design/completion and lifecycle
+documents. It did not audit a target, modify sealed runs, inspect every line of the
+roughly 21.5k runtime Python lines, or independently adjudicate all 150 mechanisms.
+
+### Confirmed issues and corrections
+
+Priorities are engineering priorities, not exploitable-vulnerability severities.
+
+| Priority | Reproduction / direct evidence | Correction |
+|---|---|---|
+| P1 | A frozen split-deferral Campaign could schedule a fresh AUTO NEEDS_REVIEW after a human disposition, or return the old deferred artifact instead of the active human result on retry. Both history layouts failed regression tests. | Reuse the current active human adjudication only when it covers the same refutations; retain shared coverage/source-demotion validation. No new approval or automated human identity is claimed. |
+| P1 | Same task ID with different Batch, bundled Work Units, bundle items or upstream revision pins returned the old task as though the request were an ordinary prompt retry. All four negative cases failed. | Include those fields in immutable identity comparison and reject mismatch without changing events. Prompt/budget-only resubmission still returns the original authoritative spec, preserving intended legacy retry behavior. |
+| P1 | A later event for hypothesis B cleared hypothesis A's invalidation marker when Batch/type matched. Refutation, adjudication, revival and verdict-ledger cases failed. | Compare the original event's entity as well as Batch/type/time. This does not replace full coverage gates, relax cascading invalidation or authorize stale-result reuse. Legacy markers without a resolvable target retain the existing stage-level fallback; full event history is the supported input. |
+| P2 | Chinese project overview described NOT_FEASIBLE/external observations/committed R3 correction as absent and generalized one historical Python/large-repository record into current language status. | Match current bounded contracts and distinguish dated examples, development trials, provider availability and independent qualification. Do not replace the old project's evidence or invent a full language matrix. |
+| P2 | An unresolved outcome with a recorded Finding could be described as having “no canonical Finding.” | Describe the actual NEEDS_REVIEW state without denying existing linked records or treating the Finding as confirmation. |
+
+The focused pre-fix reproduction produced **10 failed, 1 passed**; the passing case
+preserved the intended original prompt/budget retry contract. Corrections are shared
+workflow rules with synthetic identifiers, not branches for a past target or audit plan.
+The preceding R2/R4/static/deferral repairs are also included in this commit and
+remain covered by TR-20.
+
+### Cleanliness, bias, dead code and redundancy
+
+- Runtime Python/helpers, eligible knowledge and the main Skill are scanned for legacy
+  formats and bounded residue patterns, with separately supplied recent-target/plan
+  tokens. No target-specific runtime branch or fixed expected-finding quota was
+  found in the inspected paths. Pattern cleanliness is not semantic neutrality.
+- Project-specific supplements and old run observations remain in development/history
+  documents, identified as evidence records. They must not become fresh R1/R2 input.
+  Framework/API examples, CWE identifiers, generic build profiles and opaque provenance
+  are not automatically contamination; actual applicability still requires target
+  evidence. Do not erase traceability merely to hide historical influence.
+- Fixed portfolio/ranking, historical training samples, generic or cross-language cue
+  wording, uneven default/experimental providers and model behavior can bias
+  attention. No balanced blind 150-cell study establishes their quality or neutrality.
+  Independent per-card counterexample review and equal-budget paired evaluation remain
+  necessary; deleting history tokens alone cannot fix these limitations.
+- A fresh AST name/attribute inventory across runtime/tests/tools found no unreferenced
+  top-level runtime definition candidate or unused non-reexport import. Exact AST
+  function-body comparison found no duplicate groups of at least 12 lines. These are
+  syntactic screens, not whole-program liveness or equivalent-algorithm proofs.
+  No code was deleted solely on a text/AST non-reference.
+- Architecture concentration remains: execution about 4.2k lines, Batch workflow 2.3k,
+  closure 2.2k and store 1.5k. Knowledge and operational documents repeat some concepts.
+  Distinct evidence/consumer roles justify some repetition; context-cost and maintenance
+  measurements are needed before extracting or deleting shared behavior. No second
+  ledger, experiment system or target-specific recovery engine was introduced.
+- The main Skill remains 500 lines, not a small prompt. The wheel regression continues
+  to test runtime assets outside the checkout; Skill/runbook delivery and real host
+  enforcement remain separate responsibilities. “General-purpose” means reusable
+  within the declared security-audit scope, not every software-engineering task.
+
+### Engineering criteria and lifecycle standards
+
+**Google internal requirements: NOT ASSESSED.** No authorized controlled criteria or
+internal acceptance owner was supplied. Source clarity, tests and public engineering
+practice cannot establish internal approval.
+
+**ISO/IEC/IEEE 12207 conformity: NOT ESTABLISHED.** The repository supplies partial
+maintenance/configuration/verification/traceability evidence, not a controlled
+edition-specific lifecycle assessment. Applicable edition, organizational tailoring,
+named process owners, required objective outcomes and independent assessment remain
+external prerequisites, as recorded in
+[the lifecycle self-assessment](LIFECYCLE_CONFORMANCE_VNEXT.md).
+Neither this table nor passing tests closes those gaps.
+
+### Verification
+
+- Python **3.14.4**, full command:
+  `env -u PYTHONPATH python3 -m pytest tests -o addopts='' -q -rs --tb=short`.
+  Result: **574 passed, 1 skipped**, 65.28 seconds. The skip is
+  `test_heldout_release_acceptance.py`: protected real held-out manifest not configured.
+  No synthetic substitute was created to remove the acceptance gap.
+- Focused identity/deferral/workflow modules: **130 passed** after repairing the
+  pre-fix failures. The full suite also exercises isolated wheel catalog/CLI/coordinator
+  imports and packaged parser helpers outside the checkout.
+- Compatibility/residue scan: **PASS**, zero findings across **53 Python files,
+  2 helpers, 167 eligible knowledge JSON files and 1 main prompt**. The caller supplied
+  the recent target name, target-audit path token, supplement/report filenames and
+  three pilot issue IDs; these were not made a built-in target blacklist.
+- `python3 -m compileall -q src tools` and `git diff --check`: **PASS**.
+- **19 Markdown files, 253 local file links, zero missing targets**. Skill metadata
+  retains `name`/quoted `description` and the **500-line** progressive-loading bound.
+  Link existence is not proof of prose correctness or normative standards coverage.
+
+These results establish bounded local behavior on this environment. They do not
+establish all supported Python versions/platforms, dead-code absence, unbiased
+discovery, provider hard caps, real-host static-only enforcement or lifecycle conformity.

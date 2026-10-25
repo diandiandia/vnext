@@ -33,10 +33,12 @@ from .analysis_models import (
     RevivalReview,
     Surface,
     SurfaceReviewDisposition,
+    VerdictKind,
     VerdictSubmission,
 )
 from .batch_workflow import BatchWorkflow
 from .campaign import CampaignManager
+from .deferred_review import review_aware_r3_verdicts
 from .stage_revisions import (
     STAGE_INVALIDATION_DEPENDENTS,
     active_stage_events,
@@ -46,7 +48,7 @@ from .discovery.hotspots import compact_hotspot_report, scan_work_unit_hotspots
 from .adapters.languages import LANGUAGE_ADAPTERS
 from .knowledge_catalog import KnowledgeCatalog, default_knowledge_root
 from .experiments.harness_catalog import DEFAULT_HARNESS_CATALOG
-from .models import CampaignStatus, ModelError
+from .models import CampaignStatus, ModelError, dynamic_execution_policy
 from .plan_models import WorkUnit
 from .planning import discovery_output_floor_bytes
 from .runtime_policy import (
@@ -421,7 +423,11 @@ class ManualExecutionBackend:
                 self.manager.artifacts.get_bytes(existing_submissions[-1].payload_ref)
             ))
             same_identity = (
-                existing_spec.work_unit_id == task.work_unit_id
+                existing_spec.batch_id == task.batch_id
+                and existing_spec.work_unit_id == task.work_unit_id
+                and existing_spec.work_unit_ids == task.work_unit_ids
+                and existing_spec.bundle_item_ids == task.bundle_item_ids
+                and existing_spec.stage_revision_ids == task.stage_revision_ids
                 and existing_spec.operation == task.operation
                 and existing_spec.required_output == task.required_output
             )
@@ -932,6 +938,20 @@ class ManualExecutionBackend:
                 )
             else:
                 self._validate_hypothesis_output(task, output)
+                raw_runs = (
+                    output["axis_runs"]
+                    if task.required_output == "compact-hypothesis-set/v1"
+                    else [output["axis_run"]]
+                )
+                references = [
+                    ref for run in raw_runs for ref in run["evidence_refs"]
+                ] + [
+                    ref for hypothesis in output["hypotheses"]
+                    for ref in hypothesis["seed_refs"]
+                ]
+                BatchWorkflow(
+                    self.manager, self.campaign_id, task.batch_id,
+                ).validate_concrete_evidence(references)
                 if task.required_output in {
                     "hypothesis-set/v1",
                     "compact-hypothesis-set/v1",
@@ -2546,6 +2566,10 @@ class DiscoveryCoordinator:
                 raise ModelError(
                     f"R3.5 adjudication requires two refutations: {hypothesis_id}"
                 )
+            deferred = self._deferred_split_adjudication(hypothesis_id, refutations)
+            if deferred is not None:
+                self.workflow.record_adjudication(deferred)
+                continue
             input_ref = self._put_json({
                 "schema_version": "1.0",
                 "operation": "adjudicate_refutations",
@@ -2578,6 +2602,51 @@ class DiscoveryCoordinator:
                 stage_revision_ids=stage_revision_ids,
             )))
         return tuple(views)
+
+    def _deferred_split_adjudication(
+        self, hypothesis_id: str, refutations: Sequence[Mapping[str, Any]],
+    ) -> Adjudication | None:
+        if (
+            "defer_r35_splits" not in self.workflow.campaign.constraints
+            or len(refutations) != 2
+            or len({item["verdict"] for item in refutations}) < 2
+        ):
+            return None
+        existing = self.workflow._active_events(
+            event_type="ADJUDICATION_DECIDED", entity_id=hypothesis_id,
+        )
+        if existing:
+            current = Adjudication.from_dict(
+                self.workflow._read_artifact(existing[-1].payload_ref)
+            )
+            if (
+                current.actor is AdjudicationActor.HUMAN
+                and set(current.refutation_ids) == {
+                    str(item["refutation_id"]) for item in refutations
+                }
+            ):
+                return current
+        ordered = sorted(refutations, key=lambda item: str(item["refutation_id"]))
+        identity = json.dumps({
+            "hypothesis_id": hypothesis_id,
+            "r3_revision": self._stage_revision_parts("R3_COMPLETED"),
+            "refutations": ordered,
+        }, sort_keys=True, ensure_ascii=False)
+        return Adjudication(
+            "ADJ-deferred-" + hashlib.sha256(identity.encode("utf-8")).hexdigest()[:24],
+            hypothesis_id,
+            tuple(str(item["refutation_id"]) for item in ordered),
+            VerdictKind.NEEDS_REVIEW,
+            AdjudicationActor.AUTO,
+            (),
+            "Split refutations remain unresolved under the frozen deferral policy; "
+            "no human approval or definitive reachability decision is recorded. "
+            + " ".join(
+                f"{item['refutation_id']} ({item['verdict']}): {item['rationale']}; "
+                f"evidence_refs={json.dumps(item['evidence_refs'], ensure_ascii=False)}."
+                for item in ordered
+            ),
+        )
 
     def approve_r35_adjudication(
         self, task_id: str, *, output_ref: str, reviewer: str,
@@ -2623,14 +2692,25 @@ class DiscoveryCoordinator:
 
     def commit_r35_adjudications(self) -> tuple[str, ...]:
         revision_parts = self._stage_revision_parts("R3_COMPLETED")
+        deferred = {
+            hypothesis_id: adjudication
+            for hypothesis_id in self._r35_eligible()
+            if (adjudication := self._deferred_split_adjudication(
+                hypothesis_id, self._r35_refutations(hypothesis_id),
+            )) is not None
+        }
         expected = {
             self._task_id(
                 "adjudicate_refutations", hypothesis_id, *revision_parts
             ): hypothesis_id
             for hypothesis_id in self._r35_eligible()
+            if hypothesis_id not in deferred
         }
         views = self._successful_tasks("adjudicate_refutations", expected)
-        artifact_ids = []
+        artifact_ids = [
+            self.workflow.record_adjudication(adjudication)
+            for adjudication in deferred.values()
+        ]
         for view in views:
             hypothesis_id = expected[view.task.task_id]
             value = self._read_output(view)
@@ -2786,6 +2866,10 @@ class DiscoveryCoordinator:
         return self.workflow.complete_r35()
 
     def schedule_r4(self) -> tuple[TaskView, ...]:
+        with self.workflow.manager.store.atomic_events():
+            return self._schedule_r4()
+
+    def _schedule_r4(self) -> tuple[TaskView, ...]:
         if self._active_task_views(
             operation="run_category_audit_bundle", batch_id=self.workflow.batch_id,
         ):
@@ -2816,12 +2900,9 @@ class DiscoveryCoordinator:
             (str(item["work_unit_id"]), str(item["axis"])): item
             for item in r2["axis_runs"]
         }
-        r3_artifact = json.loads(
-            self.workflow.manager.artifacts.get_bytes(r3_event.payload_ref)
-        )
         r3_verdicts_by_hypothesis = {
             str(item["hypothesis_id"]): item
-            for item in r3_artifact.get("verdicts", [])
+            for item in review_aware_r3_verdicts(self.workflow)
         }
         hypotheses_by_work_unit: dict[str, list[Mapping[str, Any]]] = {}
         for hypothesis in r2["hypotheses"]:
@@ -2985,6 +3066,18 @@ class DiscoveryCoordinator:
         max_work_units_per_task: int = 4,
         max_task_input_bytes: int = 512 * 1024,
     ) -> tuple[TaskView, ...]:
+        with self.workflow.manager.store.atomic_events():
+            return self._schedule_r4_bundled(
+                max_work_units_per_task=max_work_units_per_task,
+                max_task_input_bytes=max_task_input_bytes,
+            )
+
+    def _schedule_r4_bundled(
+        self,
+        *,
+        max_work_units_per_task: int,
+        max_task_input_bytes: int,
+    ) -> tuple[TaskView, ...]:
         if max_work_units_per_task < 2 or max_task_input_bytes < 1:
             raise ModelError("R4 bundle limits must be at least two Work Units and one byte")
         plan_event = self._require_stage("CATEGORY_AUDIT_PLAN_RECORDED")
@@ -3005,12 +3098,9 @@ class DiscoveryCoordinator:
             (str(item["work_unit_id"]), str(item["axis"])): item
             for item in r2["axis_runs"]
         }
-        r3_artifact = json.loads(
-            self.workflow.manager.artifacts.get_bytes(r3_event.payload_ref)
-        )
         r3_verdicts_by_hypothesis = {
             str(item["hypothesis_id"]): item
-            for item in r3_artifact.get("verdicts", [])
+            for item in review_aware_r3_verdicts(self.workflow)
         }
         hypotheses_by_work_unit: dict[str, list[Mapping[str, Any]]] = {}
         for hypothesis in r2["hypotheses"]:
@@ -3459,7 +3549,6 @@ class DiscoveryCoordinator:
         if any(event.payload_ref is None for event in (r2_event, r3_event, r4_event)):
             raise ModelError("R5 input stage is missing its artifact")
         r2 = json.loads(self.workflow.manager.artifacts.get_bytes(r2_event.payload_ref))
-        r3 = json.loads(self.workflow.manager.artifacts.get_bytes(r3_event.payload_ref))
         hypotheses = {
             str(item["hypothesis_id"]): item for item in r2["hypotheses"]
         }
@@ -3486,7 +3575,7 @@ class DiscoveryCoordinator:
                 "observation": observation,
             })
         views = []
-        for verdict in r3["verdicts"]:
+        for verdict in review_aware_r3_verdicts(self.workflow):
             hypothesis_id = str(verdict["hypothesis_id"])
             hypothesis = hypotheses[hypothesis_id]
             work_unit = work_units[str(hypothesis["work_unit_id"])]
@@ -3989,10 +4078,19 @@ class DiscoveryCoordinator:
 
     def _put_json(self, value: Mapping[str, Any]) -> str:
         if "output_contract" in value:
+            policy = dynamic_execution_policy(
+                self.workflow.manager.store.get_campaign(self.workflow.campaign_id)
+            )
             value = {
                 **value,
                 "output_discipline": _OUTPUT_DISCIPLINE,
-                "execution_policy": _TASK_EXECUTION_POLICY,
+                "dynamic_execution_policy": policy,
+                "execution_policy": _TASK_EXECUTION_POLICY + (
+                    " This Campaign forbids dynamic execution, including managed harnesses."
+                    if policy == "STATIC_ONLY"
+                    else " Campaign dynamic execution policy is UNDECLARED; this is not "
+                    "host authorization."
+                ),
             }
         encoded = json.dumps(
             value, ensure_ascii=False, sort_keys=True, separators=(",", ":")

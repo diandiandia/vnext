@@ -12,6 +12,19 @@ The real-target pilot and release qualification procedure is in
 
 ## Ordered Work
 
+### Current Maintenance Baseline (2026-10-25)
+
+Task policy 48 includes early R2 concrete-reference checks, atomic ordinary/bundled
+R4 scheduling, frozen static-only and optional unresolved split deferral, and derived
+review/recovery views (TR-20). Retry fixes preserve human decisions, full task
+ownership/revision identity and per-entity invalidation markers. The
+[latest review](GENERALITY_REVIEW_VNEXT.md#latest-review-2026-10-25-retry-identity-and-documentation)
+records bounded evidence and remaining limits. The dated pilot subsections below
+explain development entry decisions, not extra requirements or discovery input for
+every target. No pilot's scope, candidates, expected findings or audit plan is loaded
+into runtime knowledge. Local completion does not establish language quality,
+cost benefit, safe automatic reuse, host isolation or standards conformity.
+
 ### 0. Repository-Owned Gaps and Evidence-First Work
 
 The following work is deliberately separated by what evidence can establish:

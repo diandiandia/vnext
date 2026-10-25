@@ -408,6 +408,11 @@ class BatchWorkflow:
             not tuple(evidence) for evidence in axis_evidence.values()
         ):
             raise ModelError("R2 requires evidence for all six discovery axes")
+        self.validate_concrete_evidence(
+            [ref for refs in axis_evidence.values() for ref in refs]
+            + [ref for run in axis_runs for ref in run.evidence_refs]
+            + [ref for hypothesis in hypotheses for ref in hypothesis.seed_refs]
+        )
         work_unit_ids = set(work_units)
         axis_run_by_key = {}
         for item in axis_runs:
@@ -597,7 +602,17 @@ class BatchWorkflow:
         if set(adjudication.refutation_ids) != available_ids:
             raise ModelError("adjudication must reference every submitted refutation")
         refuter_verdicts = {item["verdict"] for item in refutations}
-        if len(refuter_verdicts) > 1 and adjudication.actor is not AdjudicationActor.HUMAN:
+        deferred_split = (
+            "defer_r35_splits" in self.campaign.constraints
+            and len(refutations) == 2
+            and adjudication.actor is AdjudicationActor.AUTO
+            and adjudication.final_verdict is VerdictKind.NEEDS_REVIEW
+        )
+        if (
+            len(refuter_verdicts) > 1
+            and adjudication.actor is not AdjudicationActor.HUMAN
+            and not deferred_split
+        ):
             raise ModelError("split refutations require human adjudication")
         if (
             verifier_verdict["verdict"] == VerdictKind.REACHABLE.value
@@ -933,6 +948,23 @@ class BatchWorkflow:
         )
         return artifact_id
 
+    def validate_concrete_evidence(self, references: Sequence[str]) -> None:
+        """Check concrete evidence without interpreting legacy symbolic seed IDs as proof."""
+        if any(
+            not isinstance(reference, str) or not reference
+            or reference != reference.strip()
+            for reference in references
+        ):
+            raise ModelError("evidence references must be nonblank strings without surrounding whitespace")
+        line_cache: dict[str, tuple[int, frozenset[int]]] = {}
+        for reference in sorted(set(references)):
+            if reference.startswith("LOC") and not reference.startswith("LOC-"):
+                raise ModelError(f"malformed source LOC anchor: {reference}")
+            if reference.startswith(("LOC-", "sha256:")):
+                self._validate_evidence_reference(
+                    reference, None, line_count_cache=line_cache,
+                )
+
     def validate_category_evidence(self, run: CategoryRun) -> None:
         """Validate concrete references on every R4 entry path."""
         CategoryRun.from_dict({
@@ -943,12 +975,7 @@ class BatchWorkflow:
             references.update(axis.evidence_refs)
         for review in run.hypothesis_reviews:
             references.update(review.evidence_refs)
-        line_cache: dict[str, tuple[int, frozenset[int]]] = {}
-        for reference in sorted(references):
-            if reference.startswith(("LOC-", "sha256:")):
-                self._validate_evidence_reference(
-                    reference, None, line_count_cache=line_cache,
-                )
+        self.validate_concrete_evidence(tuple(references))
 
     def record_r4(
         self,

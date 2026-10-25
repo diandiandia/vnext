@@ -16,13 +16,19 @@ IMPLEMENTED_RELEASE_GATES = tuple(f"RG{index}" for index in range(1, 16))
 
 
 _POLICY: dict[str, Any] = {
-    "policy_version": "vnext-task-policy-46",
+    "policy_version": "vnext-task-policy-48",
     "task_collection": {
         "go_hotspots": "campaign_frozen_opt_in_trusted_offline_ast_helper_candidates_only_not_release_qualified",
         "java_hotspots": "campaign_frozen_opt_in_jdk_parse_only_unresolved_method_candidates_not_release_qualified",
         "supporting_resources": "explicit_pre_r0_digest_registration;concrete_loc_refs_match_frozen_bytes;not_call_chain_or_review_coverage",
         "r3_wire_contract": "nested_verdict_with_complete_example",
         "r35_static_challenges": "campaign_frozen_opt_in_same_two_perspective_protocol_no_evidence_grade_upgrade",
+        "r35_split_deferral": "campaign_frozen_opt_in_deterministic_auto_needs_review_only_both_refutations_retained_no_human_approval",
+        "r35_split_retry": "preserve_current_human_adjudication_bound_to_same_refutations_never_replace_with_deferred_result",
+        "task_resubmission_identity": "campaign_batch_primary_and_bundled_work_units_bundle_items_operation_output_contract_upstream_revision_pins_immutable;original_prompt_and_budget_retained",
+        "dynamic_execution_policy": "frozen_static_only_blocks_managed_harness_before_side_effects;legacy_undeclared_not_authorization;not_os_enforced",
+        "unresolved_review_queue": "derived_active_stage_evidence_provisional_no_semantic_resolution_or_new_ledger",
+        "revision_recovery_plan": "read_only_unresolved_invalidations_match_original_entity_preserve_cascade_no_automatic_result_reuse",
         "late_collection": "explicit_operator_authorization_original_attempt_and_output_normal_validation_no_new_dispatch",
         "wall_amendment": "append_only_monotone_limit_extension_original_clock_and_breach_retained",
         "go_harness_profile": "explicit_go_offline_environment_and_bounded_build_file_size;captured_output_limits_independent;ineligible_runs_cannot_upgrade",
@@ -46,9 +52,11 @@ _POLICY: dict[str, Any] = {
         "r1_boundary_review_coverage": "exactly_once_with_evidence_and_rationale_at_collect",
         "r1_boundary_anchor_validation": "endpoint_component_and_snapshot_loc_line_at_collect",
         "r2_hypothesis_shape_validation": "collect",
+        "r2_concrete_evidence_validation": "compact_and_per_axis_collect_and_direct_commit;axis_aggregate_axis_run_and_seed_refs;frozen_nonblank_LOC_and_resolvable_artifact;symbolic_ids_not_source_proof",
         "r2_large_source_guidance": "bounded_line_range_and_symbol_reads_fail_without_complete_file_scope",
         "r2_large_source_warning_bytes": R2_LARGE_SOURCE_FILE_WARNING_BYTES,
         "r4_bundle": "opt-in_same-family_preserve_per_plan_results",
+        "r4_scheduling_atomicity": "nested_sqlite_savepoints_all_task_and_screening_events_commit_or_rollback_together;unreferenced_content_addressed_artifacts_may_remain",
         "r4_bundle_default_work_units": 1,
         "r4_bundle_max_input_bytes": 524288,
         "empty_component_planning": "scope_project_edges_prune_wholly_excluded_obligations_preserve_cross_scope_boundaries_and_truly_empty_root",

@@ -22,6 +22,7 @@ from .models import (
     CampaignAuditMode,
     CampaignRecord,
     CampaignStatus,
+    dynamic_execution_policy,
 )
 from .analysis_models import ExternalObservation, SkillIssue, SkillIssueStatus
 from .plan_models import AuditPlan, ComponentGraph, PlanAmendment, ProjectInventory
@@ -1248,6 +1249,7 @@ class CampaignManager:
     def _write_campaign_export(self, record: CampaignRecord) -> None:
         portable = asdict(record)
         portable["status"] = record.status.value
+        portable["dynamic_execution_policy"] = dynamic_execution_policy(record)
         portable["target_root"] = "<runtime-only>"
         self._atomic_json(self.state_dir / "campaign.json", portable)
 

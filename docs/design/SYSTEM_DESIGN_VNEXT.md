@@ -29,7 +29,7 @@ in-tree stores remain recoverable and ambiguous dual stores require an explicit
 selection. Library hosts must explicitly select external state. Physical source-read
 or OS context isolation is still a host responsibility.
 
-Current-contract update (2026-10-24): the runtime policy is `vnext-task-policy-46`.
+Current-contract update (2026-10-25): the runtime policy is `vnext-task-policy-48`.
 CG2's component ownership accounting recognizes complete evidence-backed EXCLUDED or
 DEFERRED path scope for a component without boundary obligations; it does not turn that
 scope decision into an audit or safety claim. Campaign output includes a non-gating
@@ -43,6 +43,26 @@ Maintenance update (2026-10-24): path-scope validation accepts
 inventoried source whose path and digest match the disposition and frozen snapshot
 baseline. This is file identity/emptiness evidence, not a LOC anchor, review claim,
 or safety finding.
+
+Reliability update (2026-10-24): concrete R2 axis/seed references are checked at
+per-axis/compact collection and direct stage commit against the shared frozen-source
+and artifact validators. Symbolic provenance IDs are not source proof. Both R4
+schedulers atomically persist task and screening events or roll the call back.
+`init --static-only` freezes a dynamic-execution prohibition; legacy Campaigns are
+UNDECLARED, not authorized. Independently, `--defer-r35-splits` permits only unresolved
+AUTO NEEDS_REVIEW for split refutations; default human handling is unchanged.
+Active canonical artifacts derive provisional review packets and report summaries.
+The read-only recovery plan preserves dependent invalidation and never automatically
+reuses old results. See TR-20 and the [runbook](../ORCHESTRATOR_RUNBOOK.md).
+These are workflow contracts, not empirical discovery-quality or host-sandbox evidence.
+
+Reassessment update (2026-10-25): retries preserve same-refutation human decisions
+instead of reapplying unresolved split deferral. Durable task identity also includes
+Batch, bundled ownership and upstream revision pins; same-ID resubmission cannot
+silently substitute those identities. Recovery-marker replacement compares the
+original event's entity, not just its Batch/type. See the
+[latest review](GENERALITY_REVIEW_VNEXT.md#latest-review-2026-10-25-retry-identity-and-documentation)
+for reproductions, remaining debt and standards limits.
 
 ## 1. Purpose
 

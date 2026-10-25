@@ -59,7 +59,7 @@ from .resource_cleanup import (
     create_campaign_temp_directory,
     register_process_group,
 )
-from .models import CampaignAuditMode, ModelError
+from .models import CampaignAuditMode, ModelError, dynamic_execution_policy
 
 
 def _default_cli_state_dir(target: str | Path) -> Path:
@@ -151,6 +151,8 @@ def _handle_init(arguments: argparse.Namespace) -> int:
                 (("experimental_go_hotspots",) if arguments.experimental_go_hotspots else ())
                 + (("experimental_java_hotspots",) if arguments.experimental_java_hotspots else ())
                 + (("static_challenges",) if arguments.static_challenges else ())
+                + (("static_only",) if arguments.static_only else ())
+                + (("defer_r35_splits",) if arguments.defer_r35_splits else ())
             ),
         )
         _print(asdict(campaign))
@@ -163,6 +165,7 @@ def _handle_status(arguments: argparse.Namespace) -> int:
         for campaign in manager.store.list_campaigns():
             campaigns.append({
                 **asdict(campaign),
+                "dynamic_execution_policy": dynamic_execution_policy(campaign),
                 "batches": [
                     asdict(batch)
                     for batch in manager.store.list_batches(campaign.campaign_id)
@@ -1031,6 +1034,28 @@ def _parser() -> argparse.ArgumentParser:
         "--static-challenges", action="store_true",
         help="freeze opt-in static R3.5 challenge generation for this Campaign",
     )
+    init.add_argument(
+        "--static-only", action="store_true",
+        help="freeze a Campaign constraint forbidding dynamic execution, including managed harnesses",
+    )
+    init.add_argument(
+        "--defer-r35-splits", action="store_true",
+        help="freeze opt-in unresolved R3.5 split deferral for post-run review",
+    )
+
+    review_queue = subparsers.add_parser(
+        "review-queue", help="derive unresolved review packets from active stage evidence",
+    )
+    review_queue.add_argument("target")
+    review_queue.add_argument("campaign_id")
+    review_queue.add_argument("--state-dir", default=".audit_vnext")
+
+    recovery = subparsers.add_parser(
+        "recovery-plan", help="derive read-only stage revision recovery instructions",
+    )
+    recovery.add_argument("target")
+    recovery.add_argument("campaign_id")
+    recovery.add_argument("--state-dir", default=".audit_vnext")
 
     wall_amend = subparsers.add_parser(
         "campaign-wall-budget-amend",
@@ -1513,6 +1538,24 @@ def main(argv: list[str] | None = None) -> int:
 
         if arguments.command == "resource-cleanup":
             return _handle_resource_cleanup(arguments)
+
+        if arguments.command == "review-queue":
+            from .deferred_review import derive_review_queue
+
+            with CampaignManager(arguments.target, arguments.state_dir) as manager:
+                _print(derive_review_queue(manager, arguments.campaign_id))
+            return 0
+
+        if arguments.command == "recovery-plan":
+            from .stage_revisions import stage_recovery_plan
+
+            with CampaignManager(arguments.target, arguments.state_dir) as manager:
+                manager.store.get_campaign(arguments.campaign_id)
+                _print({
+                    "campaign_id": arguments.campaign_id,
+                    **stage_recovery_plan(manager.store.list_events(arguments.campaign_id)),
+                })
+            return 0
 
         if arguments.command == "inventory":
             return _handle_inventory(arguments)

@@ -40,6 +40,13 @@ requirements were satisfied; it does not mean that every file was inspected or t
 undiscovered vulnerability exists. Reports preserve excluded, deferred, and unresolved
 scope.
 
+New Campaigns may freeze `init --static-only` to prohibit dynamic execution, including
+managed harnesses, and independently opt into `--defer-r35-splits` to retain split
+refutations as provisional `NEEDS_REVIEW` without blocking on human adjudication.
+Neither option is inferred from old notes. `review-queue` derives evidence packets;
+`recovery-plan` lists invalidated projections without reusing stale results. See the
+[orchestrator runbook](docs/ORCHESTRATOR_RUNBOOK.md) for defaults and limitations.
+
 Campaign reports inherit unresolved scope from every current Batch report; a
 coordinator cannot erase it by submitting an empty list. A derived per-hypothesis
 outcome ledger joins late Findings by hypothesis ID and retains non-finding candidates

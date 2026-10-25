@@ -107,6 +107,32 @@ def test_stage_invalidation_clears_only_after_later_same_batch_revision() -> Non
     ]) == []
 
 
+@pytest.mark.parametrize("event_type", [
+    "REFUTATION_SUBMITTED", "ADJUDICATION_DECIDED", "REVIVAL_REVIEWED",
+    "VERDICT_ADJUDICATED",
+])
+def test_other_hypothesis_cannot_clear_invalidated_evidence(event_type: str) -> None:
+    target = SimpleNamespace(
+        event_id="EVT-old", event_type=event_type, batch_id="B-1",
+        entity_type="hypothesis", entity_id="HYP-a", sequence=10, payload={},
+    )
+    marker = SimpleNamespace(
+        event_id="EVT-invalidate", event_type="STAGE_PROJECTION_INVALIDATED",
+        batch_id="B-1", sequence=11,
+        payload={"target_event_id": target.event_id, "target_stage": event_type},
+    )
+    other = SimpleNamespace(
+        event_id="EVT-other", event_type=event_type, batch_id="B-1",
+        entity_type="hypothesis", entity_id="HYP-b", sequence=12, payload={},
+    )
+    replacement = SimpleNamespace(
+        event_id="EVT-new", event_type=event_type, batch_id="B-1",
+        entity_type="hypothesis", entity_id="HYP-a", sequence=13, payload={},
+    )
+    assert unresolved_stage_invalidations([target, marker, other]) == [marker]
+    assert unresolved_stage_invalidations([target, marker, other, replacement]) == []
+
+
 def test_active_projection_rejects_mismatched_upstream_revision_pin() -> None:
     old_r1 = SimpleNamespace(
         event_id="EVT-r1-old", event_type="R1_COMPLETED", batch_id="B-1",

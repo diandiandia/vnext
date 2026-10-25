@@ -33,6 +33,41 @@ provide an approved immutable `--snapshot-id` and retain its provenance; do not 
 a stable identity for mutable source. Keep source permissions, isolation, runtime
 limits, logs, stop owner and allowed commands explicit.
 
+### Frozen execution and split-review choices
+
+For a new Campaign, `init --static-only` freezes a prohibition on running, compiling,
+importing or evaluating target-derived code, including tests and probes. The machine
+field `dynamic_execution_policy` is `STATIC_ONLY`; the managed harness rejects the
+request before creating resources/artifacts or launching a process. Existing Campaigns
+without this constraint are `UNDECLARED`, not implicitly authorized to execute.
+Worker task inputs carry the frozen policy. This is not an OS sandbox: external host
+commands still require separate enforcement. Trusted parser helpers only parse target
+text; they do not run target packages.
+
+Independently, `init --defer-r35-splits` freezes opt-in split deferral. The normal
+adjudication schedule/commit commands record deterministic AUTO `NEEDS_REVIEW` when
+the two independent refutations disagree, preserving both records and their evidence.
+No adjudication worker or human-approval event is invented. Two-perspective coverage
+and ordinary agreement handling remain required. Without this flag, the existing
+human-review split rule remains unchanged. Neither frozen constraint can be retrofitted
+by editing notes in an existing Campaign.
+Retrying schedule/commit preserves an active human disposition for the same
+refutations; it must not append a new unresolved result over that decision.
+
+```bash
+vnext review-queue "$TARGET" "$CAMPAIGN_ID"
+vnext recovery-plan "$TARGET" "$CAMPAIGN_ID"
+```
+
+The review queue is JSON derived from active R2/R3/refutation/adjudication artifacts,
+with claim, seed refs, principal, preconditions, evidence grade, both objections,
+artifact references and unresolved rationale. Campaign JSON includes these packets;
+Markdown summarizes them. They are provisional decision inputs, not confirmed
+vulnerabilities or a new evidence ledger. A passed Campaign can still have unresolved
+candidates. Human resolution remains an explicit evidenced operator action; do not
+erase uncertainty by automatically approving a proposal. After Campaign completion,
+record new investigation in a declared follow-up Campaign rather than rewriting history.
+
 New CLI `init` defaults to a target-path-hashed store below
 `$XDG_STATE_HOME/reachable-audit` (or `~/.local/state/reachable-audit` when
 `XDG_STATE_HOME` is unset, empty, or relative), outside the source tree. Other commands
@@ -156,7 +191,8 @@ New runners should consume `tasks`, not count an unknown JSON shape as an empty 
 
 ### Human adjudication is a separate operator action
 
-A split refutation requires actual human review. A Worker must not turn itself into
+A definitive split disposition requires actual human review; frozen opt-in deferral
+above preserves uncertainty instead of deciding the split. A Worker must not turn itself into
 a human by choosing `actor=human`, a `human:*` worker ID, or a standing-delegation
 label. The human worker label remains necessary for the existing task path but is
 not sufficient to commit. Pause and show the exact proposal and source evidence to
@@ -193,6 +229,15 @@ use `[]` when no items were predeclared. Each checklist item binds an ID to one
 Work Unit, discovery axis, description and current-source anchor. The corresponding
 AxisRun must review each applicable ID exactly once and cite its declared anchor.
 This improves recall of known helpers; it is not an exhaustive entrypoint census.
+
+Concrete R2 axis and hypothesis-seed references are validated at both collection and
+direct stage commit: source paths, frozen bytes and nonblank line anchors must resolve,
+as must content-addressed artifacts. `LOC/` is not a valid alternative to `LOC-`.
+Existing symbolic seed/Surface/mechanism IDs remain accepted for provenance but are
+not source proof. Ordinary and bundled R4 scheduling commit task and screening events
+in one transaction. Any validation or write failure rolls the entire scheduling call
+back; immutable unreferenced artifacts may remain, but no partial task/screening event
+set becomes visible. An exact retry uses the original task identities.
 
 For unusually long compact R2 work, size the lease explicitly rather than changing the
 global default. For example, a measured task expected to exceed the default 900 seconds
@@ -260,6 +305,20 @@ itself evidence that UPHOLD reviews were omitted.
 Recovery is bounded by authorization, remaining attempts, budget and the current
 lease/revision. Persist failure and usage evidence; missing telemetry is incomplete
 cost, never free work. Do not create infinite retry loops.
+Task-ID retries must preserve Batch, primary/bundled Work Units, bundle items,
+operation/output contract and upstream revision pins. Revised prompt text or proposed
+budget does not replace an already submitted spec: inspect the returned original task.
+
+`recovery-plan` is read-only guidance derived from unresolved invalidation events,
+grouped by Batch/stage, with original target-event references and command names.
+Per-hypothesis invalidations cannot be cleared by another hypothesis's event merely
+because it has the same event type and Batch. Stage replacement is not proof that
+every required refutation or review is present; coverage gates still apply.
+Recommit the amended upstream output, then reschedule/review/commit downstream work
+against current revision pins. Command options (including the R2 checklist/layout)
+and current hypothesis eligibility still apply. The checklist neither executes these
+steps nor authorizes copying old outputs into new tasks, and it is not a closure gate.
+Do not cancel the invalidation cascade to avoid recovery work.
 
 | Symptom | Correct action | Do not do |
 |---|---|---|
@@ -457,7 +516,8 @@ the scan fails explicitly rather than falling back into the audit tree.
 An optional `--static-challenges` requires the existing two-perspective R3.5 protocol
 for static-only REACHABLE claims as well as edge-proven claims. Both scheduling and
 completion use the same frozen selection. Adjudication still requires separate refuter
-labels, call-chain plus premise perspectives, human handling of splits and source
+labels, call-chain plus premise perspectives, human handling of definitive splits
+(or frozen opt-in unresolved deferral) and source
 verification of demotion. Labels are not authenticated identities. Retention cannot
 promote evidence grade, and default static-only skips are exposed in the final JSON.
 

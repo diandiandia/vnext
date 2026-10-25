@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from contextlib import AbstractContextManager
+from contextlib import AbstractContextManager, contextmanager
 import datetime as dt
 import json
 from pathlib import Path
 import sqlite3
-from typing import Any, Mapping, Sequence
+from typing import Any, Iterator, Mapping, Sequence
 import uuid
 
 from .models import (
@@ -60,6 +60,20 @@ class AuditStore(AbstractContextManager["AuditStore"]):
 
     def close(self) -> None:
         self._connection.close()
+
+    @contextmanager
+    def atomic_events(self) -> Iterator[None]:
+        """Nest event writes without letting an inner append commit the outer group."""
+        savepoint = "events_" + uuid.uuid4().hex
+        self._connection.execute(f"SAVEPOINT {savepoint}")
+        try:
+            yield
+        except BaseException:
+            self._connection.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+            self._connection.execute(f"RELEASE SAVEPOINT {savepoint}")
+            raise
+        else:
+            self._connection.execute(f"RELEASE SAVEPOINT {savepoint}")
 
     def _initialize(self) -> None:
         self._connection.executescript(
@@ -545,7 +559,7 @@ class AuditStore(AbstractContextManager["AuditStore"]):
         payload_ref: str | None = None,
     ) -> AppendResult:
         self.get_campaign(campaign_id)
-        with self._connection:
+        with self.atomic_events():
             return self._append_event_tx(
                 campaign_id=campaign_id,
                 batch_id=batch_id,
@@ -567,7 +581,7 @@ class AuditStore(AbstractContextManager["AuditStore"]):
         self.get_campaign(campaign_id)
         created_at = _utc_now()
         results = []
-        with self._connection:
+        with self.atomic_events():
             for item in events:
                 results.append(self._append_event_tx(
                     campaign_id=campaign_id,

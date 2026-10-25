@@ -81,7 +81,7 @@ a fresh copy does not erase an operator's prior knowledge of the target.
 15. Durable task inputs declare static analysis only: do not execute, compile, import,
   source, or evaluate target-derived code, tests, build scripts, snippets, or probes
   in a worker context. Dynamic evidence requires explicit host authorization and a
-  Campaign-registered managed R5 harness; a static-only Campaign permits no dynamic
+  Campaign-registered managed R5 harness; `init --static-only` forbids dynamic
   execution. This task contract is not an OS sandbox.
 
 Before the first R0, inventory source files and component build manifests are frozen in
@@ -126,8 +126,8 @@ never executing target packages. Java receiver types remain unresolved. Neither 
 is default-enabled or release-qualified; an unavailable scan is not zero risk.
 `init --static-challenges` requires the existing two-perspective R3.5 review for
 static-only REACHABLE claims too; it cannot upgrade their evidence grade.
-After a claim, confirm worker dispatch; release the lease on dispatch failure. Poll
-lease timing and expiry, but do not infer worker liveness from a durable lease.
+`init --defer-r35-splits` keeps splits unresolved, never human-approved; use `review-queue`.
+Confirm dispatch or release the lease; task/lease state does not prove worker liveness.
 
 Every `task-collect` input must include measured `agent_runs` and `wall_seconds`.
 Use `init --max-wall-seconds` to enforce an optional local Campaign claim deadline
@@ -422,8 +422,8 @@ partial batch. If a successful task output must be corrected after collection bu
 its R1/R2/R3/R4/R5/R6 stage commits, use `task-amend` with a replacement output, reason, and
 content-addressed evidence refs. The prior output remains immutable. A supported R1-R5
 amendment after stage commit appends the replacement and affected-descendant invalidation
-events; reschedule and recommit the invalidated downstream stages before closure. Stale
-tasks cannot satisfy the new revision. Terminal R6 output may be amended after its Batch
+events; use `recovery-plan` and recommit affected stages; no automatic result reuse. Stale
+tasks cannot satisfy new revisions. Terminal R6 output may be amended after its Batch
 projection while the Campaign is not `COMPLETE`; run `task-commit-r6` again and then
 `campaign-close` to rebuild projections. Campaign closure rejects an amended R6 task
 until a newer R6 projection exists, and amendments are rejected after Campaign

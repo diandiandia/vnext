@@ -39,6 +39,24 @@ distribution, catalog and evaluator regressions verify those bounded contracts.
 
 ## 2. Requirements and Implementation Audit
 
+Reliability refinement (2026-10-24): SWDR-012/013 validate concrete R2 axis/seed refs
+at collection and direct commit; symbolic IDs are not promoted to source proof.
+SWDR-014 supports frozen opt-in split deferral to AUTO NEEDS_REVIEW, with two
+independent perspectives retained and no synthetic human approval. SWDR-015 rejects
+managed harness execution for frozen STATIC_ONLY before side effects without hiding
+a required experiment. SWDR-017 includes atomic R4 task/screening event writes and a
+read-only recovery checklist preserving dependent invalidation. SWDR-019 includes
+derived active-evidence provisional review packets in CLI and Campaign reports.
+Evidence: [test_pilot_repairs.py](../../tests/test_pilot_repairs.py),
+[test_static_policy.py](../../tests/test_static_policy.py), and
+[test_deferred_review.py](../../tests/test_deferred_review.py), specified in TR-20.
+These bounded implementations do not establish real-target recall or OS enforcement.
+The 2026-10-25 reassessment further covers SWDR-014/017: split retries retain an active
+human decision for the same refutations; same-ID task resubmission rejects changed
+Batch/bundled ownership/revision pins; recovery does not treat another hypothesis's
+event as its replacement. Tests in `test_deferred_review.py`, `test_execution.py`
+and `test_batch_workflow.py` reproduce the previous failures and verify non-mutation.
+
 | ID | Current software contract | System reqs | Software design | Implementation evidence, remaining target, or known defect |
 |---|---|---|---|---|
 | SWDR-001 | The runtime shall load a versioned portfolio of exactly 15 approved canonical language IDs; certification status shall be evidence-derived. | SYSR-002, 004, 027 | §3.1, §8 | **Implemented.** The approved roster is in [portfolio.json](../../knowledge/portfolio.json), and the loader validates 15 unique languages. Certification remains an evaluation result, not an asset flag. |

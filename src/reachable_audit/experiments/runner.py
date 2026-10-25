@@ -17,7 +17,7 @@ except ImportError:
     resource = None
 
 from ..campaign import CampaignManager
-from ..models import ModelError
+from ..models import ModelError, dynamic_execution_policy
 from ..resource_cleanup import (
     create_campaign_temp_directory,
     register_process_group,
@@ -54,6 +54,9 @@ def run_harness(
     Eligibility means complete, hypothesis-bound capture, not a confirmed result;
     nonzero exits may represent intentional crash observations.
     """
+    campaign = manager.store.get_campaign(campaign_id)
+    if dynamic_execution_policy(campaign) == "STATIC_ONLY":
+        raise ModelError("static-only Campaign forbids dynamic execution, including managed harnesses")
     if profile not in {None, "go-offline"}:
         raise ModelError("unknown harness profile")
     argv = tuple(str(item) for item in command)
@@ -74,7 +77,6 @@ def run_harness(
     if resource is None:
         raise ModelError("managed harness execution requires POSIX resource limits")
 
-    campaign = manager.store.get_campaign(campaign_id)
     target_root = Path(campaign.target_root).resolve()
     working_directory = (target_root / cwd).resolve()
     if working_directory != target_root and target_root not in working_directory.parents:

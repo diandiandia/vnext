@@ -1940,6 +1940,47 @@ def test_task_id_cannot_be_reused_with_a_different_spec(tmp_path: Path) -> None:
         manager.close()
 
 
+@pytest.mark.parametrize("changes", [
+    {"batch_id": "B-2"},
+    {"work_unit_ids": ("WU-1", "WU-2")},
+    {"bundle_item_ids": ("CP-other",)},
+    {"stage_revision_ids": {"R1_COMPLETED": "REV-other"}},
+])
+def test_task_retry_cannot_change_ownership_or_revision(
+    tmp_path: Path, changes: dict,
+) -> None:
+    manager, task = _setup(tmp_path)
+    try:
+        manager.add_batch(
+            campaign_id=task.campaign_id, batch_id="B-2",
+            manifest={"work_unit_ids": ["WU-1"]},
+        )
+        backend = ManualExecutionBackend(manager, task.campaign_id)
+        original = backend.submit(task)
+        before = manager.store.list_events(task.campaign_id)
+        with pytest.raises(ModelError, match="different spec"):
+            backend.submit(replace(task, **changes))
+        assert manager.store.list_events(task.campaign_id) == before
+        assert backend.poll(task.task_id) == original
+    finally:
+        manager.close()
+
+
+def test_task_retry_preserves_original_prompt_and_budget(tmp_path: Path) -> None:
+    manager, task = _setup(tmp_path)
+    try:
+        backend = ManualExecutionBackend(manager, task.campaign_id)
+        original = backend.submit(task)
+        revised = manager.artifacts.put_text("revised task guidance").artifact_id
+        before = manager.store.list_events(task.campaign_id)
+        assert backend.submit(replace(
+            task, input_refs=(revised,), budget={"minutes": 20},
+        )) == original
+        assert manager.store.list_events(task.campaign_id) == before
+    finally:
+        manager.close()
+
+
 def test_discovery_coordinator_commits_r1_and_six_axis_r2(tmp_path: Path) -> None:
     manager, workflow, plan = _workflow(tmp_path, "CMP-coordinator")
     try:
