@@ -535,6 +535,12 @@ execution, refutation, category-run, harness, CLI and Campaign closure regressio
   must fail without changing history; prompt/budget-only retries retain the original
   authoritative spec. These identity cases also run in `test_execution.py` and
   `test_batch_workflow.py`.
+- R5 task inputs must include claim-versus-observation interpretation guidance for
+  target/host/harness ownership, injected actions, build conditions, fidelity,
+  unproven implications and security-impact/disclosure limits. Verify delivery in
+  ordinary and replacement-Batch end-to-end tests in `test_deferred_review.py`.
+  These assertions test task guidance, not semantic correctness or Agent compliance;
+  the existing Experiment schema and empirical provenance gates remain unchanged.
 
 **Real-host follow-up:** run a fresh authorized Campaign with explicit frozen choices;
 do not relabel old sealed Campaigns. Verify that the host enforces the static-only

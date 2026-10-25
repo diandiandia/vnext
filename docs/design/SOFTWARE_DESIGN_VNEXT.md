@@ -88,6 +88,13 @@ the target event's entity when available; coverage gates independently check the
 complete current hypothesis/refutation set. These are shared contracts, not target
 exceptions or automatic evidence reuse.
 
+Policy 51 adds R5 interpretation guidance to the existing task analysis contract:
+use existing rationale, observation references and tested preconditions to distinguish
+claim from observation, target/host/harness failure ownership, injected actions,
+build conditions and unproven impact. No Experiment schema, disposition, approval
+step or semantic validator is added. Registered execution alone is not confirmation
+of the claimed path, security impact or disclosure eligibility.
+
 This design extends the existing vNext Python package and its canonical Campaign,
 Batch, event, artifact, Work Unit, and Handoff models. It does not introduce v3 runtime
 compatibility. Existing vNext schemas remain the starting point; schema changes require

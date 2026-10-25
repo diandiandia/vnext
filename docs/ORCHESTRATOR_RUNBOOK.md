@@ -274,6 +274,30 @@ assessment disposition `NEEDS_REVIEW`. Do not execute it without authorization o
 invent observation artifacts. Confirmed/refuted results still require observations;
 empirical upgrades still require the registered evidence described above.
 
+### R5 interpretation: observation is not the whole claim
+
+Use existing `Experiment.rationale`, `observation_refs`, `preconditions_tested` and
+assessment rationale; no additional output fields are required.
+
+- State the exact claim tested separately from actual observations and cite the logs.
+  Identify whether the failing operation is in target code, embedding host or harness.
+- Describe harness-injected actions and retain instrumentation, fault injection,
+  build options and runtime conditions. Running a real library does not establish an
+  end-to-end target path. A manually modeled path remains `mechanism` fidelity unless
+  equivalence is evidenced; do not promote it merely because the library is real.
+- A sanitizer diagnostic or nonzero exit alone does not confirm the claim. Do not
+  infer a write from a read, corruption from allocation failure, or refutation from
+  a timeout/non-reproduction. Record unproven implications explicitly.
+- Separate behavior reproduction, memory-safety failure, security impact and
+  disclosure eligibility. A resource-limit bypass is not automatically a sandbox
+  escape. Keep material unproven parts `NEEDS_REVIEW`, rather than confirming a
+  broader claim than the evidence supports.
+
+These are Agent reasoning requirements, not semantic checks implemented by the
+structural validators. Registration proves execution provenance, not correctness of
+the interpretation. Ordinary managed R5 does not require HMAC; signed external
+observations are a separate, non-confirming evidence path.
+
 ## 4. Six-Axis Deep Review
 
 All triggers are conditional on current source evidence. For Java, consult the

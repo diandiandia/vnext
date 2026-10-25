@@ -325,15 +325,15 @@ An explicit harness input `"profile": "go-offline"` provides bounded Go build/pr
 settings and private offline caches. See the runbook's Go slice for approved limits;
 the profile is not an OS/network sandbox or evidence that the target behavior occurred.
 
-R5 tasks include registered harness execution references for the same hypothesis and
-snapshot when available. A worker may propose commands and limits, but worker-local
-runs alone cannot justify `EMPIRICALLY_CONFIRMED`. The host must run `harness-run` and
-supply its execution/stdout/stderr artifact references before collecting or amending an
-empirical assessment. Do not invent registered IDs. For no experiment, use JSON `null`
-for `assessment.experiment_id`, never an empty string; non-null IDs must name an
-experiment in the same task output. Invalid structure, scope, or IDs fail at collection
-and leave the lease available for correction. Experiment fidelity and registered
-empirical evidence remain subject to stage-commit validation.
+R5 tasks include registered harness refs for the same hypothesis/snapshot when available.
+Workers may propose commands/limits, but local runs cannot justify `EMPIRICALLY_CONFIRMED`.
+The host must run `harness-run` and supply execution/stdout/stderr refs before collecting
+or amending an empirical assessment. Never invent IDs. With no experiment, use JSON `null`
+for `assessment.experiment_id`; non-null IDs must name an experiment in the same output.
+Invalid structure, scope or IDs fail collection and leave the lease available for repair.
+Fidelity/evidence are revalidated at commit. In rationale/preconditions, separate claim,
+observations, failure owner (target/host/harness), injected actions and build conditions.
+State unproven implications; sanitizer errors prove neither target path nor security impact. Follow the runbook's R5 rules.
 
 Use `NOT_FEASIBLE` only when an experiment is required but cannot be attempted because
 of a documented environment, tooling, or authorization blocker. Set

@@ -549,6 +549,17 @@ def test_deferred_split_closes_workflow_without_semantic_resolution(
         r5_task, = coordinator.schedule_r5()
         r5_input = json.loads(manager.artifacts.get_bytes(r5_task.task.input_refs[0]))
         assert r5_input["verdict"]["verdict"] == "NEEDS_REVIEW"
+        contract = r5_input["analysis_contract"]
+        for guidance in (
+            "exact claim tested",
+            "target code, embedding host, or harness",
+            "instrumentation, fault injection, build options",
+            "real library does not prove an end-to-end target path",
+            "sanitizer diagnostic or nonzero exit alone",
+            "disclosure eligibility",
+            "Structural validation cannot decide semantic truth",
+        ):
+            assert guidance in contract
         workflow.record_r5([], [R5Assessment(
             "HYP-split", False, None, R5Disposition.NEEDS_REVIEW,
             ("EVID-r5",), "no experiment resolves the split",
