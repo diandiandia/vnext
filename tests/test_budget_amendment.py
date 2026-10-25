@@ -237,7 +237,9 @@ def test_budget_amendment_cli_and_init_constraints(tmp_path: Path, capsys) -> No
     capsys.readouterr()
     with CampaignManager(target, state_dir) as manager:
         campaign = manager.store.get_campaign("CMP-cli")
-        assert set(campaign.constraints) == {"static_challenges", "experimental_java_hotspots"}
+        assert set(campaign.constraints) == {
+            "static_challenges", "experimental_java_hotspots", "defer_r35_splits",
+        }
         evidence = manager.artifacts.put_text("CLI extension evidence").artifact_id
     assert main([
         "campaign-wall-budget-amend", str(target), "CMP-cli",

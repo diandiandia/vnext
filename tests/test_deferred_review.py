@@ -45,7 +45,7 @@ from reachable_audit.planning import create_audit_plan
 from reachable_audit.stage_revisions import STAGE_INVALIDATION_DEPENDENTS, active_stage_events
 
 
-def _workflow(path: Path, *, deferred: bool = True):
+def _workflow(path: Path, *, deferred: bool | None = None):
     (path / "app.py").write_text("def run(value): return value\n", encoding="utf-8")
     inventory = build_inventory(path, "fixture:deferred")
     plan = create_audit_plan(
@@ -54,7 +54,9 @@ def _workflow(path: Path, *, deferred: bool = True):
     manager = CampaignManager(path)
     manager.create_campaign(
         campaign_id="CMP-deferred", snapshot_id="fixture:deferred",
-        constraints=("defer_r35_splits",) if deferred else (),
+        constraints=(
+            None if deferred is None else ("defer_r35_splits",) if deferred else ()
+        ),
     )
     manager.record_inventory(campaign_id="CMP-deferred", inventory=inventory)
     manager.record_plan(campaign_id="CMP-deferred", plan=plan, inventory=inventory)
@@ -112,18 +114,54 @@ def test_init_freezes_split_deferral(
         "init", str(tmp_path), "--snapshot-id", "fixture:init-deferred",
         "--campaign-id", "CMP-init", "--state-dir", ".audit_vnext",
     ]
-    opted_in = ["--defer-r35-splits"] if enabled else []
+    opted_in = ["--defer-r35-splits"] if enabled else ["--no-defer-r35-splits"]
     assert main(args + opted_in) == 0
     campaign = json.loads(capsys.readouterr().out)
     assert ("defer_r35_splits" in campaign["constraints"]) is enabled
     assert main(args + opted_in) == 0
     capsys.readouterr()
-    assert main(args + ([] if enabled else ["--defer-r35-splits"])) == 2
+    assert main(args + (["--no-defer-r35-splits"] if enabled else ["--defer-r35-splits"])) == 2
     capsys.readouterr()
     with CampaignManager(tmp_path) as manager:
         assert manager.store.get_campaign("CMP-init").constraints == (
             ("defer_r35_splits",) if enabled else ()
         )
+
+
+def test_new_cli_campaign_defaults_to_deferral_and_preserves_old_policy(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str],
+) -> None:
+    args = [
+        "init", str(tmp_path), "--snapshot-id", "fixture:default",
+        "--state-dir", ".audit_vnext",
+    ]
+    assert main(args + ["--campaign-id", "CMP-default"]) == 0
+    assert "defer_r35_splits" in json.loads(capsys.readouterr().out)["constraints"]
+    with CampaignManager(tmp_path) as manager:
+        manager.create_campaign(
+            snapshot_id="fixture:default", campaign_id="CMP-old", constraints=(),
+        )
+        before = manager.store.list_events("CMP-old")
+    assert main(args + ["--campaign-id", "CMP-old"]) == 0
+    assert json.loads(capsys.readouterr().out)["constraints"] == []
+    with CampaignManager(tmp_path) as manager:
+        assert manager.store.list_events("CMP-old") == before
+
+
+def test_library_default_and_explicit_constraints_are_frozen(tmp_path: Path) -> None:
+    with CampaignManager(tmp_path) as manager:
+        new = manager.create_campaign(snapshot_id="fixture:default", campaign_id="CMP-new")
+        assert new.constraints == ("defer_r35_splits",)
+        old = manager.create_campaign(
+            snapshot_id="fixture:default", campaign_id="CMP-explicit", constraints=(),
+        )
+        assert old.constraints == ()
+        assert manager.create_campaign(
+            snapshot_id="fixture:default", campaign_id="CMP-explicit",
+        ) == old
+        assert manager.create_campaign(
+            snapshot_id="fixture:default", campaign_id="CMP-new",
+        ) == new
 
 
 def test_legacy_split_still_requires_human(tmp_path: Path) -> None:

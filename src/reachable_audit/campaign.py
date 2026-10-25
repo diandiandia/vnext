@@ -34,7 +34,7 @@ from .planning import (
     validate_plan,
     validate_plan_amendment,
 )
-from .store import AuditStore
+from .store import AuditStore, NotFoundError
 
 
 class SnapshotError(RuntimeError):
@@ -100,6 +100,11 @@ class CampaignManager:
         history_source_campaign_ids: tuple[str, ...] = (),
     ) -> CampaignRecord:
         identifier = campaign_id or f"CMP-{uuid.uuid4().hex}"
+        if constraints is None:
+            try:
+                constraints = self.store.get_campaign(identifier).constraints
+            except NotFoundError:
+                constraints = ("defer_r35_splits",)
         if len(history_source_campaign_ids) != len(set(history_source_campaign_ids)):
             raise ValueError("history source Campaign IDs must be unique")
         if audit_mode is CampaignAuditMode.FRESH and history_source_campaign_ids:

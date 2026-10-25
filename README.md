@@ -41,9 +41,10 @@ undiscovered vulnerability exists. Reports preserve excluded, deferred, and unre
 scope.
 
 New Campaigns may freeze `init --static-only` to prohibit dynamic execution, including
-managed harnesses, and independently opt into `--defer-r35-splits` to retain split
+managed harnesses. New Campaigns default to `--defer-r35-splits` to retain split
 refutations as provisional `NEEDS_REVIEW` without blocking on human adjudication.
-Neither option is inferred from old notes. `review-queue` derives evidence packets;
+Use `--no-defer-r35-splits` to require human split adjudication instead.
+Existing Campaigns retain their frozen policy. `review-queue` derives evidence packets;
 `recovery-plan` lists invalidated projections without reusing stale results. See the
 [orchestrator runbook](docs/ORCHESTRATOR_RUNBOOK.md) for defaults and limitations.
 

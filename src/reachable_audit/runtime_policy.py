@@ -16,7 +16,7 @@ IMPLEMENTED_RELEASE_GATES = tuple(f"RG{index}" for index in range(1, 16))
 
 
 _POLICY: dict[str, Any] = {
-    "policy_version": "vnext-task-policy-48",
+    "policy_version": "vnext-task-policy-49",
     "task_collection": {
         "go_hotspots": "campaign_frozen_opt_in_trusted_offline_ast_helper_candidates_only_not_release_qualified",
         "java_hotspots": "campaign_frozen_opt_in_jdk_parse_only_unresolved_method_candidates_not_release_qualified",
@@ -24,6 +24,7 @@ _POLICY: dict[str, Any] = {
         "r3_wire_contract": "nested_verdict_with_complete_example",
         "r35_static_challenges": "campaign_frozen_opt_in_same_two_perspective_protocol_no_evidence_grade_upgrade",
         "r35_split_deferral": "campaign_frozen_opt_in_deterministic_auto_needs_review_only_both_refutations_retained_no_human_approval",
+        "r35_split_default": "new_cli_and_library_unspecified_constraints_enable_deferral;explicit_no_defer_or_exact_library_constraints_override;existing_frozen_policy_retained",
         "r35_split_retry": "preserve_current_human_adjudication_bound_to_same_refutations_never_replace_with_deferred_result",
         "task_resubmission_identity": "campaign_batch_primary_and_bundled_work_units_bundle_items_operation_output_contract_upstream_revision_pins_immutable;original_prompt_and_budget_retained",
         "dynamic_execution_policy": "frozen_static_only_blocks_managed_harness_before_side_effects;legacy_undeclared_not_authorization;not_os_enforced",

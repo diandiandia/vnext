@@ -38,6 +38,8 @@ def _workflow(
     tmp_path: Path,
     campaign_id: str = "CMP-slice",
     source: str = "def handle(value):\n    return value\n",
+    *,
+    constraints: tuple[str, ...] | None = None,
 ):
     (tmp_path / "app.py").write_text(source, encoding="utf-8")
     inventory = build_inventory(tmp_path, "fixture:slice")
@@ -47,7 +49,9 @@ def _workflow(
         category_families=["INJECTION"],
     )
     manager = CampaignManager(tmp_path)
-    manager.create_campaign(campaign_id=campaign_id, snapshot_id="fixture:slice")
+    manager.create_campaign(
+        campaign_id=campaign_id, snapshot_id="fixture:slice", constraints=constraints,
+    )
     manager.record_inventory(campaign_id=campaign_id, inventory=inventory)
     manager.record_plan(campaign_id=campaign_id, plan=plan, inventory=inventory)
     return manager, BatchWorkflow(manager, campaign_id, plan.batches[0].batch_id), plan

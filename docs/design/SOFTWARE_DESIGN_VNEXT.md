@@ -52,6 +52,12 @@ does not make `LOC-<path>:1` valid for an empty file or change source-anchor sem
 
 ## 1. Scope and Compatibility
 
+Current default (2026-10-25, task policy 49): new CLI Campaigns and library creation
+with omitted constraints freeze `defer_r35_splits`. CLI BooleanOptionalAction allows
+`--no-defer-r35-splits`; explicit library constraints remain exact overrides.
+Omitted selection on retry uses the existing record, never migrates an old Campaign.
+This supersedes the earlier opt-in default below; unresolved semantics are unchanged.
+
 Reliability contract (2026-10-24; extended by task policy 48 on 2026-10-25): `BatchWorkflow` shares concrete
 evidence validation across R2 collection/direct commit and R4 paths, including
 frozen bytes and nonblank LOC lines; legacy symbolic IDs remain provenance only.

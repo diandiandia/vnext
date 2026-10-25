@@ -10,6 +10,11 @@ The historical [quality reassessment](QUALITY_REASSESSMENT_VNEXT.md) is retained
 dated evidence, not as the current implementation backlog.
 Earlier sections retain their dated review evidence; the latest linked section is
 authoritative for this reassessment, not a new per-target audit procedure.
+Subsequent user-approved default update (2026-10-25, task policy 49): new CLI
+Campaigns and library Campaigns with omitted constraints now enable split deferral.
+`--no-defer-r35-splits` / exact library constraints opt out; existing frozen selections
+are preserved. Earlier references to opt-in deferral describe the reviewed policy 48,
+not the current default. The unresolved-only and decision-packet contracts are unchanged.
 
 ## Product Objective and Decision
 

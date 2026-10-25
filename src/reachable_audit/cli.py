@@ -141,6 +141,16 @@ def _handle_init(arguments: argparse.Namespace) -> int:
     if arguments.require_host_worker_attestation:
         budget["require_host_worker_attestation"] = True
     with CampaignManager(arguments.target, arguments.state_dir) as manager:
+        defer_splits = arguments.defer_r35_splits
+        if defer_splits is None:
+            from .store import NotFoundError
+
+            try:
+                existing = manager.store.get_campaign(arguments.campaign_id)
+            except NotFoundError:
+                defer_splits = True
+            else:
+                defer_splits = "defer_r35_splits" in existing.constraints
         campaign = manager.create_campaign(
             snapshot_id=snapshot_id,
             campaign_id=arguments.campaign_id,
@@ -152,7 +162,7 @@ def _handle_init(arguments: argparse.Namespace) -> int:
                 + (("experimental_java_hotspots",) if arguments.experimental_java_hotspots else ())
                 + (("static_challenges",) if arguments.static_challenges else ())
                 + (("static_only",) if arguments.static_only else ())
-                + (("defer_r35_splits",) if arguments.defer_r35_splits else ())
+                + (("defer_r35_splits",) if defer_splits else ())
             ),
         )
         _print(asdict(campaign))
@@ -1039,8 +1049,9 @@ def _parser() -> argparse.ArgumentParser:
         help="freeze a Campaign constraint forbidding dynamic execution, including managed harnesses",
     )
     init.add_argument(
-        "--defer-r35-splits", action="store_true",
-        help="freeze opt-in unresolved R3.5 split deferral for post-run review",
+        "--defer-r35-splits", action=argparse.BooleanOptionalAction, default=None,
+        help="retain unresolved R3.5 splits for post-run review (default for new Campaigns); "
+        "--no-defer-r35-splits requires human split adjudication",
     )
 
     review_queue = subparsers.add_parser(

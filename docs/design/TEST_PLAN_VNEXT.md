@@ -513,7 +513,10 @@ execution, refutation, category-run, harness, CLI and Campaign closure regressio
   No declaration is inferred from text or unrelated constraints. Both library and
   CLI harness attempts must fail before resources/artifacts/processes are created.
   Legacy authorized harness tests still pass; required experiments remain required.
-- `init --defer-r35-splits` preserves legacy defaults and other init options. A split
+- New `init` defaults to split deferral; `--no-defer-r35-splits` opts out and
+  `--defer-r35-splits` explicitly enables it. Repeated init without a choice preserves
+  legacy selection, and conflicting explicit choices fail. Library omitted constraints
+  use the new default only for new Campaigns; explicit constraints are exact. A split
   yields only AUTO NEEDS_REVIEW, both refutation records, source/premise evidence and
   a deterministic revision-bound identity; repeated/interrupted commit does not
   fabricate tasks or human approval. Definitive AUTO split resolution remains invalid.

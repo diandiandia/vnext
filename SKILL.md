@@ -126,7 +126,7 @@ never executing target packages. Java receiver types remain unresolved. Neither 
 is default-enabled or release-qualified; an unavailable scan is not zero risk.
 `init --static-challenges` requires the existing two-perspective R3.5 review for
 static-only REACHABLE claims too; it cannot upgrade their evidence grade.
-`init --defer-r35-splits` keeps splits unresolved, never human-approved; use `review-queue`.
+New Campaigns default to unresolved splits; `--no-defer-r35-splits` opts out; use `review-queue`.
 Confirm dispatch or release the lease; task/lease state does not prove worker liveness.
 
 Every `task-collect` input must include measured `agent_runs` and `wall_seconds`.

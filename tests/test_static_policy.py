@@ -19,7 +19,10 @@ def _freeze_static_creation(monkeypatch: pytest.MonkeyPatch) -> None:
     create = CampaignManager.create_campaign
 
     def create_static(self, **kwargs):
-        kwargs["constraints"] = (*kwargs.get("constraints", ()), "static_only")
+        constraints = kwargs.get("constraints")
+        if constraints is None:
+            constraints = ("defer_r35_splits",)
+        kwargs["constraints"] = (*constraints, "static_only")
         return create(self, **kwargs)
 
     monkeypatch.setattr(CampaignManager, "create_campaign", create_static)
@@ -47,7 +50,8 @@ def test_init_status_and_export_policy(
         campaign = manager.store.get_campaign("CMP-policy")
         assert dynamic_execution_policy(campaign) == expected
         assert campaign.constraints == (
-            ("static_challenges", "static_only") if static_only else ()
+            ("static_challenges", "static_only", "defer_r35_splits")
+            if static_only else ("defer_r35_splits",)
         )
     exported = json.loads((state / "campaign.json").read_text())
     assert exported["dynamic_execution_policy"] == expected

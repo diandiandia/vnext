@@ -44,13 +44,18 @@ Worker task inputs carry the frozen policy. This is not an OS sandbox: external 
 commands still require separate enforcement. Trusted parser helpers only parse target
 text; they do not run target packages.
 
-Independently, `init --defer-r35-splits` freezes opt-in split deferral. The normal
+Independently, new `init` Campaigns freeze split deferral by default. The normal
 adjudication schedule/commit commands record deterministic AUTO `NEEDS_REVIEW` when
 the two independent refutations disagree, preserving both records and their evidence.
 No adjudication worker or human-approval event is invented. Two-perspective coverage
-and ordinary agreement handling remain required. Without this flag, the existing
-human-review split rule remains unchanged. Neither frozen constraint can be retrofitted
+and ordinary agreement handling remain required. `--defer-r35-splits` explicitly
+selects that default; `--no-defer-r35-splits` opts into the human-review split rule.
+An omitted option on repeated init retains the existing Campaign's frozen selection;
+an explicit conflicting option is rejected. Neither frozen constraint can be retrofitted
 by editing notes in an existing Campaign.
+Library `create_campaign` also defaults to deferral when `constraints` is omitted.
+An explicit `constraints` list is an exact policy override (including `()` to disable);
+omitting it on an existing Campaign preserves its recorded constraints.
 Retrying schedule/commit preserves an active human disposition for the same
 refutations; it must not append a new unresolved result over that decision.
 

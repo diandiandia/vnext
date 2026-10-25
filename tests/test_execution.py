@@ -3111,7 +3111,7 @@ def test_discovery_coordinator_runs_independent_r35_refutations(
 
 
 def test_human_label_requires_separate_exact_output_review(tmp_path: Path) -> None:
-    manager, workflow, plan = _workflow(tmp_path, "CMP-human-review")
+    manager, workflow, plan = _workflow(tmp_path, "CMP-human-review", constraints=())
     try:
         unit = plan.work_units[0]
         workflow.run_r0()
