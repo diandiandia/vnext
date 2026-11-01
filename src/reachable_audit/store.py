@@ -46,14 +46,20 @@ def _json(value: Any) -> str:
 
 
 class AuditStore(AbstractContextManager["AuditStore"]):
-    def __init__(self, path: str | Path) -> None:
+    def __init__(self, path: str | Path, *, read_only: bool = False) -> None:
         self.path = Path(path)
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self._connection = sqlite3.connect(self.path)
+        if read_only:
+            self._connection = sqlite3.connect(
+                self.path.resolve().as_uri() + "?mode=ro", uri=True,
+            )
+        else:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            self._connection = sqlite3.connect(self.path)
         self._connection.row_factory = sqlite3.Row
         self._connection.execute("PRAGMA foreign_keys = ON")
-        self._connection.execute("PRAGMA journal_mode = WAL")
-        self._initialize()
+        if not read_only:
+            self._connection.execute("PRAGMA journal_mode = WAL")
+            self._initialize()
 
     def __exit__(self, exc_type: object, exc: object, traceback: object) -> None:
         self.close()
@@ -794,7 +800,7 @@ class AuditStore(AbstractContextManager["AuditStore"]):
 
     def _task_inputs_invalidated(self, submission: EventRecord) -> bool:
         revisions = submission.payload.get("stage_revision_ids", {})
-        if not isinstance(revisions, dict) or not revisions or submission.batch_id is None:
+        if not isinstance(revisions, dict) or submission.batch_id is None:
             return False
         rows = self._connection.execute(
             """
@@ -806,6 +812,8 @@ class AuditStore(AbstractContextManager["AuditStore"]):
         ).fetchall()
         for row in rows:
             payload = json.loads(row["payload_json"])
+            if payload.get("invalidated_task_id") == submission.entity_id:
+                return True
             target_stage = str(payload.get("target_stage", ""))
             target_revision_id = str(payload.get("target_revision_id", ""))
             if revisions.get(target_stage) == target_revision_id:

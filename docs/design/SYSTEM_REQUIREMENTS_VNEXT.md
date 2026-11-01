@@ -35,6 +35,15 @@ default to deferral; explicit opt-out/exact constraints and legacy frozen select
 remain authoritative. SYSR-014/023 current review packets exclude superseded Batch
 history, but not unresolved evidence merely because a Batch is DEFERRED.
 
+Maintenance update (2026-11-01, task policy 54): R3.5 review outputs are validated
+against their task scope and concrete evidence at collection and commit. Supported
+amendments invalidate dependent R3.5/R4/R5/R6 projections without reusing stale task
+results. R4 reports disposition differences against the current R3 verdict or R3.5
+adjudication with linked evidence, but does not adjudicate semantic correctness.
+Read-only CLI status selects Campaigns matching the requested target when a state
+directory is shared. These are local workflow contracts, not independent review or
+target discovery-quality evidence.
+
 - IDs `SYSR-###` are stable identifiers for this requirements baseline.
 - The current contract describes managed runtime behavior, not every earlier target.
 - References identify implementation/design coverage, not proof of discovery quality.

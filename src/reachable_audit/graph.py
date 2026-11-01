@@ -175,6 +175,7 @@ def build_component_graph(
             edge_keys.add((source_unit.manifest_path, dependency.name, "build_dependency"))
 
     source_by_path = {item.path: item for item in inventory.source_files}
+    target_anchor_lines: dict[str, int | None] = {}
     for source_path, source_file in sorted(source_by_path.items()):
         adapter = LANGUAGE_ADAPTERS.get(source_file.language)
         if adapter is None:
@@ -199,6 +200,32 @@ def build_component_graph(
             key = (source_path, target_path, "language_import_candidate")
             if key in edge_keys:
                 continue
+            if target_path not in target_anchor_lines:
+                target_anchor_lines[target_path] = None
+                try:
+                    with (root / target_path).open(
+                        encoding="utf-8", errors="replace",
+                    ) as target_source:
+                        target_anchor_lines[target_path] = next(
+                            (
+                                index for index, line in enumerate(target_source, start=1)
+                                if line.strip()
+                            ),
+                            None,
+                        )
+                except OSError as error:
+                    diagnostics.append(GraphDiagnostic(
+                        manifest_path=target_path,
+                        code="IMPORT_TARGET_UNREADABLE",
+                        detail=str(error),
+                    ))
+                if target_anchor_lines[target_path] is None:
+                    diagnostics.append(GraphDiagnostic(
+                        manifest_path=target_path,
+                        code="IMPORT_TARGET_NO_SOURCE_ANCHOR",
+                        detail="Import candidate retained without a nonblank target LOC anchor.",
+                    ))
+            target_line = target_anchor_lines[target_path]
             edge_keys.add(key)
             edges.append(BoundaryEdge(
                 edge_id=_stable_id(
@@ -213,7 +240,10 @@ def build_component_graph(
                 target_path=target_path,
                 source_language=source_file.language,
                 target_language=source_by_path[target_path].language,
-                evidence_refs=(f"LOC-{source_path}:{line_number}", f"LOC-{target_path}:1"),
+                evidence_refs=(
+                    f"LOC-{source_path}:{line_number}",
+                    *((f"LOC-{target_path}:{target_line}",) if target_line is not None else ()),
+                ),
                 discovery_status="agent_proposed",
             ))
     return ComponentGraph(

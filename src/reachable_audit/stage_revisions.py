@@ -61,6 +61,31 @@ STAGE_INVALIDATION_DEPENDENTS = {
         "R6_COMPLETED",
         "TRANSMISSION_METRICS_RECORDED",
     ),
+    "REFUTATION_SUBMITTED": (
+        "REFUTATION_SUBMITTED",
+        "ADJUDICATION_DECIDED",
+        "R3_5_COMPLETED",
+        "R4_COMPLETED",
+        "R5_COMPLETED",
+        "R6_COMPLETED",
+        "TRANSMISSION_METRICS_RECORDED",
+    ),
+    "ADJUDICATION_DECIDED": (
+        "ADJUDICATION_DECIDED",
+        "R3_5_COMPLETED",
+        "R4_COMPLETED",
+        "R5_COMPLETED",
+        "R6_COMPLETED",
+        "TRANSMISSION_METRICS_RECORDED",
+    ),
+    "REVIVAL_REVIEWED": (
+        "REVIVAL_REVIEWED",
+        "R3_5_COMPLETED",
+        "R4_COMPLETED",
+        "R5_COMPLETED",
+        "R6_COMPLETED",
+        "TRANSMISSION_METRICS_RECORDED",
+    ),
 }
 
 
@@ -92,6 +117,8 @@ def unresolved_stage_invalidations(events: Iterable[Any]) -> list[Any]:
     unresolved = []
     for marker in event_list:
         if marker.event_type != "STAGE_PROJECTION_INVALIDATED":
+            continue
+        if marker.payload.get("invalidated_task_id"):
             continue
         target_stage = marker.payload.get("target_stage")
         target = by_id.get(marker.payload.get("target_event_id"))

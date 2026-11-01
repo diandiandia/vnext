@@ -87,6 +87,16 @@ moved. The library `CampaignManager` retains its legacy default; embedded hosts 
 provide an external location themselves. Source workers may search only inventoried
 source paths, not arbitrary files under the target root.
 
+`status` opens an existing database read-only: a missing store or a store with no
+Campaign for the requested target is an error, not an empty successful audit. It
+does not initialize or migrate a database. If an explicitly shared store contains
+multiple targets, status returns only the requested target's Campaigns. Relative
+explicit state paths retain their target-relative meaning, but commands reject
+creating a new store inside the target. New CLI `init` requires an external store;
+an explicit existing in-target store remains available to non-init recovery commands
+with a warning. Do not silence that warning by treating legacy state as inventoried
+source.
+
 Select categories from the applicable language profiles and threat model before
 planning. Categories are hard scope: an audit must not silently narrow the approved
 families to the three categories in an example or a provider's available leads. Record any
@@ -190,7 +200,7 @@ boundary ownership.
 
 Use actual returned IDs and stage artifacts. Do not write events directly, synthesize
 empty success payloads, bypass commits, or interpret no hypotheses as proof of safety.
-Retries and amendments must preserve old history. Committed R1-R5 amendments
+Retries and amendments must preserve old history. Committed R1-R5 and R3.5 amendments
 invalidate affected descendants: reschedule and recommit current revisions.
 After Campaign completion do not amend history; use a declared new Campaign.
 Schedulers return `tasks` arrays; R6 also retains the legacy single `task` alias.
@@ -263,8 +273,13 @@ host/provider limits for actual execution bounds; do not set long durations blin
 For every allowed R4 hypothesis, emit one `hypothesis_reviews` disposition with evidence
 and rationale. Also reconcile each previously recorded Finding exactly once in the
 applicable CategoryRun. At R6, provide one `finding_reviews` decision per canonical
-Finding. The closure report exposes findings needing review and R3.5/R4 disposition
-disagreements. These records are worker assertions enforced for identity/coverage and
+Finding. The closure report exposes findings needing review and all R4 disposition
+changes against the current R3 verdict, overridden by a current R3.5 adjudication when
+present. The matching states are REACHABLE/SUPPORTED, UNREACHABLE/REJECTED and
+NEEDS_REVIEW/NEEDS_REVIEW; other pairings, including uncertainty downgrades, retain
+both stages' evidence references and the R4 rationale. Disagreements are not
+automatically resolved and do not themselves fail a workflow gate.
+These records are worker assertions enforced for identity/coverage and
 resolvable references; they are not independent human semantic validation. Inspect the
 referenced evidence before relying on the classification or reconciliation.
 
@@ -355,6 +370,24 @@ against current revision pins. Command options (including the R2 checklist/layou
 and current hypothesis eligibility still apply. The checklist neither executes these
 steps nor authorizes copying old outputs into new tasks, and it is not a closure gate.
 Do not cancel the invalidation cascade to avoid recovery work.
+
+R3.5 collection validates the complete nested Refutation, Adjudication or RevivalReview,
+including required identities, task hypothesis/reviewer/perspective bindings and concrete
+evidence. A human adjudication is still a proposal until its exact artifact is explicitly
+approved; collection does not supply that approval. R3.5 commits revalidate legacy
+outputs and write their event set atomically, so malformed later results cannot leave
+a partial commit. Correct an already-collected result through `task-amend` with actor,
+reason and evidence, not a direct import that disconnects it from the task history.
+
+Amending a committed refutation invalidates the Batch's refutation/adjudication
+projections and affected downstream work, but not R3 or the original worker attempts.
+Recommit both current refutation outputs, then schedule fresh adjudication tasks and
+complete R3.5. Adjudication and revival amendments similarly require recommitting
+their current review outputs and R3.5 completion before downstream recovery.
+Old approvals stay bound to old output digests. Invalidated downstream tasks cannot
+be claimed or collected; newly scheduled tasks use current review revisions. Unchanged
+source evidence may be retained, but old downstream conclusions are not automatically
+reused. This applies to every supported source language.
 
 | Symptom | Correct action | Do not do |
 |---|---|---|

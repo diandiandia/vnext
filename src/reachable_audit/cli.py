@@ -86,7 +86,23 @@ def _cli_state_dir(
     prefer_external: bool = False,
 ) -> str | Path:
     if requested is not None:
-        return requested
+        target_root = Path(target).resolve()
+        state_path = Path(requested)
+        state_path = (
+            state_path if state_path.is_absolute() else target_root / state_path
+        ).resolve()
+        if target_root == state_path or target_root in state_path.parents:
+            if prefer_external or not (state_path / "state.db").is_file():
+                raise ValueError(
+                    "state directory resolves inside the target; use an absolute "
+                    "--state-dir outside the frozen source tree"
+                )
+            print(
+                "warning: using an existing in-target state store for legacy recovery; "
+                "this is not an isolated source-search boundary",
+                file=sys.stderr,
+            )
+        return state_path
     target_root = Path(target).resolve()
     new_state = _default_cli_state_dir(target_root)
     legacy_state = target_root / ".audit_vnext"
@@ -170,15 +186,34 @@ def _handle_init(arguments: argparse.Namespace) -> int:
 
 
 def _handle_status(arguments: argparse.Namespace) -> int:
-    with CampaignManager(arguments.target, arguments.state_dir) as manager:
+    from .store import AuditStore
+
+    target_root = Path(arguments.target).resolve()
+    if not target_root.is_dir():
+        raise ValueError(f"target root is not a directory: {target_root}")
+    state_path = Path(arguments.state_dir)
+    database = state_path / "state.db"
+    if not database.is_file():
+        raise ValueError(
+            f"Campaign state database does not exist: {database}; "
+            "check --state-dir or explicitly initialize a new Campaign"
+        )
+    with AuditStore(database, read_only=True) as store:
+        stored_campaigns = store.list_campaigns()
+        target_campaigns = [
+            campaign for campaign in stored_campaigns
+            if Path(campaign.target_root).resolve() == target_root
+        ]
+        if not target_campaigns:
+            raise ValueError("state store has no Campaigns for this target")
         campaigns = []
-        for campaign in manager.store.list_campaigns():
+        for campaign in target_campaigns:
             campaigns.append({
                 **asdict(campaign),
                 "dynamic_execution_policy": dynamic_execution_policy(campaign),
                 "batches": [
                     asdict(batch)
-                    for batch in manager.store.list_batches(campaign.campaign_id)
+                    for batch in store.list_batches(campaign.campaign_id)
                 ],
             })
         _print({"campaigns": campaigns})
@@ -1519,10 +1554,10 @@ def _parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     arguments = _parser().parse_args(argv)
     try:
-        if hasattr(arguments, "state_dir") and arguments.state_dir is None:
+        if hasattr(arguments, "state_dir"):
             arguments.state_dir = _cli_state_dir(
                 arguments.target,
-                None,
+                arguments.state_dir,
                 prefer_external=arguments.command == "init",
             )
         if arguments.command == "init":

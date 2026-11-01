@@ -62,6 +62,16 @@ excludes superseded Batch evidence from current packets while retaining archive
 artifacts and packets for merely DEFERRED Batches. TR-20 tests a real Plan Amendment
 and distinguishes these two lifecycle states.
 
+Maintenance update (2026-11-01, task policy 54): R3.5 nested review records are
+validated against task identity, scope, perspective and concrete evidence before
+success, and revalidated atomically at commit. Refutation/adjudication/revival
+amendments invalidate dependent projections and task revisions. R4 records
+non-gating disposition differences against the effective R3/R3.5 verdict with both
+evidence sides. CLI status is read-only and target-scoped even for an explicitly
+shared store. Language-import candidates use a nonblank target LOC when available;
+unanchored targets remain candidates but carry no fabricated target reference.
+See TR-21 for bounded regression evidence and its semantic-assurance limits.
+
 | ID | Current software contract | System reqs | Software design | Implementation evidence, remaining target, or known defect |
 |---|---|---|---|---|
 | SWDR-001 | The runtime shall load a versioned portfolio of exactly 15 approved canonical language IDs; certification status shall be evidence-derived. | SYSR-002, 004, 027 | §3.1, §8 | **Implemented.** The approved roster is in [portfolio.json](../../knowledge/portfolio.json), and the loader validates 15 unique languages. Certification remains an evaluation result, not an asset flag. |

@@ -16,13 +16,14 @@ IMPLEMENTED_RELEASE_GATES = tuple(f"RG{index}" for index in range(1, 16))
 
 
 _POLICY: dict[str, Any] = {
-    "policy_version": "vnext-task-policy-53",
+    "policy_version": "vnext-task-policy-54",
     "task_collection": {
         "go_hotspots": "campaign_frozen_opt_in_trusted_offline_ast_helper_candidates_only_not_release_qualified",
         "java_hotspots": "campaign_frozen_opt_in_jdk_parse_only_unresolved_method_candidates_not_release_qualified",
         "supporting_resources": "explicit_pre_r0_digest_registration;concrete_loc_refs_match_frozen_bytes;not_call_chain_or_review_coverage",
         "r3_wire_contract": "nested_verdict_with_complete_example",
         "r35_static_challenges": "campaign_frozen_opt_in_same_two_perspective_protocol_no_evidence_grade_upgrade",
+        "r35_collection_validation": "nested_refutation_adjudication_revival_models_identity_scope_perspective_and_concrete_evidence_checked_before_success;commit_revalidates_and_is_atomic",
         "r35_split_deferral": "campaign_frozen_deterministic_auto_needs_review_only_both_refutations_retained_no_human_approval",
         "r35_split_default": "new_cli_and_library_unspecified_constraints_enable_deferral;explicit_no_defer_or_exact_library_constraints_override;existing_frozen_policy_retained",
         "r35_split_retry": "preserve_current_human_adjudication_bound_to_same_refutations_never_replace_with_deferred_result",
@@ -52,7 +53,7 @@ _POLICY: dict[str, Any] = {
         "review_scope_sentinel": "ALL_SOURCE_FILES",
         "reviewed_scope_validation": "exact_scalar_or_exact_paths",
         "r1_boundary_review_coverage": "exactly_once_with_evidence_and_rationale_at_collect",
-        "r1_boundary_anchor_validation": "endpoint_component_and_snapshot_loc_line_at_collect",
+        "r1_boundary_anchor_validation": "endpoint_component_ownership;shared_language_import_and_symbol_lines_skip_leading_whitespace;nonblank_endpoint_refs_validated_before_dispatch_and_at_collect",
         "r2_hypothesis_shape_validation": "collect",
         "r2_concrete_evidence_validation": "compact_and_per_axis_collect_and_direct_commit;axis_aggregate_axis_run_and_seed_refs;frozen_nonblank_LOC_and_resolvable_artifact;symbolic_ids_not_source_proof",
         "r2_large_source_guidance": "bounded_line_range_and_symbol_reads_fail_without_complete_file_scope",
@@ -73,7 +74,9 @@ _POLICY: dict[str, Any] = {
         "r5_not_feasible": "required_blocker_evidence_null_experiment_id_needs_review_no_attempted_run",
         "r5_external_observation": "host_hmac_campaign_snapshot_batch_hypothesis_observer_method_time_campaign_owned_artifacts_evidence_only_non_confirming",
         "r5_external_observation_refs": "optional_assessment_refs_must_name_registered_same_batch_hypothesis_observation;never_confirms_or_refutes",
-        "late_stage_amendment": "r1_r6_precommit_r1_r5_postcommit_atomic_dependent_invalidation_and_terminal_r6_recommit_before_campaign_close",
+        "late_stage_amendment": "r1_r6_and_r35_precommit;r1_r5_and_r35_postcommit_atomic_dependent_projection_and_task_invalidation;new_downstream_identity;terminal_r6_recommit_before_campaign_close",
+        "cli_state_isolation": "new_explicit_in_target_stores_rejected;existing_explicit_legacy_recovery_warns;status_reads_existing_database_without_initialization_and_checks_target_identity",
+        "r4_r3_disagreements": "every_r4_disposition_change_against_current_r3_or_r35_adjudication_derived_with_both_evidence_sides;not_semantic_adjudication",
         "r5_empirical_contract": "host_registered_harness_for_same_hypothesis_and_snapshot",
         "r5_interpretation_guidance": "language_and_mechanism_neutral;existing_rationale_and_preconditions_separate_claim_observation_failure_owner_harness_actions_build_conditions_and_unproven_impact;registration_not_semantic_confirmation;no_schema_or_gate_change",
         "experiment_recipe_prerequisites": "optional_tooling_scoped_to_memory_safety_and_numeric_families",

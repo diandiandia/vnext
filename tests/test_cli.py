@@ -42,6 +42,109 @@ def test_cli_initializes_and_reports_campaign(
     assert status_output["campaigns"][0]["campaign_id"] == init_output["campaign_id"]
 
 
+@pytest.mark.parametrize("requested", ["state", "absolute-inside", "absolute-outside", None])
+def test_status_missing_store_fails_without_creating_files(
+    tmp_path: Path, capsys: object, monkeypatch: object, requested: str | None,
+) -> None:
+    target = tmp_path / "target"
+    target.mkdir()
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state-home"))
+    command = ["status", str(target)]
+    if requested is not None:
+        path = {
+            "state": "state",
+            "absolute-inside": str(target / "state"),
+            "absolute-outside": str(tmp_path / "external"),
+        }[requested]
+        command.extend(["--state-dir", path])
+    assert main(command) == 2
+    output = capsys.readouterr()
+    assert output.out == ""
+    assert "error:" in output.err
+    assert list(target.iterdir()) == []
+    assert not (tmp_path / "external").exists()
+    assert not (tmp_path / "state-home").exists()
+
+
+def test_status_uses_existing_store_read_only_and_rejects_wrong_target(
+    tmp_path: Path, capsys: object,
+) -> None:
+    target = tmp_path / "target"
+    other_target = tmp_path / "other-target"
+    target.mkdir()
+    other_target.mkdir()
+    state_dir = tmp_path / "external"
+    with CampaignManager(target, state_dir) as manager:
+        manager.create_campaign(campaign_id="CMP-read-only", snapshot_id="fixture:read-only")
+    before = {path.name: path.read_bytes() for path in state_dir.iterdir() if path.is_file()}
+    assert main(["status", str(target), "--state-dir", str(state_dir)]) == 0
+    output = capsys.readouterr()
+    assert json.loads(output.out)["campaigns"][0]["campaign_id"] == "CMP-read-only"
+    assert output.err == ""
+    after = {path.name: path.read_bytes() for path in state_dir.iterdir() if path.is_file()}
+    assert after.get("state.db") == before["state.db"]
+    assert main(["status", str(other_target), "--state-dir", str(state_dir)]) == 2
+    assert "no Campaigns for this target" in capsys.readouterr().err
+
+
+def test_status_empty_existing_store_is_not_an_empty_success(
+    tmp_path: Path, capsys: object,
+) -> None:
+    target = tmp_path / "target"
+    target.mkdir()
+    state_dir = tmp_path / "empty-state"
+    with CampaignManager(target, state_dir):
+        pass
+
+    before = (state_dir / "state.db").read_bytes()
+    assert main(["status", str(target), "--state-dir", str(state_dir)]) == 2
+    output = capsys.readouterr()
+    assert output.out == ""
+    assert "no Campaigns for this target" in output.err
+    assert (state_dir / "state.db").read_bytes() == before
+
+
+def test_status_filters_campaigns_in_a_shared_state_store(
+    tmp_path: Path, capsys: object,
+) -> None:
+    first_target = tmp_path / "first-target"
+    second_target = tmp_path / "second-target"
+    state_dir = tmp_path / "shared-state"
+    first_target.mkdir()
+    second_target.mkdir()
+    with CampaignManager(first_target, state_dir) as manager:
+        manager.create_campaign(campaign_id="CMP-first", snapshot_id="fixture:first")
+    with CampaignManager(second_target, state_dir) as manager:
+        manager.create_campaign(campaign_id="CMP-second", snapshot_id="fixture:second")
+
+    assert main(["status", str(first_target), "--state-dir", str(state_dir)]) == 0
+    first = json.loads(capsys.readouterr().out)
+    assert [item["campaign_id"] for item in first["campaigns"]] == ["CMP-first"]
+
+    assert main(["status", str(second_target), "--state-dir", str(state_dir)]) == 0
+    second = json.loads(capsys.readouterr().out)
+    assert [item["campaign_id"] for item in second["campaigns"]] == ["CMP-second"]
+
+
+def test_explicit_legacy_state_query_warns_and_new_in_target_init_is_rejected(
+    tmp_path: Path, capsys: object,
+) -> None:
+    target = tmp_path / "target"
+    target.mkdir()
+    with CampaignManager(target) as manager:
+        manager.create_campaign(campaign_id="CMP-legacy", snapshot_id="fixture:legacy")
+    assert main(["status", str(target), "--state-dir", ".audit_vnext"]) == 0
+    output = capsys.readouterr()
+    assert json.loads(output.out)["campaigns"][0]["campaign_id"] == "CMP-legacy"
+    assert "legacy recovery" in output.err
+    assert main([
+        "init", str(target), "--state-dir", "state",
+        "--snapshot-id", "fixture:new",
+    ]) == 2
+    assert "inside the target" in capsys.readouterr().err
+    assert not (target / "state").exists()
+
+
 def test_cli_external_default_is_cwd_independent(
     tmp_path: Path, capsys: object, monkeypatch: object,
 ) -> None:

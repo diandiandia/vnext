@@ -8,6 +8,10 @@ import sys
 import pytest
 
 from reachable_audit.analysis_models import (
+    Adjudication,
+    AdjudicationActor,
+    AttackAngle,
+    AxisRun,
     BatchClosure,
     CampaignClosure,
     Experiment,
@@ -24,9 +28,17 @@ from reachable_audit.analysis_models import (
     Mechanism,
     R5Assessment,
     R5Disposition,
+    Refutation,
+    SourceVerification,
     SecurityImpact,
     SurfaceReviewDisposition,
     SurfaceReviewState,
+    VerdictKind,
+    CategoryRun,
+    CategoryRunStatus,
+    Applicability,
+    HypothesisReview,
+    HypothesisReviewDisposition,
 )
 from reachable_audit.campaign_closure import CampaignCloser
 from reachable_audit.cli import main
@@ -41,6 +53,9 @@ from reachable_audit.graph import build_component_graph
 from test_experiments_metrics import _ready_for_r5
 from reachable_audit.experiments.runner import run_harness
 from conftest import execution_configuration_fixture
+from test_refutation import _reachable_workflow
+from test_category_runs import _card
+from reachable_audit.knowledge import create_category_audit_plans
 
 
 def test_r5_confirmation_can_confirm_static_only_hypothesis(
@@ -197,6 +212,83 @@ def test_r6_closes_clean_batch_with_all_nine_gates(tmp_path: Path) -> None:
         assert manager.store.get_batch(
             "CMP-r4", workflow.batch_id
         ).status is BatchStatus.COMPLETE
+    finally:
+        manager.close()
+
+
+@pytest.mark.parametrize("verdict_kind", list(VerdictKind))
+@pytest.mark.parametrize("r4_disposition", list(HypothesisReviewDisposition))
+@pytest.mark.parametrize("adjudicated", [False, True])
+def test_r6_reports_every_disposition_change_against_current_verdict(
+    tmp_path: Path, verdict_kind: VerdictKind,
+    r4_disposition: HypothesisReviewDisposition, adjudicated: bool,
+) -> None:
+    manager, workflow = _reachable_workflow(
+        tmp_path,
+        verdict_kind=VerdictKind.REACHABLE if adjudicated else verdict_kind,
+        static_only=not adjudicated,
+    )
+    try:
+        if adjudicated:
+            for refuter, angle in (("a", AttackAngle.CALL_CHAIN), ("b", AttackAngle.PRINCIPAL)):
+                workflow.record_refutation(Refutation(
+                    f"REF-{refuter}", "HYP-state", refuter, verdict_kind, angle,
+                    ("LOC-app.py:1",), "current source-backed review",
+                ))
+            workflow.record_adjudication(Adjudication(
+                "ADJ-current", "HYP-state", ("REF-a", "REF-b"), verdict_kind,
+                AdjudicationActor.AUTO,
+                (SourceVerification("guard blocks the input", "LOC-app.py:1", "app.py:1"),)
+                if verdict_kind is VerdictKind.UNREACHABLE else (),
+                "current adjudication supersedes the initial verdict",
+            ))
+        workflow.record_revival_selection(
+            [], rationale="no additional sampled revival review",
+            evidence_refs=("LOC-app.py:1",),
+        )
+        workflow.complete_r35()
+        plan = manager.load_audit_plan(workflow.campaign_id, workflow.batch.manifest["plan_id"])
+        category_plan, = create_category_audit_plans(plan.work_units, [_card()], budget={})
+        workflow.record_category_audit_plan([category_plan])
+        r2 = workflow._read_artifact(workflow._require_stage("R2_COMPLETED").payload_ref)
+        workflow.record_r4([CategoryRun(
+            "CR-review", category_plan.category_plan_id, category_plan.work_unit_id,
+            "STATE", category_plan.mechanism_variants,
+            tuple(AxisRun.from_dict(item) for item in r2["axis_runs"]),
+            Applicability.APPLICABLE, CategoryRunStatus.COMPLETE,
+            ("LOC-app.py:1",), "source-backed category review",
+            ("HYP-state",), (),
+            (HypothesisReview(
+                "HYP-state", r4_disposition, ("LOC-app.py:1",),
+                "the category reviewer records this explicit disposition",
+            ),),
+        )])
+        workflow.record_r5([], [R5Assessment(
+            "HYP-state", False, None, R5Disposition.NEEDS_REVIEW,
+            ("LOC-app.py:1",), "no dynamic conclusion",
+        )])
+        report = workflow.close_r6(BatchClosure(
+            {"agent_runs": 1}, (), (), (), (),
+            surface_dispositions=(SurfaceReviewDisposition(
+                "SURF-run", SurfaceReviewState.DEFERRED,
+                ("LOC-app.py:1",), "the hypothesis remains visible",
+            ),),
+        ))
+        matching = {
+            VerdictKind.REACHABLE: HypothesisReviewDisposition.SUPPORTED,
+            VerdictKind.UNREACHABLE: HypothesisReviewDisposition.REJECTED,
+            VerdictKind.NEEDS_REVIEW: HypothesisReviewDisposition.NEEDS_REVIEW,
+        }
+        disagreements = report["r4_r3_disagreements"]
+        assert len(disagreements) == (0 if matching[verdict_kind] is r4_disposition else 1)
+        if disagreements:
+            disagreement, = disagreements
+            assert disagreement["r3_5_verdict"] == verdict_kind.value
+            assert disagreement["r4_disposition"] == r4_disposition.value
+            assert disagreement["r3_evidence_refs"]
+            assert disagreement["evidence_refs"] == ["LOC-app.py:1"]
+            assert disagreement["rationale"]
+        assert report["gates"]["BG9"]["detail"]["r4_r3_disagreements"] == disagreements
     finally:
         manager.close()
 

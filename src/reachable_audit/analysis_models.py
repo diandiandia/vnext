@@ -600,6 +600,11 @@ class Refutation:
 
     @classmethod
     def from_dict(cls, value: Mapping[str, Any]) -> "Refutation":
+        _validate_review_fields(
+            value,
+            ("refutation_id", "hypothesis_id", "refuter_id", "verdict", "attack_angle", "rationale"),
+            ("evidence_refs",),
+        )
         refutation = cls(
             refutation_id=str(value["refutation_id"]),
             hypothesis_id=str(value["hypothesis_id"]),
@@ -624,6 +629,7 @@ class SourceVerification:
 
     @classmethod
     def from_dict(cls, value: Mapping[str, Any]) -> "SourceVerification":
+        _validate_review_fields(value, ("claim", "evidence_ref", "source_anchor"), ())
         verification = cls(
             claim=str(value["claim"]),
             evidence_ref=str(value["evidence_ref"]),
@@ -648,6 +654,15 @@ class Adjudication:
 
     @classmethod
     def from_dict(cls, value: Mapping[str, Any]) -> "Adjudication":
+        _validate_review_fields(
+            value,
+            ("adjudication_id", "hypothesis_id", "final_verdict", "actor", "rationale"),
+            ("refutation_ids",),
+        )
+        if len(value["refutation_ids"]) != 2:
+            raise ModelError("adjudication requires exactly two refutation IDs")
+        if not isinstance(value.get("source_verifications", []), (list, tuple)):
+            raise ModelError("source_verifications must be an array")
         adjudication = cls(
             adjudication_id=str(value["adjudication_id"]),
             hypothesis_id=str(value["hypothesis_id"]),
@@ -676,6 +691,11 @@ class RevivalReview:
 
     @classmethod
     def from_dict(cls, value: Mapping[str, Any]) -> "RevivalReview":
+        _validate_review_fields(
+            value,
+            ("revival_id", "hypothesis_id", "reviewer_id", "outcome", "rationale"),
+            ("evidence_refs",),
+        )
         review = cls(
             revival_id=str(value["revival_id"]),
             hypothesis_id=str(value["hypothesis_id"]),
@@ -689,6 +709,28 @@ class RevivalReview:
         if not review.evidence_refs or not review.rationale:
             raise ModelError("revival review requires evidence refs and rationale")
         return review
+
+
+def _validate_review_fields(
+    value: Mapping[str, Any],
+    string_fields: tuple[str, ...],
+    reference_fields: tuple[str, ...],
+) -> None:
+    if not isinstance(value, Mapping):
+        raise ModelError("review record must be an object")
+    for field_name in string_fields:
+        item = value.get(field_name)
+        if not isinstance(item, str) or not item.strip():
+            raise ModelError(f"review field {field_name} must be a non-empty string")
+    for field_name in reference_fields:
+        items = value.get(field_name)
+        if (
+            not isinstance(items, (list, tuple))
+            or not items
+            or any(not isinstance(item, str) or not item.strip() for item in items)
+            or len(items) != len(set(items))
+        ):
+            raise ModelError(f"review field {field_name} requires unique non-empty string references")
 
 
 @dataclass(frozen=True)

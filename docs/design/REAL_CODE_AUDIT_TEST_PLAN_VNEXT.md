@@ -283,6 +283,11 @@ encode one development campaign's remaining-language list as a universal procedu
 Use separate fresh Campaigns for independent per-language samples, even when two
 languages share a repository. Ordinary mixed-language audits retain the declared scope;
 they do not require artificial per-language Campaign splitting.
+Candidate repositories, CVE intake references, size gates and pre-development evidence
+requirements are maintained separately in
+[TOP15_LANGUAGE_REAL_PROJECT_CANDIDATE_PLAN_VNEXT.md](TOP15_LANGUAGE_REAL_PROJECT_CANDIDATE_PLAN_VNEXT.md).
+That supplement is a proposal only: it does not authorize targets, freeze versions, or
+make CVE details available to discovery workers.
 
 | Language | Select a representative authorized project/component with | Pilot-specific questions |
 |---|---|---|

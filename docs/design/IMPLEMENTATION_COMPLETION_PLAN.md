@@ -12,6 +12,16 @@ The real-target pilot and release qualification procedure is in
 
 ## Ordered Work
 
+### Current Maintenance Baseline (2026-11-01)
+
+Task policy 54 validates and atomically commits complete R3.5 review records, supports
+evidence-bound amendments with dependent invalidation, and reports R4/R3.5 disposition
+differences without treating them as resolved findings. CLI status is read-only and
+target-scoped for shared state stores; language-import candidates use nonblank source
+anchors. TR-21 records the local regression scope. This does not establish semantic
+review, independent discovery quality, Google internal approval, or lifecycle-standard
+conformity. See the [current generality review](GENERALITY_REVIEW_VNEXT.md).
+
 ### Current Maintenance Baseline (2026-10-25)
 
 Task policy 53 includes early R2 concrete-reference checks, atomic ordinary/bundled

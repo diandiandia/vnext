@@ -32,6 +32,7 @@ from reachable_audit.execution import (
     TaskStatus,
 )
 from reachable_audit.models import ModelError
+from reachable_audit.plan_models import BoundaryEdge
 from reachable_audit.knowledge_catalog import KnowledgeCatalog, default_knowledge_root
 from reachable_audit.store import ConflictError
 from reachable_audit.runtime_policy import TASK_OUTPUT_MAX_BYTES, execution_policy_digest
@@ -563,6 +564,41 @@ def test_r1_schedule_blocks_oversized_boundary_review_floor(
         assert backend.list_tasks(
             operation="discover_surfaces", batch_id=workflow.batch_id,
         ) == ()
+    finally:
+        manager.close()
+
+
+@pytest.mark.parametrize("anchor", ["LOC-app.py:3", "LOC-app.py:999"])
+def test_r1_schedule_rejects_invalid_supplied_anchors_before_dispatch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, anchor: str,
+) -> None:
+    manager, workflow, plan = _workflow(
+        tmp_path, "CMP-r1-supplied-anchor", source="def handle(value):\n    return value\n\n",
+    )
+    try:
+        workflow.run_r0()
+        backend = ManualExecutionBackend(manager, workflow.campaign_id)
+        coordinator = DiscoveryCoordinator(workflow, backend)
+        unit = plan.work_units[0]
+        scoped_unit = {
+            **asdict(unit),
+            "work_unit_id": f"{unit.work_unit_id}-boundary",
+            "boundary_edge_ids": ["EDGE-bad"],
+        }
+        edge = BoundaryEdge(
+            "EDGE-bad", unit.component_id, unit.component_id,
+            "language_import_candidate", "app.py:3",
+            source_path="app.py", target_path="app.py", evidence_refs=(anchor,),
+        )
+        monkeypatch.setattr(coordinator, "_work_units", lambda: [
+            {**asdict(unit), "boundary_edge_ids": []}, scoped_unit,
+        ])
+        monkeypatch.setattr(manager, "load_audit_plan", lambda *_args: replace(
+            plan, boundary_edges=(edge,),
+        ))
+        with pytest.raises(ModelError):
+            coordinator.schedule_r1()
+        assert backend.list_tasks(operation="discover_surfaces") == ()
     finally:
         manager.close()
 
@@ -3190,5 +3226,21 @@ def test_human_label_requires_separate_exact_output_review(tmp_path: Path) -> No
             "--input", str(approval),
         ]) == 0
         assert len(coordinator.commit_r35_adjudications()) == 1
+        output["adjudication"]["rationale"] = "corrected premise requiring a new exact-output review"
+        replacement_ref = manager.artifacts.put_text(json.dumps(output)).artifact_id
+        backend.amend_completed_output(
+            view.task.task_id, replacement_ref, reason="correct the approved rationale",
+            evidence_refs=(output_ref, replacement_ref),
+        )
+        with pytest.raises(ModelError, match="explicit operator review"):
+            coordinator.commit_r35_adjudications()
+        assert workflow._active_events(event_type="ADJUDICATION_DECIDED") == []
+        coordinator.approve_r35_adjudication(
+            view.task.task_id, output_ref=replacement_ref, reviewer="operator",
+            rationale="reviewed the corrected proposal", evidence_refs=(replacement_ref,),
+        )
+        assert len(coordinator.commit_r35_adjudications()) == 1
+        current, = workflow._active_events(event_type="ADJUDICATION_DECIDED")
+        assert workflow._read_artifact(current.payload_ref)["rationale"] == output["adjudication"]["rationale"]
     finally:
         manager.close()

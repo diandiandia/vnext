@@ -8,6 +8,13 @@ import posixpath
 import re
 
 
+def _match_line(source: str, match: re.Match[str]) -> int:
+    start = match.start()
+    while start < match.end() and source[start].isspace():
+        start += 1
+    return source.count("\n", 0, start) + 1
+
+
 @dataclass(frozen=True)
 class LanguageAdapter:
     language_id: str
@@ -33,7 +40,7 @@ class LanguageAdapter:
                 (value for value in match.groups() if value), None
             )
             if reference:
-                line = source.count("\n", 0, match.start()) + 1
+                line = _match_line(source, match)
                 references.append((line, reference))
         return tuple(references)
 
@@ -43,7 +50,7 @@ class LanguageAdapter:
         for match in expression.finditer(source):
             name = next((value for value in match.groups() if value), None)
             if name:
-                line = source.count("\n", 0, match.start()) + 1
+                line = _match_line(source, match)
                 symbols.append((line, name))
         return tuple(symbols)
 

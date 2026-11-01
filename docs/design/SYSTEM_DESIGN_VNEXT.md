@@ -38,6 +38,18 @@ evaluation protocol is documented, but no held-out dataset or result is supplied
 These changes do not alter the release status, which remains blocked pending external
 qualification evidence.
 
+Current-contract update (2026-11-01): runtime policy 54 validates complete R3.5
+refutation/adjudication/revival records at collection and commit, and permits
+evidence-bound R3.5 output amendment with downstream invalidation and recommit.
+Campaign reporting exposes non-gating R4 dispositions that differ from current R3/R3.5
+verdicts with evidence from both sides; it does not resolve them semantically.
+Explicitly shared CLI state stores are queried read-only and filtered to the requested
+target. Language-import boundary candidates use nonblank source anchors and do not
+fabricate line 1 for empty files. Focused and full regression results are recorded in
+the current [generality review](GENERALITY_REVIEW_VNEXT.md) and [test plan](TEST_PLAN_VNEXT.md).
+These local mechanisms do not certify independent review, target-read observation,
+discovery quality, Google internal requirements, or ISO conformity.
+
 Maintenance update (2026-10-24): path-scope validation accepts
 `EMPTY-FILE:<path>:sha256:<digest>` only for an excluded/deferred zero-byte
 inventoried source whose path and digest match the disposition and frozen snapshot

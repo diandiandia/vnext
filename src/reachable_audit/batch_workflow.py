@@ -566,6 +566,7 @@ class BatchWorkflow:
             idempotency_key=(
                 f"r35-refute:{self.campaign_id}:{r3_revision_id}:"
                 f"{refutation.refutation_id}"
+                + self._review_recovery_suffix("REFUTATION_SUBMITTED", refutation.hypothesis_id)
             ),
             actor="agent",
             payload={
@@ -632,6 +633,7 @@ class BatchWorkflow:
             idempotency_key=(
                 f"r35-adjudicate:{self.campaign_id}:{r3_revision_id}:"
                 f"{adjudication.adjudication_id}"
+                + self._review_recovery_suffix("ADJUDICATION_DECIDED", adjudication.hypothesis_id)
             ),
             actor=adjudication.actor.value,
             payload={
@@ -705,12 +707,34 @@ class BatchWorkflow:
             idempotency_key=(
                 f"r35-revival:{self.campaign_id}:{selection_event.event_id}:"
                 f"{review.revival_id}"
+                + self._review_recovery_suffix("REVIVAL_REVIEWED", review.hypothesis_id)
             ),
             actor="agent",
             payload={"revival_id": review.revival_id, "outcome": review.outcome.value},
             payload_ref=artifact_id,
         )
         return artifact_id
+
+    def _review_recovery_suffix(self, event_type: str, hypothesis_id: str) -> str:
+        events = self._events()
+        target_ids = {
+            event.event_id for event in events
+            if event.event_type == event_type and event.entity_id == hypothesis_id
+        }
+        markers = [
+            event for event in events
+            if event.event_type == "STAGE_PROJECTION_INVALIDATED"
+            and event.payload.get("target_event_id") in target_ids
+        ]
+        return f":{markers[-1].event_id}" if markers else ""
+
+    def _review_outputs_amended(self) -> bool:
+        return any(
+            event.payload.get("stage") in {
+                "REFUTATION_SUBMITTED", "ADJUDICATION_DECIDED", "REVIVAL_REVIEWED",
+            }
+            for event in self._events(event_type="TASK_OUTPUT_AMENDED")
+        )
 
     def complete_r35(self) -> str:
         self._require_stage("R3_COMPLETED")
@@ -753,6 +777,13 @@ class BatchWorkflow:
             # Legacy field includes UPHOLD reviews; it never meant actual overturns.
             "revived_hypothesis_ids": sorted(reviewed),
         }
+        if self._review_outputs_amended():
+            value["review_artifact_refs"] = {
+                event.event_id: event.payload_ref
+                for event in self._active_events(event_types={
+                    "REFUTATION_SUBMITTED", "ADJUDICATION_DECIDED", "REVIVAL_REVIEWED",
+                })
+            }
         revision_metadata = self._stage_revision_metadata(
             "R3_5", value, {}, ("R3_COMPLETED",)
         )
@@ -1103,6 +1134,7 @@ class BatchWorkflow:
                 "CATEGORY_AUDIT_PLAN_RECORDED",
                 "R2_COMPLETED",
                 "R3_COMPLETED",
+                *(("R3_5_COMPLETED",) if self._review_outputs_amended() else ()),
             ),
         )
         existing_artifact_id = self._existing_stage_artifact(
@@ -1524,29 +1556,55 @@ class BatchWorkflow:
             )
             for state in FindingReviewState
         }
-        adjudicated_verdicts = {
-            event.entity_id: str(event.payload.get("final_verdict", ""))
+        original_verdicts = {
+            str(item["hypothesis_id"]): item for item in verdicts
+        }
+        effective_verdicts = {
+            str(item["hypothesis_id"]): str(item["verdict"])
+            for item in verdicts
+        }
+        adjudication_events = {
+            event.entity_id: event
             for event in self._active_events(event_type="ADJUDICATION_DECIDED")
+        }
+        effective_verdicts.update({
+            event.entity_id: str(event.payload.get("final_verdict", ""))
+            for event in adjudication_events.values()
+        })
+        expected_dispositions = {
+            VerdictKind.REACHABLE.value: "SUPPORTED",
+            VerdictKind.UNREACHABLE.value: "REJECTED",
+            VerdictKind.NEEDS_REVIEW.value: "NEEDS_REVIEW",
         }
         r4_r3_disagreements = []
         for category_run in r4["category_runs"]:
             for review in category_run.get("hypothesis_reviews", []):
-                final_verdict = adjudicated_verdicts.get(
+                final_verdict = effective_verdicts.get(
                     str(review["hypothesis_id"])
                 )
                 disposition = str(review["disposition"])
-                if (
-                    final_verdict == VerdictKind.REACHABLE.value
-                    and disposition == "REJECTED"
-                ) or (
-                    final_verdict == VerdictKind.UNREACHABLE.value
-                    and disposition == "SUPPORTED"
-                ):
+                if final_verdict is None:
+                    raise ModelError(
+                        f"R4 review has no current R3 verdict: {review['hypothesis_id']}"
+                    )
+                if expected_dispositions[final_verdict] != disposition:
+                    original = original_verdicts[str(review["hypothesis_id"])]
+                    adjudication = adjudication_events.get(str(review["hypothesis_id"]))
                     r4_r3_disagreements.append({
                         "hypothesis_id": str(review["hypothesis_id"]),
                         "r3_5_verdict": final_verdict,
                         "r4_disposition": disposition,
                         "category_run_id": str(category_run["category_run_id"]),
+                        "r3_evidence_refs": list(dict.fromkeys((
+                            *original.get("call_chain", []),
+                            *original.get("edge_evidence_ids", []),
+                            *original.get("blocking_evidence_ids", []),
+                            *((stage_events["R3_COMPLETED"].payload_ref,)
+                              if stage_events["R3_COMPLETED"].payload_ref else ()),
+                            *((adjudication.payload_ref,) if adjudication else ()),
+                        ))),
+                        "evidence_refs": list(review["evidence_refs"]),
+                        "rationale": str(review["rationale"]),
                     })
         gates["BG9"] = {
             "pass": True,

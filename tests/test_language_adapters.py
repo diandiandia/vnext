@@ -21,6 +21,47 @@ _DECLARATIONS = {
     "shell": "handle() { :; }",
 }
 
+_IMPORTS = {
+    "c": '#include "core.h"',
+    "cpp": '#include "core.hpp"',
+    "csharp": "using Company.Core;",
+    "go": '"example.com/core"',
+    "java": "import demo.Core;",
+    "rust": "use crate::core;",
+    "python": "from core import handle",
+    "javascript": 'import { handle } from "./core";',
+    "typescript": 'import { handle } from "./core";',
+    "kotlin": "import demo.Core",
+    "scala": "import demo.Core",
+    "php": "use Core;",
+    "ruby": 'require "core"',
+    "swift": "import Core",
+    "shell": "source core.sh",
+}
+
+
+@pytest.mark.parametrize("language", sorted(_DECLARATIONS))
+@pytest.mark.parametrize("newline", ["\n", "\r\n"])
+def test_all_language_anchors_skip_leading_blank_lines(
+    language: str, newline: str,
+) -> None:
+    adapter = LANGUAGE_ADAPTERS[language]
+    for extractor, statement in (
+        (adapter.import_references, _IMPORTS[language]),
+        (adapter.symbols, _DECLARATIONS[language]),
+    ):
+        expected = extractor(statement)
+        assert expected
+        source = newline + " \t" + newline + "  " + statement + newline
+        assert extractor(source) == tuple((3, name) for _, name in expected)
+
+
+def test_multiline_import_keeps_statement_start_and_resolved_reference() -> None:
+    source = '\n\nimport { handle } from\n  "./core";\n'
+    for language in ("javascript", "typescript"):
+        adapter = LANGUAGE_ADAPTERS[language]
+        assert adapter.import_references(source) == ((3, "./core"),)
+
 
 def test_all_portfolio_adapters_extract_symbols_and_normalize_locations() -> None:
     assert set(LANGUAGE_ADAPTERS) == set(_DECLARATIONS)

@@ -1,5 +1,6 @@
 from pathlib import Path
 from types import SimpleNamespace
+import pytest
 
 from reachable_audit.graph import build_component_graph
 from reachable_audit.inventory import build_inventory
@@ -8,6 +9,78 @@ from reachable_audit.inventory import build_inventory
 def _write(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
+
+
+@pytest.mark.parametrize(("source_path", "source", "target_path", "target"), [
+    ("app/Main.java", "import demo.Core;", "core/demo/Core.java", "package demo;\nclass Core {}"),
+    ("app/main.py", "import core", "core/core.py", "VALUE = 1"),
+    ("app/main.ts", 'import { core } from "../core/core";', "core/core.ts", "export const core = 1;"),
+])
+def test_import_edges_anchor_nonblank_lines_at_both_endpoints(
+    tmp_path: Path, source_path: str, source: str, target_path: str, target: str,
+) -> None:
+    _write(tmp_path / "app" / "Makefile", "# app\n")
+    _write(tmp_path / "core" / "Makefile", "# core\n")
+    _write(tmp_path / source_path, "\n \t\n" + source + "\n")
+    _write(tmp_path / target_path, "\n" + target + "\n")
+    graph = build_component_graph(tmp_path, build_inventory(tmp_path, "fixture:anchors"))
+    edges = [edge for edge in graph.edges if edge.kind == "language_import_candidate"]
+    assert len(edges) == 1
+    assert edges[0].evidence_refs == (
+        f"LOC-{source_path}:3", f"LOC-{target_path}:2",
+    )
+
+
+def test_empty_import_target_keeps_boundary_candidate_without_fabricating_anchor(
+    tmp_path: Path,
+) -> None:
+    _write(tmp_path / "app" / "Makefile", "# app\n")
+    _write(tmp_path / "core" / "Makefile", "# core\n")
+    _write(tmp_path / "app" / "main.py", "\nimport core\n")
+    _write(tmp_path / "core" / "core.py", "")
+    graph = build_component_graph(tmp_path, build_inventory(tmp_path, "fixture:empty-import"))
+    edges = [edge for edge in graph.edges if edge.kind == "language_import_candidate"]
+    assert len(edges) == 1
+    assert edges[0].target_path == "core/core.py"
+    assert edges[0].evidence_refs == ("LOC-app/main.py:2",)
+    assert any(
+        diagnostic.code == "IMPORT_TARGET_NO_SOURCE_ANCHOR"
+        for diagnostic in graph.diagnostics
+    )
+
+
+def test_import_anchor_lookup_does_not_read_target_file_twice(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source_path = tmp_path / "app" / "main.py"
+    target_path = tmp_path / "core" / "core.py"
+    _write(tmp_path / "app" / "Makefile", "# app\n")
+    _write(tmp_path / "core" / "Makefile", "# core\n")
+    _write(source_path, "import core\n")
+    _write(target_path, " \nVALUE = 1\n")
+
+    original_read_text = Path.read_text
+    target_reads = 0
+
+    def read_text(path: Path, *args: object, **kwargs: object) -> str:
+        nonlocal target_reads
+        if path == target_path:
+            target_reads += 1
+            if target_reads > 1:
+                raise AssertionError("anchor lookup should not read the full file again")
+        return original_read_text(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", read_text)
+    graph = build_component_graph(
+        tmp_path, build_inventory(tmp_path, "fixture:single-target-read"),
+    )
+
+    edges = [edge for edge in graph.edges if edge.kind == "language_import_candidate"]
+    assert len(edges) == 1
+    assert edges[0].evidence_refs == (
+        "LOC-app/main.py:1", "LOC-core/core.py:2",
+    )
+    assert target_reads == 1
 
 
 def test_graph_resolves_python_cargo_and_go_local_dependencies(tmp_path: Path) -> None:

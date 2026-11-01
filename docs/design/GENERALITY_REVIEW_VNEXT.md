@@ -1,8 +1,10 @@
 # Generality and Engineering Review
 
 Initial review: 2026-10-20. Base: `a3b969c` plus that review's uncommitted changes.
-Latest reassessment: 2026-10-25, base `c90664f` plus the policy 53 repairs recorded in
-[the latest review](#latest-review-2026-10-25-shared-guidance-scope).
+Latest reassessment: 2026-11-01, base `1ca7a67` plus the reviewed and repaired
+worktree changes recorded in
+[the latest review](#latest-review-2026-11-01-worktree-contracts-and-generality-boundaries).
+The 2026-10-25 section remains the prior dated review.
 This is a bounded engineering review and repair record, not a security certification,
 exhaustive dead-code proof, Google internal approval, or ISO conformity assessment.
 The historical [quality reassessment](QUALITY_REASSESSMENT_VNEXT.md) is retained as
@@ -1029,3 +1031,55 @@ It improves explicit selection boundaries, not semantic truth or audit recall.
   knowledge assets and sealed target-audit materials were not changed.
 - Documentation links and metadata were checked separately. No Google internal
   approval, ISO/IEC/IEEE 12207 conformity or independent qualification is inferred.
+
+## Latest Review (2026-11-01): Worktree Contracts and Generality Boundaries
+
+### Scope and findings
+
+This reassessment reviewed the current worktree changes to R3.5 collection/commit and
+revision recovery, R4 disposition reporting, CLI state selection, graph anchors,
+related regressions and the new development-candidate supplement. It also checked
+the current Skill/README boundary, runtime residue scan, design/requirements/test
+documents and the existing lifecycle self-assessment. It is not a new complete
+security audit, independent code qualification, or proof that all dead code and bias
+have been found.
+
+| Area | Finding | Action and remaining limit |
+|---|---|---|
+| Shared explicit state directory | Read-only `status` rejected the entire store when any Campaign belonged to another target, although the store model allows multiple targets. This made a valid shared store unusable and conflated store identity with Campaign identity. | Filter to the requested target and fail only when a nonempty store has no matching Campaign. Regression tests verify each target sees only its own Campaigns and mismatched queries fail. |
+| Import target anchors | Anchor discovery loaded and split the whole target file again after import parsing, increasing transient memory for large source files. | Stream lines until the first nonblank anchor; a regression test prevents a second full-file read. |
+| Dead/redundant code | `_successful_tasks()` had two adjacent identical empty-input guards. | Removed the duplicate. This specific fix is not an exhaustive dead-code analysis. |
+| Current R3.5/R4 contracts | Complex amendment and cross-stage reporting behavior is structural; it must not be presented as semantic confirmation or independent human review. | Documentation now records task-bound evidence validation, atomic commit/revision behavior, non-gating disagreements, and the requirement to inspect both evidence sides. |
+| Candidate target information | A candidate-project/CVE supplement exists under design documentation and is referenced only by the development-pilot plan. It is explicitly a proposal, not authorization or discovery-worker input. | Keep it outside runtime Skill/knowledge and frozen discovery artifacts. The runtime residue scan found no project-specific tokens; that bounded scan cannot establish complete semantic neutrality. |
+| Skill size | The current `SKILL.md` is 509 lines, not the 500 recorded in the prior review. | Record the corrected measurement; treat it as a context/maintenance cost rather than silently claiming the earlier bound. The Skill remains security-audit-specific by design and general only across authorized targets/languages within that scope. |
+
+### Generality, bias and standards boundary
+
+The Skill is not a universal all-domain evaluator or generic code-review assistant.
+Its product scope is authorized source-code security auditing across the declared
+language/build portfolio. The fixed portfolio and uneven hotspot depth remain known
+coverage imbalances; neither adapters, ranked guidance nor passing synthetic tests
+prove balanced discovery, absence of language bias, or real-target recall. No
+per-audit candidate list or expected finding is part of the runtime knowledge
+catalog; the new candidate plan is evaluator-side documentation only.
+
+Google internal requirements remain **NOT ASSESSED** because no controlled
+requirements or acceptance authority were supplied. ISO/IEC/IEEE 12207 conformity
+remains **NOT ESTABLISHED**: the lifecycle document correctly limits itself to a
+preliminary selected-concept mapping and lacks a controlled edition, organization
+tailoring, accountable process outcomes, and independent approval evidence. Do not
+relabel this repository review as Google approval or ISO certification.
+
+### Verification
+
+- Focused regressions for shared stores and import anchors: **8 passed**.
+- Full command:
+  `env -u PYTHONPATH python3 -m pytest tests -o addopts='' -q -rs --tb=short`.
+  **690 passed, 1 skipped**, 71.58 seconds. The protected real held-out manifest
+  remains unconfigured; the skip is not replaced with synthetic acceptance.
+- Compatibility scan: PASS, zero findings across **53 runtime Python files,
+  2 helpers, 167 eligible knowledge files and 1 main prompt**. This is bounded
+  residue evidence, not proof of zero historical influence or zero bias.
+- `git diff --check` passed. Newly added relative documentation targets and the
+  TR-21 anchor exist. No Google internal approval, ISO conformity, or independent
+  qualification is inferred.

@@ -561,6 +561,39 @@ the structural contracts, not discovery quality, cost reduction, human identity 
 safe automatic reuse. Large-file slicing, sink census, red-team sweeps, mandatory
 cards and cross-language provider claims retain their separate evidence gates.
 
+### TR-21: R3.5 Review Amendment and Target-Scoped Status
+
+**Required tests:** [test_refutation.py](../../tests/test_refutation.py),
+[test_deferred_review.py](../../tests/test_deferred_review.py),
+[test_execution.py](../../tests/test_execution.py),
+[test_batch_closure.py](../../tests/test_batch_closure.py),
+[test_cli.py](../../tests/test_cli.py), and
+[test_component_graph.py](../../tests/test_component_graph.py).
+
+- Reject malformed nested R3.5 outputs, wrong hypothesis/reviewer/perspective identity,
+  out-of-scope records, and missing or unresolved concrete evidence before task
+  success. Revalidate at commit and prove that a later invalid item leaves no partial
+  event projection.
+- Amend committed refutations, adjudications, and revival reviews only through the
+  revisioned workflow. Verify old events remain, affected downstream tasks and
+  projections become stale, current outputs must be recommitted, and approval remains
+  bound to the reviewed artifact digest.
+- Report each R4 disposition change against the effective current R3/R3.5 verdict,
+  with evidence references from both sides. Matching disposition pairs are not
+  disagreements; uncertainty changes remain visible and non-gating. Do not treat
+  the report as semantic adjudication.
+- Open status without creating or migrating state, reject a state store with no
+  Campaign for the requested target, and filter other targets from an explicitly
+  shared store. Verify read-only behavior and ensure a shared store does not expose
+  another target's Campaigns.
+- Resolve language-import candidates to the first nonblank target line, skip leading
+  whitespace, and retain empty/unreadable targets without fabricating a LOC. Anchor
+  lookup must not load a target file's full contents a second time.
+
+These are local structural and data-isolation regressions. They do not prove that
+review evidence is semantically correct, that a human independently approved it, or
+that a Worker observed all target source.
+
 ## 5. Evidence Record
 
 Every test report records:

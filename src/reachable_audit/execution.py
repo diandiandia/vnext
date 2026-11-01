@@ -655,13 +655,16 @@ class ManualExecutionBackend:
         return self.poll(lease.task.task_id)
 
     def _task_revision_is_stale(self, task: TaskSpec) -> bool:
-        if not task.stage_revision_ids:
-            return False
         markers = self.manager.store.list_batch_events(
             self.campaign_id,
             task.batch_id,
             event_type="STAGE_PROJECTION_INVALIDATED",
         )
+        if any(
+            event.payload.get("invalidated_task_id") == task.task_id
+            for event in markers
+        ):
+            return True
         invalidated = {
             (str(event.payload.get("target_stage", "")), str(
                 event.payload.get("target_revision_id", "")
@@ -803,6 +806,9 @@ class ManualExecutionBackend:
             "generate_hypotheses": "R2_COMPLETED",
             "generate_hypotheses_compact": "R2_COMPLETED",
             "verify_reachability": "R3_COMPLETED",
+            "refute_reachability": "REFUTATION_SUBMITTED",
+            "adjudicate_refutations": "ADJUDICATION_DECIDED",
+            "review_unreachable_verdict": "REVIVAL_REVIEWED",
             "run_category_audit": "R4_COMPLETED",
             "run_category_audit_bundle": "R4_COMPLETED",
             "assess_experiment": "R5_COMPLETED",
@@ -875,6 +881,33 @@ class ManualExecutionBackend:
                     "replacement_output_ref": replacement_output_ref,
                 },
             } for event in invalidated_events]
+            if committed_stage in {
+                "REFUTATION_SUBMITTED", "ADJUDICATION_DECIDED", "REVIVAL_REVIEWED",
+            }:
+                downstream_operations = {
+                    "run_category_audit", "run_category_audit_bundle",
+                    "assess_experiment", "collect_batch_closure_evidence",
+                }
+                if committed_stage == "REFUTATION_SUBMITTED":
+                    downstream_operations.add("adjudicate_refutations")
+                invalidation_events.extend({
+                    "batch_id": view.task.batch_id,
+                    "entity_type": "batch_stage_invalidation",
+                    "entity_id": downstream.task.task_id,
+                    "event_type": "STAGE_PROJECTION_INVALIDATED",
+                    "idempotency_key": (
+                        f"r35-task-invalidate:{task_id}:{replacement_output_ref}:"
+                        f"{downstream.task.task_id}"
+                    ),
+                    "actor": actor,
+                    "payload": {
+                        "target_stage": stage_by_operation[downstream.task.operation],
+                        "invalidated_task_id": downstream.task.task_id,
+                        "task_id": task_id,
+                        "replacement_output_ref": replacement_output_ref,
+                    },
+                } for downstream in self.list_tasks(batch_id=view.task.batch_id)
+                  if downstream.task.operation in downstream_operations)
             self.manager.store.append_events_batch(
                 self.campaign_id, [amendment_event, *invalidation_events]
             )
@@ -915,6 +948,10 @@ class ManualExecutionBackend:
             )
         if task.required_output == "verdict-submission/v1":
             self._validate_verdict_output(task, output)
+        if task.required_output in {
+            "refutation/v1", "adjudication/v1", "revival-review/v1",
+        }:
+            self._validate_r35_output(task, output)
         if task.required_output in _REVIEWED_SCOPE_OUTPUTS:
             work_unit = self._task_work_unit(task)
             DiscoveryCoordinator._validate_reviewed_paths(
@@ -1025,6 +1062,98 @@ class ManualExecutionBackend:
                     f"missing={missing[:10]}, extra={extra[:10]}"
                 )
         return output
+
+    def _validate_r35_output(
+        self, task: TaskSpec, output: Mapping[str, Any],
+    ) -> None:
+        field = {
+            "refutation/v1": "refutation",
+            "adjudication/v1": "adjudication",
+            "revival-review/v1": "revival_review",
+        }[task.required_output]
+        value = output.get(field)
+        if not isinstance(value, dict):
+            raise ModelError(f"R3.5 task requires a {field} object: {task.task_id}")
+        try:
+            task_input = json.loads(self.manager.artifacts.get_bytes(task.input_refs[0]))
+            if task.required_output == "adjudication/v1":
+                hypothesis_id = task_input["hypothesis_id"]
+                parsed = Adjudication.from_dict(value)
+            elif task.required_output == "refutation/v1":
+                hypothesis_id = task_input["hypothesis"]["hypothesis_id"]
+                parsed = Refutation.from_dict(value)
+            else:
+                hypothesis_id = task_input["hypothesis"]["hypothesis_id"]
+                parsed = RevivalReview.from_dict(value)
+        except (OSError, KeyError, TypeError, ValueError, IndexError) as error:
+            raise ModelError(f"invalid R3.5 {field}: {task.task_id}: {error}") from error
+        if parsed.hypothesis_id != hypothesis_id:
+            raise ModelError(f"R3.5 {field} task scope mismatch: {task.task_id}")
+        workflow = BatchWorkflow(self.manager, self.campaign_id, task.batch_id)
+        if isinstance(parsed, Refutation):
+            if task_input["hypothesis"].get("work_unit_id") != task.work_unit_id:
+                raise ModelError(f"R3.5 refutation Work Unit mismatch: {task.task_id}")
+            if task_input.get("assigned_perspective") not in {
+                AttackAngle.CALL_CHAIN.value,
+                "one of principal/configuration/deployment/impact",
+            }:
+                raise ModelError(f"R3.5 refutation input has no assigned perspective: {task.task_id}")
+            allowed_angles = (
+                {AttackAngle.CALL_CHAIN}
+                if task_input.get("assigned_perspective") == AttackAngle.CALL_CHAIN.value
+                else {
+                    AttackAngle.PRINCIPAL, AttackAngle.CONFIGURATION,
+                    AttackAngle.DEPLOYMENT, AttackAngle.IMPACT,
+                }
+            )
+            if (
+                parsed.refuter_id != task_input.get("refuter_id")
+                or parsed.attack_angle not in allowed_angles
+            ):
+                raise ModelError(f"R3.5 refutation task scope mismatch: {task.task_id}")
+            workflow.validate_concrete_evidence(parsed.evidence_refs)
+        elif isinstance(parsed, Adjudication):
+            refutations = task_input.get("refutations")
+            if not isinstance(refutations, list) or len(refutations) != 2:
+                raise ModelError(f"R3.5 adjudication input requires two refutations: {task.task_id}")
+            try:
+                input_refutations = [Refutation.from_dict(item) for item in refutations]
+            except (KeyError, TypeError, ValueError) as error:
+                raise ModelError(f"invalid adjudication refutation input: {task.task_id}: {error}") from error
+            expected_ids = {item.refutation_id for item in input_refutations}
+            if set(parsed.refutation_ids) != expected_ids:
+                raise ModelError(f"R3.5 adjudication refutation scope mismatch: {task.task_id}")
+            split = len({item["verdict"] for item in refutations}) > 1
+            if split and parsed.actor is AdjudicationActor.AUTO and not (
+                "defer_r35_splits" in workflow.campaign.constraints
+                and parsed.final_verdict is VerdictKind.NEEDS_REVIEW
+            ):
+                raise ModelError("split refutations require human adjudication")
+            hypothesis, verifier = workflow._refutation_target(hypothesis_id)
+            if hypothesis["work_unit_id"] != task.work_unit_id:
+                raise ModelError(f"R3.5 adjudication Work Unit mismatch: {task.task_id}")
+            if (
+                verifier["verdict"] == VerdictKind.REACHABLE.value
+                and parsed.final_verdict is VerdictKind.UNREACHABLE
+                and not parsed.source_verifications
+            ):
+                raise ModelError(
+                    "REACHABLE to UNREACHABLE adjudication requires source verification"
+                )
+            for verification in parsed.source_verifications:
+                workflow.validate_concrete_evidence((
+                    verification.evidence_ref,
+                    verification.source_anchor
+                    if verification.source_anchor.startswith("LOC-")
+                    else f"LOC-{verification.source_anchor}",
+                ))
+        else:
+            if task_input["hypothesis"].get("work_unit_id") != task.work_unit_id:
+                raise ModelError(f"R3.5 revival Work Unit mismatch: {task.task_id}")
+            expected_reviewer = f"revival-reviewer:{task.batch_id}:{hypothesis_id}"
+            if parsed.reviewer_id != expected_reviewer:
+                raise ModelError(f"R3.5 revival task scope mismatch: {task.task_id}")
+            workflow.validate_concrete_evidence(parsed.evidence_refs)
 
     @staticmethod
     def _parse_r5_output(
@@ -1826,6 +1955,9 @@ class DiscoveryCoordinator:
         edges = [asdict(edge) for edge in plan.boundary_edges if edge.edge_id in edge_ids]
         if {edge["edge_id"] for edge in edges} != edge_ids:
             raise ModelError("Work Unit references unknown boundary edges")
+        self.workflow.validate_concrete_evidence([
+            reference for edge in edges for reference in edge["evidence_refs"]
+        ])
         return edges
 
     def schedule_r1(self) -> tuple[TaskView, ...]:
@@ -1856,9 +1988,13 @@ class DiscoveryCoordinator:
         inventory = self.workflow.manager.load_inventory(
             self.workflow.campaign_id
         )
+        boundaries_by_work_unit = {
+            str(work_unit["work_unit_id"]): self._boundary_edges_for_work_unit(work_unit)
+            for work_unit in work_units
+        }
         views = []
         for work_unit in work_units:
-            boundary_edges = self._boundary_edges_for_work_unit(work_unit)
+            boundary_edges = boundaries_by_work_unit[str(work_unit["work_unit_id"])]
             boundary_component_ids = {
                 str(edge[key])
                 for edge in boundary_edges
@@ -2526,7 +2662,7 @@ class DiscoveryCoordinator:
                     )
                 ] = (hypothesis_id, refuter_id, angles)
         views = self._successful_tasks("refute_reachability", expected)
-        artifact_ids = []
+        refutations = []
         workers_by_hypothesis: dict[str, set[str]] = {}
         for view in views:
             hypothesis_id, refuter_id, allowed_angles = expected[view.task.task_id]
@@ -2555,12 +2691,19 @@ class DiscoveryCoordinator:
                     f"R3.5 refutations for a hypothesis require distinct claimed workers: {hypothesis_id}"
                 )
             workers.add(view.worker_id)
-            artifact_ids.append(self.workflow.record_refutation(refutation))
-        return tuple(artifact_ids)
+            if view.output_ref is None:
+                raise ModelError(f"successful task has no output: {view.task.task_id}")
+            self.backend._validate_task_output(view.task, view.output_ref)
+            refutations.append(refutation)
+        with self.workflow.manager.store.atomic_events():
+            return tuple(
+                self.workflow.record_refutation(refutation)
+                for refutation in refutations
+            )
 
     def schedule_r35_adjudications(self) -> tuple[TaskView, ...]:
         r3_event = self._require_stage("R3_COMPLETED")
-        revision_parts = self._stage_revision_parts("R3_COMPLETED")
+        revision_parts = self._r35_adjudication_revision_parts()
         stage_revision_ids = self._stage_revision_id_map("R3_COMPLETED")
         if r3_event.payload_ref is None:
             raise ModelError("R3 stage is missing its artifact")
@@ -2696,7 +2839,11 @@ class DiscoveryCoordinator:
         return approval_ref
 
     def commit_r35_adjudications(self) -> tuple[str, ...]:
-        revision_parts = self._stage_revision_parts("R3_COMPLETED")
+        with self.workflow.manager.store.atomic_events():
+            return self._commit_r35_adjudications()
+
+    def _commit_r35_adjudications(self) -> tuple[str, ...]:
+        revision_parts = self._r35_adjudication_revision_parts()
         deferred = {
             hypothesis_id: adjudication
             for hypothesis_id in self._r35_eligible()
@@ -2718,6 +2865,9 @@ class DiscoveryCoordinator:
         ]
         for view in views:
             hypothesis_id = expected[view.task.task_id]
+            if view.output_ref is None:
+                raise ModelError(f"successful task has no output: {view.task.task_id}")
+            self.backend._validate_task_output(view.task, view.output_ref)
             value = self._read_output(view)
             adjudication_value = value.get("adjudication")
             if not isinstance(adjudication_value, dict):
@@ -2830,6 +2980,10 @@ class DiscoveryCoordinator:
         return tuple(views)
 
     def commit_r35_revivals(self) -> str:
+        with self.workflow.manager.store.atomic_events():
+            return self._commit_r35_revivals()
+
+    def _commit_r35_revivals(self) -> str:
         selection = self._require_stage("REVIVAL_SAMPLE_SELECTED")
         revision_parts = self._stage_revision_parts(
             "R2_COMPLETED", "R3_COMPLETED"
@@ -2850,6 +3004,9 @@ class DiscoveryCoordinator:
         views = self._successful_tasks("review_unreachable_verdict", expected)
         for view in views:
             hypothesis_id = expected[view.task.task_id]
+            if view.output_ref is None:
+                raise ModelError(f"successful task has no output: {view.task.task_id}")
+            self.backend._validate_task_output(view.task, view.output_ref)
             output = self._read_output(view)
             review_value = output.get("revival_review")
             if not isinstance(review_value, dict):
@@ -2886,10 +3043,10 @@ class DiscoveryCoordinator:
         r2_event = self._require_stage("R2_COMPLETED")
         r3_event = self._require_stage("R3_COMPLETED")
         revision_parts = self._stage_revision_parts(
-            "CATEGORY_AUDIT_PLAN_RECORDED", "R2_COMPLETED", "R3_COMPLETED"
+            *self._r4_revision_types()
         )
         stage_revision_ids = self._stage_revision_id_map(
-            "CATEGORY_AUDIT_PLAN_RECORDED", "R2_COMPLETED", "R3_COMPLETED"
+            *self._r4_revision_types()
         )
         if any(event.payload_ref is None for event in (plan_event, r2_event, r3_event)):
             raise ModelError("R4 input stage is missing its artifact")
@@ -3090,10 +3247,10 @@ class DiscoveryCoordinator:
         r2_event = self._require_stage("R2_COMPLETED")
         r3_event = self._require_stage("R3_COMPLETED")
         revision_parts = self._stage_revision_parts(
-            "CATEGORY_AUDIT_PLAN_RECORDED", "R2_COMPLETED", "R3_COMPLETED"
+            *self._r4_revision_types()
         )
         stage_revision_ids = self._stage_revision_id_map(
-            "CATEGORY_AUDIT_PLAN_RECORDED", "R2_COMPLETED", "R3_COMPLETED"
+            *self._r4_revision_types()
         )
         if any(event.payload_ref is None for event in (plan_event, r2_event, r3_event)):
             raise ModelError("R4 input stage is missing its artifact")
@@ -3438,7 +3595,7 @@ class DiscoveryCoordinator:
     def commit_r4(self) -> str:
         plan_event = self._require_stage("CATEGORY_AUDIT_PLAN_RECORDED")
         revision_parts = self._stage_revision_parts(
-            "CATEGORY_AUDIT_PLAN_RECORDED", "R2_COMPLETED", "R3_COMPLETED"
+            *self._r4_revision_types()
         )
         if plan_event.payload_ref is None:
             raise ModelError("CategoryAuditPlan stage is missing its artifact")
@@ -3890,6 +4047,23 @@ class DiscoveryCoordinator:
             if event.payload_ref is not None
         ]
 
+    def _r35_adjudication_revision_parts(self) -> tuple[str, ...]:
+        amendments = self.workflow.manager.store.list_batch_events(
+            self.workflow.campaign_id, self.workflow.batch_id,
+            event_type="TASK_OUTPUT_AMENDED",
+        )
+        return (
+            *self._stage_revision_parts("R3_COMPLETED"),
+            *(event.event_id for event in amendments
+              if event.payload.get("stage") == "REFUTATION_SUBMITTED"),
+        )
+
+    def _r4_revision_types(self) -> tuple[str, ...]:
+        return (
+            "CATEGORY_AUDIT_PLAN_RECORDED", "R2_COMPLETED", "R3_COMPLETED",
+            *(("R3_5_COMPLETED",) if self.workflow._review_outputs_amended() else ()),
+        )
+
     def _r35_eligible(self) -> dict[str, str]:
         r2_event = self._require_stage("R2_COMPLETED")
         r3_event = self._require_stage("R3_COMPLETED")
@@ -4001,10 +4175,11 @@ class DiscoveryCoordinator:
         return list(value)
 
     def _require_stage(self, event_type: str) -> Any:
-        events = self.workflow.manager.store.list_batch_events(
-            self.workflow.campaign_id,
-            self.workflow.batch_id,
-            event_type=event_type,
+        events = active_stage_events(
+            self.workflow.manager.store.list_batch_events(
+                self.workflow.campaign_id, self.workflow.batch_id,
+            ),
+            event_type,
         )
         if not events:
             raise ModelError(f"required Batch stage is missing: {event_type}")
@@ -4017,8 +4192,6 @@ class DiscoveryCoordinator:
         *,
         prefix: bool = False,
     ) -> tuple[TaskView, ...]:
-        if not expected:
-            return ()
         if not expected:
             return ()
         views = self._active_task_views(
@@ -4081,6 +4254,11 @@ class DiscoveryCoordinator:
         return tuple(
             view for view in views
             if view.status is not TaskStatus.CANCELLED
+            and not any(
+                event.payload.get("invalidated_task_id") == view.task.task_id
+                for event in events
+                if event.event_type == "STAGE_PROJECTION_INVALIDATED"
+            )
             and not any(
                 (stage, revision_id) in invalidated_revisions
                 for stage, revision_id in view.task.stage_revision_ids.items()

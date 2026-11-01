@@ -99,6 +99,18 @@ Universal R5 guidance does not prioritize a particular diagnostic tool or failur
 mechanism. Language/mechanism-specific guidance remains scoped by the existing
 catalog and recipe selection; this refinement adds no knowledge assets.
 
+Maintenance update (2026-11-01, task policy 54): R3.5 task collection parses and
+validates required fields, unique references, hypothesis/Work Unit/perspective scope,
+and concrete evidence before success; commit repeats validation and persists the
+review projections atomically. Supported pre-commit and post-commit R3.5 amendments
+invalidate dependent review projections and task identities while retaining prior
+events/artifacts. R4 reporting compares every disposition with the current R3 verdict
+or current R3.5 adjudication and retains both evidence sides without deciding which is
+semantically correct. CLI `status` uses a read-only store and filters a shared store by
+the requested target; graph import candidates anchor nonblank source lines and retain
+unanchored/empty targets without invented LOC evidence. See [TR-21](TEST_PLAN_VNEXT.md#tr-21-r35-review-amendment-and-target-scoped-status).
+These checks do not prove Agent identity, independent semantic review, or discovery quality.
+
 This design extends the existing vNext Python package and its canonical Campaign,
 Batch, event, artifact, Work Unit, and Handoff models. It does not introduce v3 runtime
 compatibility. Existing vNext schemas remain the starting point; schema changes require

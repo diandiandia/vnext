@@ -119,9 +119,12 @@ def _coordinator(manager: CampaignManager, workflow: BatchWorkflow):
 def test_init_freezes_split_deferral(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], enabled: bool,
 ) -> None:
+    target = tmp_path / "target"
+    target.mkdir()
+    state_dir = tmp_path / "state"
     args = [
-        "init", str(tmp_path), "--snapshot-id", "fixture:init-deferred",
-        "--campaign-id", "CMP-init", "--state-dir", ".audit_vnext",
+        "init", str(target), "--snapshot-id", "fixture:init-deferred",
+        "--campaign-id", "CMP-init", "--state-dir", str(state_dir),
     ]
     opted_in = ["--defer-r35-splits"] if enabled else ["--no-defer-r35-splits"]
     assert main(args + opted_in) == 0
@@ -131,7 +134,7 @@ def test_init_freezes_split_deferral(
     capsys.readouterr()
     assert main(args + (["--no-defer-r35-splits"] if enabled else ["--defer-r35-splits"])) == 2
     capsys.readouterr()
-    with CampaignManager(tmp_path) as manager:
+    with CampaignManager(target, state_dir) as manager:
         assert manager.store.get_campaign("CMP-init").constraints == (
             ("defer_r35_splits",) if enabled else ()
         )
@@ -140,20 +143,23 @@ def test_init_freezes_split_deferral(
 def test_new_cli_campaign_defaults_to_deferral_and_preserves_old_policy(
     tmp_path: Path, capsys: pytest.CaptureFixture[str],
 ) -> None:
+    target = tmp_path / "target"
+    target.mkdir()
+    state_dir = tmp_path / "state"
     args = [
-        "init", str(tmp_path), "--snapshot-id", "fixture:default",
-        "--state-dir", ".audit_vnext",
+        "init", str(target), "--snapshot-id", "fixture:default",
+        "--state-dir", str(state_dir),
     ]
     assert main(args + ["--campaign-id", "CMP-default"]) == 0
     assert "defer_r35_splits" in json.loads(capsys.readouterr().out)["constraints"]
-    with CampaignManager(tmp_path) as manager:
+    with CampaignManager(target, state_dir) as manager:
         manager.create_campaign(
             snapshot_id="fixture:default", campaign_id="CMP-old", constraints=(),
         )
         before = manager.store.list_events("CMP-old")
     assert main(args + ["--campaign-id", "CMP-old"]) == 0
     assert json.loads(capsys.readouterr().out)["constraints"] == []
-    with CampaignManager(tmp_path) as manager:
+    with CampaignManager(target, state_dir) as manager:
         assert manager.store.list_events("CMP-old") == before
 
 
@@ -301,7 +307,7 @@ def test_split_scheduling_commit_and_reopen_are_durable_and_idempotent(
 
 
 @pytest.mark.parametrize("operation", ["schedule_r35_adjudications", "commit_r35_adjudications"])
-def test_retry_recovers_after_durable_append(
+def test_retry_preserves_atomic_commit_and_durable_scheduler_recovery(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, operation: str,
 ) -> None:
     manager, workflow, _ = _workflow(tmp_path)
@@ -318,8 +324,12 @@ def test_retry_recovers_after_durable_append(
             patch.setattr(workflow, "record_adjudication", fail_after_record)
             with pytest.raises(RuntimeError, match="durable append"):
                 getattr(coordinator, operation)()
-        event, = workflow._active_events(event_type="ADJUDICATION_DECIDED")
+        if operation == "commit_r35_adjudications":
+            assert workflow._active_events(event_type="ADJUDICATION_DECIDED") == []
+        else:
+            assert len(workflow._active_events(event_type="ADJUDICATION_DECIDED")) == 1
         assert coordinator.schedule_r35_adjudications() == ()
+        event, = workflow._active_events(event_type="ADJUDICATION_DECIDED")
         assert coordinator.commit_r35_adjudications() == (event.payload_ref,)
         assert workflow._active_events(event_type="ADJUDICATION_DECIDED") == [event]
     finally:
