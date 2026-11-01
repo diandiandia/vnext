@@ -1,8 +1,8 @@
 # Reachable Audit：我们为什么这样设计，以及还要证明什么
 
-当前合同校订：2026-10-25。下文的大仓库数字是注明范围的历史运行记录，
+当前合同校订：2026-11-01（task policy 56）。下文的大仓库数字是注明范围的历史运行记录，
 不是当前能力总表；最新复评与验证见
-[通用性评估](design/GENERALITY_REVIEW_VNEXT.md#latest-review-2026-10-25-retry-identity-and-documentation)。
+[通用性评估](design/GENERALITY_REVIEW_VNEXT.md)。
 运行合同以 [Skill](../SKILL.md)、[运行手册](ORCHESTRATOR_RUNBOOK.md)
 和当前源码为准，历史失败不能当成当前仍未实现的功能。
 
@@ -68,7 +68,7 @@ Reachable Audit 是一套帮助 AI 参与大型代码审计的“工作台”：
 
 可以用一句话区分两者：
 
-> `SKILL.md` 负责告诉 Agent“应该怎么做”；运行时负责记录并检查“它实际上做了什么、依据是什么、还有什么没做”。
+> `SKILL.md` 负责告诉 Agent“应该怎么做”；运行时记录并校验“它提交了什么、引用了什么证据、申报了哪些缺口”。这些记录不证明 Agent 实际读过所有源码，也不自动证明推理正确。
 
 #### Markdown 能约束什么，不能约束什么？
 

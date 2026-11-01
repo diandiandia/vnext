@@ -1,5 +1,7 @@
 from pathlib import Path
+import os
 import shutil
+import sqlite3
 import sys
 
 import pytest
@@ -71,6 +73,49 @@ def test_runner_rejects_working_directory_escape(tmp_path: Path) -> None:
                 cwd="..",
             )
     finally:
+        manager.close()
+
+
+@pytest.mark.parametrize("already_exited", [False, True])
+@pytest.mark.parametrize("error_type", [ModelError, sqlite3.OperationalError])
+def test_runner_surfaces_process_registration_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    already_exited: bool, error_type: type[Exception],
+) -> None:
+    manager = _campaign(tmp_path / "target")
+    process_ids: list[int] = []
+
+    def fail_registration(
+        manager: CampaignManager, campaign_id: str, process_group_id: int,
+        *, label: str,
+    ) -> str:
+        process_ids.append(process_group_id)
+        if already_exited:
+            os.waitpid(process_group_id, 0)
+        raise error_type("resource registration failed")
+
+    monkeypatch.setattr(
+        "reachable_audit.experiments.runner.register_process_group", fail_registration,
+    )
+    try:
+        with pytest.raises(error_type, match="resource registration failed"):
+            run_harness(
+                manager, "CMP-harness",
+                command=[
+                    sys.executable, "-c",
+                    "pass" if already_exited else "import time; time.sleep(60)",
+                ],
+                hypothesis_id="HYP-capture",
+                execution_provenance={"origin": "target_tree"},
+            )
+        assert len(process_ids) == 1
+        with pytest.raises(ProcessLookupError):
+            os.kill(process_ids[0], 0)
+        assert not manager.store.list_events(
+            "CMP-harness", event_type="HARNESS_EXECUTION_COMPLETED",
+        )
+    finally:
+        cleanup_campaign_resources(manager, "CMP-harness")
         manager.close()
 
 

@@ -127,6 +127,15 @@ See TR-21 for bounded regression evidence and its semantic-assurance limits.
 
 ## 3. Audit Summary
 
+Maintenance correction (2026-11-01, task policy 56): the policy 55 statement below
+overstated direct-object R5 validation. SWDR-015 now shares assessment structure
+validation across JSON and direct submission, including strict booleans and
+evidence/rationale/external-reference requirements. SWDR-036 managed execution
+cannot produce a completed harness record after failed process registration,
+regardless of whether the child is still running.
+[TR-23](TEST_PLAN_VNEXT.md#tr-23-direct-r5-structure-and-harness-registration-failure)
+records fault-injection and direct-submission regressions.
+
 Maintenance refinement (2026-11-01, task policy 55): SWDR-015 experiment validation
 rejects non-boolean requirement flags and contradictory dispositions at collection
 and direct commit; empirical upgrade additionally requires declared provenance with

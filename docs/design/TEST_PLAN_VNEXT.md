@@ -628,6 +628,25 @@ that a Worker observed all target source.
 These are infrastructure and contract regressions, not a discovery-quality benchmark,
 independent source-equivalence assessment or evidence of physical host isolation.
 
+### TR-23: Direct R5 Structure and Harness Registration Failure
+
+**Required tests:** [test_experiments_metrics.py](../../tests/test_experiments_metrics.py)
+and [test_harness_runner.py](../../tests/test_harness_runner.py).
+
+- Submit direct R5 objects with non-boolean requirement flags; reject them before
+  persisting R5_COMPLETED, using the same explicit error as JSON input.
+- Verify direct assessment validation rejects missing evidence/rationale and
+  duplicate or non-subset external observation references. Valid static-retained,
+  required-inconclusive, confirmed/refuted and not-feasible semantics stay unchanged.
+- Inject both model and database process-registration failures before and after
+  child exit. Always propagate the original failure, terminate/reap a live
+  unregistered child, and never emit HARNESS_EXECUTION_COMPLETED.
+- Run default, Go/JVM and static-only regressions; no profile-specific error
+  exception, automatic language choice or resource-default change is allowed.
+
+These test software reliability and validation consistency, not target vulnerability
+discovery quality or independently observed execution provenance.
+
 ## 5. Evidence Record
 
 Every test report records:

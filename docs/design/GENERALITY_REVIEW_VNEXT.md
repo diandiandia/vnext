@@ -1197,3 +1197,76 @@ accountable process outcomes and acceptance evidence are still missing.
   a complete editor type check or semantic documentation validation.
 - Final patch whitespace and commit-state checks are recorded with the repository
   change, not interpreted as independent qualification.
+
+## Latest Review (Task Policy 56): Direct Submission and Failure Transparency
+
+### Basis and conclusion
+
+Reassessment baseline: clean commit `6d9528f`. Reviewed the active Skill,
+README/runbook, Chinese overview, system/software design, requirements and lifecycle
+assessment, together with R0/R5/harness contracts, catalog loading, package isolation
+and bounded runtime screens. This is an engineering/Skill quality review, not a
+complete vulnerability audit or independent release qualification.
+
+| Question | Evidence-bounded conclusion |
+|---|---|
+| General-purpose Skill? | General across authorized source-security targets within its declared language/build scope, not across every software task. Persistent scope, leases, evidence, recovery and closure gates support the long-running objective. Real discovery quality remains unqualified. |
+| Clean implementation? | No supplied target-residue tokens were found in the scanned runtime surfaces. Two reproducible validation/error-handling defects were repaired below. “Clean” does not mean bug-free. |
+| Historical project or plan contamination? | Candidate-project plans and dated reviews still exist under development documentation, but the catalog does not load them and the Skill forbids discovery-worker use. Fresh Campaign and wheel-isolation tests pass. A full checkout/Skill copy and an operator can still read history; physical/model-context isolation is not proven. |
+| Bias? | Fixed portfolio ranks, templated cards, training-derived guidance and unequal hotspot-provider depth remain coverage/attention risks. Guidance requires current-target preconditions and counterevidence; neither adapter counts nor tests establish unbiased recall. |
+| Dead/redundant code? | The bounded AST screen found no unused-import candidates or exact function-body duplicate groups of at least 12 lines. Its one runtime-only unreferenced-function candidate, public `sign_manifest`, is called by evaluation tests and retained. Dynamic use, semantic duplicates and all dead branches were not exhaustively analyzed. |
+| Architecture and documentation? | Existing canonical events/artifacts and shared validators are appropriate engineering support, not target-specific patches. Large modules and accumulated dated design updates remain maintenance debt. One overview statement overstated observed Agent activity; it now distinguishes validated submissions from actual source reading. |
+| Google internal requirements? | **NOT ASSESSED**: no controlled criteria or authorized acceptance decision supplied. Public engineering practice and local tests cannot substitute for these. |
+| ISO/IEC/IEEE 12207? | **NOT ESTABLISHED**: selected lifecycle-concept mapping and local maintenance evidence do not supply controlled applicability, organizational tailoring, accountable process outcomes or independent acceptance. |
+
+Representative knowledge inspection included a Python deserialization/C-extension
+profile and migration provenance. Language APIs are conditional cues, not assumed
+target behavior. Migration digest bases retain training lineage; they are not passed
+as discovery task knowledge. No broad rewrite or deletion of the catalog, public API
+or historical verification records was justified by this evidence.
+
+### Reproductions and repairs
+
+The new focused regressions produced **11 failures and 2 passes** before repair:
+
+- **Direct R5 structure gap:** JSON parsing rejected non-boolean requirement flags,
+  but direct objects did not use that check; `0` and `None` could persist an R5
+  stage as a false requirement. Missing evidence/rationale and invalid external
+  reference sets also bypassed the shared experiment validator. Move the existing
+  structure checks into one helper used by parsing and experiment validation;
+  direct stage recording validates before external-observation lookup. Remove
+  duplicated disposition checks. Valid disposition semantics are unchanged.
+- **Swallowed harness registration failure:** registration exceptions were only
+  rethrown while the child was live. An already-exited child could therefore lead
+  to a completed managed-run record after registration failed. Replace the broad
+  catch with failure cleanup in `finally`, match the returned registration event,
+  terminate/reap a live unregistered child and always propagate the failure.
+  Fault injection covers model and database errors with both live/exited children.
+  No completed execution event or empirical-upgrade record is produced on failure.
+- **Documentation assurance gap:** correct the Chinese overview's “actually did”
+  claim to submitted/validated evidence. Align the Skill, README, runbook,
+  system/software design, requirements and lifecycle record with the repaired
+  contracts and [TR-23](TEST_PLAN_VNEXT.md#tr-23-direct-r5-structure-and-harness-registration-failure).
+
+Task policy is **56**. These are language/project-neutral fixes to existing entry
+paths; no knowledge asset, target audit package, candidate plan, profile default,
+new approval workflow or runtime target-name blacklist was added.
+
+### Verification and limits
+
+- Related R5/harness/Go/static-only/Batch-closure modules: **113 passed**.
+- Full command: `pytest -q -o addopts= -rs --tb=short`.
+  **719 passed, 1 skipped**, 60.82 seconds. The protected real held-out manifest is
+  still unconfigured; the skip is not a successful qualification result.
+- Runtime compatibility/residue scan: PASS, zero findings across **53 Python
+  files, 2 parser helpers, 167 knowledge JSON files and 1 main prompt**.
+  Historical tokens were external scanner inputs. Catalog loading validated
+  **15 languages, 150 cards and 150 provenance records**.
+- Python compilation, changed Markdown file/heading links, scalar Skill metadata,
+  the **500-line** Skill bound and patch whitespace checks pass. No complete
+  editor type-check or exhaustive semantic documentation audit is claimed.
+
+This corrects policy 55's overstatement of shared direct-object validation rather
+than treating its previous passing suite as proof. Representative host/target
+acceptance, independently measured discovery quality and actual context isolation
+remain required before an “excellent production-grade” claim.

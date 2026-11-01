@@ -16,7 +16,7 @@ IMPLEMENTED_RELEASE_GATES = tuple(f"RG{index}" for index in range(1, 16))
 
 
 _POLICY: dict[str, Any] = {
-    "policy_version": "vnext-task-policy-55",
+    "policy_version": "vnext-task-policy-56",
     "task_collection": {
         "go_hotspots": "campaign_frozen_opt_in_trusted_offline_ast_helper_candidates_only_not_release_qualified",
         "java_hotspots": "campaign_frozen_opt_in_jdk_parse_only_unresolved_method_candidates_not_release_qualified",
@@ -36,6 +36,7 @@ _POLICY: dict[str, Any] = {
         "wall_amendment": "append_only_monotone_limit_extension_original_clock_and_breach_retained",
         "go_harness_profile": "explicit_go_offline_environment_and_bounded_build_file_size;captured_output_limits_independent;ineligible_runs_cannot_upgrade",
         "jvm_harness_profile": "explicit_jvm_bounded_4GiB_address_space_default;explicit_limit_wins;no_automatic_language_selection_or_jvm_option_injection",
+        "harness_registration_failure": "cleanup_and_rethrow_even_if_child_exited;no_completed_execution_artifact_or_empirical_upgrade",
         "shell_execution_by_scheduler": False,
         "task_execution_policy": "static_analysis_by_worker;dynamic_execution_requires_explicit_host_authorization_and_registered_r5_harness;not_os_enforced",
         "required_measurements": ["agent_runs", "wall_seconds"],
@@ -74,7 +75,7 @@ _POLICY: dict[str, Any] = {
         "attempt_usage": "all_claimed_attempts_with_unreported_attempts_incomplete",
         "hotspot_source_identity": "parsed_bytes_match_r0_digest",
         "r5_experiment_reference_validation": "collect_and_commit_null_or_task_local_id",
-        "r5_disposition_validation": "shared_collect_and_direct_commit;boolean_required_flag;required_static_retained_rejected;required_inconclusive_needs_review;confirmation_refutation_not_feasible_match_experiment",
+        "r5_disposition_validation": "shared_structure_and_experiments_collect_and_direct_commit;strict_boolean_required_flag;evidence_rationale_and_unique_external_refs_required;required_static_retained_rejected;required_inconclusive_needs_review;confirmation_refutation_not_feasible_match_experiment",
         "r5_not_feasible": "required_blocker_evidence_null_experiment_id_needs_review_no_attempted_run",
         "r5_external_observation": "host_hmac_campaign_snapshot_batch_hypothesis_observer_method_time_campaign_owned_artifacts_evidence_only_non_confirming",
         "r5_external_observation_refs": "optional_assessment_refs_must_name_registered_same_batch_hypothesis_observation;never_confirms_or_refutes",

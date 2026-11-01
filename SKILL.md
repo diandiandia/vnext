@@ -295,8 +295,8 @@ listed as limitations. One Campaign may contain several portfolio languages. Use
 `toolchain-probe <language>` only for registered version checks; it does not certify that
 the language's build or runtime behavior was audited.
 
-Use authorized `harness-run` argv/timeout inputs for experiments; POSIX resource caps
-and captured stdout/stderr are not a sandbox. Use external isolation for hostile code.
+Use authorized `harness-run` argv/timeout inputs; resource-registration failures are
+errors, not completed runs. POSIX caps are not a sandbox; externally isolate hostile code.
 
 `harness-run` needs the current `hypothesis_id` and explicit `execution_provenance`
 to be eligible for an R5 empirical upgrade. `cwd` must resolve inside the target.
@@ -336,7 +336,7 @@ rationale. If an attempt ran but was inconclusive, attach its experiment and use
 `NEEDS_REVIEW`. `NOT_FEASIBLE` is an unresolved disposition, never evidence of safety,
 confirmation, or refutation.
 `STATIC_VERDICT_RETAINED` requires `experiment_required: false`. Required inconclusive
-experiments use `NEEDS_REVIEW`; task collection and direct commit share these checks.
+experiments use `NEEDS_REVIEW`; collection/direct commit share structure and result checks.
 
 ## Finding Classification
 

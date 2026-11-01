@@ -1099,8 +1099,6 @@ class R5Assessment:
 
     @classmethod
     def from_dict(cls, value: Mapping[str, Any]) -> "R5Assessment":
-        if not isinstance(value["experiment_required"], bool):
-            raise ModelError("R5 experiment_required must be a boolean")
         assessment = cls(
             hypothesis_id=str(value["hypothesis_id"]),
             experiment_required=value["experiment_required"],
@@ -1116,45 +1114,42 @@ class R5Assessment:
                 str(item) for item in value.get("external_observation_refs", [])
             ),
         )
-        if not assessment.evidence_refs or not assessment.rationale:
-            raise ModelError("R5 assessment requires evidence refs and rationale")
-        if len(assessment.external_observation_refs) != len(set(assessment.external_observation_refs)):
-            raise ModelError("R5 external_observation_refs must be unique")
-        if not set(assessment.external_observation_refs).issubset(assessment.evidence_refs):
-            raise ModelError("R5 external observation refs must also appear in evidence_refs")
-        if assessment.disposition is R5Disposition.NOT_FEASIBLE:
-            if not assessment.experiment_required or assessment.experiment_id is not None:
-                raise ModelError(
-                    "NOT_FEASIBLE requires a required experiment and a null experiment_id"
-                )
-        elif assessment.experiment_required and assessment.experiment_id is None:
-            raise ModelError("required R5 experiment is missing")
-        if (
-            assessment.disposition is R5Disposition.STATIC_VERDICT_RETAINED
-            and assessment.experiment_required
-        ):
-            raise ModelError(
-                "STATIC_VERDICT_RETAINED cannot require an experiment"
-            )
+        assessment._validate_structure()
         return assessment
 
-    def validate_experiments(self, by_id: Mapping[str, Experiment]) -> Experiment | None:
-        experiment = by_id.get(self.experiment_id) if self.experiment_id else None
+    def _validate_structure(self) -> None:
+        if not isinstance(self.experiment_required, bool):
+            raise ModelError("R5 experiment_required must be a boolean")
+        if not self.evidence_refs or not self.rationale:
+            raise ModelError("R5 assessment requires evidence refs and rationale")
+        if len(self.external_observation_refs) != len(set(self.external_observation_refs)):
+            raise ModelError("R5 external_observation_refs must be unique")
+        if not set(self.external_observation_refs).issubset(self.evidence_refs):
+            raise ModelError("R5 external observation refs must also appear in evidence_refs")
         if self.disposition is R5Disposition.NOT_FEASIBLE:
             if not self.experiment_required or self.experiment_id is not None:
                 raise ModelError(
                     "NOT_FEASIBLE requires a required experiment and a null experiment_id"
                 )
+        elif self.experiment_required and self.experiment_id is None:
+            raise ModelError("required R5 experiment is missing")
+        if (
+            self.disposition is R5Disposition.STATIC_VERDICT_RETAINED
+            and self.experiment_required
+        ):
+            raise ModelError(
+                "STATIC_VERDICT_RETAINED cannot require an experiment"
+            )
+
+    def validate_experiments(self, by_id: Mapping[str, Experiment]) -> Experiment | None:
+        self._validate_structure()
+        experiment = by_id.get(self.experiment_id) if self.experiment_id else None
+        if self.disposition is R5Disposition.NOT_FEASIBLE:
             if any(item.hypothesis_id == self.hypothesis_id for item in by_id.values()):
                 raise ModelError(
                     "NOT_FEASIBLE cannot accompany an attempted experiment; "
                     "use NEEDS_REVIEW for an inconclusive run"
                 )
-        elif (
-            self.disposition is R5Disposition.STATIC_VERDICT_RETAINED
-            and self.experiment_required
-        ):
-            raise ModelError("STATIC_VERDICT_RETAINED cannot require an experiment")
         elif self.experiment_required and experiment is None:
             raise ModelError("required R5 experiment is missing")
         if self.experiment_id is not None and experiment is None:

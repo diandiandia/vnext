@@ -1,4 +1,5 @@
 import json
+from dataclasses import replace
 from pathlib import Path
 import sys
 
@@ -177,6 +178,43 @@ def test_r5_required_flag_rejects_non_boolean_values(required: object) -> None:
             "evidence_refs": ["EVID-static"],
             "rationale": "no implicit truthiness for wire policy flags",
         })
+
+
+@pytest.mark.parametrize("required", ["false", "true", 0, 1, None])
+def test_direct_r5_rejects_non_boolean_required_flag(
+    tmp_path: Path, required: object,
+) -> None:
+    manager, workflow = _ready_for_r5(tmp_path, static_hypothesis=True)
+    try:
+        assessment = R5Assessment(
+            "HYP-static", False, None, R5Disposition.STATIC_VERDICT_RETAINED,
+            ("EVID-static",), "retain the unresolved static verdict",
+        )
+        with pytest.raises(ModelError, match="experiment_required must be a boolean"):
+            workflow.record_r5([], [replace(assessment, experiment_required=required)])
+        assert not manager.store.list_batch_events(
+            workflow.campaign_id, workflow.batch_id, event_type="R5_COMPLETED",
+        )
+    finally:
+        manager.close()
+
+
+@pytest.mark.parametrize("changes, message", [
+    ({"evidence_refs": ()}, "evidence refs and rationale"),
+    ({"rationale": ""}, "evidence refs and rationale"),
+    ({"external_observation_refs": ("OBS-1", "OBS-1")}, "must be unique"),
+    ({"external_observation_refs": ("OBS-1",)}, "also appear in evidence_refs"),
+])
+def test_direct_r5_enforces_assessment_structure(
+    changes: dict[str, object], message: str,
+) -> None:
+    assessment = R5Assessment(
+        "HYP-static", False, None, R5Disposition.STATIC_VERDICT_RETAINED,
+        ("EVID-static",), "retain the unresolved static verdict",
+    )
+    with pytest.raises(ModelError, match=message):
+        replace(assessment, **changes).validate_experiments({})
+
 
 def test_required_inconclusive_r5_is_rejected_during_task_parsing() -> None:
     with pytest.raises(ModelError, match="inconclusive required experiment"):

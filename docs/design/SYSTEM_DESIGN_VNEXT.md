@@ -66,6 +66,13 @@ attestation. `jvm-bounded` is an explicit resource profile, not automatic langua
 or project-specific behavior. Ordinary defaults and static-only prohibitions are unchanged.
 See [TR-22](TEST_PLAN_VNEXT.md#tr-22-generic-boundary-scope-r0-compatibility-and-r5-provenance).
 
+Current-contract refinement (2026-11-01, task policy 56): R5 JSON collection and
+direct object submission share assessment structure checks as well as experiment
+consistency checks. A failed harness process registration always propagates, even
+after child exit; a live unregistered child is terminated and no completed execution
+record is emitted. This is reliability/error handling, not execution attestation.
+See [TR-23](TEST_PLAN_VNEXT.md#tr-23-direct-r5-structure-and-harness-registration-failure).
+
 Reliability update (2026-10-24): concrete R2 axis/seed references are checked at
 per-axis/compact collection and direct stage commit against the shared frozen-source
 and artifact validators. Symbolic provenance IDs are not source proof. Both R4

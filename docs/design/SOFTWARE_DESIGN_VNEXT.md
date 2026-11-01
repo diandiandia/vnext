@@ -121,6 +121,17 @@ there is no second digest map. Missing provenance is ineligible, and built-copy
 origins require equivalent fidelity with linked artifacts, not a real-target label.
 See [TR-22](TEST_PLAN_VNEXT.md#tr-22-generic-boundary-scope-r0-compatibility-and-r5-provenance).
 
+Maintenance refinement (2026-11-01, task policy 56): `R5Assessment.from_dict()` and
+`validate_experiments()` reuse the same structure validation: a strict boolean
+requirement flag, evidence/rationale, external-reference uniqueness/subset and
+required/disposition combinations. `record_r5()` validates the assessment before
+resolving its external observations. Valid disposition semantics are unchanged.
+Harness resource registration matches the returned registration event; failed
+registration uses unconditional failure cleanup rather than a broad exception
+catch that only rethrows for a live child. Child exit cannot turn a registration
+failure into `HARNESS_EXECUTION_COMPLETED`.
+See [TR-23](TEST_PLAN_VNEXT.md#tr-23-direct-r5-structure-and-harness-registration-failure).
+
 This design extends the existing vNext Python package and its canonical Campaign,
 Batch, event, artifact, Work Unit, and Handoff models. It does not introduce v3 runtime
 compatibility. Existing vNext schemas remain the starting point; schema changes require

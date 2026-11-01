@@ -50,6 +50,12 @@ local verification work products only. They do not supply an applicable controll
 standard edition, organizational tailoring, approvals or independent acceptance.
 Google internal requirements remain not assessed; ISO conformity remains unestablished.
 
+Task policy 56 maintenance correction: TR-23 reproduces and repairs direct-object
+R5 structure-validation gaps and a swallowed process-registration failure after
+child exit. This corrects the earlier scope of local verification evidence; it does
+not establish organizational approval, controlled standards applicability, independent
+quality assessment or compliance.
+
 Statuses mean:
 
 - **Implemented in tool:** a tested software mechanism exists.

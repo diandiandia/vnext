@@ -404,6 +404,7 @@ reused. This applies to every supported source language.
 | Runaway process / storage pressure | Pause dispatch; preserve durable artifacts; use `resource-cleanup` only for registered resources and stop known process groups under host control | Kill by process name, delete the evidence store, or treat cleanup as fixing a full disk |
 | Required experiment cannot start | Record NOT_FEASIBLE, `experiment_required: true`, `experiment_id: null`, blocker evidence and NEEDS_REVIEW semantics | Claim empirical confirmation/refutation or hide a required experiment |
 | Experiment actually ran but timed out/inconclusive | Preserve registered run/output, use NEEDS_REVIEW and reassess within limits | Label an attempted experiment NOT_FEASIBLE or infer safety from timeout |
+| Harness process registration failed | Retain the error and diagnose resource/event persistence; the runner terminates a live unregistered child and rethrows even if it already exited. Reassess R5 uncertainty before an authorized retry | Treat process exit/output as a completed managed run or empirical evidence |
 | Budget/permission exhausted or unsafe cleanup | Pause and retain evidence; an approved wall-budget extension must append an amendment without resetting creation time. Abort with skill issues if abandoning | Invent usage, subtract pauses silently, bypass host controls, or force resource PASS |
 
 ## 6. Coverage and Closing Work

@@ -1259,6 +1259,7 @@ class BatchWorkflow:
                     f"experiment references unknown hypothesis: {experiment.experiment_id}"
                 )
         for assessment in assessments:
+            experiment = assessment.validate_experiments(experiment_by_id)
             for reference in assessment.external_observation_refs:
                 observation = external_observations_by_ref.get(reference)
                 if (
@@ -1268,7 +1269,6 @@ class BatchWorkflow:
                     raise ModelError(
                         f"R5 external observation is outside assessment scope: {assessment.hypothesis_id}"
                     )
-            experiment = assessment.validate_experiments(experiment_by_id)
             if assessment.disposition is R5Disposition.EMPIRICALLY_CONFIRMED:
                 assert experiment is not None
                 self._validate_empirical_harness_evidence(experiment, harness_events)

@@ -154,26 +154,32 @@ def run_harness(
                     cpu_limit_seconds, memory_limit_bytes, file_size_limit_bytes
                 ),
             )
+            registration_completed = False
             try:
-                register_process_group(
+                registration_event_id = register_process_group(
                     manager, campaign_id, process.pid,
                     label=f"R5 harness: {Path(argv[0]).name}",
                 )
-                events = manager.store.list_events(campaign_id)
-                process_resource_id = next(
-                    event.entity_id for event in reversed(events)
-                    if event.event_type == "RESOURCE_REGISTERED"
+                events = manager.store.list_events(
+                    campaign_id, event_type="RESOURCE_REGISTERED",
+                )
+                process_resource_id = next((
+                    event.entity_id for event in events
+                    if event.event_id == registration_event_id
                     and event.payload.get("kind") == "process_group"
                     and event.payload.get("process_group_id") == process.pid
-                )
-            except Exception:
-                if process.poll() is None:
-                    try:
-                        os.killpg(process.pid, signal.SIGKILL)
-                    except ProcessLookupError:
-                        pass
+                ), None)
+                if process_resource_id is None:
+                    raise ModelError("harness process registration event is missing")
+                registration_completed = True
+            finally:
+                if not registration_completed:
+                    if process.poll() is None:
+                        try:
+                            os.killpg(process.pid, signal.SIGKILL)
+                        except ProcessLookupError:
+                            pass
                     process.wait()
-                    raise
             try:
                 if profile == "go-offline":
                     deadline = time.monotonic() + timeout_seconds
