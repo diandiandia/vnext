@@ -1,8 +1,164 @@
 # Reachable Audit vNext
 
-Reachable Audit vNext is an experimental, evidence-oriented workflow for auditing
-whether inputs from declared principals can reach security-sensitive operations in
-large, mixed-language repositories.
+**Make AI-assisted security audits resumable, evidence-traceable, and explicit about
+coverage gaps.**
+
+Reachable Audit vNext is an experimental Agent Skill and campaign runtime for
+authorized audits of large, mixed-language repositories. It helps an AI host trace
+whether inputs from declared principals reach security-sensitive operations, retain
+counterevidence, and resume long-running work without relying on chat history alone.
+
+**中文：让 AI 大仓库安全审计可恢复、证据可追溯、覆盖缺口可见。**
+它负责组织审计和保存证据，不是安装后就能自动找出漏洞的扫描器。
+详见[中文项目介绍](docs/PROJECT_OVERVIEW_ZH.md)。
+
+[Install](#install) · [Quick start](#quick-start) · [Runnable demo](#runnable-demo) ·
+[Limitations](#current-limitations) · [Operating guide](docs/ORCHESTRATOR_RUNBOOK.md)
+
+## Who Is It For?
+
+- Security reviewers tracing entry points, principals, guards, and sensitive
+  operations across components or languages.
+- AI Agent users who need durable task ownership, cross-component handoffs, and
+  recovery after an interruption.
+- Review leads who need source-linked evidence, counterarguments, and visible
+  excluded, deferred, or unresolved scope rather than just a list of findings.
+
+For a small, one-off general code review, a simpler review prompt may be enough.
+vNext is designed for audit coordination and traceability, not automatic proof of
+exploitability.
+
+## Install
+
+Requirements: **Python 3.11+** and a host Agent with an available model/runtime and
+permission to use the CLI. The Python runtime has no third-party dependencies.
+The Skills CLI route also requires Node.js/npm.
+
+### Agent Skill
+
+From the project where you want the host to discover the Skill:
+
+```bash
+npx skills add diandiandia/vnext
+```
+
+Select your host in the installer. Review the Skill before granting permissions.
+Installation does not dispatch an Agent, authorize target execution, or establish
+host compatibility or language certification.
+
+The Skill needs its accompanying `tools/`, `src/`, `knowledge/`, and referenced
+runbooks, not just `SKILL.md`. Set `VNEXT_ROOT` below to the installed Skill directory
+containing those files, or use a complete checkout. Local-source copy installation
+has been smoke-tested with the Skills CLI for GitHub Copilot; the public GitHub
+installation and an end-to-end host audit have not been verified by that test.
+
+### Complete checkout / local development
+
+```bash
+git clone https://github.com/diandiandia/vnext.git
+cd vnext
+VNEXT_ROOT="$PWD"
+python3 "$VNEXT_ROOT/tools/vnext.py" --help
+```
+
+To install the checked-out Skill into another project's host, run
+`npx skills add /absolute/path/to/vnext` from that project.
+
+The launcher works from other directories without installing a Python package or
+setting `PYTHONPATH`. A built wheel includes runtime knowledge and parser helpers,
+but does not install the host Skill or its runbooks. Building the wheel requires the
+setuptools dependency declared in [pyproject.toml](pyproject.toml).
+
+## Quick Start
+
+Use an authorized, frozen source copy. Set `VNEXT_ROOT` to the absolute installation
+or checkout directory, and keep an explicit absolute state directory **outside** the
+target. Pass that same state directory to every command.
+
+```bash
+VNEXT_ROOT=/absolute/path/to/vnext
+TARGET=/absolute/path/to/authorized-frozen-copy
+STATE_DIR=/absolute/path/outside-target/audit-state
+CAMPAIGN_ID=audit-local-001
+CATEGORIES=INJECTION,AUTHN,STATE
+
+vnext() { python3 "$VNEXT_ROOT/tools/vnext.py" "$@"; }
+vnext --help
+vnext init "$TARGET" --state-dir "$STATE_DIR" \
+  --campaign-id "$CAMPAIGN_ID" --audit-mode fresh --static-only
+vnext inventory "$TARGET" "$CAMPAIGN_ID" --state-dir "$STATE_DIR"
+vnext graph "$TARGET" "$CAMPAIGN_ID" --state-dir "$STATE_DIR"
+vnext plan "$TARGET" "$CAMPAIGN_ID" --state-dir "$STATE_DIR" \
+  --categories "$CATEGORIES"
+vnext status "$TARGET" --state-dir "$STATE_DIR"
+```
+
+Automatic snapshot detection requires a clean Git worktree. For a non-Git frozen
+copy, add an approved immutable `--snapshot-id` and retain its provenance; do not
+use a placeholder identity for mutable source.
+
+The categories above are an illustrative limited scope, not a complete audit
+checklist. Choose approved families from the target's threat model and language
+profiles; explicitly account for exclusions. `--static-only` freezes a prohibition
+on dynamic target execution, including managed harnesses; it is not an OS sandbox.
+
+`plan` prints the actual Batch IDs and scope summaries. These commands prepare a
+Campaign; **they do not perform the audit**. For a returned Batch, the host must
+execute R0 and the durable schedule/claim/collect/commit lifecycle in
+[SKILL.md](SKILL.md) and the [orchestrator runbook](docs/ORCHESTRATOR_RUNBOOK.md).
+After an interruption, restore the same paths and Campaign ID, inspect `status`
+and the runbook's recovery procedure; do not initialize a new Campaign as a
+substitute for resuming the old one.
+
+## Runnable Demo
+
+This is a **workflow smoke demo, not a vulnerability-finding benchmark**. It creates
+a tiny synthetic Python target, inventories it, plans work, and reopens saved state
+from another working directory. Reuse `VNEXT_ROOT` and the `vnext` function above.
+Run in a disposable directory; use a new directory for each independent demo.
+
+```bash
+mkdir -p vnext-demo/target vnext-demo/state
+DEMO_ROOT="$(cd vnext-demo && pwd)"
+TARGET="$DEMO_ROOT/target"
+STATE_DIR="$DEMO_ROOT/state"
+CAMPAIGN_ID=demo-001
+printf 'def echo(value: str) -> str:\n    return value\n' > "$TARGET/app.py"
+
+vnext init "$TARGET" --state-dir "$STATE_DIR" \
+  --campaign-id "$CAMPAIGN_ID" --snapshot-id fixture:readme-demo \
+  --audit-mode fresh --static-only
+vnext inventory "$TARGET" "$CAMPAIGN_ID" --state-dir "$STATE_DIR"
+vnext graph "$TARGET" "$CAMPAIGN_ID" --state-dir "$STATE_DIR"
+vnext plan "$TARGET" "$CAMPAIGN_ID" --state-dir "$STATE_DIR" \
+  --categories INJECTION
+(cd "$DEMO_ROOT" && vnext status "$TARGET" --state-dir "$STATE_DIR")
+```
+
+Expected output is JSON: initialization identifies Campaign `demo-001`, planning
+returns planned Batches, and the final status still contains that Campaign. The
+source stays in `target/`; state stays in the sibling `state/` directory. Keep the
+fixture unchanged while its Campaign is active.
+
+A real audit adds source anchors, principal/precondition declarations, reachability
+arguments, refutation records, evidence-linked classifications, and unresolved
+scope. See the [review queue and report guide](docs/ORCHESTRATOR_RUNBOOK.md#1-stable-command-entry)
+for how provisional claims remain visible. This demo produces no confirmed
+vulnerability or completed audit report.
+
+## Current Limitations
+
+- **Experimental:** vNext is a shadow candidate, not release-certified.
+- **Agent-dependent:** the host reads and analyzes source; the runtime validates
+  submissions, not their complete semantic truth.
+- **Not a universal scanner:** 15 language adapters and the knowledge portfolio
+  are not proof of certified discovery quality in those languages.
+- **Not a safety verdict:** workflow `PASS` does not mean complete inspection,
+  absence of vulnerabilities, or independently validated exploitability.
+- **Host-enforced isolation:** execution permissions, fresh worker contexts, and
+  protection against hostile target code remain host responsibilities.
+
+## How It Works
 
 It provides the durable campaign engine around an AI host: frozen scope, inventory,
 work planning, task leases, evidence validation, independent refutation, experiments,
@@ -14,8 +170,6 @@ analyzer and does not discover vulnerabilities without an Agent and an execution
 > real paired, held-out acceptance across the approved language portfolio, mixed-language
 > boundary tests, and a qualifying large-repository recovery run. The current evidence
 > does not establish that vNext finds more vulnerabilities than v3.
-
-## How It Works
 
 An audit is a Campaign over a frozen repository snapshot. The planner divides its
 inventory into Work Units and resumable Batches; cross-Batch work is assigned through
@@ -121,7 +275,7 @@ It does not load v3
 queues or findings as discovery input. Fresh Campaigns isolate prior audit history;
 follow-up history must be declared and remains context, not proof.
 
-## Quick Start
+## Audit Scope and Qualification
 
 The product objective is a versioned Top15-language portfolio with ten prioritized
 security issues per language, including large, very large, and mixed-language
@@ -135,42 +289,9 @@ and promotion have separate prerequisites. Start with the
 [development pilot requirements](docs/design/REAL_CODE_AUDIT_TEST_PLAN_VNEXT.md);
 retain permissions, isolation, resource limits, and logs without inventing attestations.
 
-Requirements: Python 3.11 or newer. The runtime has no third-party Python dependencies;
-pytest is required for development tests. A host Agent and model/runtime are required to
-perform the audit work.
-
-The built wheel includes the runtime knowledge catalog and parser helpers; the
-host-facing Skill and runbooks remain in this checkout and must be made available to
-the host separately. A Python package install alone does not install a host Skill or
-establish its permissions. Building/testing the distribution also requires the
-setuptools build dependency declared in [pyproject.toml](pyproject.toml).
 Run release evaluation from the complete source checkout: RG8/RG9 require local source,
 knowledge and main-prompt scan coverage. A wheel-only installation cannot satisfy that
 qualification requirement.
-
-For a working-directory-independent CLI, use
-`python3 /path/to/vnext/tools/vnext.py --help` without setting `PYTHONPATH`.
-The [orchestrator runbook](docs/ORCHESTRATOR_RUNBOOK.md) covers fresh task-local
-workers, stage progression, restart, source-backed depth and bounded recovery.
-Fresh worker contexts and sandbox enforcement are host responsibilities, not
-guaranteed by the launcher.
-
-From the repository root, set the target and Campaign ID, then initialize a Campaign.
-Automatic snapshot detection accepts only a clean Git worktree; otherwise provide an
-explicit frozen snapshot ID.
-
-```bash
-export PYTHONPATH="$PWD/src${PYTHONPATH:+:$PYTHONPATH}"
-TARGET=/path/to/target
-CAMPAIGN_ID=audit-2026-01
-
-python3 -m reachable_audit init "$TARGET" \
-  --campaign-id "$CAMPAIGN_ID" --snapshot-id "git:<commit>" --audit-mode fresh
-python3 -m reachable_audit inventory "$TARGET" "$CAMPAIGN_ID"
-python3 -m reachable_audit graph "$TARGET" "$CAMPAIGN_ID"
-python3 -m reachable_audit plan "$TARGET" "$CAMPAIGN_ID" \
-  --categories MEMORY-SAFETY,STATE,RESOURCE-DOS
-```
 
 `plan` records planned Batches and prints their IDs and scope summaries. An optional
 `--cost-profile <json>` adds task-fanout and cost scenarios from caller-supplied measured
@@ -179,15 +300,17 @@ per CategoryAuditPlan. `task-schedule-r4 --bundle-work-units 2` opts into bundli
 family plans while retaining a separate CategoryRun per plan and Work Unit; compare total
 cost, retries, coverage, and review quality before using it on a production Campaign.
 
-For each planned Batch, run R0 and use the durable task schedule/claim/collect/commit
-workflow with a host Agent. The complete host protocol, evidence rules, and recovery commands are in
-[`SKILL.md`](SKILL.md). Use the CLI help for the exact arguments supported by this build:
+## License and Permissions
 
-```bash
-python3 -m reachable_audit --help
-```
+The package currently declares `Proprietary` in [pyproject.toml](pyproject.toml);
+this checkout does not include a standalone license granting reuse rights.
+Public availability and Skill installation do not themselves grant permission to
+copy, modify, or redistribute the project. Obtain appropriate permission from the
+maintainer. Authorization to audit a target repository is a separate requirement.
 
 ## Development
+
+pytest is required for development tests.
 
 ```bash
 env -u PYTHONPATH python3 -m pytest tests -q

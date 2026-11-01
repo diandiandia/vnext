@@ -1,9 +1,9 @@
 ---
 name: vnext
-description: "Audit authorized source repositories for reachable security vulnerabilities across a versioned Top15-language / Top10-issue portfolio. Use for large, very large, and mixed-language projects, resumable Campaign/Batch audits, and development pilots that identify skill or workflow defects. Experimental; release certification is separate."
+description: "Audit authorized source repositories for reachable security vulnerabilities. Use when tracing entry points, principals, guards, and sensitive operations across components or languages; coordinating large or very large repository audits; resuming Campaign/Batch work after interruptions; or tracking source evidence, counterevidence, and coverage gaps. Also supports development pilots that identify skill or workflow defects. Experimental Agent-dependent workflow, not a standalone scanner or release certification."
 ---
 
-# Reachable Critical Audit vNext
+# Reachable Audit vNext
 
 Use this skill for authorized security audits of source repositories, especially
 large or mixed-language projects. It is not a general-purpose code review skill,
@@ -370,6 +370,15 @@ release-ready, obtain a qualified independent review and retain its disposition.
 The runtime does not authenticate reviewer independence or enforce that review.
 
 ## Quick Start and References
+
+Requires Python 3.11+ and a host Agent with an available model/runtime. Resolve
+`VNEXT_ROOT` to the absolute directory containing this installed `SKILL.md`, not
+the audited target or the host's current working directory. Verify that
+`tools/vnext.py`, `src/reachable_audit/`, `knowledge/`, and the referenced runbooks
+are present before initializing a Campaign. A copy of `SKILL.md` alone is not a
+complete installation; if support files are missing, report the installation
+problem and use a complete checkout rather than silently skipping runtime validation.
+See the [installation and workflow demo](./README.md#install).
 
 For exact command arguments, use the relevant subcommand's CLI help (for example,
 `vnext task-schedule-r2 --help` after defining the launcher, or
