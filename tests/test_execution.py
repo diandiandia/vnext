@@ -2055,6 +2055,10 @@ def test_discovery_coordinator_commits_r1_and_six_axis_r2(tmp_path: Path) -> Non
             for view in scheduled_tasks
         ]
         assert len(r2_inputs) == 6
+        assert all(
+            item["boundary_edge_context"]["total_edge_count"] == 0
+            for item in r2_inputs
+        )
         assert all(item["knowledge_context"]["knowledge_version"] == "portfolio-2026-09-v1" for item in r2_inputs)
         assert all(item["knowledge_context"]["issue_entries"] for item in r2_inputs)
         assert all(item["knowledge_context"]["mechanism_cards"] for item in r2_inputs)
@@ -2292,6 +2296,48 @@ def test_default_revival_reviews_all_initial_unreachable_candidates(tmp_path: Pa
         manager.close()
 
 
+def test_r2_boundary_context_respects_count_and_byte_caps(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manager, workflow, _plan = _workflow(tmp_path, "CMP-r2-boundary-cap")
+    try:
+        coordinator = DiscoveryCoordinator(
+            workflow, ManualExecutionBackend(manager, workflow.campaign_id)
+        )
+        edges = [
+            {
+                "edge_id": f"EDGE-{index:03d}",
+                "evidence": "x" * (70 * 1024) if index == 0 else "bounded",
+                "evidence_refs": [],
+            }
+            for index in range(70)
+        ]
+        monkeypatch.setattr(
+            coordinator, "_boundary_edges_for_work_unit", lambda _work_unit: edges
+        )
+
+        context = coordinator._r2_boundary_edge_context({"boundary_edge_ids": []})
+
+        assert context["total_edge_count"] == 70
+        assert context["included_edge_count"] == 64
+        assert context["omitted_edge_count"] == 6
+        assert "EDGE-000" not in {
+            edge["edge_id"] for edge in context["edges"]
+        }
+        assert len(json.dumps(context, separators=(",", ":")).encode()) <= 64 * 1024
+
+        edges[:] = [{
+            "edge_id": "EDGE-metadata-limit",
+            "evidence_refs": [],
+            "evidence": "x" * (64 * 1024 - 100),
+        }]
+        context = coordinator._r2_boundary_edge_context({"boundary_edge_ids": []})
+        assert context["included_edge_count"] == 0
+        assert context["omitted_edge_count"] == 1
+    finally:
+        manager.close()
+
+
 def test_compact_r2_runs_all_axes_in_one_task_per_work_unit(tmp_path: Path) -> None:
     manager, workflow, plan = _workflow(
         tmp_path,
@@ -2328,6 +2374,18 @@ def test_compact_r2_runs_all_axes_in_one_task_per_work_unit(tmp_path: Path) -> N
         tasks = coordinator.schedule_r2_compact(entrypoint_checklist=checklist)
         assert len(tasks) == len(plan.work_units) == 1
         task_input = json.loads(manager.artifacts.get_bytes(tasks[0].task.input_refs[0]))
+        assert task_input["boundary_edge_context"] == {
+            "edges": [],
+            "total_edge_count": 0,
+            "included_edge_count": 0,
+            "omitted_edge_count": 0,
+            "max_edges": 64,
+            "max_bytes": 64 * 1024,
+        }
+        assert task_input["work_unit"]["boundary_edge_count"] == 0
+        assert "canonical Plan and complete R1 boundary-review set remain" in (
+            task_input["analysis_contract"]["boundary"]
+        )
         assert "STATIC_ANALYSIS_ONLY" in task_input["execution_policy"]
         assert set(task_input["analysis_contract"]) == {axis.value for axis in DiscoveryAxis}
         assert all(

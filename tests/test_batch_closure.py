@@ -68,6 +68,7 @@ def test_r5_confirmation_can_confirm_static_only_hypothesis(
             workflow.campaign_id,
             command=[sys.executable, "-c", "print('confirmed')"],
             hypothesis_id="HYP-static",
+            execution_provenance={"origin": "target_tree"},
         )
         experiment = Experiment(
             "EXP-static", "HYP-static", ExperimentFidelity.REAL_TARGET,
@@ -978,6 +979,24 @@ def test_not_feasible_r5_cannot_hide_an_attempted_experiment(
         manager.close()
 
 
+def test_record_r5_rejects_required_static_verdict_before_stage_commit(
+    tmp_path: Path,
+) -> None:
+    manager, workflow = _ready_for_r5(tmp_path, static_hypothesis=True)
+    try:
+        with pytest.raises(ModelError, match="STATIC_VERDICT_RETAINED cannot require"):
+            workflow.record_r5([], [R5Assessment(
+                hypothesis_id="HYP-static",
+                experiment_required=True,
+                experiment_id="EXP-proposed",
+                disposition=R5Disposition.STATIC_VERDICT_RETAINED,
+                evidence_refs=("LOC-app.py:1",),
+                rationale="required experiment cannot retain the static verdict",
+            )])
+    finally:
+        manager.close()
+
+
 @pytest.mark.parametrize(
     "disposition",
     (R5Disposition.EMPIRICALLY_CONFIRMED, R5Disposition.REFUTED),
@@ -992,6 +1011,7 @@ def test_bg2_accepts_every_explicit_r5_disposition_for_static_only_verdict(
                 manager, workflow.campaign_id,
                 command=[sys.executable, "-c", "print('observed')"],
                 hypothesis_id="HYP-static",
+                execution_provenance={"origin": "target_tree"},
             )
             experiment = Experiment(
                 "EXP-static", "HYP-static", ExperimentFidelity.REAL_TARGET,

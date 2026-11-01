@@ -56,6 +56,16 @@ inventoried source whose path and digest match the disposition and frozen snapsh
 baseline. This is file identity/emptiness evidence, not a LOC anchor, review claim,
 or safety finding.
 
+Current-contract update (2026-11-01, task policy 55): scope projection excludes only
+concrete EXCLUDED callers and preserves DEFERRED/component-only incoming obligations.
+R0 reminders preserve immutable legacy receipts and still detect source drift.
+Both R2 modes carry bounded, omission-counted boundary context. R5 shares
+experiment/disposition validation at collection and commit and requires declared
+execution provenance for empirical upgrades; artifact integrity is not execution
+attestation. `jvm-bounded` is an explicit resource profile, not automatic language-
+or project-specific behavior. Ordinary defaults and static-only prohibitions are unchanged.
+See [TR-22](TEST_PLAN_VNEXT.md#tr-22-generic-boundary-scope-r0-compatibility-and-r5-provenance).
+
 Reliability update (2026-10-24): concrete R2 axis/seed references are checked at
 per-axis/compact collection and direct stage commit against the shared frozen-source
 and artifact validators. Symbolic provenance IDs are not source proof. Both R4

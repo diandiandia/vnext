@@ -1,4 +1,5 @@
 from pathlib import Path
+import shutil
 import sys
 
 import pytest
@@ -70,4 +71,106 @@ def test_runner_rejects_working_directory_escape(tmp_path: Path) -> None:
                 cwd="..",
             )
     finally:
+        manager.close()
+
+
+def test_jvm_profile_uses_bounded_four_gibibyte_address_space(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "target").mkdir()
+    manager = _campaign(tmp_path / "target")
+    try:
+        default = run_harness(
+            manager,
+            "CMP-harness",
+            command=[sys.executable, "-c", "print('bounded')"],
+            profile="jvm-bounded",
+        )
+        assert default["resource_limits"]["address_space_bytes"] == 4 * 1024**3
+        assert default["exit_code"] == 0
+
+        java = shutil.which("java")
+        if java is not None:
+            jvm = run_harness(
+                manager,
+                "CMP-harness",
+                command=[
+                    java,
+                    "-Xmx512m",
+                    "-XX:MaxMetaspaceSize=256m",
+                    "-XX:ReservedCodeCacheSize=128m",
+                    "-version",
+                ],
+                profile="jvm-bounded",
+                timeout_seconds=15,
+            )
+            assert jvm["resource_limits"]["address_space_bytes"] == 4 * 1024**3
+            assert jvm["exit_code"] == 0, manager.artifacts.get_bytes(
+                str(jvm["stderr_artifact_id"])
+            ).decode(errors="replace")
+
+        overridden = run_harness(
+            manager,
+            "CMP-harness",
+            command=[sys.executable, "-c", "print('bounded')"],
+            profile="jvm-bounded",
+            memory_limit_bytes=512 * 1024**2,
+        )
+        assert overridden["resource_limits"]["address_space_bytes"] == 512 * 1024**2
+        assert overridden["exit_code"] == 0
+    finally:
+        cleanup_campaign_resources(manager, "CMP-harness")
+        manager.close()
+
+
+def test_runner_validates_execution_provenance_artifact_scope(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "target").mkdir()
+    manager = _campaign(tmp_path / "target")
+    try:
+        with pytest.raises(ModelError, match="target_tree provenance"):
+            run_harness(
+                manager,
+                "CMP-harness",
+                command=[sys.executable, "-c", "pass"],
+                execution_provenance={
+                    "origin": "target_tree",
+                    "artifact_refs": ["sha256:" + "0" * 64],
+                },
+            )
+        build_ref = manager.artifacts.put_bytes(b"build").artifact_id
+        with pytest.raises(ModelError, match="same_snapshot_build requires"):
+            run_harness(
+                manager,
+                "CMP-harness",
+                command=[sys.executable, "-c", "pass"],
+                execution_provenance={
+                    "origin": "same_snapshot_build",
+                    "source_snapshot_id": "another:snapshot",
+                    "artifact_refs": [build_ref],
+                },
+            )
+    finally:
+        manager.close()
+
+
+@pytest.mark.parametrize("provenance", [None, {"origin": "mechanism_only"}])
+def test_hypothesis_alone_does_not_establish_empirical_provenance(
+    tmp_path: Path, provenance: dict[str, str] | None,
+) -> None:
+    manager = _campaign(tmp_path / "target")
+    try:
+        result = run_harness(
+            manager,
+            "CMP-harness",
+            command=[sys.executable, "-c", "print('observed')"],
+            hypothesis_id="HYP-capture",
+            execution_provenance=provenance,
+        )
+        assert result["exit_code"] == 0
+        assert result["empirical_upgrade_eligible"] is False
+        assert "provenance" in str(result["empirical_upgrade_note"])
+    finally:
+        cleanup_campaign_resources(manager, "CMP-harness")
         manager.close()

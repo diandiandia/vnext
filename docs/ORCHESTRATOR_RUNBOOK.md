@@ -288,6 +288,9 @@ command and rationale; use `result=inconclusive`, `observation_refs=[]`, and
 assessment disposition `NEEDS_REVIEW`. Do not execute it without authorization or
 invent observation artifacts. Confirmed/refuted results still require observations;
 empirical upgrades still require the registered evidence described above.
+`STATIC_VERDICT_RETAINED` cannot accompany `experiment_required=true`.
+Inconclusive required experiments must use `NEEDS_REVIEW`; these disposition/result
+checks run at collection and direct commit, not only at final closure.
 
 ### R5 interpretation: observation is not the whole claim
 
@@ -457,6 +460,12 @@ or VM is still required for hostile code. Capture stdout/stderr and execution ar
 refs, verify the observed behavior, and pass the registered refs to normal R5 tasks.
 Toolchain availability alone does not mean an experiment was executed.
 
+For JVM startup failures caused by address-space reservations, opt into
+`profile: "jvm-bounded"` for a 4 GiB virtual-address-space cap; an explicit
+`memory_limit_bytes` still overrides it. Set JVM heap, metaspace and code-cache limits
+in the approved command itself (for example, `-Xmx512m`); the profile does not inject
+JVM options or suppress resource failures. This remains a resource cap, not a sandbox.
+
 For a trusted standard-library-only probe already present in the approved frozen
 disposable target, an explicit harness input can be:
 
@@ -467,6 +476,7 @@ disposable target, an explicit harness input can be:
   "cwd": ".",
   "timeout_seconds": 120,
   "hypothesis_id": "HYP-from-the-current-campaign",
+  "execution_provenance": {"origin": "target_tree"},
   "output_limit_bytes": 4096
 }
 ```
@@ -481,6 +491,16 @@ probe inside an already frozen source snapshot; prepare the approved copy first.
 After the run, inspect actual output and eligibility, then register the appropriate
 experiment through the normal R5 task result; an exit code alone is not confirmation.
 
+For a built copy, use `execution_provenance.origin="same_snapshot_build"` with the
+Campaign's exact `snapshot_id` and one or more content-addressed `artifact_refs`;
+classify the resulting Experiment as `equivalent` and cite those refs in
+`equivalence_evidence_refs`. Use `other_build` for a separately identified source
+snapshot/build with evidence refs; it also requires an `equivalent` Experiment.
+The runner validates and hashes referenced artifacts, and R5 rejects mismatches
+between provenance and fidelity. Provenance is still an operator declaration:
+hashes establish artifact integrity, not that the command actually executed those
+bytes.
+
 ## 8. Evidence and Scope Controls
 
 ### Supporting resources
@@ -488,8 +508,9 @@ experiment through the normal R5 task result; an exit code alone is not confirma
 Inventory source files and component build manifests are included in the write-once R0
 snapshot baseline. Their LOCs may anchor R1 boundary reviews when the manifest appears
 in the component inventory; this does not make the manifest source-review coverage.
-After inventory and before the first Batch R0, register additional required configuration,
-schema or other supporting evidence not represented by those inventory entries. For example, pass
+Before running any Batch R0, make an explicit pass over the review inputs and identify
+required configuration, schema or other supporting evidence not represented by those
+inventory entries. For example, pass
 `evidence-register TARGET CAMPAIGN --input FILE` an operator-created JSON input:
 
 ```json
@@ -508,6 +529,22 @@ target. A resource does not become a code call-chain step. If a necessary resour
 omitted, preserve the limitation and prepare a new correctly frozen Campaign instead
 of deleting evidence or rebaselining after R0. Existing Campaigns without registrations
 are not silently certified under the stronger rule.
+
+The `r0` command reports how many supporting files were registered and lists their
+paths. This is a reminder, not an automatic discovery of all resources a review needs;
+zero registrations is not proof that none are needed. Registration is frozen at the
+first R0, including across Batches in the same Campaign.
+Older R0 receipts remain immutable and are reused after scope/digest validation;
+the CLI still reports preflight reminders without rewriting the frozen baseline.
+
+R2 task inputs include a deterministic boundary-edge summary capped at 64 edges and
+64 KiB. When the input reports omitted edges, do not claim those edges were reviewed
+or irrelevant; the canonical Plan and complete R1 boundary-review set remain the
+edge ledger.
+Scope projection excludes concrete callers explicitly marked EXCLUDED. It preserves
+included-source edges to outside targets, DEFERRED-source edges into included code,
+and component-level edges without concrete paths. No directory name, project identity,
+test label or language automatically determines a path's approved scope.
 
 R4 applies the same concrete LOC/artifact checks on individual, bundled, screening
 and direct records, including nested axis and hypothesis-review evidence. Current R3

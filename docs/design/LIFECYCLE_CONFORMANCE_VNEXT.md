@@ -42,6 +42,14 @@ deleting evidence or hiding merely DEFERRED Batches. It also reconciles the curr
 default-deferral requirements and operating guidance. These are additional local
 maintenance/verification records, not a change to the standards conclusion.
 
+2026-11-01 task policy 55 maintenance record: TR-22 adds legacy R0 recovery,
+path-decision-specific boundary filtering, bounded R2 context and shared R5
+disposition/provenance validation. Default/Go/JVM resource isolation is tested at
+the software contract level. These are configuration-management, maintenance and
+local verification work products only. They do not supply an applicable controlled
+standard edition, organizational tailoring, approvals or independent acceptance.
+Google internal requirements remain not assessed; ISO conformity remains unestablished.
+
 Statuses mean:
 
 - **Implemented in tool:** a tested software mechanism exists.

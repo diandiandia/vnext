@@ -159,7 +159,8 @@ def test_static_campaign_rejects_harness_before_side_effects(
             ]) == 2
             assert "static-only" in capsys.readouterr().err
         else:
-            with pytest.raises(ModelError, match="static-only"):
-                run_harness(manager, "CMP-static", command=command, profile="go-offline")
+            for profile in (None, "go-offline", "jvm-bounded"):
+                with pytest.raises(ModelError, match="static-only"):
+                    run_harness(manager, "CMP-static", command=command, profile=profile)
         assert manager.store.list_events("CMP-static") == before_events
         assert sorted(str(p.relative_to(state)) for p in state.rglob("*")) == before_files

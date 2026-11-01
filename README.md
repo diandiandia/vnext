@@ -248,6 +248,10 @@ Go-compatible bounded builds/probes with private caches and offline fetch settin
 It changes neither ordinary harness defaults nor the need for host approval/isolation.
 See the [Go execution example](docs/ORCHESTRATOR_RUNBOOK.md#7-evidence-ready-go-development-slice)
 and TR-14 before claiming empirical evidence.
+The optional `"profile": "jvm-bounded"` uses a 4 GiB address-space default for
+JVM startup; an explicit memory limit overrides it, and JVM heap limits must be set
+in the approved command. R5 empirical evidence also requires declared execution
+provenance; built-copy runs use `equivalent` fidelity with content-addressed evidence.
 
 `init --experimental-java-hotspots` opts into bounded JDK parse-only Java method-site
 leads; target packages are never compiled or loaded. Receiver types remain unresolved,

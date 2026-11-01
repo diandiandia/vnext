@@ -766,6 +766,10 @@ def test_plan_projects_scope_without_losing_boundary_obligations(
         BoundaryEdge(
             "EDGE-component", "active", "boundary", "build", "component dependency",
         ),
+        BoundaryEdge(
+            "EDGE-incoming-component", "boundary", "active", "build",
+            "component dependency without a concrete excluded caller",
+        ),
     )
 
     plan = create_audit_plan(
@@ -774,9 +778,10 @@ def test_plan_projects_scope_without_losing_boundary_obligations(
         boundary_edges=edges, max_work_units_per_batch=1,
     )
 
-    assert {edge.edge_id for edge in plan.boundary_edges} == {
-        "EDGE-outgoing", "EDGE-incoming", "EDGE-component",
-    }
+    expected_edges = {"EDGE-outgoing", "EDGE-component", "EDGE-incoming-component"}
+    if scope_state is PlanPathState.DEFERRED:
+        expected_edges.add("EDGE-incoming")
+    assert {edge.edge_id for edge in plan.boundary_edges} == expected_edges
     assert plan.omitted_empty_component_ids == ("unrelated",)
     assert {unit.component_id for unit in plan.work_units} == {"active", "boundary"}
     assert [path for unit in plan.work_units for path in unit.source_files] == [
@@ -784,18 +789,14 @@ def test_plan_projects_scope_without_losing_boundary_obligations(
     ]
     boundary_unit = next(unit for unit in plan.work_units if unit.component_id == "boundary")
     assert boundary_unit.source_files == ()
-    assert set(boundary_unit.boundary_edge_ids) == {
-        "EDGE-outgoing", "EDGE-incoming", "EDGE-component",
-    }
+    assert set(boundary_unit.boundary_edge_ids) == expected_edges
     assert {handoff.edge_id for handoff in plan.handoffs} == {
         edge.edge_id for edge in plan.boundary_edges
     }
     assert create_audit_plan(
         campaign_id="CMP-scope-projection", inventory=inventory,
         category_families=["STATE"], path_dispositions=dispositions,
-        boundary_edges=tuple(edge for edge in edges if edge.edge_id in {
-            "EDGE-outgoing", "EDGE-incoming", "EDGE-component",
-        }),
+        boundary_edges=tuple(edge for edge in edges if edge.edge_id in expected_edges),
         max_work_units_per_batch=1,
     ) == plan
     assert type(plan).from_dict(asdict(plan)) == plan

@@ -392,6 +392,7 @@ def _handle_harness_run(arguments: argparse.Namespace) -> int:
                 str(value["hypothesis_id"])
                 if value.get("hypothesis_id") is not None else None
             ),
+            execution_provenance=value.get("execution_provenance"),
         )
         _print(result)
     return 0
@@ -561,7 +562,11 @@ def _handle_batch_stage(arguments: argparse.Namespace) -> int:
     with CampaignManager(arguments.target, arguments.state_dir) as manager:
         workflow = BatchWorkflow(manager, arguments.campaign_id, arguments.batch_id)
         if arguments.command == "r0":
-            _print({"artifact_id": workflow.run_r0()})
+            artifact_id = workflow.run_r0()
+            _print({
+                "artifact_id": artifact_id,
+                "supporting_evidence_preflight": workflow.supporting_evidence_preflight(),
+            })
         elif arguments.command == "batch-report":
             _print(workflow.build_r0_r3_report())
         else:
@@ -1161,14 +1166,16 @@ def _parser() -> argparse.ArgumentParser:
         description=(
             "Run an argv harness bound to the current Campaign and source snapshot. "
             "Set input.hypothesis_id to make the captured execution eligible for "
-            "R5 empirical-upgrade review. Optional input.profile='go-offline' uses "
-            "explicit Go-compatible resource limits and disables Go module fetching."
+            "R5 empirical-upgrade review. Set input.execution_provenance to classify "
+            "target-tree versus built-copy runs. Optional profiles are 'go-offline' "
+            "and 'jvm-bounded'."
         ),
         epilog=(
             "input.cwd must be an existing directory under the target root. CPU, "
             "address-space, output-file, descriptor, timeout, and process-group "
             "limits are resource controls, not an OS sandbox for hostile native code. "
-            "go-offline is not an OS network sandbox."
+            "go-offline is not an OS network sandbox. jvm-bounded uses a 4 GiB "
+            "default address-space cap; set JVM heap limits in command argv."
         ),
         help=(
             "run a bounded argv harness; input.hypothesis_id binds output to an R5 "
@@ -1231,7 +1238,7 @@ def _parser() -> argparse.ArgumentParser:
     amend.add_argument("--state-dir", default=".audit_vnext")
 
     for command, help_text in (
-        ("r0", "validate Batch scope and snapshot inputs"),
+        ("r0", "validate Batch inputs and report pre-registered supporting evidence"),
         ("r1", "record scoped surfaces from JSON"),
         ("r2", "record surface/mechanism hypotheses from JSON"),
         ("r3", "record canonical reachability verdicts from JSON"),

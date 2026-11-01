@@ -127,6 +127,18 @@ See TR-21 for bounded regression evidence and its semantic-assurance limits.
 
 ## 3. Audit Summary
 
+Maintenance refinement (2026-11-01, task policy 55): SWDR-015 experiment validation
+rejects non-boolean requirement flags and contradictory dispositions at collection
+and direct commit; empirical upgrade additionally requires declared provenance with
+verified artifact refs appropriate to fidelity. SWDR-044 scope projection preserves
+DEFERRED/component-only incoming boundaries while filtering concrete EXCLUDED
+callers. SWDR-049 first-R0 freezing is unchanged; legacy receipts are reused after
+digest validation. Both R2 modes receive bounded, omission-counted edge context.
+Explicit `jvm-bounded` does not change ordinary or Go defaults or inject JVM options.
+[TR-22](TEST_PLAN_VNEXT.md#tr-22-generic-boundary-scope-r0-compatibility-and-r5-provenance)
+records the regression obligations; no discovery-quality or host-isolation assurance
+is inferred.
+
 All 50 IDs retain system and software-design references. This revision does not reuse
 the old 27/14/4 status tally: the contracts are now explicitly bounded and a tally would
 obscure retained target gaps and reproduced defects.

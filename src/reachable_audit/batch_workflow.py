@@ -24,7 +24,6 @@ from .analysis_models import (
     EvidenceGrade,
     ExternalObservation,
     Experiment,
-    ExperimentResult,
     Finding,
     FindingClassification,
     FindingReviewState,
@@ -44,6 +43,7 @@ from .analysis_models import (
 )
 from .campaign import CampaignManager
 from .drift import record_snapshot_drift
+from .experiments.runner import validate_execution_provenance
 from .models import BatchStatus, CampaignStatus, EventRecord, ModelError
 from .plan_models import WorkUnit
 from .stage_revisions import active_stage_events
@@ -123,6 +123,7 @@ class BatchWorkflow:
                 f"event={drift_event_id}, affected_work_units="
                 f"{list(impact.affected_work_unit_ids)}"
             )
+        preflight = self.supporting_evidence_preflight()
         receipt = {
             "schema_version": "1.0",
             "campaign_id": self.campaign_id,
@@ -131,19 +132,35 @@ class BatchWorkflow:
             "work_unit_ids": sorted(seen_work_units),
             "scoped_paths": sorted(scoped_paths),
             "file_digests": dict(sorted(observed_digests.items())),
+            "supporting_evidence_preflight": preflight,
         }
-        artifact_id = self._put_json(receipt)
-        self.manager.store.append_event(
-            campaign_id=self.campaign_id,
-            batch_id=self.batch_id,
-            entity_type="batch_stage",
-            entity_id=self.batch_id,
-            event_type="R0_COMPLETED",
-            idempotency_key=f"r0:{self.campaign_id}:{self.batch_id}",
-            actor="tool",
-            payload={"work_units": len(work_units), "source_files": len(scoped_paths)},
-            payload_ref=artifact_id,
-        )
+        existing_event = self._stage_event("R0_COMPLETED")
+        if existing_event is not None:
+            if existing_event.payload_ref is None:
+                raise ModelError("existing R0_COMPLETED event has no artifact")
+            existing_receipt = self._read_artifact(existing_event.payload_ref)
+            if not isinstance(existing_receipt, dict):
+                raise ModelError("existing R0_COMPLETED artifact must be an object")
+            if "supporting_evidence_preflight" not in existing_receipt:
+                receipt.pop("supporting_evidence_preflight")
+        artifact_id = self._existing_stage_artifact("R0_COMPLETED", receipt)
+        if artifact_id is None:
+            artifact_id = self._put_json(receipt)
+            self.manager.store.append_event(
+                campaign_id=self.campaign_id,
+                batch_id=self.batch_id,
+                entity_type="batch_stage",
+                entity_id=self.batch_id,
+                event_type="R0_COMPLETED",
+                idempotency_key=f"r0:{self.campaign_id}:{self.batch_id}",
+                actor="tool",
+                payload={
+                    "work_units": len(work_units),
+                    "source_files": len(scoped_paths),
+                    "supporting_evidence_files": preflight["registered_file_count"],
+                },
+                payload_ref=artifact_id,
+            )
         batch = self.manager.store.get_batch(self.campaign_id, self.batch_id)
         if batch.status is BatchStatus.PLANNED:
             self.manager.store.transition_batch(
@@ -155,6 +172,24 @@ class BatchWorkflow:
                 self.campaign_id, CampaignStatus.RUNNING
             )
         return artifact_id
+
+    def supporting_evidence_preflight(self) -> dict[str, Any]:
+        registered_paths: set[str] = set()
+        for event in self.manager.store.list_events(
+            self.campaign_id, event_type="EVIDENCE_FILES_REGISTERED",
+        ):
+            file_digests = event.payload.get("file_digests")
+            if not isinstance(file_digests, dict):
+                raise ModelError("supporting evidence registration has invalid file digests")
+            registered_paths.update(str(path) for path in file_digests)
+        return {
+            "registered_file_count": len(registered_paths),
+            "registered_paths": sorted(registered_paths),
+            "reminder": (
+                "Confirm all required supporting resources were registered before "
+                "the first R0; missing resources cannot be added to this Campaign."
+            ),
+        }
 
     def record_r1(
         self,
@@ -1233,50 +1268,10 @@ class BatchWorkflow:
                     raise ModelError(
                         f"R5 external observation is outside assessment scope: {assessment.hypothesis_id}"
                     )
-            experiment = (
-                experiment_by_id.get(assessment.experiment_id)
-                if assessment.experiment_id
-                else None
-            )
-            if assessment.disposition is R5Disposition.NOT_FEASIBLE:
-                if not assessment.experiment_required or assessment.experiment_id is not None:
-                    raise ModelError(
-                        "NOT_FEASIBLE requires a required experiment and no experiment ID"
-                    )
-                if any(
-                    item.hypothesis_id == assessment.hypothesis_id
-                    for item in experiments
-                ):
-                    raise ModelError(
-                        "NOT_FEASIBLE cannot accompany an attempted experiment; "
-                        "use NEEDS_REVIEW for an inconclusive run"
-                    )
-            elif assessment.experiment_required and experiment is None:
-                raise ModelError("required R5 experiment is missing")
-            if assessment.experiment_id and experiment is None:
-                raise ModelError(
-                    f"R5 assessment references unknown experiment: {assessment.experiment_id}"
-                )
-            if experiment and experiment.hypothesis_id != assessment.hypothesis_id:
-                raise ModelError("R5 experiment belongs to a different hypothesis")
+            experiment = assessment.validate_experiments(experiment_by_id)
             if assessment.disposition is R5Disposition.EMPIRICALLY_CONFIRMED:
-                if experiment is None or not experiment.supports_empirical_upgrade:
-                    raise ModelError(
-                        "empirical upgrade requires a confirmed real-target or equivalent experiment"
-                    )
+                assert experiment is not None
                 self._validate_empirical_harness_evidence(experiment, harness_events)
-            if assessment.disposition is R5Disposition.REFUTED:
-                if experiment is None or experiment.result is not ExperimentResult.REFUTED:
-                    raise ModelError("R5 REFUTED disposition requires a refuting experiment")
-            if (
-                assessment.experiment_required
-                and experiment is not None
-                and experiment.result is ExperimentResult.INCONCLUSIVE
-                and assessment.disposition is not R5Disposition.NEEDS_REVIEW
-            ):
-                raise ModelError(
-                    "inconclusive required experiment must result in NEEDS_REVIEW"
-                )
         value = {
             "schema_version": "1.0",
             "experiments": [asdict(item) for item in experiments],
@@ -1345,9 +1340,32 @@ class BatchWorkflow:
                 or report.get("campaign_id") != self.campaign_id
                 or report.get("snapshot_id") != self.campaign.snapshot_id
                 or report.get("hypothesis_id") != experiment.hypothesis_id
-                or report.get("empirical_upgrade_eligible") is False
+                or report.get("empirical_upgrade_eligible") is not True
                 or not isinstance(report.get("command"), list)
                 or not report["command"]
+            ):
+                continue
+            provenance = report.get("execution_provenance")
+            if not isinstance(provenance, dict):
+                continue
+            try:
+                normalized_provenance = validate_execution_provenance(
+                    self.manager, self.campaign.snapshot_id, provenance
+                )
+            except (OSError, ValueError):
+                continue
+            if normalized_provenance != provenance:
+                continue
+            origin = provenance.get("origin")
+            expected_origins = (
+                {"target_tree"}
+                if experiment.fidelity.value == "real_target"
+                else {"same_snapshot_build", "other_build"}
+            )
+            if origin not in expected_origins:
+                continue
+            if origin in {"same_snapshot_build", "other_build"} and (
+                not set(provenance["artifact_refs"]).issubset(experiment.equivalence_evidence_refs)
             ):
                 continue
             output_refs = {

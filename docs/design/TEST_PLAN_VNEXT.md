@@ -594,6 +594,40 @@ These are local structural and data-isolation regressions. They do not prove tha
 review evidence is semantically correct, that a human independently approved it, or
 that a Worker observed all target source.
 
+### TR-22: Generic Boundary Scope, R0 Compatibility and R5 Provenance
+
+**Required tests:** [test_planning.py](../../tests/test_planning.py),
+[test_batch_workflow.py](../../tests/test_batch_workflow.py),
+[test_execution.py](../../tests/test_execution.py),
+[test_experiments_metrics.py](../../tests/test_experiments_metrics.py),
+[test_batch_closure.py](../../tests/test_batch_closure.py),
+[test_harness_runner.py](../../tests/test_harness_runner.py),
+[test_go_harness_runner.py](../../tests/test_go_harness_runner.py),
+[test_static_policy.py](../../tests/test_static_policy.py), and
+[test_cli.py](../../tests/test_cli.py).
+
+- Exclude concrete EXCLUDED callers without dropping included outgoing edges,
+  DEFERRED incoming edges or component-only cross-scope obligations. Scope is an
+  approved path decision, not a directory/project/language heuristic.
+- Reuse legacy R0 receipts without changing their bytes or adding a second stage
+  event. Still check current source digests and report drift. CLI preflight reminders
+  expose registered supporting resources without relaxing first-R0 freezing.
+- Provide endpoint/evidence records in both R2 scheduling modes. Cap the complete
+  boundary context at 64 edges and 64 KiB, including metadata; deterministically
+  count omissions without calling them reviewed.
+- Reject non-boolean R5 requirement flags and contradictory experiment/disposition
+  pairs before collection succeeds, as well as at direct commit. Preserve valid
+  required-inconclusive NEEDS_REVIEW and confirmed/refuted/not-feasible paths.
+- Verify registered provenance artifacts and match built-copy origins to equivalent
+  fidelity/evidence. Missing provenance remains explicitly ineligible; operator
+  declarations are not proof that the command executed particular artifact bytes.
+- Keep default and Go limits unchanged. JVM resources change only through explicit
+  `jvm-bounded`; overrides win, no JVM options are injected, and static-only forbids
+  all profiles before side effects. Test real JVM startup when a local JDK exists.
+
+These are infrastructure and contract regressions, not a discovery-quality benchmark,
+independent source-equivalence assessment or evidence of physical host isolation.
+
 ## 5. Evidence Record
 
 Every test report records:

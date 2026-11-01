@@ -493,6 +493,7 @@ def test_cli_managed_harness_run_records_output_artifacts(
         "cpu_limit_seconds": 2,
         "memory_limit_bytes": 256 * 1024 * 1024,
         "hypothesis_id": "HYP-harness-cli",
+        "execution_provenance": {"origin": "target_tree"},
     }), encoding="utf-8")
 
     assert main([
@@ -505,6 +506,7 @@ def test_cli_managed_harness_run_records_output_artifacts(
     assert result["resource_limits"]["address_space_bytes"] == 256 * 1024 * 1024
     assert result["stdout_artifact_id"].startswith("sha256:")
     assert result["execution_artifact_id"].startswith("sha256:")
+    assert result["execution_provenance"]["origin"] == "target_tree"
 
 
 def test_cli_task_list_filters_batch_and_hints_exhausted_retry(
@@ -907,7 +909,11 @@ def test_cli_drives_a_durable_surface_task(tmp_path: Path, capsys: object) -> No
     ]
     assert plan["batches"] == 1
     assert main(["r0", str(target), "CMP-tasks", batch_id]) == 0
-    capsys.readouterr()  # type: ignore[attr-defined]
+    r0_result = json.loads(capsys.readouterr().out)  # type: ignore[attr-defined]
+    assert r0_result["supporting_evidence_preflight"]["registered_file_count"] == 0
+    assert "cannot be added to this Campaign" in r0_result[
+        "supporting_evidence_preflight"
+    ]["reminder"]
     assert main(["task-schedule-r1", str(target), "CMP-tasks", batch_id]) == 0
     capsys.readouterr()  # type: ignore[attr-defined]
     assert main([

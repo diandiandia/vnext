@@ -1083,3 +1083,117 @@ relabel this repository review as Google approval or ISO certification.
 - `git diff --check` passed. Newly added relative documentation targets and the
   TR-21 anchor exist. No Google internal approval, ISO conformity, or independent
   qualification is inferred.
+
+## Latest Review (Task Policy 55): Generic Recovery, Scope and Experiment Evidence
+
+### Assessment basis
+
+This review starts from commit `9c7090a` and includes the pending development
+changes to R0 supporting-evidence preflight, boundary projection, R2 boundary
+context, early R5 validation, harness provenance and explicit JVM resource limits.
+It reviews those changes as cross-target software contracts, not as rules inferred
+from one pilot's expected findings. No target source, audit plan, result label,
+language knowledge asset or external audit package was modified.
+
+The declared scope remains authorized source-code security auditing across the
+supported languages/build systems. Within that scope, the implementation is a
+general workflow rather than a project-specific scanner. It is still experimental:
+passing the software tests does not establish excellent discovery quality,
+representative real-target coverage or release qualification.
+
+### Reproduced defects and repairs
+
+Four failing regression cases established three defects before repair:
+
+| Defect | Root-cause repair | Preserved behavior / verification |
+|---|---|---|
+| An old R0 receipt conflicted with a new idempotent R0 event because newly added preflight metadata changed the receipt bytes. | Revalidate the frozen source and scope, then compare and reuse the old receipt through the existing artifact/event machinery when it lacks the new metadata. Require an object receipt; do not rewrite historical evidence or create another R0 event. | Source drift still fails. CLI preflight reports the current frozen supporting-evidence registrations even when an old receipt is reused. |
+| Scope projection removed component-only incoming edges and incoming edges from DEFERRED paths along with explicitly EXCLUDED callers. | Apply the caller exclusion only to a concrete path with an EXCLUDED decision; retain the existing either-endpoint-in-scope selection for other edges. | Retain included-to-outside, DEFERRED-to-included and component-only incoming edges. No directory-name, language or project-name exclusion heuristic was added. |
+| A required inconclusive experiment could accompany REFUTED through task collection, despite being incompatible with the R5 disposition. | Share `R5Assessment.validate_experiments()` between collection and direct stage recording; validate references, ownership, required/infeasible combinations and result/disposition consistency. | Required inconclusive evidence stays NEEDS_REVIEW. Duplicate experiment IDs and non-boolean `experiment_required` inputs fail explicitly. Structural validation does not confirm a vulnerability's semantics. |
+
+Additional safeguards and simplifications:
+
+- Both R2 scheduling modes receive the same bounded boundary summary. The limit is
+  **64 edges / 64 KiB**, including omission metadata; oversized early edges do not
+  prevent later fitting context. Counts distinguish selected, included and omitted
+  evidence rather than implying complete boundary coverage.
+- R0 supporting-evidence preflight is shared by the receipt and CLI. It reports a
+  reminder when no build/runtime support is registered, not a completeness gate
+  or an automatic claim that those inputs are needed for every target.
+- Harness recording and the R5 empirical gate share
+  `validate_execution_provenance()`. Built-copy evidence must reference registered
+  artifacts and the matching snapshot/fidelity. Integrity uses the existing
+  content-addressed artifact store rather than a second SHA-256 map.
+  Missing/mechanism-only provenance can record an experiment but is explicitly
+  ineligible for empirical upgrades. Provenance remains an operator declaration:
+  it does not prove that the executed argv consumed the declared bytes.
+- Removed an unused workflow import and duplicate operational instructions.
+  The main Skill now has **500 lines**; this corrects the prior review's measured
+  509-line entry rather than rewriting that historical measurement.
+- Task policy is **55**. The Skill, runbook, README, requirements, system/software
+  design and [TR-22](TEST_PLAN_VNEXT.md#tr-22-generic-boundary-scope-r0-compatibility-and-r5-provenance)
+  describe the changed contracts and their limits.
+
+### Resource profiles do not choose audit scope
+
+`jvm-bounded` is an explicit opt-in resource profile. It sets a default **4 GiB
+address-space ceiling**, not a heap size or a promise that every JVM will start.
+The caller still supplies JVM heap/other options; the runtime does not detect a
+language/project and silently switch profiles or inject JVM arguments. An explicit
+memory override takes precedence. The normal profile remains **2 GiB**, and
+`go-offline` remains **8 GiB**. STATIC_ONLY rejects execution under every profile
+before subprocess/resource side effects. The real available JVM startup check
+passed; that is an environment-specific probe, not a JVM/platform certification.
+
+### Historical information, bias and architecture limits
+
+The runtime catalog loads approved profiles/cards/provenance, not design reviews
+or candidate-project plans. Fresh Campaigns do not inherit prior Skill regression
+sources; follow-up history requires explicit same-target input. Wheel isolation
+and fresh-mode regressions pass. The Skill explicitly forbids passing evaluator
+plans, prior reviews or expected results to discovery workers.
+
+Historical reviews and candidate/pilot documents still exist in the repository as
+evaluator-side development evidence. A full Skill installation or an operator can
+read them, so this is not physical isolation or proof that model attention cannot
+be influenced. The runtime residue scan below found no supplied historical tokens
+in its selected surfaces; it is not a semantic proof of zero contamination.
+
+Ranked training knowledge, templated verification text, the fixed language
+portfolio and unequal hotspot depth remain quality/coverage risks. Representative
+Java proxy-trust and C parser-boundary cards describe reusable mechanisms, but
+their applicability must be established from the current target rather than
+assuming the named API/header or memory operation exists. No blind rewriting of
+all knowledge cards was justified by this review. Independent discovery-quality
+evaluation remains necessary.
+
+A bounded AST screen found no unreferenced top-level candidates or exact
+function-body duplicate groups of at least 12 lines in the inspected runtime
+Python files. One unused import was removed. This is not exhaustive dead-code
+proof; dynamic dispatch, semantic duplication and the large workflow modules
+remain outside that screen's assurance. The repairs reuse existing validators,
+artifact integrity and stage recovery rather than introducing a parallel runtime
+architecture or target-specific exceptions.
+
+Google internal requirements remain **NOT ASSESSED**: no controlled requirements
+or acceptance authority were supplied. ISO/IEC/IEEE 12207 conformity remains
+**NOT ESTABLISHED**. The lifecycle document records selected-concept maintenance
+and verification evidence only; controlled applicability, organizational tailoring,
+accountable process outcomes and acceptance evidence are still missing.
+
+### Final verification
+
+- Full command: `pytest -q -o addopts= -rs --tb=short`.
+  **706 passed, 1 skipped**, 66.98 seconds. The protected real held-out manifest
+  remains unconfigured; no synthetic replacement or passing certification is
+  inferred from that skip.
+- Final focused command covering exact R2 byte/count limits, harness provenance,
+  required-inconclusive R5 and legacy R0 recovery: **10 passed**.
+- Compatibility scan: PASS, zero findings across **53 runtime Python files,
+  2 helpers, 167 eligible knowledge files and 1 main prompt**. Historical project
+  tokens were supplied to the scanner externally, not embedded as runtime rules.
+- Python source/helpers compiled successfully. Changed Markdown file-link targets,
+  Skill scalar metadata and the 500-line bound were checked. These checks are not
+  a complete editor type check or semantic documentation validation.
+- Final patch whitespace and commit-state checks are recorded with the repository
+  change, not interpreted as independent qualification.

@@ -57,6 +57,78 @@ def _workflow(
     return manager, BatchWorkflow(manager, campaign_id, plan.batches[0].batch_id), plan
 
 
+def test_r0_receipt_reports_pre_registered_supporting_evidence(
+    tmp_path: Path,
+) -> None:
+    manager, workflow, _plan = _workflow(tmp_path, "CMP-r0-evidence-preflight")
+    try:
+        (tmp_path / "resources").mkdir()
+        (tmp_path / "resources" / "schema.json").write_text(
+            '{"type":"object"}\n', encoding="utf-8"
+        )
+        manager.register_evidence_files(
+            workflow.campaign_id,
+            ["resources/schema.json"],
+            reason="Schema used to interpret request validation",
+        )
+
+        artifact_id = workflow.run_r0()
+        receipt = json.loads(manager.artifacts.get_bytes(artifact_id))
+
+        assert receipt["supporting_evidence_preflight"] == {
+            "registered_file_count": 1,
+            "registered_paths": ["resources/schema.json"],
+            "reminder": (
+                "Confirm all required supporting resources were registered before "
+                "the first R0; missing resources cannot be added to this Campaign."
+            ),
+        }
+        event = workflow._stage_event("R0_COMPLETED")
+        assert event is not None
+        assert event.payload["supporting_evidence_files"] == 1
+    finally:
+        manager.close()
+
+
+def test_r0_resumes_legacy_receipt_without_rewriting_frozen_evidence(
+    tmp_path: Path,
+) -> None:
+    manager, workflow, plan = _workflow(tmp_path, "CMP-r0-legacy")
+    try:
+        receipt = {
+            "schema_version": "1.0",
+            "campaign_id": workflow.campaign_id,
+            "batch_id": workflow.batch_id,
+            "snapshot_id": workflow.campaign.snapshot_id,
+            "work_unit_ids": sorted(unit.work_unit_id for unit in plan.work_units),
+            "scoped_paths": ["app.py"],
+            "file_digests": dict(manager.load_snapshot_baseline(workflow.campaign_id)["files"]),
+        }
+        reference = workflow._put_json(receipt)
+        manager.store.append_event(
+            campaign_id=workflow.campaign_id,
+            batch_id=workflow.batch_id,
+            entity_type="batch_stage",
+            entity_id=workflow.batch_id,
+            event_type="R0_COMPLETED",
+            idempotency_key=f"r0:{workflow.campaign_id}:{workflow.batch_id}",
+            actor="tool",
+            payload={"work_units": len(plan.work_units), "source_files": 1},
+            payload_ref=reference,
+        )
+        before = manager.store.list_events(workflow.campaign_id)
+        original_bytes = manager.artifacts.get_bytes(reference)
+        assert workflow.run_r0() == reference
+        assert manager.artifacts.get_bytes(reference) == original_bytes
+        assert len(workflow._events(event_type="R0_COMPLETED")) == 1
+        assert manager.store.list_events(workflow.campaign_id)[:len(before)] == before
+
+        (tmp_path / "app.py").write_text("changed = True\n", encoding="utf-8")
+        with pytest.raises(ModelError, match="snapshot drift"):
+            workflow.run_r0()
+    finally:
+        manager.close()
+
 def test_stage_event_filter_keeps_replacement_revision_active() -> None:
     prior = SimpleNamespace(
         event_id="EVT-r1-prior", event_type="R1_COMPLETED", payload={},

@@ -1099,9 +1099,11 @@ class R5Assessment:
 
     @classmethod
     def from_dict(cls, value: Mapping[str, Any]) -> "R5Assessment":
+        if not isinstance(value["experiment_required"], bool):
+            raise ModelError("R5 experiment_required must be a boolean")
         assessment = cls(
             hypothesis_id=str(value["hypothesis_id"]),
-            experiment_required=bool(value["experiment_required"]),
+            experiment_required=value["experiment_required"],
             experiment_id=(
                 str(value["experiment_id"])
                 if value.get("experiment_id") is not None
@@ -1127,7 +1129,54 @@ class R5Assessment:
                 )
         elif assessment.experiment_required and assessment.experiment_id is None:
             raise ModelError("required R5 experiment is missing")
+        if (
+            assessment.disposition is R5Disposition.STATIC_VERDICT_RETAINED
+            and assessment.experiment_required
+        ):
+            raise ModelError(
+                "STATIC_VERDICT_RETAINED cannot require an experiment"
+            )
         return assessment
+
+    def validate_experiments(self, by_id: Mapping[str, Experiment]) -> Experiment | None:
+        experiment = by_id.get(self.experiment_id) if self.experiment_id else None
+        if self.disposition is R5Disposition.NOT_FEASIBLE:
+            if not self.experiment_required or self.experiment_id is not None:
+                raise ModelError(
+                    "NOT_FEASIBLE requires a required experiment and a null experiment_id"
+                )
+            if any(item.hypothesis_id == self.hypothesis_id for item in by_id.values()):
+                raise ModelError(
+                    "NOT_FEASIBLE cannot accompany an attempted experiment; "
+                    "use NEEDS_REVIEW for an inconclusive run"
+                )
+        elif (
+            self.disposition is R5Disposition.STATIC_VERDICT_RETAINED
+            and self.experiment_required
+        ):
+            raise ModelError("STATIC_VERDICT_RETAINED cannot require an experiment")
+        elif self.experiment_required and experiment is None:
+            raise ModelError("required R5 experiment is missing")
+        if self.experiment_id is not None and experiment is None:
+            raise ModelError(f"R5 assessment references unknown experiment: {self.experiment_id}")
+        if experiment and experiment.hypothesis_id != self.hypothesis_id:
+            raise ModelError("R5 experiment belongs to a different hypothesis")
+        if (
+            self.experiment_required
+            and experiment is not None
+            and experiment.result is ExperimentResult.INCONCLUSIVE
+            and self.disposition is not R5Disposition.NEEDS_REVIEW
+        ):
+            raise ModelError("inconclusive required experiment must result in NEEDS_REVIEW")
+        if self.disposition is R5Disposition.EMPIRICALLY_CONFIRMED:
+            if experiment is None or not experiment.supports_empirical_upgrade:
+                raise ModelError(
+                    "empirical upgrade requires a confirmed real-target or equivalent experiment"
+                )
+        if self.disposition is R5Disposition.REFUTED:
+            if experiment is None or experiment.result is not ExperimentResult.REFUTED:
+                raise ModelError("R5 REFUTED disposition requires a refuting experiment")
+        return experiment
 
 
 @dataclass(frozen=True)

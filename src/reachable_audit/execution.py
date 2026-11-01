@@ -133,6 +133,15 @@ _R2_ENTRYPOINT_CONTRACT = (
     "limitations, not successful review. Do not treat a checked entrypoint as proof "
     "that adjacent helpers or the whole file were reviewed."
 )
+_R2_BOUNDARY_CONTEXT_MAX_EDGES = 64
+_R2_BOUNDARY_CONTEXT_MAX_BYTES = 64 * 1024
+_R2_BOUNDARY_EVIDENCE_CONTRACT = (
+    "boundary_edge_context contains a deterministic, size-bounded subset of this "
+    "Work Unit's R1 boundary edges. Review supplied endpoints and evidence; when "
+    "omitted_edge_count is nonzero, do not claim the omitted edges were reviewed "
+    "or irrelevant. The canonical Plan and complete R1 boundary-review set remain "
+    "the edge ledger."
+)
 
 _VERIFICATION_INSTRUCTIONS = (
     "Determine reachability from a declared principal. REACHABLE requires an explicit "
@@ -1184,6 +1193,10 @@ class ManualExecutionBackend:
                 "R5 assessment references an experiment outside its task: "
                 f"{assessment.experiment_id}"
             )
+        experiment_by_id = {item.experiment_id: item for item in experiments}
+        if len(experiment_by_id) != len(experiments):
+            raise ModelError("duplicate R5 experiment ID")
+        assessment.validate_experiments(experiment_by_id)
         return experiments, assessment
 
     def _validate_category_run_plan(
@@ -1960,6 +1973,42 @@ class DiscoveryCoordinator:
         ])
         return edges
 
+    def _r2_boundary_edge_context(
+        self, work_unit: Mapping[str, Any]
+    ) -> dict[str, Any]:
+        edges = sorted(
+            self._boundary_edges_for_work_unit(work_unit),
+            key=lambda edge: str(edge["edge_id"]),
+        )
+        selected: list[dict[str, Any]] = []
+        for edge in edges:
+            if len(selected) >= _R2_BOUNDARY_CONTEXT_MAX_EDGES:
+                break
+            candidate_edges = [*selected, edge]
+            candidate_context = {
+                "edges": candidate_edges,
+                "total_edge_count": len(edges),
+                "included_edge_count": len(candidate_edges),
+                "omitted_edge_count": len(edges) - len(candidate_edges),
+                "max_edges": _R2_BOUNDARY_CONTEXT_MAX_EDGES,
+                "max_bytes": _R2_BOUNDARY_CONTEXT_MAX_BYTES,
+            }
+            encoded = json.dumps(
+                candidate_context,
+                ensure_ascii=False,
+                separators=(",", ":"),
+            ).encode("utf-8")
+            if len(encoded) <= _R2_BOUNDARY_CONTEXT_MAX_BYTES:
+                selected.append(edge)
+        return {
+            "edges": selected,
+            "total_edge_count": len(edges),
+            "included_edge_count": len(selected),
+            "omitted_edge_count": len(edges) - len(selected),
+            "max_edges": _R2_BOUNDARY_CONTEXT_MAX_EDGES,
+            "max_bytes": _R2_BOUNDARY_CONTEXT_MAX_BYTES,
+        }
+
     def schedule_r1(self) -> tuple[TaskView, ...]:
         self._require_stage("R0_COMPLETED")
         self.workflow.run_r0()
@@ -2162,6 +2211,7 @@ class DiscoveryCoordinator:
         for work_unit in self._work_units():
             work_unit_id = str(work_unit["work_unit_id"])
             hotspot_report = self._hotspot_context(work_unit)
+            boundary_edge_context = self._r2_boundary_edge_context(work_unit)
             for axis in DiscoveryAxis:
                 required_entrypoints = [
                     item for item in normalized_checklist
@@ -2178,9 +2228,10 @@ class DiscoveryCoordinator:
                     "operation": "generate_hypotheses",
                     "axis": axis.value,
                     "snapshot_id": self.workflow.campaign.snapshot_id,
-                    "work_unit": _agent_work_unit(work_unit),
+                    "work_unit": _agent_work_unit(work_unit, drop_edge_ids=True),
                     "hotspot_report": hotspot_report,
                     "hotspot_contract": _HOTSPOT_CONTRACT,
+                    "boundary_edge_context": boundary_edge_context,
                     "surfaces": surfaces_by_work_unit.get(work_unit_id, []),
                     "required_entrypoints": required_entrypoints,
                     "language_adapters": self._language_adapter_context(work_unit),
@@ -2188,6 +2239,7 @@ class DiscoveryCoordinator:
                     "analysis_contract": (
                         _AXIS_INSTRUCTIONS[axis.value] + " " + _R2_ALTITUDE_CONTRACT
                         + " " + _R2_ENTRYPOINT_CONTRACT
+                        + " " + _R2_BOUNDARY_EVIDENCE_CONTRACT
                     ),
                     "output_contract": {
                         "schema_version": "1.0",
@@ -2245,6 +2297,7 @@ class DiscoveryCoordinator:
         for work_unit in self._work_units():
             work_unit_id = str(work_unit["work_unit_id"])
             hotspot_report = self._hotspot_context(work_unit)
+            boundary_edge_context = self._r2_boundary_edge_context(work_unit)
             knowledge_context = self.knowledge_catalog.task_context(
                 work_unit.get("languages", []),
                 families=work_unit.get("category_families", []),
@@ -2254,9 +2307,10 @@ class DiscoveryCoordinator:
                 "schema_version": "1.0",
                 "operation": "generate_hypotheses_compact",
                 "snapshot_id": self.workflow.campaign.snapshot_id,
-                "work_unit": _agent_work_unit(work_unit),
+                "work_unit": _agent_work_unit(work_unit, drop_edge_ids=True),
                 "hotspot_report": hotspot_report,
                 "hotspot_contract": _HOTSPOT_CONTRACT,
+                "boundary_edge_context": boundary_edge_context,
                 "surfaces": surfaces_by_work_unit.get(work_unit_id, []),
                 "required_entrypoints": [
                     item for item in normalized_checklist
@@ -2268,6 +2322,7 @@ class DiscoveryCoordinator:
                     axis: (
                         _AXIS_INSTRUCTIONS[axis] + " " + _R2_ALTITUDE_CONTRACT
                         + " " + _R2_ENTRYPOINT_CONTRACT
+                        + " " + _R2_BOUNDARY_EVIDENCE_CONTRACT
                     )
                     for axis in axes
                 },

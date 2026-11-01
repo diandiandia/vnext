@@ -99,6 +99,9 @@ procedure and bounded recovery decisions. Keep the coordinator focused on compac
 state; use fresh source-analysis workers when the host supports isolated contexts.
 This is host behavior, not engine-enforced physical context isolation or a guarantee
 of attention quality. Preserve task-local context only for same-lease repairs.
+Target-candidate plans and dated audit reviews under `docs/design/` are evaluator-side
+records, not discovery instructions. Do not load their project names, expected findings
+or prior audit outcomes into source-analysis workers.
 
 Start independent audits with `init` (default `--audit-mode fresh`). Do not inspect or
 load prior Campaign artifacts while planning or generating hypotheses. A follow-up must
@@ -275,6 +278,9 @@ falsifiable security claim. Submit failures with `succeeded: false`, no `output`
 specific summary; failed or missing tasks block commit.
 
 Compact R2 requires all six evidenced axis dispositions. Follow the claimed task's `output_contract` for the exact payload schema; do not infer or copy a schema from another task.
+Both R2 modes provide `boundary_edge_context` capped at 64 edges and 64 KiB, with
+omission counts. Retrieve remaining contracts from the canonical Plan and R1 reviews
+when needed; never treat omitted edges as reviewed or irrelevant.
 
 Every R2 task input contains a pinned `knowledge_context` with issue-profile entries,
 approved Mechanism Cards, provenance IDs, and any guidance omitted by the task budget.
@@ -289,30 +295,16 @@ listed as limitations. One Campaign may contain several portfolio languages. Use
 `toolchain-probe <language>` only for registered version checks; it does not certify that
 the language's build or runtime behavior was audited.
 
-For behavior experiments, prefer `harness-run` with an explicit argv array and a bounded
-timeout. The runner applies POSIX CPU, address-space, output-file, file-descriptor, and
-core-dump limits and records stdout/stderr as artifacts. These limits are resource
-controls, not a security sandbox for hostile code; use an external container/VM when the
-target may execute adversarial native code.
+Use authorized `harness-run` argv/timeout inputs for experiments; POSIX resource caps
+and captured stdout/stderr are not a sandbox. Use external isolation for hostile code.
 
-`harness-run` input may include `hypothesis_id` to bind the execution to an R5 claim;
-without it, the run is recorded as ineligible for empirical upgrade. `cwd` is relative
-to the target and must resolve inside its root. The managed resource limits are not an
-OS sandbox.
-
-Example input:
-
-```json
-{
-  "command": ["python3", "-c", "print('probe')"],
-  "cwd": ".",
-  "timeout_seconds": 10,
-  "hypothesis_id": "HYP-from-the-current-campaign"
-}
-```
-
-The `hypothesis_id` must identify the R5 hypothesis being tested; do not reuse another
-Campaign's ID. `cwd` must be an existing directory under the target root.
+`harness-run` needs the current `hypothesis_id` and explicit `execution_provenance`
+to be eligible for an R5 empirical upgrade. `cwd` must resolve inside the target.
+Use `target_tree` for declared frozen-target execution; built-copy runs require
+`same_snapshot_build` or `other_build`, source snapshot identity, artifact refs, and
+`equivalent` Experiment fidelity with equivalence evidence. Artifact integrity is
+checked, but this does not prove the command executed those bytes. The runbook has
+the input example; missing provenance is recorded as ineligible, not silently inferred.
 
 The default `memory_limit_bytes` is 2147483648 (2 GiB) of address space, not resident
 memory. If a harness reports an address-space mapping failure, diagnose the toolchain
@@ -324,13 +316,15 @@ target crash or evidence of safety.
 An explicit harness input `"profile": "go-offline"` provides bounded Go build/probe
 settings and private offline caches. See the runbook's Go slice for approved limits;
 the profile is not an OS/network sandbox or evidence that the target behavior occurred.
+`"profile": "jvm-bounded"` only opts into a 4 GiB address-space default; explicit
+`memory_limit_bytes` overrides it and JVM heap options remain host-controlled.
+No profile is selected automatically from a target's language or identity.
 
-R5 tasks include registered harness refs for the same hypothesis/snapshot when available.
-Workers may propose commands/limits, but local runs cannot justify `EMPIRICALLY_CONFIRMED`.
-The host must run `harness-run` and supply execution/stdout/stderr refs before collecting
-or amending an empirical assessment. Never invent IDs. With no experiment, use JSON `null`
-for `assessment.experiment_id`; non-null IDs must name an experiment in the same output.
-Invalid structure, scope or IDs fail collection and leave the lease available for repair.
+R5 tasks supply same-hypothesis/snapshot harness refs when available. Worker-local
+runs cannot justify `EMPIRICALLY_CONFIRMED`: the host must register execution and
+stdout/stderr refs. With no experiment, use JSON `null` for `assessment.experiment_id`;
+non-null IDs must name an experiment in the same output. Invalid structure, scope or
+IDs fail collection and leave the lease available for repair.
 Fidelity/evidence are revalidated at commit. In rationale/preconditions, separate claim,
 observations, failure owner (target/host/harness), injected actions and build conditions.
 State unproven implications; tool diagnostics alone prove neither the claim nor security impact. Follow the runbook's R5 rules.
@@ -341,6 +335,8 @@ of a documented environment, tooling, or authorization blocker. Set
 rationale. If an attempt ran but was inconclusive, attach its experiment and use
 `NEEDS_REVIEW`. `NOT_FEASIBLE` is an unresolved disposition, never evidence of safety,
 confirmation, or refutation.
+`STATIC_VERDICT_RETAINED` requires `experiment_required: false`. Required inconclusive
+experiments use `NEEDS_REVIEW`; task collection and direct commit share these checks.
 
 ## Finding Classification
 
@@ -477,11 +473,6 @@ applying source-discovery instructions to every task.
 `shadow-evaluate` never promotes vNext or retires v3. It only reports whether supplied
 evidence satisfies the release gates. Synthetic runs cannot satisfy held-out,
 representative-project, 20GB+, Handoff reconciliation, or traceability gates.
-
-Execution tasks are durable artifact references. A worker must claim a lease before
-collecting a result. R1/R2 commit only after every planned Work Unit/axis task succeeds.
-Snapshot drift blocks the Batch; it can only be resolved after source hashes match the
-frozen baseline and resolution evidence is recorded.
 
 `campaign-close` automatically cancels unfinished durable tasks and releases registered
 resources after all Campaign gates pass. `campaign-abort` is the explicit terminal path

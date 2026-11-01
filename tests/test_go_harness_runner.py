@@ -100,12 +100,18 @@ def test_real_go_build_and_r5_artifacts_are_offline_bounded_and_disposable(
         assert build["empirical_upgrade_eligible"] is False
         assert build["resource_limits"]["address_space_bytes"] == 8 * 1024**3
         assert build["resource_limits"]["file_size_bytes_per_stream"] == 64 * 1024**2
+        build_artifact_ref = manager.artifacts.put_bytes(binary.read_bytes()).artifact_id
         for mode, expected_exit, expected_result in (
             ("observe", 0, "confirmed"), ("missing-precondition", 3, "inconclusive"),
         ):
             result = run_harness(
                 manager, campaign_id, command=[str(binary), mode],
                 profile="go-offline", hypothesis_id="HYP-synthetic-go",
+                execution_provenance={
+                    "origin": "same_snapshot_build",
+                    "source_snapshot_id": snapshot_id,
+                    "artifact_refs": [build_artifact_ref],
+                },
                 output_limit_bytes=4096, timeout_seconds=5,
             )
             runtime_paths.append(manager.state_dir / str(result["runtime_directory_ref"]))
@@ -125,13 +131,14 @@ def test_real_go_build_and_r5_artifacts_are_offline_bounded_and_disposable(
             experiment = Experiment.from_dict({
                 "experiment_id": f"EXP-go-{mode}",
                 "hypothesis_id": "HYP-synthetic-go",
-                "fidelity": "real_target",
+                "fidelity": "equivalent",
                 "result": expected_result,
                 "target_ref": "fixture:synthetic-go-only/main.go",
                 "command_refs": [result["execution_artifact_id"]],
                 "observation_refs": [
                     result["stdout_artifact_id"], result["stderr_artifact_id"],
                 ],
+                "equivalence_evidence_refs": [build_artifact_ref],
                 "rationale": "Only synthetic fixture behavior; not production target evidence.",
             })
             if expected_exit == 0:
@@ -242,6 +249,7 @@ def test_nonzero_exit_is_complete_evidence_not_automatic_confirmation(
             manager, "CMP-crash",
             command=[sys.executable, "-c", "print('synthetic crash observation'); raise SystemExit(3)"],
             profile=profile, hypothesis_id="HYP-crash",
+            execution_provenance={"origin": "target_tree"},
         )
         assert result["exit_code"] == 3
         assert result["empirical_upgrade_eligible"] is True

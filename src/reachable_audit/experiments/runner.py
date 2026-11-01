@@ -28,6 +28,14 @@ from ..resource_cleanup import (
 _MAX_TIMEOUT_SECONDS = 300
 _MAX_OUTPUT_BYTES = 1024 * 1024
 _MAX_OPEN_FILES = 64
+_MAX_PROVENANCE_ARTIFACTS = 32
+
+_EXECUTION_ORIGINS = {
+    "target_tree",
+    "same_snapshot_build",
+    "other_build",
+    "mechanism_only",
+}
 
 
 def run_harness(
@@ -43,22 +51,27 @@ def run_harness(
     memory_limit_bytes: int | None = None,
     hypothesis_id: str | None = None,
     profile: str | None = None,
+    execution_provenance: Mapping[str, object] | None = None,
 ) -> dict[str, object]:
-    """Run explicit argv; ``go-offline`` opts into private, offline Go build settings.
+    """Run explicit argv under bounded resources and record optional execution provenance.
 
-    The Go profile permits 8 GiB virtual address space and 64 MiB build files,
-    not unlimited memory or output. It disables Go downloads, user configuration,
-    telemetry and cgo. These are Go tool settings, not OS network isolation:
-    arbitrary probe network traffic is not blocked or certified sandboxed.
+    ``go-offline`` opts into private, offline Go build settings. ``jvm-bounded``
+    raises the default address-space limit to 4 GiB for JVM startup; callers
+    remain responsible for explicit JVM heap limits. Neither profile is an OS
+    network sandbox. Optional execution provenance is an operator declaration
+    backed by content-addressed artifacts, not proof that the command used them.
     Selecting a profile does not grant permission to execute target code.
-    Eligibility means complete, hypothesis-bound capture, not a confirmed result;
-    nonzero exits may represent intentional crash observations.
+    Eligibility means complete, hypothesis-bound capture with declared provenance,
+    not a confirmed result; nonzero exits may represent intentional crash observations.
     """
     campaign = manager.store.get_campaign(campaign_id)
     if dynamic_execution_policy(campaign) == "STATIC_ONLY":
         raise ModelError("static-only Campaign forbids dynamic execution, including managed harnesses")
-    if profile not in {None, "go-offline"}:
+    if profile not in {None, "go-offline", "jvm-bounded"}:
         raise ModelError("unknown harness profile")
+    normalized_provenance = validate_execution_provenance(
+        manager, campaign.snapshot_id, execution_provenance
+    )
     argv = tuple(str(item) for item in command)
     if not argv or any(not item or "\x00" in item for item in argv):
         raise ModelError("harness command must be a non-empty argv array")
@@ -71,7 +84,10 @@ def run_harness(
     if not 0 < cpu_limit_seconds <= _MAX_TIMEOUT_SECONDS:
         raise ModelError(f"harness CPU limit must be between 1 and {_MAX_TIMEOUT_SECONDS} seconds")
     if memory_limit_bytes is None:
-        memory_limit_bytes = (8 if profile == "go-offline" else 2) * 1024**3
+        memory_limit_bytes = (
+            8 if profile == "go-offline" else
+            4 if profile == "jvm-bounded" else 2
+        ) * 1024**3
     if memory_limit_bytes <= 0:
         raise ModelError("harness memory limit must be positive")
     if resource is None:
@@ -200,6 +216,21 @@ def run_harness(
         (len(stdout) >= output_limit_bytes or len(stderr) >= output_limit_bytes)
         and exit_code not in {0, None}
     )
+    eligibility_notes = []
+    if hypothesis_id is None:
+        eligibility_notes.append(
+            "no hypothesis_id was supplied; this run cannot support an R5 empirical upgrade"
+        )
+    if normalized_provenance is None or normalized_provenance["origin"] == "mechanism_only":
+        eligibility_notes.append(
+            "execution provenance is missing or mechanism-only"
+        )
+    if timed_out:
+        eligibility_notes.append("timed out execution cannot support an R5 empirical upgrade")
+    if output_limit_exceeded:
+        eligibility_notes.append(
+            "output-limited execution cannot support an R5 empirical upgrade"
+        )
     stdout_artifact = manager.artifacts.put_bytes(stdout[:output_limit_bytes])
     stderr_artifact = manager.artifacts.put_bytes(stderr[:output_limit_bytes])
     result: dict[str, object] = {
@@ -208,16 +239,15 @@ def run_harness(
         "snapshot_id": campaign.snapshot_id,
         "hypothesis_id": hypothesis_id,
         "empirical_upgrade_eligible": (
-            hypothesis_id is not None and not timed_out and not output_limit_exceeded
+            hypothesis_id is not None
+            and normalized_provenance is not None
+            and normalized_provenance["origin"] != "mechanism_only"
+            and not timed_out
+            and not output_limit_exceeded
         ),
-        "empirical_upgrade_note": (
-            "no hypothesis_id was supplied; this run cannot support an R5 empirical upgrade"
-            if hypothesis_id is None else (
-                None if not timed_out and not output_limit_exceeded
-                else "timed out or output-limited execution cannot support an R5 empirical upgrade"
-            )
-        ),
+        "empirical_upgrade_note": "; ".join(eligibility_notes) or None,
         "profile": profile,
+        "execution_provenance": normalized_provenance,
         "command": list(argv),
         "working_directory": working_directory.relative_to(target_root).as_posix() or ".",
         "timeout_seconds": timeout_seconds,
@@ -261,6 +291,74 @@ def run_harness(
         payload_ref=execution_artifact.artifact_id,
     )
     return {**result, "execution_artifact_id": execution_artifact.artifact_id}
+
+
+def validate_execution_provenance(
+    manager: CampaignManager,
+    snapshot_id: str,
+    value: Mapping[str, object] | None,
+) -> dict[str, object] | None:
+    """Normalize declared provenance and verify content-addressed evidence."""
+    if value is None:
+        return None
+    if not isinstance(value, Mapping):
+        raise ModelError("execution provenance must be an object")
+    origin = value.get("origin")
+    if not isinstance(origin, str) or origin not in _EXECUTION_ORIGINS:
+        raise ModelError("execution provenance origin is invalid")
+    allowed_keys = {"origin", "source_snapshot_id", "artifact_refs"}
+    if set(value) - allowed_keys:
+        raise ModelError("execution provenance has unknown fields")
+    source_snapshot_id = value.get("source_snapshot_id")
+    artifact_refs = value.get("artifact_refs", [])
+    if not isinstance(artifact_refs, (list, tuple)) or any(
+        not isinstance(reference, str) or not reference
+        for reference in artifact_refs
+    ):
+        raise ModelError("execution provenance artifact_refs must be non-empty strings")
+    if len(artifact_refs) > _MAX_PROVENANCE_ARTIFACTS:
+        raise ModelError("execution provenance has too many artifact references")
+    if len(set(artifact_refs)) != len(artifact_refs):
+        raise ModelError("execution provenance artifact_refs must be unique")
+    if origin == "target_tree":
+        if source_snapshot_id not in (None, snapshot_id) or artifact_refs:
+            raise ModelError(
+                "target_tree provenance cannot identify a separate build artifact"
+            )
+        return {
+            "origin": origin,
+            "source_snapshot_id": snapshot_id,
+            "artifact_refs": [],
+        }
+    if origin == "same_snapshot_build":
+        if source_snapshot_id != snapshot_id or not artifact_refs:
+            raise ModelError(
+                "same_snapshot_build requires the Campaign snapshot and build artifact refs"
+            )
+    elif origin == "other_build":
+        if (
+            not isinstance(source_snapshot_id, str)
+            or not source_snapshot_id
+            or source_snapshot_id == snapshot_id
+            or not artifact_refs
+        ):
+            raise ModelError(
+                "other_build requires a distinct source snapshot and build artifact refs"
+            )
+    elif origin == "mechanism_only" and (source_snapshot_id is not None or artifact_refs):
+        raise ModelError("mechanism_only provenance cannot identify a target build")
+    for reference in artifact_refs:
+        try:
+            manager.artifacts.get_bytes(reference)
+        except (OSError, ValueError) as error:
+            raise ModelError(
+                f"execution provenance artifact is unavailable: {reference}"
+            ) from error
+    return {
+        "origin": origin,
+        "source_snapshot_id": source_snapshot_id,
+        "artifact_refs": list(artifact_refs),
+    }
 
 
 def _child_limits(

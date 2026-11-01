@@ -322,11 +322,18 @@ def create_audit_plan(
             return path_state_by_path[path] is PlanPathState.INCLUDED
         return component_id in included_components or component_id not in source_components
 
-    # Keep both endpoint reviews for cross-scope risks, but not unrelated outside edges.
+    # Do not create boundary obligations from explicitly excluded callers.
+    # Component-only and deferred-source edges still need cross-scope review.
     boundary_edges = tuple(
         edge for edge in boundary_edges
-        if endpoint_in_scope(edge.source_component_id, edge.source_path)
-        or endpoint_in_scope(edge.target_component_id, edge.target_path)
+        if not (
+            edge.source_path
+            and path_state_by_path[edge.source_path] is PlanPathState.EXCLUDED
+        )
+        and (
+            endpoint_in_scope(edge.source_component_id, edge.source_path)
+            or endpoint_in_scope(edge.target_component_id, edge.target_path)
+        )
     )
 
     files_by_component: dict[str, list[tuple[str, str]]] = {

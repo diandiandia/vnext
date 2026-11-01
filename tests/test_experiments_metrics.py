@@ -154,6 +154,53 @@ def test_inconclusive_proposed_experiment_may_omit_observations() -> None:
     assert experiment.supports_empirical_upgrade is False
 
 
+def test_static_retained_r5_cannot_defer_a_required_experiment() -> None:
+    with pytest.raises(ModelError, match="STATIC_VERDICT_RETAINED cannot require"):
+        R5Assessment.from_dict({
+            "hypothesis_id": "HYP-static",
+            "experiment_required": True,
+            "experiment_id": "EXP-proposed",
+            "disposition": "STATIC_VERDICT_RETAINED",
+            "evidence_refs": ["LOC-src/example.py:1"],
+            "rationale": "attempt to keep a static verdict despite a required experiment",
+        })
+
+
+@pytest.mark.parametrize("required", ["false", "true", 0, 1, None])
+def test_r5_required_flag_rejects_non_boolean_values(required: object) -> None:
+    with pytest.raises(ModelError, match="experiment_required must be a boolean"):
+        R5Assessment.from_dict({
+            "hypothesis_id": "HYP-flag",
+            "experiment_required": required,
+            "experiment_id": None,
+            "disposition": "STATIC_VERDICT_RETAINED",
+            "evidence_refs": ["EVID-static"],
+            "rationale": "no implicit truthiness for wire policy flags",
+        })
+
+def test_required_inconclusive_r5_is_rejected_during_task_parsing() -> None:
+    with pytest.raises(ModelError, match="inconclusive required experiment"):
+        ManualExecutionBackend._parse_r5_output({
+            "schema_version": "1.0",
+            "experiments": [{
+                "experiment_id": "EXP-1",
+                "hypothesis_id": "HYP-1",
+                "fidelity": "real_target",
+                "result": "inconclusive",
+                "target_ref": "current target",
+                "command_refs": ["CMD-1"],
+                "rationale": "no conclusive observation",
+            }],
+            "assessment": {
+                "hypothesis_id": "HYP-1",
+                "experiment_required": True,
+                "experiment_id": "EXP-1",
+                "disposition": "REFUTED",
+                "evidence_refs": ["CMD-1"],
+                "rationale": "cannot claim refutation from an inconclusive experiment",
+            },
+        }, "TASK-r5", "HYP-1")
+
 def test_confirmed_or_refuted_experiment_requires_observations() -> None:
     base = {
         "experiment_id": "EXP-result",
@@ -196,6 +243,7 @@ def test_empirical_experiment_requires_registered_harness_artifacts(tmp_path: Pa
             workflow.campaign_id,
             command=[sys.executable, "-c", "print('observed')"],
             hypothesis_id="HYP-bound",
+            execution_provenance={"origin": "target_tree"},
         )
         experiment = Experiment(
             "EXP-real", "HYP-bound", ExperimentFidelity.REAL_TARGET,
@@ -214,6 +262,44 @@ def test_empirical_experiment_requires_registered_harness_artifacts(tmp_path: Pa
         )
         with pytest.raises(ModelError, match="registered harness execution"):
             workflow._validate_empirical_harness_evidence(mismatched)
+    finally:
+        manager.close()
+
+
+def test_empirical_harness_provenance_must_match_experiment_fidelity(
+    tmp_path: Path,
+) -> None:
+    manager, workflow = _ready_for_r5(tmp_path, surface_without_hypothesis=True)
+    try:
+        build_ref = manager.artifacts.put_bytes(b"same-snapshot-build").artifact_id
+        result = run_harness(
+            manager,
+            workflow.campaign_id,
+            command=[sys.executable, "-c", "print('observed')"],
+            hypothesis_id="HYP-bound",
+            execution_provenance={
+                "origin": "same_snapshot_build",
+                "source_snapshot_id": workflow.campaign.snapshot_id,
+                "artifact_refs": [build_ref],
+            },
+        )
+        equivalent = Experiment(
+            "EXP-equivalent", "HYP-bound", ExperimentFidelity.EQUIVALENT,
+            ExperimentResult.CONFIRMED, "same-snapshot build",
+            (str(result["execution_artifact_id"]),),
+            (str(result["stdout_artifact_id"]), str(result["stderr_artifact_id"])),
+            (build_ref,), (), "built copy is tied to the frozen source snapshot",
+        )
+        workflow._validate_empirical_harness_evidence(equivalent)
+
+        real_target_claim = Experiment(
+            "EXP-mislabeled", "HYP-bound", ExperimentFidelity.REAL_TARGET,
+            ExperimentResult.CONFIRMED, "same-snapshot build",
+            equivalent.command_refs, equivalent.observation_refs,
+            (build_ref,), (), "built copy mislabeled as the target tree",
+        )
+        with pytest.raises(ModelError, match="registered harness execution"):
+            workflow._validate_empirical_harness_evidence(real_target_claim)
     finally:
         manager.close()
 
@@ -395,6 +481,27 @@ def test_r5_assessment_runs_as_durable_task(
         assert "disposition NEEDS_REVIEW" in task_input["analysis_contract"]
         lease = backend.claim("experiment-reviewer")
         assert lease is not None
+        invalid_static_claim = {
+            "schema_version": "1.0",
+            "experiments": [],
+            "assessment": {
+                "hypothesis_id": "HYP-state",
+                "experiment_required": True,
+                "experiment_id": "EXP-proposed",
+                "disposition": "STATIC_VERDICT_RETAINED",
+                "evidence_refs": ["EVID-r3"],
+                "rationale": "invalidly retains a static verdict",
+            },
+        }
+        invalid_static_ref = manager.artifacts.put_text(
+            json.dumps(invalid_static_claim)
+        ).artifact_id
+        with pytest.raises(ModelError, match="STATIC_VERDICT_RETAINED cannot require"):
+            backend.collect(lease, TaskResult(
+                True, invalid_static_ref, "inconsistent R5 assessment",
+                {"agent_runs": 1, "wall_seconds": 1}, execution_configuration_fixture(),
+            ))
+        assert backend.poll(lease.task.task_id).status.value == "LEASED"
         output = {
             "schema_version": "1.0",
             "experiments": [],

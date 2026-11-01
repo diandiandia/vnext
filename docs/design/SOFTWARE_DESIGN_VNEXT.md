@@ -111,6 +111,16 @@ the requested target; graph import candidates anchor nonblank source lines and r
 unanchored/empty targets without invented LOC evidence. See [TR-21](TEST_PLAN_VNEXT.md#tr-21-r35-review-amendment-and-target-scoped-status).
 These checks do not prove Agent identity, independent semantic review, or discovery quality.
 
+Maintenance update (2026-11-01, task policy 55): EXCLUDED concrete callers are
+filtered without treating DEFERRED or component-only incoming edges as excluded.
+R0 reuses prior receipts after scope/digest validation; new reminder metadata does
+not rewrite legacy events or allow post-R0 resource registration.
+R5 experiment/disposition and provenance validation each have one shared producer/
+consumer validator. Content-addressed artifact IDs already carry SHA-256 integrity;
+there is no second digest map. Missing provenance is ineligible, and built-copy
+origins require equivalent fidelity with linked artifacts, not a real-target label.
+See [TR-22](TEST_PLAN_VNEXT.md#tr-22-generic-boundary-scope-r0-compatibility-and-r5-provenance).
+
 This design extends the existing vNext Python package and its canonical Campaign,
 Batch, event, artifact, Work Unit, and Handoff models. It does not introduce v3 runtime
 compatibility. Existing vNext schemas remain the starting point; schema changes require
@@ -420,7 +430,11 @@ once at bundle scope while retaining per-item seed-card allowlists.
 R5 collection and commit share experiment structure, hypothesis scope, and task-local
 reference checks. An absent experiment ID is JSON null; invalid output remains leased
 for correction. Legacy successful output can be amended before R5 commit. Empirical
-fidelity and registered harness evidence are additionally validated at stage commit.
+fidelity, execution provenance and registered harness evidence are additionally
+validated at stage commit. A built-copy run must carry content-addressed provenance
+artifacts and use EQUIVALENT fidelity; artifact digests establish integrity, not that
+the command executed those exact bytes. STATIC_VERDICT_RETAINED cannot require an
+experiment, and this pair is rejected during task collection as well as direct commit.
 `r5-observation-register` separately verifies a host-authority HMAC binding an external
 observation to Campaign/snapshot/Batch/hypothesis, observer, method, timestamp, and
 Campaign-owned evidence digests. It records evidence-only provenance and does not alter
@@ -751,6 +765,8 @@ execution store and R5 observations. Its explicit 8 GiB address-space default an
 stdout/stderr or ordinary-runner defaults. Private cache/temp and offline Go fetch
 settings do not replace a host VM/container or network policy. Reports explicitly
 marked empirical-upgrade-ineligible cannot be used to upgrade through R5.
+The `jvm-bounded` profile has a 4 GiB address-space default for JVM startup; an
+explicit limit overrides it, and callers must set JVM heap limits themselves.
 The compact context also reports `scan_status` as `not_scanned`, `completed`, `partial`
 or `error`, with supported/scanned/unsupported/parse-error counts. Provider availability
 is not a successful scan, and candidate count zero is not evidence of a clean target.
@@ -765,6 +781,9 @@ applicable axis must have a task result or an explicit execution failure. The co
 requires exactly one disposition per Work Unit and axis and rejects hypotheses from axes
 marked not applicable or deferred. This makes omitted analysis visible without requiring
 six redundant full-repository passes.
+Both R2 modes receive a deterministic boundary-edge summary capped at 64 edges and
+64 KiB. Omitted edges are explicitly counted; the Plan and R1 boundary-review set
+remain the complete ledger, and omission is not a review disposition.
 
 Planning rejects axis subsets; only all-six plans are currently supported end to end.
 R1/R2 scheduling rechecks R0, and the hotspot provider verifies the bytes it parses
