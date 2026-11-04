@@ -663,3 +663,151 @@ actor, reason and resolvable evidence. It cannot silently reset pauses or reopen
 completed Campaign. Reports retain original-budget FAIL when breached, separately from
 approved-limit conformance and incomplete usage. Local actor/evidence assertions do not
 prove external approval authority or provider hard-cap enforcement.
+
+## Optional coverage and delivery pilots
+
+These are opt-in implementation pilots, not discovery-quality acceptance.
+For local audit-method consultation, answer the bounded question without creating
+a Campaign; a full audit still requires the complete lifecycle.
+Freeze new policies on a **new** Campaign with `init --coverage-critic`,
+`--domain-guidance` and/or `--task-budget-policy POLICY.json`. Do not change old
+Campaign constraints or task identities to bypass a gate. All commands below take
+the same external `--state-dir STATE_DIR` as the Campaign.
+
+### Coverage review and approved replay
+
+After current R1/R2 and before R3:
+
+```text
+task-schedule-coverage-critic TARGET CAMPAIGN BATCH --phase initial
+# Use the normal task-claim / task-collect lifecycle with a separate worker.
+task-commit-coverage-critic TARGET CAMPAIGN BATCH --phase initial
+coverage-critic-status TARGET CAMPAIGN BATCH --phase initial
+```
+
+After current R5 and before R6, repeat with `--phase final` and another independent
+worker. The coordinator must explicitly schedule these tasks; stage gates enforce
+their presence but do not launch an external Agent. Independent worker IDs are
+declarations, not host-verified authorship or isolated context.
+
+The `coverage-critic/v1` output has exact fields `schema_version: "1.0"`,
+`context` (copy the supplied context verbatim), `reviewed_paths` (exact scoped source
+paths actually inspected), nonempty `checks` (`invariant`, `result`,
+`evidence_refs`), `missing_units`, `reassign_ids` and boolean `stop`.
+Each missing unit has `paths`, `reason`, `evidence_refs`; each reassignment has
+`work_unit_id`, `reason`, `evidence_refs`. Checks and proposals need real LOC anchors.
+`stop` is true exactly when both proposal arrays are empty; it is **not** a
+certificate of complete coverage or absence of vulnerabilities.
+
+Pending proposals block progression. For an evidenced false-positive proposal:
+`coverage-reject TARGET CAMPAIGN BATCH TASK --input DISPOSITION.json`.
+The object has `approved_by` (not the critic's worker) and `decisions`, exactly one
+entry for every current proposal: `proposal_digest` (from status), `reason`,
+`evidence_refs`. This records an operator decision without overwriting the critic.
+Deferral does not satisfy the gate.
+
+For approved additional/repeated work:
+`coverage-extend TARGET CAMPAIGN --input EXTENSION.json`. Exact request:
+
+```json
+{
+  "schema_version": "1.0",
+  "base_plan_id": "COPY_CURRENT_PLAN_ID",
+  "reason": "Source-backed reason for additional or repeated review",
+  "approved_by": "operator",
+  "evidence_refs": ["LOC-app.py:1"],
+  "include_paths": [],
+  "boundary_edges": [],
+  "recheck_work_unit_ids": ["COPY_CURRENT_WORK_UNIT_ID"]
+}
+```
+
+Use actual target paths and current IDs, never the example values. New boundary
+objects use the existing `BoundaryEdge` schema. Included paths must already be in
+the frozen inventory; new source bytes/files require a new snapshot Campaign.
+All previous tasks must be quiescent (complete or explicitly cancelled). The
+operation creates a versioned Plan and new Batches, preserves old records, marks
+old Batches superseded, and conservatively replays **all** Batches without reusing
+conclusions. This may be expensive; approve its budget first. It does not extend
+`amend` to mutate immutable coverage. Identical request replay is idempotent.
+The old Plan does not store its original configured size ceilings. Extension uses
+its observed maximum unit/file and Batch sizes as conservative new caps rather
+than silently restoring larger defaults.
+
+### Explicit, bounded domain guidance
+
+Before R2 submission/commit, use
+`domain-select TARGET CAMPAIGN BATCH --input SELECTION.json`:
+
+```json
+{
+  "work_unit_id": "COPY_CURRENT_WORK_UNIT_ID",
+  "domain_id": "ai_agent",
+  "reason": "Current source crosses an Agent tool authorization boundary",
+  "evidence_refs": ["LOC-app.py:1"]
+}
+```
+
+Pilot domain IDs are `ai_agent`, `data_lifecycle`, `supply_chain`. They are original
+compact discipline/moves/counterevidence/validation blocks, not imported long
+companions. Select from current source before discovery or refine after R1.
+Unselected means NOT ASSESSED, not inapplicable. Critic inputs include selections
+and check omissions. Late discoveries require approved replay; do not mutate a
+submitted task. Content is digest-bound; changing knowledge requires the frozen
+engine or a new approved Campaign. Limits are 16 KiB per unit and 64 KiB combined
+guidance per task; overflow fails explicitly.
+
+### Unresolved delivery
+
+`review-plan TARGET CAMPAIGN BATCH HYPOTHESIS --actor operator --input REVIEW.json`
+records a current unresolved item's exact object:
+
+```json
+{
+  "blockers": ["The deployed principal's permission scope is not observed"],
+  "validation_plan": {"owner": "Inspect the bound identity and permission policy"},
+  "investigation_urgency": "NOT_ASSESSED",
+  "priority_rationale": "Deployment evidence is missing"
+}
+```
+
+At least one substantive `local` or `owner` step is required. Urgency accepts
+P0/P1/P2/P3/NOT_ASSESSED, is not CVSS or severity, and must not be assigned solely
+from an unproven impact label. Severity/unknown keys are rejected. Current evidence
+changes invalidate this delivery projection. Legacy records without plans remain
+visible as NOT_RECORDED, not silently upgraded or excluded; raw historical stage
+artifacts are retained separately.
+
+### Internal admission budgets and host safety
+
+Example policy file:
+
+```json
+{
+  "totals": {"agent_runs": 20},
+  "default_attempt_budget": {"agent_runs": 1},
+  "protected_reserve": {"agent_runs": 8}
+}
+```
+
+Dimensions are `agent_runs`, `delegated_agent_runs`, `tokens`, `input_tokens`,
+`output_tokens`, `wall_seconds`, `cost_microunits`; totals are positive integers.
+Specify realistic per-attempt estimates for configured dimensions; they are not
+automatic candidate-cost forecasts. Both critic phases qualify as downstream
+work. `task-budget-status TARGET CAMPAIGN` shows reserved/spent/free amounts.
+Insufficient admission pauses new work; it never automatically changes R2 mode,
+samples mandatory revival, resets elapsed costs or treats missing usage as free.
+Failed/retried attempts count. Expired reservations reconcile on subsequent claim.
+Approved monotone total increases are available via
+`TaskBudget(store, campaign_id).amend_totals(totals, authorization_id=...,
+actor=..., reason=..., evidence_refs=[...])`; approval is a caller declaration,
+not verified authority. Provider caps and process termination are external.
+
+`host-capabilities` reports transfer and isolation separately without executing
+target code. Descriptor-relative safe promotion requires quiescent writers;
+it alone is not isolation. `harness-run --isolation linux-bwrap` (or its JSON
+`isolation` field) fails closed when host capability or a complete qualified policy
+is missing. Never retry with the isolation option removed to evade that blocker.
+Record R5 NOT_FEASIBLE/NEEDS_REVIEW with the observed host limitation and safe owner
+plan instead of claiming dynamic confirmation. Legacy harness authorization and
+static-only prohibitions remain unchanged.

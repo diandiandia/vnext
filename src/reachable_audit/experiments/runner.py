@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import signal
 import subprocess
+import tempfile
 import time
 from typing import Callable, Mapping, Sequence
 
@@ -22,6 +23,10 @@ from ..resource_cleanup import (
     create_campaign_temp_directory,
     register_process_group,
     release_campaign_resource,
+)
+from .safe_artifacts import (
+    read_bounded_capture,
+    require_linux_bwrap_isolation,
 )
 
 
@@ -51,6 +56,7 @@ def run_harness(
     memory_limit_bytes: int | None = None,
     hypothesis_id: str | None = None,
     profile: str | None = None,
+    isolation: str | None = None,
     execution_provenance: Mapping[str, object] | None = None,
 ) -> dict[str, object]:
     """Run explicit argv under bounded resources and record optional execution provenance.
@@ -58,8 +64,10 @@ def run_harness(
     ``go-offline`` opts into private, offline Go build settings. ``jvm-bounded``
     raises the default address-space limit to 4 GiB for JVM startup; callers
     remain responsible for explicit JVM heap limits. Neither profile is an OS
-    network sandbox. Optional execution provenance is an operator declaration
-    backed by content-addressed artifacts, not proof that the command used them.
+    network sandbox. ``isolation="linux-bwrap"`` fails closed until a complete
+    host policy has been qualified; it never falls back to legacy execution.
+    Optional execution provenance is an operator declaration backed by
+    content-addressed artifacts, not proof that the command used them.
     Selecting a profile does not grant permission to execute target code.
     Eligibility means complete, hypothesis-bound capture with declared provenance,
     not a confirmed result; nonzero exits may represent intentional crash observations.
@@ -69,6 +77,10 @@ def run_harness(
         raise ModelError("static-only Campaign forbids dynamic execution, including managed harnesses")
     if profile not in {None, "go-offline", "jvm-bounded"}:
         raise ModelError("unknown harness profile")
+    if isolation is not None and isolation != "linux-bwrap":
+        raise ModelError("unknown harness isolation mode")
+    if isolation == "linux-bwrap":
+        require_linux_bwrap_isolation()
     normalized_provenance = validate_execution_provenance(
         manager, campaign.snapshot_id, execution_provenance
     )
@@ -103,8 +115,6 @@ def run_harness(
     runtime_directory = create_campaign_temp_directory(
         manager, campaign_id, label="R5 harness execution"
     )
-    stdout_path = runtime_directory / "stdout.bin"
-    stderr_path = runtime_directory / "stderr.bin"
     allowed_environment = {
         key: os.environ[key]
         for key in ("PATH", "HOME", "LANG", "LC_ALL", "SYSTEMROOT", "WINDIR")
@@ -139,7 +149,9 @@ def run_harness(
     timed_out = False
     output_limit_exceeded = False
     exit_code: int | None = None
-    with stdout_path.open("wb") as stdout_handle, stderr_path.open("wb") as stderr_handle:
+    with tempfile.TemporaryFile(mode="w+b") as stdout_handle, tempfile.TemporaryFile(
+        mode="w+b"
+    ) as stderr_handle:
         try:
             process = subprocess.Popen(
                 argv,
@@ -184,7 +196,10 @@ def run_harness(
                 if profile == "go-offline":
                     deadline = time.monotonic() + timeout_seconds
                     while process.poll() is None:
-                        if max(stdout_path.stat().st_size, stderr_path.stat().st_size) > output_limit_bytes:
+                        if max(
+                            os.fstat(stdout_handle.fileno()).st_size,
+                            os.fstat(stderr_handle.fileno()).st_size,
+                        ) > output_limit_bytes:
                             output_limit_exceeded = True
                             break
                         if time.monotonic() >= deadline:
@@ -212,12 +227,12 @@ def run_harness(
                     manager, campaign_id, process_resource_id
                 )
 
-    with stdout_path.open("rb") as stream:
-        stdout = stream.read(output_limit_bytes + 1)
-    with stderr_path.open("rb") as stream:
-        stderr = stream.read(output_limit_bytes + 1)
-    stdout_truncated = len(stdout) > output_limit_bytes
-    stderr_truncated = len(stderr) > output_limit_bytes
+        stdout, stdout_truncated = read_bounded_capture(
+            stdout_handle, output_limit_bytes
+        )
+        stderr, stderr_truncated = read_bounded_capture(
+            stderr_handle, output_limit_bytes
+        )
     output_limit_exceeded = output_limit_exceeded or stdout_truncated or stderr_truncated or (
         (len(stdout) >= output_limit_bytes or len(stderr) >= output_limit_bytes)
         and exit_code not in {0, None}

@@ -5,29 +5,22 @@ description: "Audit authorized source repositories for reachable security vulner
 
 # Reachable Audit vNext
 
-Use this skill for authorized security audits of source repositories, especially
-large or mixed-language projects. It is not a general-purpose code review skill,
-standalone analyzer, or release certification.
+Use this skill for authorized security audits, especially large or mixed-language repositories.
+It is not general-purpose code review, a standalone analyzer, or release certification.
+
+For local audit-method questions or source-backed explanations, answer without automatically creating a Campaign.
+Do not claim R0-R6 coverage for consultation; a complete audit requires the full lifecycle below.
 
 ## Current Capability
 
-This skill targets the approved Top15-language / Top10-issue portfolio for large,
-very large, and mixed-language projects. The roster is a versioned product scope,
-not a claim of a universal popularity ranking; the ten issues per language are
-prioritized review guidance, not a quota of findings or an exhaustive checklist.
-Establish framework, platform, privilege, and deployment preconditions from the
-current target. Training provenance is not evidence about that target. Test
-counterevidence and preserve source-evidenced candidates outside the catalog.
+The approved Top15-language / Top10-issue portfolio is versioned product scope, not a universal popularity ranking.
+Ten issues per language guide review, not finding quotas or exhaustive coverage. Establish framework, platform, privilege and deployment preconditions from current source.
+Training provenance is not target evidence. Test counterevidence and preserve source-evidenced candidates outside the catalog.
 
-This is an experimental audit workflow. The current build provides
-Campaign and Batch state management, idempotent events, artifacts, recovery, component
-inventory, deterministic Work Unit planning, cross-Batch Handoffs, R0-R6 execution,
-CG1-CG10 Campaign closure, durable Agent task leases, source-slice drift invalidation,
-15 source-language adapters, 14 build ecosystem adapters, the approved 15-language /
-150-issue knowledge catalog, R5 recipes and bounded toolchain probes, and derived final reports. The implementation remains an
-experimental shadow candidate until RG1-RG15 acceptance is completed on representative
-projects, including all 15 language certifications, a mixed-language Campaign, and a
-20GB+ Campaign. See `docs/design/ACCEPTANCE_PLAN_VNEXT.md`.
+The experimental build provides Campaign/Batch state, events, artifacts, recovery, inventory, deterministic Work Units, cross-Batch Handoffs, R0-R6, CG1-CG10, durable leases and source-drift invalidation.
+It includes 15 source-language and 14 build-ecosystem adapters, the 150-issue catalog, R5 recipes, bounded toolchain probes and derived reports.
+It remains a shadow candidate until RG1-RG15 acceptance on representative projects, including all 15 language certifications, mixed-language and 20GB+ Campaigns.
+See `docs/design/ACCEPTANCE_PLAN_VNEXT.md`.
 
 ## Audit Use Versus Release Qualification
 
@@ -92,6 +85,13 @@ evidence merely to pass a validator.
 R4 checks concrete LOC/artifact references in individual, bundled and direct records.
 
 ## Host Agent Loop
+
+Freeze opt-in `--coverage-critic`, `--domain-guidance`, `--task-budget-policy` at initialization; never silently change old Campaigns.
+With Critic enabled, schedule/collect/commit independent initial review after R1/R2 before R3, and final review after R5 before R6; inspect current Plan, stages and source.
+Resolve proposals by evidenced operator rejection or approved `coverage-extend` (all-Batch replay, no conclusion reuse), never invented findings or overridden `stop`.
+Select domains from current source before R2; absent guidance is NOT ASSESSED. Unresolved urgency is not severity; budget insufficiency never skips mandatory review/revival.
+See the runbook's **Optional coverage and delivery pilots** section for full contracts.
+Safe promotion is not isolation; `harness-run --isolation linux-bwrap` fails closed until host qualification. Never remove isolation to evade a blocker.
 
 Use the [orchestrator runbook](./docs/ORCHESTRATOR_RUNBOOK.md) for the lifecycle
 matrix, fresh task-local worker contexts, six-axis deep-review questions, restart

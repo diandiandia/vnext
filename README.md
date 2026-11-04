@@ -110,6 +110,21 @@ After an interruption, restore the same paths and Campaign ID, inspect `status`
 and the runbook's recovery procedure; do not initialize a new Campaign as a
 substitute for resuming the old one.
 
+## Optional Coverage and Delivery Pilots
+
+New Campaigns can opt into `init --coverage-critic --domain-guidance` and
+`--task-budget-policy policy.json`. They remain experimental, disabled by default,
+and do not certify discovery quality. Critic-enabled runs require source-evidenced
+initial and final reviews before R3 and R6 respectively. New coverage uses an
+approved, versioned Plan extension that replays **all** Batches, not an in-place
+`amend`. Domain guidance is explicitly selected from current source, not inferred
+from project names. Unresolved review items can retain blockers, validation plans
+and investigation urgency without a vulnerability severity.
+
+See [pilot commands and safety boundaries](docs/ORCHESTRATOR_RUNBOOK.md#optional-coverage-and-delivery-pilots)
+before enabling them. Safe artifact transfer is not a sandbox; isolated target
+execution remains unavailable until its complete host policy is qualified.
+
 ## Runnable Demo
 
 This is a **workflow smoke demo, not a vulnerability-finding benchmark**. It creates

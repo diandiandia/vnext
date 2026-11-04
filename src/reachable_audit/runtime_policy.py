@@ -16,8 +16,13 @@ IMPLEMENTED_RELEASE_GATES = tuple(f"RG{index}" for index in range(1, 16))
 
 
 _POLICY: dict[str, Any] = {
-    "policy_version": "vnext-task-policy-56",
+    "policy_version": "vnext-task-policy-57",
     "task_collection": {
+        "coverage_critic": "campaign_opt_in_initial_before_r3_final_after_r5_before_r6;source_evidenced_exact_scope;declared_independent_worker;explicit_operator_rejection_or_versioned_all_batch_replay",
+        "domain_guidance": "campaign_opt_in_three_original_pilots;explicit_source_selection_before_r2;frozen_digest;16KiB_per_unit_64KiB_per_task;unselected_not_assessed",
+        "review_delivery": "derived_current_unresolved_evidence_bound_blockers_and_owner_or_local_plan;urgency_not_severity;missing_delivery_disclosed",
+        "task_budget_admission": "campaign_opt_in_event_backed_atomic_per_attempt_reservations;protected_downstream;missing_usage_retained;no_provider_hard_cap_or_automatic_sampling",
+        "safe_artifact_promotion": "explicit_posix_descriptor_relative_quiescent_writer_contract;not_sandbox;linux_bwrap_fail_closed_without_qualified_policy",
         "go_hotspots": "campaign_frozen_opt_in_trusted_offline_ast_helper_candidates_only_not_release_qualified",
         "java_hotspots": "campaign_frozen_opt_in_jdk_parse_only_unresolved_method_candidates_not_release_qualified",
         "supporting_resources": "explicit_pre_r0_digest_registration;concrete_loc_refs_match_frozen_bytes;not_call_chain_or_review_coverage",

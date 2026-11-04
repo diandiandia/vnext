@@ -1,5 +1,18 @@
 # Reachable Audit vNext System Design
 
+## Optional policy 57 extension
+
+The Campaign coordinator owns critic scheduling and source-backed proposal
+disposition; workers remain read-only. Critic completion is bound to the current
+snapshot, Plan and stage artifact revisions. Approved extension preserves immutable
+old artifacts, creates a new Plan and Batches, supersedes old Batches atomically,
+and conservatively replays all work. It does not modify `amend_plan` semantics.
+Domain blocks are source-selected knowledge, not findings. Unresolved delivery is
+a projection of existing evidence. Budget reservations are event-backed internal
+admission; provider enforcement and independent identities remain host responsibilities.
+Safe descriptor-relative transfer requires quiescent writers and is not a sandbox.
+See the [operating contract](../ORCHESTRATOR_RUNBOOK.md#optional-coverage-and-delivery-pilots).
+
 Status: as-implemented architecture baseline, reviewed 2026-10-17 against commit
 `beaef3b` plus the working-tree contract repairs. This describes the managed runtime, not guarantees about external Agent
 hosts or demonstrated audit capability. Roadmap items are not current contracts;

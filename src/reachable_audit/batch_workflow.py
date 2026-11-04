@@ -1483,6 +1483,8 @@ class BatchWorkflow:
         return artifact_id
 
     def close_r6(self, closure: BatchClosure) -> dict[str, Any]:
+        from .coverage_critic import require_critic
+        require_critic(self, "final")
         required_stages = (
             "R0_COMPLETED",
             "R1_COMPLETED",
@@ -1895,6 +1897,8 @@ class BatchWorkflow:
         *,
         source_task_output_refs: Mapping[str, str] | None = None,
     ) -> str:
+        from .coverage_critic import require_critic
+        require_critic(self, "initial", allow_newer_stages=True)
         r2_event = self._require_stage("R2_COMPLETED")
         hypothesis_ids = {
             item["hypothesis_id"]

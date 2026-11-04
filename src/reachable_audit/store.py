@@ -205,6 +205,8 @@ class AuditStore(AbstractContextManager["AuditStore"]):
             type(delegated_cap) is not int or delegated_cap < 0
         ):
             raise ValueError("max_delegated_agent_runs must be a non-negative integer")
+        from .task_budget import validate_task_budget_policy
+        validate_task_budget_policy(budget or {})
         now = _utc_now()
         budget_json = _json(dict(budget or {}))
         constraints_json = _json(list(constraints or ()))
@@ -458,7 +460,7 @@ class AuditStore(AbstractContextManager["AuditStore"]):
         self.get_campaign(campaign_id)
         manifest_json = _json(dict(manifest))
         now = _utc_now()
-        with self._connection:
+        with self.atomic_events():
             existing = self._connection.execute(
                 "SELECT * FROM batches WHERE campaign_id = ? AND batch_id = ?",
                 (campaign_id, batch_id),
@@ -521,7 +523,7 @@ class AuditStore(AbstractContextManager["AuditStore"]):
         *,
         actor: str = "tool",
     ) -> BatchRecord:
-        with self._connection:
+        with self.atomic_events():
             current = self.get_batch(campaign_id, batch_id)
             if current.status == target:
                 return current

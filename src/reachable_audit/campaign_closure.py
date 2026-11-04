@@ -621,6 +621,12 @@ class CampaignCloser:
             return False
 
     def close(self, closure: CampaignClosure) -> dict[str, Any]:
+        from .batch_workflow import BatchWorkflow
+        from .coverage_critic import require_critic
+        for batch in self.plan.batches:
+            require_critic(
+                BatchWorkflow(self.manager, self.campaign_id, batch.batch_id), "final",
+            )
         events = self.manager.store.list_events(self.campaign_id)
         recorded_plans = [
             event for event in events if event.event_type == "PLAN_RECORDED"
@@ -1671,6 +1677,9 @@ class CampaignCloser:
                 ) if constraint in self.campaign.constraints
             ],
         }
+        if self.manager.store.get_campaign(self.campaign_id).budget.get("task_budget_policy"):
+            from .task_budget import budget_status
+            report["task_budget_admission"] = budget_status(self.manager, self.campaign_id)
         encoded = json.dumps(
             report, ensure_ascii=False, sort_keys=True, separators=(",", ":")
         )
@@ -2038,6 +2047,21 @@ class CampaignCloser:
                 f"NEEDS_REVIEW (provisional). {item['unresolved_rationale']} "
                 "See the JSON report or review-queue for the complete evidence packet."
             )
+            delivery = item.get("delivery")
+            if delivery:
+                lines.append(
+                    f"  Investigation urgency: {delivery['investigation_urgency']} "
+                    f"(not vulnerability severity). {delivery['priority_rationale']}"
+                )
+                lines.extend(f"  Blocker: {b}" for b in delivery["blockers"])
+                lines.extend(
+                    f"  {kind} validation: {step}"
+                    for kind, step in delivery["validation_plan"].items()
+                )
+            else:
+                lines.append(
+                    "  Structured validation plan not recorded; investigation urgency not assessed."
+                )
         if not report.get("review_queue"):
             lines.append("- None derived from active stage evidence.")
         lines.extend([
@@ -2143,6 +2167,14 @@ class CampaignCloser:
             f"- {gate_id}: {'PASS' if gate['pass'] else 'FAIL'}"
             for gate_id, gate in report.get("gates", {}).items()
         )
+        if "task_budget_admission" in report:
+            lines.extend([
+                "", "## Internal task budget admission", "",
+                "Operator-configured estimates and internal accounting, not provider hard caps.",
+                "", "```json",
+                json.dumps(report["task_budget_admission"], ensure_ascii=False, sort_keys=True),
+                "```",
+            ])
         return "\n".join(lines) + "\n"
 
 

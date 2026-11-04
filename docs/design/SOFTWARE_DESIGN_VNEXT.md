@@ -1,5 +1,28 @@
 # Reachable Audit vNext Software Design
 
+## Optional policy 57 implementation
+
+- `coverage_critic.py`: `coverage-critic/v1`, initial/final scheduling, source checks,
+  exact current revisions, declared worker separation, evidenced operator rejection,
+  and approved `coverage-extend`. Extension uses nested SQLite savepoints for Plan,
+  Batch supersession and extension markers. Derived filesystem exports may remain
+  after a rolled-back transaction; durable events, never unreferenced exports,
+  determine the active Plan. All Batches replay without conclusion reuse.
+- `domain_guidance.py`: three original compact pilot blocks, explicit LOC-backed
+  Work Unit selection before R2, content digest binding, 16 KiB per-unit and 64 KiB
+  combined task limits. Missing selection is NOT ASSESSED; no invented seventh axis.
+- `deferred_review.py`: delivery binds current R2/R3/refutation/adjudication refs.
+  Stale plans are not reused. New delivery has blockers, local/owner action,
+  urgency and rationale; original historical evidence is unchanged.
+- `task_budget.py`: opt-in multidimensional per-attempt accounting through existing
+  backend events and transactions. Missing usage remains charged/reserved rather
+  than free. Estimates and protected reserves are operator-configured.
+- Experiment transfer primitives reject unsafe paths and file types. Output capture
+  uses pre-opened descriptors. Requested isolation fails closed until a qualified
+  host policy exists; no unsafe fallback or implied empirical proof.
+
+See [task status and external blockers](CLOUDFLARE_DESIGN_ADOPTION_PROPOSAL_ZH.md#14-实施记录与验收边界).
+
 Status: as-implemented software baseline, initially reviewed 2026-10-17 against commit
 `beaef3b` plus working-tree repairs; subsequent contract updates are dated below and
 cross-referenced to the completion plan.

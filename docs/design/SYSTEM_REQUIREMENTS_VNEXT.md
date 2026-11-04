@@ -1,5 +1,15 @@
 # Reachable Audit vNext System Requirements
 
+## Optional coverage/delivery extension (task policy 57)
+
+The [adoption contract](CLOUDFLARE_DESIGN_ADOPTION_PROPOSAL_ZH.md#14-实施记录与验收边界)
+defines CFA-005–027. New requirements are bounded to opt-in coverage review and
+versioned replay, source-selected compact domain guidance, unresolved delivery,
+atomic internal budget admission and safe transfer primitives. Existing Campaigns
+do not silently acquire these policies. Coverage review is an Agent declaration,
+not observed completeness; transfer is not isolation. Default enablement, discovery
+quality and qualified isolated execution remain unaccepted.
+
 Status: as-implemented system requirements baseline, reviewed 2026-10-17 against
 commit `beaef3b` plus working-tree repairs and `SYSTEM_DESIGN_VNEXT.md`. This revision replaces target-only
 obligations with bounded current contracts. Missing target capabilities and known

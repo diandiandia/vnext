@@ -55,6 +55,7 @@ from .runtime_policy import (
     TASK_OUTPUT_MAX_BYTES, TASK_OUTPUT_TARGET_BYTES, execution_policy_digest,
 )
 from .store import NotFoundError
+from .task_budget import BudgetInsufficient, TaskBudget
 
 
 _SURFACE_INSTRUCTIONS = (
@@ -253,6 +254,7 @@ _TASK_OUTPUT_REQUIRED_FIELDS = {
     "category-run-bundle/v1": {"category_runs"},
     "r5-assessment/v1": {"experiments", "assessment"},
     "batch-closure-evidence/v1": {"closure"},
+    "coverage-critic/v1": {"context", "missing_units", "reassign_ids", "stop", "reviewed_paths", "checks"},
 }
 
 
@@ -409,6 +411,7 @@ class ManualExecutionBackend:
         task = TaskSpec.from_dict(asdict(task))
         if task.campaign_id != self.campaign_id:
             raise ModelError("execution task belongs to another Campaign")
+        TaskBudget(self.manager.store, self.campaign_id).validate_task(task)
         self.manager.store.get_batch(task.campaign_id, task.batch_id)
         encoded = json.dumps(
             asdict(task), ensure_ascii=False, sort_keys=True, separators=(",", ":")
@@ -553,6 +556,7 @@ class ManualExecutionBackend:
                 f"elapsed_seconds={wall_clock['elapsed_seconds']:.1f}, "
                 f"deadline_at={wall_clock['deadline_at']}"
             )
+        budget_error = None
         for candidate_task_id in self._task_ids():
             if task_id_filter is not None and candidate_task_id != task_id_filter:
                 continue
@@ -563,15 +567,20 @@ class ManualExecutionBackend:
                 continue
             if self._task_revision_is_stale(view.task):
                 continue
-            event = self.manager.store.claim_task(
-                campaign_id=self.campaign_id,
-                task_id=candidate_task_id,
-                worker_id=worker_id,
-                lease_expires_at=(
-                    dt.datetime.fromisoformat(now) + dt.timedelta(seconds=lease_seconds)
-                ).isoformat(),
-                now=now,
-            )
+            try:
+                event = TaskBudget(self.manager.store, self.campaign_id).claim(
+                    view.task,
+                    campaign_id=self.campaign_id,
+                    task_id=candidate_task_id,
+                    worker_id=worker_id,
+                    lease_expires_at=(
+                        dt.datetime.fromisoformat(now) + dt.timedelta(seconds=lease_seconds)
+                    ).isoformat(),
+                    now=now,
+                )
+            except BudgetInsufficient as error:
+                budget_error = error
+                continue
             if event is None:
                 continue
             view = self.poll(candidate_task_id)
@@ -581,6 +590,8 @@ class ManualExecutionBackend:
                 attempt=int(event.payload["attempt"]),
                 lease_expires_at=str(event.payload["lease_expires_at"]),
             )
+        if budget_error is not None:
+            raise budget_error
         return None
 
     def collect(
@@ -596,6 +607,10 @@ class ManualExecutionBackend:
             current = self.current_lease(lease.task.task_id, lease.worker_id)
             if current != lease:
                 raise ModelError("recovery must match the original current task lease and attempt")
+        TaskBudget(self.manager.store, self.campaign_id).observe_usage(
+            task_id=lease.task.task_id, attempt=lease.attempt,
+            worker_id=lease.worker_id, measurements=result.measurements,
+        )
         if self._task_revision_is_stale(lease.task):
             raise ModelError("execution task inputs refer to an invalidated stage revision")
         self._validate_host_worker_attestation(lease, result)
@@ -643,7 +658,9 @@ class ManualExecutionBackend:
                 actor=recovery_actor,
                 now=self._now(),
             ).event_id
-        self.manager.store.finalize_task(
+        TaskBudget(self.manager.store, self.campaign_id).finish(
+            "finalize_task",
+            measurements=result.measurements,
             campaign_id=self.campaign_id,
             task_id=lease.task.task_id,
             worker_id=lease.worker_id,
@@ -664,6 +681,13 @@ class ManualExecutionBackend:
         return self.poll(lease.task.task_id)
 
     def _task_revision_is_stale(self, task: TaskSpec) -> bool:
+        if task.required_output == "coverage-critic/v1":
+            from .coverage_critic import coverage_context
+            task_input = json.loads(self.manager.artifacts.get_bytes(task.input_refs[0]))
+            workflow = BatchWorkflow(self.manager, self.campaign_id, task.batch_id)
+            current = coverage_context(workflow, task_input["phase"])
+            if any(task_input.get(key) != value for key, value in current.items()):
+                return True
         markers = self.manager.store.list_batch_events(
             self.campaign_id,
             task.batch_id,
@@ -940,6 +964,12 @@ class ManualExecutionBackend:
             )
         if not isinstance(output, dict) or output.get("schema_version") != "1.0":
             raise ModelError(f"task output schema_version mismatch: {task.task_id}")
+        if task.required_output == "coverage-critic/v1":
+            from .coverage_critic import validate_critic_output
+            validate_critic_output(
+                BatchWorkflow(self.manager, self.campaign_id, task.batch_id),
+                json.loads(self.manager.artifacts.get_bytes(task.input_refs[0])), output,
+            )
         required = _TASK_OUTPUT_REQUIRED_FIELDS.get(task.required_output)
         if required is not None:
             missing = required - set(output)
@@ -1753,7 +1783,8 @@ class ManualExecutionBackend:
     ) -> TaskView:
         if lease.task.campaign_id != self.campaign_id:
             raise ModelError("execution lease belongs to another Campaign")
-        self.manager.store.release_task(
+        TaskBudget(self.manager.store, self.campaign_id).finish(
+            "release_task",
             campaign_id=self.campaign_id,
             task_id=lease.task.task_id,
             worker_id=lease.worker_id,
@@ -2548,6 +2579,8 @@ class DiscoveryCoordinator:
         )
 
     def schedule_r3(self) -> tuple[TaskView, ...]:
+        from .coverage_critic import require_critic
+        require_critic(self.workflow, "initial", allow_newer_stages=True)
         r1_event = self._require_stage("R1_COMPLETED")
         r2_event = self._require_stage("R2_COMPLETED")
         revision_parts = self._stage_revision_parts("R2_COMPLETED")
@@ -3933,6 +3966,8 @@ class DiscoveryCoordinator:
         )
 
     def schedule_r6(self) -> TaskView:
+        from .coverage_critic import require_critic
+        require_critic(self.workflow, "final")
         revision_parts = self._stage_revision_parts(
             "R1_COMPLETED", "R2_COMPLETED", "R3_COMPLETED", "R3_5_COMPLETED",
             "R4_COMPLETED", "R5_COMPLETED",
@@ -4336,6 +4371,20 @@ class DiscoveryCoordinator:
 
     def _put_json(self, value: Mapping[str, Any]) -> str:
         if "output_contract" in value:
+            from .domain_guidance import POLICY as DOMAIN_POLICY, domain_context
+            if DOMAIN_POLICY in self.workflow.campaign.constraints:
+                work_unit = value.get("work_unit", {})
+                hypothesis = value.get("hypothesis", {})
+                unit_id = work_unit.get("work_unit_id") or hypothesis.get("work_unit_id")
+                units = [u for u in self._work_units()
+                         if unit_id is None or u["work_unit_id"] == unit_id]
+                guidance = {
+                    u["work_unit_id"]: domain_context(self.workflow, u["work_unit_id"])
+                    for u in units
+                }
+                if len(json.dumps(guidance).encode()) > 64 * 1024:
+                    raise ModelError("combined domain guidance exceeds 64 KiB; narrow the task")
+                value = {**value, "domain_guidance": guidance}
             policy = dynamic_execution_policy(
                 self.workflow.manager.store.get_campaign(self.workflow.campaign_id)
             )

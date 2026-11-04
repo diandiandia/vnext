@@ -1,5 +1,17 @@
 # Reachable Audit vNext Software Requirements
 
+## Optional policy 57 requirements
+
+| Requirement | Implementation/verification | Assurance boundary |
+|---|---|---|
+| CFA-005–011: revision-bound initial/final coverage review and explicit proposal handling | `coverage_critic.py`, `test_coverage_critic.py` | No semantic completeness or verified host identity |
+| CFA-012–015: source-evidenced selected domain blocks, frozen digest and bounded context | `domain_guidance.py`, `test_domain_guidance.py` | Coordinator selection, not automatic applicability |
+| CFA-016–018: evidence-bound unresolved delivery without severity | `deferred_review.py`, `test_review_delivery.py` | Legacy missing plans explicitly disclosed; no new verdict ledger |
+| CFA-019–022: atomic per-attempt admission/reserve/settlement | `task_budget.py`, budget regressions | Explicit estimates, not provider caps or automatic cost forecasting |
+| CFA-023–025: safe transfer and fail-closed isolation request | experiment host/artifact tests | Transfer implemented; complete isolated execution externally blocked |
+
+Contract and task status are in the [adoption record](CLOUDFLARE_DESIGN_ADOPTION_PROPOSAL_ZH.md#14-实施记录与验收边界).
+
 Status: as-implemented software requirements baseline, initially reviewed 2026-10-17
 against commit `beaef3b` plus working-tree repairs, `SOFTWARE_DESIGN_VNEXT.md`, and
 focused behavior checks; subsequent maintenance updates are dated below. Existing IDs

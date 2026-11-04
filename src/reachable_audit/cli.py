@@ -156,11 +156,26 @@ def _handle_init(arguments: argparse.Namespace) -> int:
         budget["max_wall_seconds"] = arguments.max_wall_seconds
     if arguments.require_host_worker_attestation:
         budget["require_host_worker_attestation"] = True
+    if arguments.task_budget_policy:
+        from .task_budget import validate_policy
+        budget["task_budget_policy"] = json.loads(
+            Path(arguments.task_budget_policy).read_text(encoding="utf-8")
+        )
+        validate_policy(budget["task_budget_policy"])
     with CampaignManager(arguments.target, arguments.state_dir) as manager:
+        from .store import NotFoundError
+        try:
+            previous_constraints = manager.store.get_campaign(arguments.campaign_id).constraints
+        except NotFoundError:
+            previous_constraints = ()
+        extras = tuple(
+            policy for flag, policy in (
+                (arguments.coverage_critic, "coverage_critic_v1"),
+                (arguments.domain_guidance, "domain_guidance_v1"),
+            ) if flag is True or (flag is None and policy in previous_constraints)
+        )
         defer_splits = arguments.defer_r35_splits
         if defer_splits is None:
-            from .store import NotFoundError
-
             try:
                 existing = manager.store.get_campaign(arguments.campaign_id)
             except NotFoundError:
@@ -179,6 +194,7 @@ def _handle_init(arguments: argparse.Namespace) -> int:
                 + (("static_challenges",) if arguments.static_challenges else ())
                 + (("static_only",) if arguments.static_only else ())
                 + (("defer_r35_splits",) if defer_splits else ())
+                + extras
             ),
         )
         _print(asdict(campaign))
@@ -376,6 +392,7 @@ def _handle_harness_run(arguments: argparse.Namespace) -> int:
             arguments.campaign_id,
             command=value["command"],
             profile=value.get("profile"),
+            isolation=arguments.isolation or value.get("isolation"),
             cwd=str(value.get("cwd", ".")),
             timeout_seconds=int(value.get("timeout_seconds", 30)),
             environment=value.get("environment"),
@@ -1043,6 +1060,11 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="reachable-audit")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
+    subparsers.add_parser(
+        "host-capabilities",
+        help="report host transfer and isolation capabilities without target execution",
+    )
+
     init = subparsers.add_parser("init", help="create a Campaign state store")
     init.add_argument("target")
     init.add_argument("--snapshot-id")
@@ -1088,6 +1110,11 @@ def _parser() -> argparse.ArgumentParser:
         "--static-only", action="store_true",
         help="freeze a Campaign constraint forbidding dynamic execution, including managed harnesses",
     )
+    init.add_argument("--coverage-critic", action=argparse.BooleanOptionalAction, default=None,
+                      help="freeze opt-in independent coverage review gates")
+    init.add_argument("--domain-guidance", action=argparse.BooleanOptionalAction, default=None,
+                      help="freeze opt-in source-evidenced bounded domain guidance")
+    init.add_argument("--task-budget-policy", help="JSON file declaring opt-in task budget admission")
     init.add_argument(
         "--defer-r35-splits", action=argparse.BooleanOptionalAction, default=None,
         help="retain unresolved R3.5 splits for post-run review (default for new Campaigns); "
@@ -1186,6 +1213,11 @@ def _parser() -> argparse.ArgumentParser:
     harness_run.add_argument("campaign_id")
     harness_run.add_argument("--input", required=True)
     harness_run.add_argument("--state-dir", default=".audit_vnext")
+    harness_run.add_argument(
+        "--isolation",
+        choices=("linux-bwrap",),
+        help="require qualified Linux bubblewrap isolation; fail closed if unavailable",
+    )
 
     plan = subparsers.add_parser("plan", help="create Work Units and planned Batches")
     plan.add_argument("target")
@@ -1544,6 +1576,27 @@ def _parser() -> argparse.ArgumentParser:
     drift_resolve.add_argument("--input", required=True)
     drift_resolve.add_argument("--state-dir", default=".audit_vnext")
 
+    for name in (
+        "task-schedule-coverage-critic", "task-commit-coverage-critic",
+        "coverage-extend", "domain-select", "review-plan", "task-budget-status",
+        "coverage-reject", "coverage-critic-status",
+    ):
+        command = subparsers.add_parser(name, help=name.replace("-", " "))
+        command.add_argument("target")
+        command.add_argument("campaign_id")
+        command.add_argument("--state-dir", default=".audit_vnext")
+        if name in {"coverage-extend", "domain-select", "review-plan", "coverage-reject"}:
+            command.add_argument("--input", required=True)
+        if name != "coverage-extend" and name != "task-budget-status":
+            command.add_argument("batch_id")
+        if name.endswith("coverage-critic") or name == "coverage-critic-status":
+            command.add_argument("--phase", choices=("initial", "final"), required=True)
+        if name == "review-plan":
+            command.add_argument("hypothesis_id")
+            command.add_argument("--actor", required=True)
+        if name == "coverage-reject":
+            command.add_argument("task_id")
+
     for command_parser in subparsers.choices.values():
         for action in command_parser._actions:
             if action.dest == "state_dir" and action.default == ".audit_vnext":
@@ -1561,6 +1614,11 @@ def _parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     arguments = _parser().parse_args(argv)
     try:
+        if arguments.command == "host-capabilities":
+            from .experiments.safe_artifacts import host_isolation_status
+            _print(host_isolation_status())
+            return 0
+
         if hasattr(arguments, "state_dir"):
             arguments.state_dir = _cli_state_dir(
                 arguments.target,
@@ -1569,6 +1627,52 @@ def main(argv: list[str] | None = None) -> int:
             )
         if arguments.command == "init":
             return _handle_init(arguments)
+
+        if arguments.command in {
+            "task-schedule-coverage-critic", "task-commit-coverage-critic",
+            "coverage-extend", "domain-select", "review-plan", "task-budget-status",
+            "coverage-reject", "coverage-critic-status",
+        }:
+            with CampaignManager(arguments.target, arguments.state_dir) as manager:
+                if arguments.command == "coverage-extend":
+                    from .coverage_critic import apply_coverage_extension
+                    _print({"plan_id": apply_coverage_extension(
+                        manager, arguments.campaign_id,
+                        json.loads(Path(arguments.input).read_text(encoding="utf-8")),
+                    )})
+                elif arguments.command == "task-budget-status":
+                    from .task_budget import budget_status
+                    _print(budget_status(manager, arguments.campaign_id))
+                else:
+                    workflow = BatchWorkflow(manager, arguments.campaign_id, arguments.batch_id)
+                    if arguments.command == "coverage-critic-status":
+                        from .coverage_critic import critic_status
+                        _print(critic_status(workflow, arguments.phase))
+                    elif arguments.command == "coverage-reject":
+                        from .coverage_critic import reject_coverage_proposals
+                        _print({"artifact_id": reject_coverage_proposals(
+                            workflow, arguments.task_id,
+                            json.loads(Path(arguments.input).read_text(encoding="utf-8")),
+                        )})
+                    elif arguments.command == "domain-select":
+                        from .domain_guidance import record_domain_selection
+                        _print({"artifact_id": record_domain_selection(
+                            workflow, json.loads(Path(arguments.input).read_text(encoding="utf-8")),
+                        )})
+                    elif arguments.command == "review-plan":
+                        from .deferred_review import record_review_delivery
+                        _print({"artifact_id": record_review_delivery(
+                            workflow, arguments.hypothesis_id,
+                            json.loads(Path(arguments.input).read_text(encoding="utf-8")),
+                            actor=arguments.actor,
+                        )})
+                    else:
+                        from .coverage_critic import commit_critic, schedule_critic
+                        if arguments.command == "task-schedule-coverage-critic":
+                            _print(asdict(schedule_critic(workflow, arguments.phase)))
+                        else:
+                            _print({"artifact_id": commit_critic(workflow, arguments.phase)})
+            return 0
 
         if arguments.command == "status":
             return _handle_status(arguments)

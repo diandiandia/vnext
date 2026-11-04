@@ -44,6 +44,17 @@ complete.
 
 ## 4. Test Requirements
 
+### Policy 57: optional coverage/delivery pilots
+
+Run the critic, domain, review-delivery, adoption CLI, budget and safe-artifact
+regressions in addition to the complete baseline. Assert real R0–R6 ordering,
+source/revision mismatches, replay idempotency, injected rollback, frozen opt-ins,
+strict unresolved schema, concurrent budget admission and unsafe artifact rejection.
+Passing fixtures cannot close CFA-004/030/031 (independent discovery/triage evidence)
+or CFA-025 (qualified host isolation). Compare baseline, critic-only, domains-only
+and combined treatments using the existing discovery evaluation protocol; historical
+targets are regression inputs, never held-out evidence.
+
 ### TR-01: Append-Only Stage Revision and Recovery
 
 **Coverage:** R1-R5 deterministic revision IDs, task-output refs, upstream revision pins,
