@@ -383,6 +383,8 @@ host contexts or authorize loading prior project plans into discovery workers.
 - [Release acceptance plan](docs/design/ACCEPTANCE_PLAN_VNEXT.md)
 - [Discovery quality evaluation protocol](docs/design/DISCOVERY_QUALITY_EVALUATION_PROTOCOL.md)
 - [Test plan](docs/design/TEST_PLAN_VNEXT.md)
+- [Policy 57 test requirements](docs/design/POLICY_57_TEST_REQUIREMENTS.md)
+- [Policy 57 test plan](docs/design/POLICY_57_TEST_PLAN.md)
 - [Repair roadmap](docs/design/REPAIR_ROADMAP_VNEXT.md)
 - [ISO/IEC/IEEE 12207 lifecycle self-assessment](docs/design/LIFECYCLE_CONFORMANCE_VNEXT.md)
 - [Historical quality reassessment](docs/design/QUALITY_REASSESSMENT_VNEXT.md)

@@ -13,6 +13,9 @@ Current as-implemented baseline: **2026-11-04**, task policy 57, release policy 
 | CFA-023–025: safe transfer and fail-closed isolation request | experiment host/artifact tests | Transfer implemented; complete isolated execution externally blocked |
 
 Contract and task status are in the [adoption record](CLOUDFLARE_DESIGN_ADOPTION_PROPOSAL_ZH.md#14-实施记录与验收边界).
+Normative, testable feature requirements are in
+[POLICY_57_TEST_REQUIREMENTS.md](POLICY_57_TEST_REQUIREMENTS.md); execution and
+real-project procedure are in [POLICY_57_TEST_PLAN.md](POLICY_57_TEST_PLAN.md).
 
 Status: as-implemented software requirements baseline, initially reviewed 2026-10-17
 against commit `beaef3b` plus working-tree repairs, `SOFTWARE_DESIGN_VNEXT.md`, and

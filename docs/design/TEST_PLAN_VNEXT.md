@@ -12,6 +12,11 @@ The plan complements [IMPLEMENTATION_COMPLETION_PLAN.md](IMPLEMENTATION_COMPLETI
 [REAL_CODE_AUDIT_TEST_PLAN_VNEXT.md](REAL_CODE_AUDIT_TEST_PLAN_VNEXT.md), and
 [LOCAL_TEST_HANDOFF.md](../LOCAL_TEST_HANDOFF.md).
 
+For the task-policy-57 feature set, use the dedicated
+[test requirements](POLICY_57_TEST_REQUIREMENTS.md) and
+[execution plan](POLICY_57_TEST_PLAN.md). They define requirement-level boundaries,
+commands, real-project precautions, independent evaluation and host-isolation blockers.
+
 ## 2. Verification Levels
 
 | Level | Scope | Required evidence | May close |
@@ -46,14 +51,14 @@ complete.
 
 ### Policy 57: optional coverage/delivery pilots
 
-Run the critic, domain, review-delivery, adoption CLI, budget and safe-artifact
-regressions in addition to the complete baseline. Assert real R0–R6 ordering,
-source/revision mismatches, replay idempotency, injected rollback, frozen opt-ins,
-strict unresolved schema, concurrent budget admission and unsafe artifact rejection.
-Passing fixtures cannot close CFA-004/030/031 (independent discovery/triage evidence)
-or CFA-025 (qualified host isolation). Compare baseline, critic-only, domains-only
-and combined treatments using the existing discovery evaluation protocol; historical
-targets are regression inputs, never held-out evidence.
+Apply PT57-01 through PT57-12 in the dedicated plan. The minimum regression scope is
+critic/domain/review-delivery/adoption CLI/budget/safe-artifact tests and the complete
+baseline. Assert R0–R6 ordering, current source/revision bindings, replay idempotency,
+injected rollback, frozen opt-ins, strict unresolved schema, concurrent budget
+admission and unsafe artifact rejection. Passing fixtures cannot close independent
+discovery/triage evidence or qualified host isolation. Compare baseline, critic-only,
+domain-only and combined treatments under the existing discovery-quality protocol;
+historical targets are regression inputs, never held-out evidence.
 
 ### TR-01: Append-Only Stage Revision and Recovery
 
