@@ -1,6 +1,6 @@
 ---
 name: vnext
-description: "Audit authorized source repositories for reachable security vulnerabilities. Use when tracing entry points, principals, guards, and sensitive operations across components or languages; coordinating large or very large repository audits; resuming Campaign/Batch work after interruptions; or tracking source evidence, counterevidence, and coverage gaps. Also supports development pilots that identify skill or workflow defects. Experimental Agent-dependent workflow, not a standalone scanner or release certification."
+description: "Use when a user requests reachable-vulnerability analysis or an evidence-oriented security audit of a large or mixed-language source repository, including durable Campaign/Batch planning, cross-component handoffs, source-backed findings, coverage gaps, or recovery. Also use to test or develop the vNext audit workflow. Not for one-shot general code review; this experimental, Agent-dependent workflow is not a standalone scanner or v3 replacement until acceptance gates pass."
 ---
 
 # Reachable Audit vNext

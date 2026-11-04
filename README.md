@@ -12,8 +12,22 @@ counterevidence, and resume long-running work without relying on chat history al
 它负责组织审计和保存证据，不是安装后就能自动找出漏洞的扫描器。
 详见[中文项目介绍](docs/PROJECT_OVERVIEW_ZH.md)。
 
+> **Experimental shadow candidate:** vNext is not a production-ready scanner or a
+> drop-in replacement for v3. Its audit and host capabilities remain under
+> evaluation; passing workflow checks does not prove a repository is secure.
+
 [Install](#install) · [Quick start](#quick-start) · [Runnable demo](#runnable-demo) ·
 [Limitations](#current-limitations) · [Operating guide](docs/ORCHESTRATOR_RUNBOOK.md)
+
+## What It Solves
+
+| Audit challenge | vNext workflow |
+|---|---|
+| Unclear which source was or was not inspected | Freeze a snapshot, inventory source, plan Work Units, and retain excluded, deferred, and unresolved scope |
+| Long audits lose state after interruption | Persist Campaign/Batch events, task leases, evidence, and recovery state |
+| Evidence and conclusions are hard to review | Bind records to source locations and artifacts, retain counterevidence, and validate workflow contracts |
+| Cross-component paths are easy to drop | Track explicit cross-Batch Handoffs and closure requirements |
+| “No finding” is mistaken for “safe” | Report workflow completion separately from uncovered scope, unresolved questions, and residual risks |
 
 ## Who Is It For?
 
@@ -34,7 +48,7 @@ Requirements: **Python 3.11+** and a host Agent with an available model/runtime 
 permission to use the CLI. The Python runtime has no third-party dependencies.
 The Skills CLI route also requires Node.js/npm.
 
-### Agent Skill
+### Agent Skill installation
 
 From the project where you want the host to discover the Skill:
 
@@ -45,6 +59,8 @@ npx skills add diandiandia/vnext
 Select your host in the installer. Review the Skill before granting permissions.
 Installation does not dispatch an Agent, authorize target execution, or establish
 host compatibility or language certification.
+
+中文读者可先看[中文项目介绍](docs/PROJECT_OVERVIEW_ZH.md)。
 
 The Skill needs its accompanying `tools/`, `src/`, `knowledge/`, and referenced
 runbooks, not just `SKILL.md`. Set `VNEXT_ROOT` below to the installed Skill directory
@@ -69,7 +85,11 @@ setting `PYTHONPATH`. A built wheel includes runtime knowledge and parser helper
 but does not install the host Skill or its runbooks. Building the wheel requires the
 setuptools dependency declared in [pyproject.toml](pyproject.toml).
 
-## Quick Start
+## Quick Start (Runtime)
+
+The `npx skills add` command above installs the Agent Skill. The commands below run
+the accompanying Python Campaign runtime from a complete checkout or a complete
+installed Skill directory; they are not an alternative Skill installation method.
 
 Use an authorized, frozen source copy. Set `VNEXT_ROOT` to the absolute installation
 or checkout directory, and keep an explicit absolute state directory **outside** the
