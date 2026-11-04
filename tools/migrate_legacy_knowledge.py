@@ -27,6 +27,84 @@ _SEVERE_CWES = {
     "94", "77", "502", "191",
 }
 _SOURCE_REFINEMENTS = {
+    ("c", "INV-c-006"): {
+        "refinement_id": "c-allocation-budget-boundary-v1",
+        "title": "Attacker-controlled allocations bypass an enforced resource budget",
+        "family": "RESOURCE-DOS",
+        "cwe": ["CWE-789"],
+        "pattern": "Attacker-influenced allocation sizes or repetition may bypass a resource-accounting boundary",
+        "sink_hint": "allocation, mapping, commitment or retention of memory",
+        "pitfall": "For the current target, distinguish requested address space, committed memory, cumulative retention and process-wide limits. Establish attacker control and actual availability impact; do not prescribe severity from allocation size alone.",
+        "counterevidence": [
+            "An enforced aggregate budget dominates all relevant allocation and retention paths.",
+            "The principal cannot control sufficient size, repetition or lifetime to exhaust the protected resource.",
+        ],
+    },
+    ("c", "INV-c-016"): {
+        "refinement_id": "c-protocol-peer-authentication-v1",
+        "title": "Protocol messages cross a privileged boundary without peer authentication",
+        "family": "AUTHN",
+        "cwe": ["CWE-306"],
+        "pattern": "A peer-controlled message may trigger protected operations without an authenticated peer identity",
+        "sink_hint": "protocol dispatch or state changes requiring an authenticated peer",
+        "pitfall": "For the current target, establish transport, deployment, peer identity and operation privileges. Missing authentication-related names or a particular handshake shape do not prove authentication is absent.",
+        "counterevidence": [
+            "Authenticated transport or an enforced peer-identity check dominates every protected message path.",
+            "The exposed protocol cannot perform operations beyond the initiating principal's authority.",
+        ],
+    },
+    ("c", "INV-c-017"): {
+        "refinement_id": "c-protocol-resource-limit-v1",
+        "title": "Protocol-controlled work bypasses an effective resource limit",
+        "family": "RESOURCE-DOS",
+        "cwe": ["CWE-770"],
+        "pattern": "Peer-controlled work may continue without a bound on admitted cost, retained state or repetition",
+        "sink_hint": "protocol work admission, resource retention or throttling",
+        "pitfall": "For the current target, establish effective configuration and sentinel semantics from source and deployment evidence. Measure attacker cost, amplification and availability impact before classifying a vulnerability or hardening gap; do not assume any threshold default.",
+        "counterevidence": [
+            "An effective upstream or local limit bounds aggregate work before resource consumption.",
+            "The principal cannot amplify or sustain work enough to affect the protected availability requirement.",
+        ],
+    },
+    ("cpp", "INV-cpp-001"): {
+        "refinement_id": "cpp-decoded-length-boundary-v1",
+        "title": "Decoded lengths exceed allocation or write bounds",
+        "family": "MEMORY-SAFETY",
+        "cwe": ["CWE-787"],
+        "pattern": "An input-derived length may reach allocation or copying before arithmetic and capacity checks",
+        "sink_hint": "length decoding, size arithmetic, allocation and bounded writes",
+        "pitfall": "For the current target, establish input trust, integer widths, overflow behavior, capacity and check ordering. An assertion after a write does not protect that write; an input-trust claim needs source-backed authority evidence. Authentication alone does not establish a trusted producer.",
+        "counterevidence": [
+            "Checked arithmetic and capacity validation dominate every allocation and write using the decoded size.",
+            "Only trusted producers within the same security boundary can reach the decoder, and untrusted principals cannot alter the decoded data.",
+        ],
+    },
+    ("java", "INV-java-017"): {
+        "refinement_id": "java-shared-state-check-use-v1",
+        "title": "Concurrent check and mutation violate a shared-state contract",
+        "family": "RACE",
+        "cwe": ["CWE-367"],
+        "pattern": "Concurrent requests may interleave validation, reservation, use or revocation of shared state",
+        "sink_hint": "state validation and mutation across threads, callbacks or transactions",
+        "pitfall": "For the current target, establish the state invariant and an allowed interleaving. Individual thread-safe operations do not necessarily make a sequence atomic; do not assume a particular map API, lifecycle or default race window.",
+        "counterevidence": [
+            "A lock, transaction or atomic state transition covers the complete invariant across all participants.",
+            "The state is confined to one owner or stale operations are rejected before protected effects.",
+        ],
+    },
+    ("java", "INV-java-020"): {
+        "refinement_id": "java-iteration-resource-budget-v1",
+        "title": "Attacker-controlled iteration exceeds the effective work budget",
+        "family": "RESOURCE-DOS",
+        "cwe": ["CWE-789"],
+        "pattern": "Peer-controlled traversal, skipping or result construction may perform more work than a visible result limit suggests",
+        "sink_hint": "iteration, filtering, pagination or materialization of results",
+        "pitfall": "For the current target, trace effective offsets, limits, evaluation order and backing-store behavior. A result count alone does not bound traversal work; do not assume parameter names, default values or eager evaluation.",
+        "counterevidence": [
+            "Indexed access or bounded traversal limits work before processing attacker-selected ranges.",
+            "Enforced admission, time and aggregate resource budgets prevent availability impact at the declared concurrency.",
+        ],
+    },
     ("cpp", "INV-cpp-003"): {
         "refinement_id": "cpp-async-lifetime-contract-v1",
         "title": "Asynchronous task object destroyed before worker completion",
@@ -247,7 +325,7 @@ def _digits(value: Any) -> str:
     return re.sub(r"[^0-9]", "", str(value))
 
 
-def _severity(entry: dict[str, Any]) -> tuple[int, int, str]:
+def _severity(entry: dict[str, Any]) -> tuple[int, int, int, str]:
     cwe_rank = 3
     for cwe in entry.get("cwe", []):
         value = _digits(cwe)
@@ -285,6 +363,8 @@ def _portable(entry: dict[str, Any], forbidden_tokens: Sequence[str]) -> bool:
 
 
 def _source_evidence(entry: dict[str, Any]) -> str:
+    if entry.get("_refinement_id"):
+        return "seeded"
     verification = entry.get("verify", {})
     source = entry.get("source", {})
     if verification.get("status") == "battle_confirmed" or source.get("tier") == "battle_verified":
@@ -465,8 +545,6 @@ def _issue_and_card(
         "A guard dominates the sensitive operation for every relevant path.",
         "The effective principal cannot control the source or the impact is not security relevant.",
     ]
-    if not typescript_seed and pitfall:
-        counterevidence.append(pitfall)
     dangerous_transitions = [pattern]
     if typescript_refinement:
         verification = list(typescript_refinement["verification"])
@@ -491,7 +569,7 @@ def _issue_and_card(
             "Establish attacker control, effective principal, guarding order, and security impact.",
             "Test the stated language-specific counterevidence against source and runtime behavior.",
         ]
-        counterevidence = list(entry.get("counterevidence", [pitfall]))
+        counterevidence = list(entry.get("counterevidence", counterevidence))
         dangerous_transitions = [pattern]
     issue = {
         "issue_id": issue_id,

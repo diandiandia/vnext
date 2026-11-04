@@ -102,6 +102,9 @@ of attention quality. Preserve task-local context only for same-lease repairs.
 Target-candidate plans and dated audit reviews under `docs/design/` are evaluator-side
 records, not discovery instructions. Do not load their project names, expected findings
 or prior audit outcomes into source-analysis workers.
+Use this Skill, the operating runbook and current task artifacts for normal execution.
+Design/acceptance documents are coordinator-side references: retrieve only a needed
+contract section, never forward whole historical documents to discovery workers.
 
 Start independent audits with `init` (default `--audit-mode fresh`). Do not inspect or
 load prior Campaign artifacts while planning or generating hypotheses. A follow-up must
@@ -246,8 +249,6 @@ Missing host metadata does not block task collection, but is recorded in the Cam
 report and prevents release certification until the evaluation authority supplies the
 attestation.
 
-Submit the exact wrapper and stage payload required by the claimed task's `output_contract`; that contract, not a copied example, is authoritative.
-
 After `task-commit-r1`, use compact R2 by default for Work Units that fit the host's
 measured context and time budgets: one task per Work Unit contains all six discovery
 axes, reducing claim/collect round trips. For unusually large or long source files,
@@ -277,7 +278,6 @@ Surfaces when applicable, stay within planned mechanism families, and state a
 falsifiable security claim. Submit failures with `succeeded: false`, no `output`, and a
 specific summary; failed or missing tasks block commit.
 
-Compact R2 requires all six evidenced axis dispositions. Follow the claimed task's `output_contract` for the exact payload schema; do not infer or copy a schema from another task.
 Both R2 modes provide `boundary_edge_context` capped at 64 edges and 64 KiB, with
 omission counts. Retrieve remaining contracts from the canonical Plan and R1 reviews
 when needed; never treat omitted edges as reviewed or irrelevant.
@@ -424,8 +424,8 @@ After a `task-collect` validation error, the task remains leased and non-termina
 correct the result JSON and resubmit it with the same task/worker before the lease
 expires, or use `task-release` with a reason. Use `task-list --batch-id` to inspect a
 partial batch. If a successful task output must be corrected after collection but before
-its R1/R2/R3/R4/R5/R6 stage commits, use `task-amend` with a replacement output, reason, and
-content-addressed evidence refs. The prior output remains immutable. A supported R1-R5
+its R1/R2/R3/R3.5/R4/R5/R6 stage commits, use `task-amend` with a replacement output, reason, and
+content-addressed evidence refs. The prior output remains immutable. A supported R1-R5 or R3.5
 amendment after stage commit appends the replacement and affected-descendant invalidation
 events; use `recovery-plan` and recommit affected stages; no automatic result reuse. Stale
 tasks cannot satisfy new revisions. Terminal R6 output may be amended after its Batch

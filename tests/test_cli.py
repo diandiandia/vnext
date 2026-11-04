@@ -446,10 +446,11 @@ def test_runtime_deproject_scan_rejects_generic_residue_patterns(tmp_path: Path)
     }
 
 
-def test_runtime_residue_scan_covers_source_and_main_prompt(tmp_path: Path) -> None:
+def test_runtime_residue_scan_covers_source_and_operating_prompts(tmp_path: Path) -> None:
     for relative, text in {
         "src/sample.py": "TARGET = 'Acme-Widget'\n",
         "SKILL.md": "Use the Acme-Widget target configuration.\n",
+        "docs/ORCHESTRATOR_RUNBOOK.md": "Reuse the Acme-Widget plan.\n",
         "docs/history.md": "Acme-Widget is historical evidence.\n",
         "tests/fixture.py": "PROJECT = 'Acme-Widget'\n",
     }.items():
@@ -459,9 +460,11 @@ def test_runtime_residue_scan_covers_source_and_main_prompt(tmp_path: Path) -> N
     for scanner in (scan_runtime_compatibility, scan_runtime_deproject):
         report = scanner(tmp_path, ["acme-widget"])
         assert report["passed"] is False
-        assert {item["path"] for item in report["findings"]} == {"src/sample.py", "SKILL.md"}
+        assert {item["path"] for item in report["findings"]} == {
+            "src/sample.py", "SKILL.md", "docs/ORCHESTRATOR_RUNBOOK.md",
+        }
         assert report["scanned_python_files"] == 1
-        assert report["scanned_prompt_files"] == 1
+        assert report["scanned_prompt_files"] == 2
 
 
 def test_runtime_residue_scan_rejects_private_host_paths(tmp_path: Path) -> None:

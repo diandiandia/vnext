@@ -12,9 +12,12 @@ from pathlib import Path
 import tempfile
 from typing import Any, Mapping, Sequence
 
+from .analysis_models import DiscoveryAxis
 from .models import ModelError
 from .knowledge_catalog import KnowledgeCatalog, default_knowledge_root
-from .compatibility import scan_runtime_compatibility, scan_runtime_deproject
+from .compatibility import (
+    OPERATING_PROMPT_PATHS, scan_runtime_compatibility, scan_runtime_deproject,
+)
 from .discovery.hotspots import enabled_hotspot_provider_ids
 from .runtime_policy import (
     IMPLEMENTED_RELEASE_GATES,
@@ -24,6 +27,30 @@ from .runtime_policy import (
 
 
 _PROJECT_CLASSES = {"native", "managed", "dynamic", "mixed", "jit"}
+_R2_DISCOVERY_OPERATIONS = {
+    "generate_hypotheses", "generate_hypotheses_compact",
+    *(f"generate_hypotheses:{axis.value}" for axis in DiscoveryAxis),
+}
+
+
+def _boolean_field(value: Mapping[str, Any], field: str, default: bool) -> bool:
+    item = value.get(field, default)
+    if not isinstance(item, bool):
+        raise ModelError(f"{field} must be a boolean")
+    return item
+
+
+def _finite_number_field(value: Mapping[str, Any], field: str, default: float) -> float:
+    item = value.get(field, default)
+    if isinstance(item, bool) or not isinstance(item, (int, float)):
+        raise ModelError(f"{field} must be a finite number")
+    try:
+        number = float(item)
+    except OverflowError as error:
+        raise ModelError(f"{field} must be a finite number") from error
+    if not math.isfinite(number):
+        raise ModelError(f"{field} must be a finite number")
+    return number
 
 
 @dataclass(frozen=True)
@@ -89,13 +116,13 @@ class ShadowRun:
             false_positive_count=int(value.get("false_positive_count", 0)),
             needs_review_count=int(value.get("needs_review_count", 0)),
             repository_size_bytes=int(value.get("repository_size_bytes", 0)),
-            campaign_complete=bool(value.get("campaign_complete", False)),
-            interruption_recovered=bool(value.get("interruption_recovered", False)),
+            campaign_complete=_boolean_field(value, "campaign_complete", False),
+            interruption_recovered=_boolean_field(value, "interruption_recovered", False),
             handoff_count=int(value.get("handoff_count", 0)),
             reconciled_handoff_count=int(value.get("reconciled_handoff_count", 0)),
-            evidence_traceable=bool(value.get("evidence_traceable", False)),
-            held_out=bool(value.get("held_out", False)),
-            synthetic=bool(value.get("synthetic", True)),
+            evidence_traceable=_boolean_field(value, "evidence_traceable", False),
+            held_out=_boolean_field(value, "held_out", False),
+            synthetic=_boolean_field(value, "synthetic", True),
             evidence_refs=tuple(str(item) for item in value.get("evidence_refs", [])),
         )
         if run.engine not in {"v3", "vnext"}:
@@ -143,9 +170,9 @@ class LanguageAcceptance:
     def from_dict(cls, value: Mapping[str, Any]) -> "LanguageAcceptance":
         item = cls(
             language=str(value["language"]),
-            certified=bool(value.get("certified", False)),
-            adapter_contract_passed=bool(value.get("adapter_contract_passed", False)),
-            held_out_sample_passed=bool(value.get("held_out_sample_passed", False)),
+            certified=_boolean_field(value, "certified", False),
+            adapter_contract_passed=_boolean_field(value, "adapter_contract_passed", False),
+            held_out_sample_passed=_boolean_field(value, "held_out_sample_passed", False),
             evidence_refs=tuple(str(ref) for ref in value.get("evidence_refs", [])),
         )
         if not item.language:
@@ -176,8 +203,8 @@ class LanguageIssueSample:
             sample_count=int(value.get("sample_count", 0)),
             v3_detected_count=int(value.get("v3_detected_count", 0)),
             vnext_detected_count=int(value.get("vnext_detected_count", 0)),
-            held_out=bool(value.get("held_out", False)),
-            synthetic=bool(value.get("synthetic", True)),
+            held_out=_boolean_field(value, "held_out", False),
+            synthetic=_boolean_field(value, "synthetic", True),
             evidence_refs=tuple(str(item) for item in value.get("evidence_refs", [])),
         )
         if not sample.language or not sample.issue_id or not sample.family:
@@ -205,11 +232,11 @@ class AcceptancePolicy:
     def from_dict(cls, value: Mapping[str, Any]) -> "AcceptancePolicy":
         policy = cls(
             minimum_improved_families=int(value.get("minimum_improved_families", 2)),
-            maximum_noise_ratio_increase=float(
-                value.get("maximum_noise_ratio_increase", 0.05)
+            maximum_noise_ratio_increase=_finite_number_field(
+                value, "maximum_noise_ratio_increase", 0.05,
             ),
-            maximum_worst_group_recall_drop=float(
-                value.get("maximum_worst_group_recall_drop", 0.0)
+            maximum_worst_group_recall_drop=_finite_number_field(
+                value, "maximum_worst_group_recall_drop", 0.0,
             ),
             large_repository_bytes=int(
                 value.get("large_repository_bytes", 20_000_000_000)
@@ -493,7 +520,7 @@ def evaluate_release(
         for field in (
             "scanned_python_files", "scanned_knowledge_files", "scanned_prompt_files",
         )
-    )
+    ) and actual_deproject["scanned_prompt_files"] == len(OPERATING_PROMPT_PATHS)
     gates["RG8"] = {
         "pass": deproject.get("passed") is True
         and bool(deproject.get("evidence_refs"))
@@ -508,7 +535,7 @@ def evaluate_release(
     compatibility = value.get("compatibility_scan", {})
     actual_compatibility = scan_runtime_compatibility(runtime_root, forbidden_tokens)
     gates["RG9"] = {
-        "pass": bool(compatibility.get("passed"))
+        "pass": compatibility.get("passed") is True
         and bool(compatibility.get("evidence_refs"))
         and required_runtime_surfaces_present
         and actual_compatibility["passed"],
@@ -1007,10 +1034,9 @@ def _clean_room_provenance_detail(
                 continue
             operation = str(task.get("operation", ""))
             is_r1 = operation == "discover_surfaces"
-            is_r2 = (
-                operation == "generate_hypotheses"
-                or operation.startswith("generate_hypotheses:")
-            )
+            is_r2 = operation in _R2_DISCOVERY_OPERATIONS
+            if operation.startswith("generate_hypotheses") and not is_r2:
+                invalid_projects.add(run.project_id)
             if not is_r1 and not is_r2:
                 continue
             saw_r1 = saw_r1 or is_r1

@@ -31,6 +31,12 @@ matches its repository size, scope/config digests, task/resource totals, Campaig
 completion, interruption recovery, and Handoff counts; the evaluator checks those fields
 against the signed run record.
 
+Release policy 8 requires JSON booleans for run, language-certification and issue-sample
+flags; strings/numbers/null are not substituted for booleans. Omitted flags retain
+their conservative defaults. Noise/recall tolerances must be finite JSON numbers
+(not booleans or numeric strings) and non-negative. A signed malformed value is still
+invalid; a signature does not turn it into qualification evidence.
+
 Each completed task result must include positive `agent_runs` and `wall_seconds`; the
 runtime generates its own vNext policy digest. When the host exposes them, task results
 also include `model_id`, `runtime_version`, and a SHA-256 `host_tool_policy_digest`.
@@ -57,6 +63,9 @@ provenance record against the Campaign measurement artifact, including fresh mod
 empty history sources, and R1/R2 task-input artifact refs. This checks signer
 attestations and digest links, not actual host prompt/session contents or absence of
 covertly supplied history; independent host-isolation evidence remains required.
+R2 includes the base operation, compact mode and each of the six registered
+per-axis operations. Compact inputs receive the same history/snapshot checks;
+unrecognized R2 operation names cannot supply qualifying discovery evidence.
 
 Every claimed attempt is included in the attempt-cost view. Released, expired,
 cancelled, or still-active claims without terminal usage make that view incomplete;
@@ -95,9 +104,10 @@ VNA_EVALUATION_HMAC_KEY=<evaluation-authority-secret> \
 PYTHONPATH=src python3 -m pytest tests/test_heldout_release_acceptance.py -q
 ```
 
-Without the manifest the test skips. With a bundle, this entry asserts that implemented
-gates pass while release remains BLOCKED for unimplemented RG12. It is not complete
-release authorization, even if a reviewer verifies the source Campaign records.
+Without the manifest the test skips. With a bundle, this entry requires all implemented
+RG1-RG15 checks to pass, evaluator status `ACCEPTED`, `eligible_for_promotion: true`
+and no unimplemented gates. This is eligibility on supplied signed evidence, not an
+automatic promotion action or a substitute for independent real-bundle acceptance.
 
 ## 3. Release Gates
 
@@ -115,8 +125,8 @@ verified answer-store facts. No gate independently proves the truth of signer as
 | RG5 | Every Handoff in every real run is reconciled. |
 | RG6 | Exactly the 15 approved languages are certified; missing, duplicate, extra, or failed languages block release. |
 | RG7 | The worst family, language, and language/issue recall delta stays within policy; per-language and per-cell confidence intervals are reported. |
-| RG8 | Runtime knowledge passes provenance and deprojecting scans, including evaluator-supplied `forbidden_residue_tokens` from the signed manifest. Local source, knowledge and main-prompt surfaces must all be present; an empty/partial scan cannot qualify. |
-| RG9 | Runtime AST import/legacy-format checks and source/main-prompt/eligible-knowledge residue scans pass, with all three local surfaces present. Full documentation consistency and semantic neutrality remain separate review obligations. |
+| RG8 | Runtime knowledge passes provenance and deprojecting scans, including evaluator-supplied `forbidden_residue_tokens` from the signed manifest. Local source, knowledge, main Skill and operating runbook must be present; an empty/partial scan cannot qualify. |
+| RG9 | Runtime AST import/legacy-format checks and source/Skill/runbook/eligible-knowledge residue scans pass; the signed scan result must be boolean true. Full documentation consistency and semantic neutrality remain separate review obligations. |
 | RG10 | Real vNext run records attest evidence_traceable=true. Artifact reference/digest validation is a separate mandatory evaluator preflight, not a semantic proof of traceability. |
 | RG11 | All 150 language/issue cells meet the frozen sample floor and at least one real held-out mixed-language Campaign has fully reconciled boundary cases. |
 | RG12 | Every enabled hotspot provider passes positive, negative, alias, and malformed-source conformance fixtures; held-out evaluation reports candidate coverage/precision separately from Agent finding recall. Missing providers and unsupported paths are explicit, never counted as clean coverage. |

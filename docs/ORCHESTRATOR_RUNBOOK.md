@@ -9,6 +9,9 @@ target's relevant mechanisms and retain other source-evidenced candidates.
 Release qualification, signed external observations and optional host-worker
 attestation have separate prerequisites. Ordinary audit use does not require HMAC
 keys. This runbook does not weaken existing stage validators or host permissions.
+This guide and the main Skill are operational prompt surfaces checked by the residue
+scanner. Design reviews, candidate plans and past run records are evaluator-side
+material, not source-worker context; their presence in a full checkout is not isolation.
 
 ## 1. Stable Command Entry
 

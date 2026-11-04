@@ -296,7 +296,7 @@ and promotion have separate prerequisites. Start with the
 retain permissions, isolation, resource limits, and logs without inventing attestations.
 
 Run release evaluation from the complete source checkout: RG8/RG9 require local source,
-knowledge and main-prompt scan coverage. A wheel-only installation cannot satisfy that
+knowledge, main Skill and operating-runbook scan coverage. A wheel-only installation cannot satisfy that
 qualification requirement.
 
 `plan` records planned Batches and prints their IDs and scope summaries. An optional
@@ -328,12 +328,14 @@ and use `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1` with the same test selection. A kille
 incomplete run is not a passing result.
 
 The compatibility scan checks legacy imports/formats and generic residue patterns in
-runtime Python/helper source, the main skill prompt, and runtime-eligible knowledge. It reports
+runtime Python/helper source, the main Skill, its operating runbook, and runtime-eligible knowledge. It reports
 the actual file counts; development/history documents and test fixtures are not runtime
 knowledge. Project-specific residue tokens are caller-supplied rather than taken from a
 built-in list of past targets. The offline legacy-knowledge migration tool also requires
 an explicit reviewer/evaluator token file. A passing scan is bounded pattern evidence,
 not semantic proof that no historical bias or project-specific guidance remains.
+Full checkout/Skill copies retain evaluator-side history; these checks do not isolate
+host contexts or authorize loading prior project plans into discovery workers.
 
 ## Project Documents
 

@@ -527,9 +527,12 @@ status=ACCEPTED, eligible_for_promotion=true and implemented_subset_status=PASS.
 These are evaluator results on supplied signed evidence, not independently verified
 release approval. External policy still requires independent review of the real bundle.
 No signed extra field waives an unavailable check.
-Release policy `vnext-release-policy-7` also requires nonzero local source, knowledge
-and main-prompt scan coverage at RG8/RG9. Run qualification from the full checkout;
-the standalone wheel lacks the host prompt and cannot qualify through empty scans.
+Release policy `vnext-release-policy-8` requires local source, knowledge and both
+operating prompts (Skill and runbook) at RG8/RG9. Boolean qualification flags are
+strictly typed; noise/recall tolerances must be finite numbers. RG13 checks base,
+compact and registered per-axis R2 inputs alike, rejecting unknown R2 operations.
+Run qualification from the full checkout; the standalone wheel lacks the operating
+prompts and cannot qualify through empty scans. These checks do not observe host context.
 
 Remaining implementation gaps include recognition of arbitrary unknown-language
 syntax, compiler-wide call-graph resolution, broader automatic FFI/RPC/IPC and

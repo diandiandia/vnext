@@ -647,6 +647,32 @@ and [test_harness_runner.py](../../tests/test_harness_runner.py).
 These test software reliability and validation consistency, not target vulnerability
 discovery quality or independently observed execution provenance.
 
+### TR-24: Generality, Operational Prompt Coverage and Evaluator Input Integrity
+
+**Required tests:** [test_evaluation.py](../../tests/test_evaluation.py),
+[test_cli.py](../../tests/test_cli.py), [test_knowledge_catalog.py](../../tests/test_knowledge_catalog.py)
+and [test_knowledge_migration.py](../../tests/test_knowledge_migration.py).
+
+- Accept valid base, compact and registered per-axis R2 clean-room evidence.
+  Reject history-bearing inputs and unknown R2 operations; compact mode must not
+  be silently omitted from provenance checks.
+- Reject non-boolean run/language/issue flags and truthy non-boolean RG9 results.
+  Preserve conservative omission defaults and valid JSON booleans. Reject boolean,
+  numeric-string, non-finite and out-of-range noise/recall tolerances explicitly.
+- Scan both the Skill and operating runbook, while leaving evaluator history and
+  fixtures outside the runtime residue surface. Missing either operating prompt
+  blocks RG8/RG9 even when a partial low-level scan has no pattern findings.
+- Generalize six reviewed C/C++/Java training mechanisms without changing issue/card
+  IDs, ranks, families or CWEs. Remove historical rule references, target-specific
+  defaults and predetermined severity. Regenerate profiles/cards/provenance through
+  the offline generator with seeded status and valid digests.
+- Do not copy a pitfall into counterevidence merely because it is nonempty.
+  Refined mechanisms must retain actual blocking/limiting conditions. A rewritten
+  training mechanism is seeded, not a newly observed target result.
+
+These are local regression and bounded curation requirements, not proof of unbiased
+150-cell discovery, complete semantic catalog review or standards conformity.
+
 ## 5. Evidence Record
 
 Every test report records:

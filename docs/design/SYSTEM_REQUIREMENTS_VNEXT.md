@@ -21,7 +21,7 @@ requirements update.
 
 Reliability traceability (2026-10-24): SYSR-012/013 concrete R2 references fail early;
 SYSR-021 includes atomic ordinary/bundled R4 scheduling; SYSR-014/023 include frozen
-frozen unresolved split deferral and derived provisional review packets; SYSR-015
+unresolved split deferral and derived provisional review packets; SYSR-015
 includes explicit STATIC_ONLY enforcement at the managed harness boundary.
 SYSR-019 recovery guidance retains the revision cascade without automatic reuse.
 These refinements map to SWDR-012/013/014/015/017/019 and TR-20; legacy defaults and
@@ -79,7 +79,7 @@ target discovery-quality evidence.
 | SYSR-021 | Campaign facts and state transitions shall be durably recorded with idempotent submission and reproducible artifact references. | §3.4; §9 | SWDR-017 | Covered |
 | SYSR-022 | Recorded source-snapshot drift shall invalidate affected Work Units, Handoffs, and Findings until resolved with evidence. | §9 | SWDR-018 | Implemented for recorded/detected drift, not continuous monitoring of every host source read. |
 | SYSR-023 | Batch completion shall not imply Campaign completion; reports shall state unreviewed scope, unresolved boundaries, blockers, and residual risk. | §6; §9 | SWDR-012, SWDR-019 | Covered |
-| SYSR-024 | Runtime shall use canonical vNext state without v2/v3 queue imports; compatibility/deproject scans shall check generic and caller-supplied residue patterns. | §3.1; §7; §10 | SWDR-020 | Scan scope includes runtime Python, the main prompt, and runtime-eligible knowledge, not history/development documents or tests. A clean scan is bounded by patterns, not proof of semantic neutrality. Caller-owned Campaign paths are not forbidden runtime-knowledge examples. |
+| SYSR-024 | Runtime shall use canonical vNext state without v2/v3 queue imports; compatibility/deproject scans shall check generic and caller-supplied residue patterns. | §3.1; §7; §10 | SWDR-020 | Scan scope includes runtime Python/helpers, the main Skill, operating runbook and runtime-eligible knowledge, not evaluator history or tests. A clean scan is bounded by patterns, not proof of semantic neutrality. Caller-owned Campaign paths are not forbidden runtime-knowledge examples. |
 | SYSR-025 | Offline extraction shall produce reviewable knowledge/provenance without importing legacy modules into runtime. | §7; §10 | SWDR-028 | Publication review is operator-asserted; semantic deduplication and consumer/counterexample review are not fully enforced. |
 | SYSR-026 | Evaluation shall validate HMAC-signed paired-run records, parity digests, budgets, evidence digests, and held-out/non-synthetic attestations. | §8; §10 | SWDR-021, SWDR-022, SWDR-027 | Independent adjudication and actual host isolation are trusted-signer responsibilities, not independently checked facts. |
 | SYSR-027 | Evaluation shall apply implemented release gates and report per-language/family/cell recall, worst-group deltas, noise, sample counts, and intervals from signed inputs. | §8; §10 | SWDR-001, SWDR-021, SWDR-024, SWDR-026, SWDR-027 | RG1-RG15 have evaluator checks; signed assertions and gate success still require independent real evidence and never alone certify capability. |

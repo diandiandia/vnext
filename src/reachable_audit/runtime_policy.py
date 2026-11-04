@@ -10,7 +10,7 @@ from typing import Any
 TASK_OUTPUT_MAX_BYTES = 4 * 1024 * 1024
 TASK_OUTPUT_TARGET_BYTES = 1024 * 1024
 R2_LARGE_SOURCE_FILE_WARNING_BYTES = 1024 * 1024
-RELEASE_POLICY_VERSION = "vnext-release-policy-7"
+RELEASE_POLICY_VERSION = "vnext-release-policy-8"
 REQUIRED_RELEASE_GATES = tuple(f"RG{index}" for index in range(1, 16))
 IMPLEMENTED_RELEASE_GATES = tuple(f"RG{index}" for index in range(1, 16))
 

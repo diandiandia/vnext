@@ -22,7 +22,15 @@ anchors. TR-21 records the local regression scope. This does not establish seman
 review, independent discovery quality, Google internal approval, or lifecycle-standard
 conformity. See the [current generality review](GENERALITY_REVIEW_VNEXT.md).
 
-### Current Maintenance Baseline (2026-10-25)
+### Current Maintenance Baseline (2026-11-04)
+
+2026-11-04 reassessment: task policy remains 56; release policy is 8. TR-24 repairs
+R2 evaluation-mode parity, qualification flag/tolerance validation and operational
+prompt scan coverage. Six C/C++/Java mechanisms were regenerated as generic seeded
+guidance; IDs, ranks, families and CWEs remain unchanged. The latest
+[generality review](GENERALITY_REVIEW_VNEXT.md#latest-review-2026-11-04-generality-and-evaluation-integrity)
+records evidence and remaining limits. The dated baselines below are historical
+maintenance records, not additional per-target requirements.
 
 Task policy 53 includes early R2 concrete-reference checks, atomic ordinary/bundled
 R4 scheduling, frozen static-only and default unresolved split deferral for new

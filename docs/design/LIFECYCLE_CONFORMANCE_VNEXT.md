@@ -84,6 +84,15 @@ Google internal engineering/security requirements are not publicly available to 
 
 ## Outstanding Assessment Inputs
 
+2026-11-04 maintenance review: release policy 8 covers compact R2 provenance,
+strict qualification flags, finite tolerances and operating-runbook residue checks.
+Six training mechanisms were generalized with digest-backed seeded provenance and
+TR-24 regressions. The acceptance guide was reconciled with the actual RG1-RG15
+test entry point. This adds change/verification evidence, not organizational
+approval or a clause-level assessment. Public Google code-review guidance was used
+as an engineering comparison only; internal approval remains NOT ASSESSED and
+ISO/IEC/IEEE 12207 conformity remains NOT ESTABLISHED.
+
 These are adopter/authority deliverables, not issues that repository code can
 self-approve. Role names below are required responsibilities, not assigned people
 or evidence that approval has occurred.

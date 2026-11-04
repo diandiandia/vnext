@@ -4,31 +4,30 @@
   "review_status": "approved",
   "mechanism_id": "MECH-cpp-01",
   "family": "MEMORY-SAFETY",
-  "title": "反序列化器尺寸字段无门: wire 字节解码的长度直接进入分配/写操作",
+  "title": "Decoded lengths exceed allocation or write bounds",
   "preconditions": [
-    "反序列化器尺寸字段无门: wire 字节解码的长度直接进入分配/写操作"
+    "An input-derived length may reach allocation or copying before arithmetic and capacity checks"
   ],
   "dangerous_transitions": [
-    "反序列化器尺寸字段无门: wire 字节解码的长度直接进入分配/写操作"
+    "An input-derived length may reach allocation or copying before arithmetic and capacity checks"
   ],
   "sink_semantics": [
-    "GetUint30/varint 解码点"
+    "length decoding, size arithmetic, allocation and bounded writes"
   ],
   "counterevidence": [
-    "A guard dominates the sensitive operation for every relevant path.",
-    "The effective principal cannot control the source or the impact is not security relevant.",
-    "『快照/缓存为受信输入』是信任模型声明不是代码防御——防御纵深建议仍需尺寸门 (code-cache 侧 size<kHeaderSize 守卫先例) | 乘法回绕必须在分配前检查 (SignedMulOverflow), 回绕后小尺寸分配成立即越界写 | 后置 CHECK 不阻断首块写——检查点在写窗口之后属后置检查形态, 按 CK-POSTOP-INVARIANT 判缺陷"
+    "Checked arithmetic and capacity validation dominate every allocation and write using the decoded size.",
+    "Only trusted producers within the same security boundary can reach the decoder, and untrusted principals cannot alter the decoded data."
   ],
   "language_applicability": [
     "cpp"
   ],
   "verification_recipe": [
-    "Trace the relevant source cue to the GetUint30/varint 解码点 operation.",
-    "Establish attacker control, effective principal, guards, and security impact.",
-    "Test the listed counterevidence and record source anchors for every edge."
+    "Trace the language-specific source cue to length decoding, size arithmetic, allocation and bounded writes.",
+    "Establish attacker control, effective principal, guarding order, and security impact.",
+    "Test the stated language-specific counterevidence against source and runtime behavior."
   ],
   "provenance": [
-    "PROV-cpp-01-c227252f8b8b"
+    "PROV-cpp-01-d2d618620cc0"
   ],
   "evaluation_partition": "training",
   "evidence_state": "seeded"

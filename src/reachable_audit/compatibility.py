@@ -9,6 +9,9 @@ import re
 from typing import Any, Sequence
 
 
+OPERATING_PROMPT_PATHS = ("SKILL.md", "docs/ORCHESTRATOR_RUNBOOK.md")
+
+
 _FORBIDDEN_MODULES = frozenset({
     "surface_mapper", "signature_lib", "signature_matcher", "workflow_export",
     "batch_verify", "evidence_ledger", "language_issue_matrix", "r2_guard",
@@ -107,7 +110,7 @@ def scan_runtime_compatibility(root: str | Path, forbidden_tokens: Sequence[str]
 
 
 def scan_runtime_deproject(root: str | Path, forbidden_tokens: Sequence[str] = ()) -> dict[str, Any]:
-    """Scan runtime source, the main prompt, and eligible knowledge for bounded residue."""
+    """Scan runtime source, operating prompts, and eligible knowledge for bounded residue."""
     base = Path(root).resolve()
     knowledge_root = base / "knowledge"
     runtime_roots = (
@@ -129,7 +132,10 @@ def scan_runtime_deproject(root: str | Path, forbidden_tokens: Sequence[str] = (
         path for path in (base / "src").rglob("*")
         if path.is_file() and path.suffix in {".go", ".java"}
     ]
-    prompt_paths = [base / "SKILL.md"] if (base / "SKILL.md").is_file() else []
+    prompt_paths = [
+        base / relative for relative in OPERATING_PROMPT_PATHS
+        if (base / relative).is_file()
+    ]
     paths.extend(source_paths)
     paths.extend(helper_paths)
     paths.extend(prompt_paths)

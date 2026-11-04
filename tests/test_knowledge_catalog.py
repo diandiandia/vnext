@@ -156,6 +156,31 @@ def test_java_tasks_receive_java_top_ten_not_all_fifteen_languages() -> None:
     )
 
 
+@pytest.mark.parametrize(("language", "rank"), [
+    ("c", 7), ("c", 9), ("c", 10), ("cpp", 1), ("java", 7), ("java", 9),
+])
+def test_refined_guidance_does_not_prescribe_historical_target_results(
+    language: str, rank: int,
+) -> None:
+    catalog = KnowledgeCatalog.load(default_knowledge_root())
+    issue = catalog.profiles[language]["entries"][rank - 1]
+    card = catalog.cards[f"MECH-{language}-{rank:02}"]
+    serialized = json.dumps({"issue": issue, "card": card}, ensure_ascii=False)
+    for token in (
+        "PREC-ALLOC", "CK-MAGNITUDE", "CK-POSTOP", "GetUint30", "kHeaderSize",
+        "SignedMulOverflow", "glitch", "max=10", "thres&&", "三段纯文本",
+        "判 Low", "不得报 remote", "窗口是默认形态",
+    ):
+        assert token not in serialized
+    assert "current target" in " ".join(issue["language_pitfalls"])
+    assert len(card["counterevidence"]) >= 2
+    assert not set(issue["language_pitfalls"]) & set(card["counterevidence"])
+    assert card["evidence_state"] == "seeded"
+    provenance = catalog.provenance[issue["provenance_refs"][0]]
+    assert provenance["evidence_state"] == "seeded"
+    assert provenance["refinement_id"]
+
+
 def test_catalog_rejects_a_missing_language_profile(tmp_path: Path) -> None:
     _write_catalog(tmp_path)
     (tmp_path / "profiles" / f"{LANGUAGES[-1]}.json").unlink()

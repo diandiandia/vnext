@@ -4,7 +4,11 @@ import hmac
 import json
 from pathlib import Path
 
-from reachable_audit.evaluation import ShadowRun, evaluate_release, sign_manifest
+from reachable_audit.analysis_models import DiscoveryAxis
+from reachable_audit.evaluation import (
+    AcceptancePolicy, LanguageAcceptance, LanguageIssueSample, ShadowRun,
+    evaluate_release, sign_manifest,
+)
 from reachable_audit.knowledge_catalog import KnowledgeCatalog, default_knowledge_root
 from reachable_audit.models import ModelError
 
@@ -259,7 +263,9 @@ def _rewrite_measurement_artifact(
     ).encode("utf-8")).hexdigest()
 
 
-@pytest.mark.parametrize("missing_surface", ("src", "knowledge", "SKILL.md"))
+@pytest.mark.parametrize("missing_surface", (
+    "src", "knowledge", "SKILL.md", "docs/ORCHESTRATOR_RUNBOOK.md",
+))
 def test_release_blocks_incomplete_local_runtime_scan(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, missing_surface: str,
 ) -> None:
@@ -270,8 +276,9 @@ def test_release_blocks_incomplete_local_runtime_scan(
         ("src/runtime.py", "VALUE = 1\n"),
         ("knowledge/portfolio.json", "{}"),
         ("SKILL.md", "Generic audit instructions.\n"),
+        ("docs/ORCHESTRATOR_RUNBOOK.md", "Generic operating lifecycle.\n"),
     ):
-        if relative.split("/", 1)[0] == missing_surface:
+        if relative == missing_surface or relative.split("/", 1)[0] == missing_surface:
             continue
         path = root / relative
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -301,7 +308,7 @@ def test_release_accepts_when_all_implemented_gate_evidence_is_valid() -> None:
     assert report["failed_gates"] == []
     assert report["verified_evidence_refs"] == sorted(manifest["evidence_artifacts"])
     assert set(report["gates"]) == {f"RG{index}" for index in range(1, 16)}
-    assert report["policy"]["release_policy_version"] == "vnext-release-policy-7"
+    assert report["policy"]["release_policy_version"] == "vnext-release-policy-8"
     assert report["gates"]["RG6"]["pass"] is True
     assert report["gates"]["RG12"]["pass"] is True
     provider_metric = report["gates"]["RG12"]["detail"]["provider_metrics"]["python-ast-hotspots-v1"]
@@ -311,6 +318,86 @@ def test_release_accepts_when_all_implemented_gate_evidence_is_valid() -> None:
     assert report["gates"]["RG15"]["pass"] is True
     assert report["gates"]["RG13"]["pass"] is True
     assert report["gates"]["RG11"]["detail"]["required_language_issue_cells"] == 150
+
+
+@pytest.mark.parametrize("operation", [
+    "generate_hypotheses_compact",
+    *(f"generate_hypotheses:{axis.value}" for axis in DiscoveryAxis),
+    "generate_hypotheses:not-an-axis",
+])
+@pytest.mark.parametrize("history", [False, True])
+def test_rg13_checks_each_supported_r2_input_mode(operation: str, history: bool) -> None:
+    manifest = _manifest()
+    project_id = "project-native"
+    reference = f"INPUT-{project_id}-R2"
+    record = manifest["evidence_artifacts"][reference]
+    record["content"]["operation"] = operation
+    if history:
+        record["content"]["history_source_campaign_ids"] = ["prior-campaign"]
+    record["sha256"] = hashlib.sha256(json.dumps(
+        record["content"], ensure_ascii=False, sort_keys=True, separators=(",", ":"),
+    ).encode()).hexdigest()
+    run = next(
+        item for item in manifest["runs"]
+        if item["project_id"] == project_id and item["engine"] == "vnext"
+    )
+    measurement = manifest["evidence_artifacts"][run["measurement_artifact_ref"]]["content"]
+    tasks = measurement["execution_measurements"]["tasks"]
+    r2_task = next(item for item in tasks if item["operation"] == "generate_hypotheses")
+    r2_task["operation"] = operation
+    _rewrite_measurement_artifact(
+        manifest, project_id, execution_measurements=measurement["execution_measurements"],
+    )
+    report = evaluate_release(_resign(manifest), signing_key=_TEST_SIGNING_KEY)
+    expected_pass = not history and operation != "generate_hypotheses:not-an-axis"
+    assert report["gates"]["RG13"]["pass"] is expected_pass
+
+
+@pytest.mark.parametrize("field", [
+    "campaign_complete", "interruption_recovered", "evidence_traceable", "held_out", "synthetic",
+])
+@pytest.mark.parametrize("invalid", ["false", 1, None])
+def test_shadow_run_requires_boolean_flags(field: str, invalid: object) -> None:
+    value = _run("project", "vnext", "dynamic")
+    value[field] = invalid
+    with pytest.raises(ModelError, match=f"{field} must be a boolean"):
+        ShadowRun.from_dict(value)
+
+
+@pytest.mark.parametrize("field", ["certified", "adapter_contract_passed", "held_out_sample_passed"])
+def test_language_acceptance_rejects_truthy_non_boolean(field: str) -> None:
+    value = _manifest()["languages"][0]
+    value[field] = "false"
+    with pytest.raises(ModelError, match=f"{field} must be a boolean"):
+        LanguageAcceptance.from_dict(value)
+
+
+@pytest.mark.parametrize("field", ["held_out", "synthetic"])
+def test_issue_sample_rejects_truthy_non_boolean(field: str) -> None:
+    value = _manifest()["language_issue_samples"][0]
+    value[field] = "false"
+    with pytest.raises(ModelError, match=f"{field} must be a boolean"):
+        LanguageIssueSample.from_dict(value)
+
+
+def test_rg9_rejects_truthy_non_boolean_scan_result() -> None:
+    manifest = _manifest()
+    manifest["compatibility_scan"]["passed"] = "false"
+    report = evaluate_release(_resign(manifest), signing_key=_TEST_SIGNING_KEY)
+    assert report["gates"]["RG9"]["pass"] is False
+
+
+@pytest.mark.parametrize("field", [
+    "maximum_noise_ratio_increase", "maximum_worst_group_recall_drop",
+])
+@pytest.mark.parametrize("invalid", [
+    float("inf"), float("-inf"), float("nan"), True, "0.05", 10 ** 400,
+])
+def test_acceptance_policy_rejects_nonfinite_or_boolean_tolerances(
+    field: str, invalid: object,
+) -> None:
+    with pytest.raises(ModelError, match="finite number"):
+        AcceptancePolicy.from_dict({field: invalid})
 
 
 @pytest.mark.parametrize(
@@ -452,7 +539,7 @@ def test_rg8_rejects_manifest_claim_when_runtime_scan_finds_residue(
             "findings": [{"path": "knowledge/profiles/sample.json", "value": "acme-widget"}],
             "scanned_knowledge_files": 1,
             "scanned_python_files": 1,
-            "scanned_prompt_files": 1,
+            "scanned_prompt_files": 2,
         },
     )
 

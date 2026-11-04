@@ -1071,10 +1071,16 @@ required gates pass, the evaluator returns status=ACCEPTED, eligible_for_promoti
 and implemented_subset_status=PASS. Independent real-bundle review remains an external
 release-policy requirement; evaluator success is not certification. Extra signed fields
 cannot enable or waive missing checks.
-Release policy `vnext-release-policy-7` requires local source, knowledge and main-prompt
-scan counts to be nonzero for RG8/RG9. Low-level scan helpers still support partial
-fixtures, but partial/empty scans cannot qualify a release. Evaluation must run from
-the complete source checkout, not a wheel-only installation.
+Release policy `vnext-release-policy-8` requires nonzero local source/knowledge counts
+and both declared operating prompts (`SKILL.md`, `docs/ORCHESTRATOR_RUNBOOK.md`) for
+RG8/RG9. Low-level scan helpers still support partial fixtures; partial/empty scans
+cannot qualify a release. Run/language/issue flags use strict boolean parsing with
+conservative omission defaults; noise/recall tolerances use finite numeric parsing.
+RG9 accepts only boolean true, not truthy scan labels. RG13 enumerates base/compact
+R2 and the six `DiscoveryAxis` operations, validates each primary input's snapshot
+and history, and marks unknown R2 operations invalid. Evaluation must run from the
+complete checkout, not a wheel-only installation. No new task stage or history store
+is introduced; task policy 56 and existing Campaign task identities are unchanged.
 
 ## 9. Acceptance and Test Design
 

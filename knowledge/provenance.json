@@ -115,23 +115,24 @@
       "evidence_state": "seeded",
       "review_status": "approved"
     },
-    "PROV-c-07-5c595fa8611f": {
-      "source_type": "v3_language_issue_inventory",
+    "PROV-c-07-137d2811c279": {
+      "source_type": "language_specific_seeded_refinement",
       "source_record_id": "INV-c-006",
+      "refinement_id": "c-allocation-budget-boundary-v1",
       "source_digest_basis": {
         "id": "INV-c-006",
         "lang": "c",
-        "title": "资源门禁强制点=计数分配器包装层: 裸 malloc/mmap/第三方分配器站点逐一枚举——限额类缺陷的旁路族",
+        "title": "Attacker-controlled allocations bypass an enforced resource budget",
         "family": "RESOURCE-DOS",
         "cwe": [
           "CWE-789"
         ],
-        "pattern": "资源门禁强制点=计数分配器包装层: 裸 malloc/mmap/第三方分配器站点逐一枚举——限额类缺陷的旁路族",
-        "sink_hint": "malloc 家族",
-        "pitfall": "分配请求 ≠ 资源耗尽: 提交内存受输入限制时判 Low (PREC-ALLOC-VIRTUAL-001) | 累积型 (逐块预留) 与一次性分配的量级判定不同 | 子执行上下文 (worker/线程/子 rt) 的资源参数继承矩阵逐项核对; 哨兵值 (0/-1/非法) 语义 fail-open 还是 fail-closed"
+        "pattern": "Attacker-influenced allocation sizes or repetition may bypass a resource-accounting boundary",
+        "sink_hint": "allocation, mapping, commitment or retention of memory",
+        "pitfall": "For the current target, distinguish requested address space, committed memory, cumulative retention and process-wide limits. Establish attacker control and actual availability impact; do not prescribe severity from allocation size alone."
       },
-      "source_digest": "sha256:5c595fa8611fe8c08d833d832d2e394ae6306e714956a41499ff3ea09306316c",
-      "evidence_state": "battle_observed",
+      "source_digest": "sha256:137d2811c279401014137434dbfacd773963e8328c7c591b1401f429c2108e54",
+      "evidence_state": "seeded",
       "review_status": "approved"
     },
     "PROV-c-08-45e1fa089a3c": {
@@ -153,60 +154,63 @@
       "evidence_state": "battle_observed",
       "review_status": "approved"
     },
-    "PROV-c-09-2ebdb946a155": {
-      "source_type": "v3_language_issue_inventory",
+    "PROV-c-09-679183ffa32f": {
+      "source_type": "language_specific_seeded_refinement",
       "source_record_id": "INV-c-016",
+      "refinement_id": "c-protocol-peer-authentication-v1",
       "source_digest_basis": {
         "id": "INV-c-016",
         "lang": "c",
-        "title": "集群同步协议默认无认证 (无 secret 机制载体)",
+        "title": "Protocol messages cross a privileged boundary without peer authentication",
         "family": "AUTHN",
         "cwe": [
           "CWE-306"
         ],
-        "pattern": "集群同步协议默认无认证 (无 secret 机制载体)",
-        "sink_hint": "入站同步监听的三段纯文本握手 (版本/主机名/对端名)",
-        "pitfall": "判据: 配置启用即攻击面; '无认证是可选关闭的默认' 与 '无认证机制载体' 是两种强度——grep 全文件无 secret/sign/hmac 标识符才可下后者结论"
+        "pattern": "A peer-controlled message may trigger protected operations without an authenticated peer identity",
+        "sink_hint": "protocol dispatch or state changes requiring an authenticated peer",
+        "pitfall": "For the current target, establish transport, deployment, peer identity and operation privileges. Missing authentication-related names or a particular handshake shape do not prove authentication is absent."
       },
-      "source_digest": "sha256:2ebdb946a155a215e00da6e8bf16821dc89bf5327c89cde52d8ce9d07dafa793",
-      "evidence_state": "battle_observed",
+      "source_digest": "sha256:679183ffa32f2fa45f3e78411a88f31fd10aa5f1864e300aff45b3e7a34de177",
+      "evidence_state": "seeded",
       "review_status": "approved"
     },
-    "PROV-c-10-7a2cfe267ebb": {
-      "source_type": "v3_language_issue_inventory",
+    "PROV-c-10-71db491dfe42": {
+      "source_type": "language_specific_seeded_refinement",
       "source_record_id": "INV-c-017",
+      "refinement_id": "c-protocol-resource-limit-v1",
       "source_digest_basis": {
         "id": "INV-c-017",
         "lang": "c",
-        "title": "协议滥用节流阈值默认 0=fail-open (上游 opt-in 加固)",
+        "title": "Protocol-controlled work bypasses an effective resource limit",
         "family": "RESOURCE-DOS",
         "cwe": [
           "CWE-770"
         ],
-        "pattern": "协议滥用节流阈值默认 0=fail-open (上游 opt-in 加固)",
-        "sink_hint": "glitch 计数 + thres&&门控的强制路径",
-        "pitfall": "量级驱动权判据: 默认配置 sink 零强制效果 + 每事件成本为协议固有处理 → 不得报 remote 级 DoS, 按防御规避内核/加固缺口口径 (CK-MAGNITUDE-OWNERSHIP)"
+        "pattern": "Peer-controlled work may continue without a bound on admitted cost, retained state or repetition",
+        "sink_hint": "protocol work admission, resource retention or throttling",
+        "pitfall": "For the current target, establish effective configuration and sentinel semantics from source and deployment evidence. Measure attacker cost, amplification and availability impact before classifying a vulnerability or hardening gap; do not assume any threshold default."
       },
-      "source_digest": "sha256:7a2cfe267ebb3c655d36b222ef3c7b8af6f03a917ec4381e8749cae851076e21",
-      "evidence_state": "battle_observed",
+      "source_digest": "sha256:71db491dfe42e8e1dd98ab863e1be058a526af35e0336f35bc741ea13487dfbc",
+      "evidence_state": "seeded",
       "review_status": "approved"
     },
-    "PROV-cpp-01-c227252f8b8b": {
-      "source_type": "v3_language_issue_inventory",
+    "PROV-cpp-01-d2d618620cc0": {
+      "source_type": "language_specific_seeded_refinement",
       "source_record_id": "INV-cpp-001",
+      "refinement_id": "cpp-decoded-length-boundary-v1",
       "source_digest_basis": {
         "id": "INV-cpp-001",
         "lang": "cpp",
-        "title": "反序列化器尺寸字段无门: wire 字节解码的长度直接进入分配/写操作",
+        "title": "Decoded lengths exceed allocation or write bounds",
         "family": "MEMORY-SAFETY",
         "cwe": [
           "CWE-787"
         ],
-        "pattern": "反序列化器尺寸字段无门: wire 字节解码的长度直接进入分配/写操作",
-        "sink_hint": "GetUint30/varint 解码点",
-        "pitfall": "『快照/缓存为受信输入』是信任模型声明不是代码防御——防御纵深建议仍需尺寸门 (code-cache 侧 size<kHeaderSize 守卫先例) | 乘法回绕必须在分配前检查 (SignedMulOverflow), 回绕后小尺寸分配成立即越界写 | 后置 CHECK 不阻断首块写——检查点在写窗口之后属后置检查形态, 按 CK-POSTOP-INVARIANT 判缺陷"
+        "pattern": "An input-derived length may reach allocation or copying before arithmetic and capacity checks",
+        "sink_hint": "length decoding, size arithmetic, allocation and bounded writes",
+        "pitfall": "For the current target, establish input trust, integer widths, overflow behavior, capacity and check ordering. An assertion after a write does not protect that write; an input-trust claim needs source-backed authority evidence. Authentication alone does not establish a trusted producer."
       },
-      "source_digest": "sha256:c227252f8b8b3d71490e3ffada0a41adadd143ae2bf8f910abbe356ebf859867",
+      "source_digest": "sha256:d2d618620cc06208252eb61866ba86263036badff3b65ea18f2881c47f53e1ed",
       "evidence_state": "seeded",
       "review_status": "approved"
     },
@@ -881,23 +885,24 @@
       "evidence_state": "battle_observed",
       "review_status": "approved"
     },
-    "PROV-java-07-b1449e8c6275": {
-      "source_type": "v3_language_issue_inventory",
+    "PROV-java-07-708fb892c758": {
+      "source_type": "language_specific_seeded_refinement",
       "source_record_id": "INV-java-017",
+      "refinement_id": "java-shared-state-check-use-v1",
       "source_digest_basis": {
         "id": "INV-java-017",
         "lang": "java",
-        "title": "时序窗口: TOCTOU 检查与消费跨事务分离 / 并发窗口 (竞态窗口+会话过期+重放)",
+        "title": "Concurrent check and mutation violate a shared-state contract",
         "family": "RACE",
         "cwe": [
           "CWE-367"
         ],
-        "pattern": "检查与撤销写入跨事务分离 (contains 检查→流结束才 put); 持久化旁路在 CAS 判定之外无条件执行; 单次使用语义的占位与消费时序窗口",
-        "sink_hint": "单次消费检查点; 撤销/持久化写入点; 锁获取与释放回调点",
-        "pitfall": "contains 只读检查与 put 原子写的窗口是默认形态——占位写前移是修复方向; 存量对象不受新保护机制覆盖 (开关翻转场景)"
+        "pattern": "Concurrent requests may interleave validation, reservation, use or revocation of shared state",
+        "sink_hint": "state validation and mutation across threads, callbacks or transactions",
+        "pitfall": "For the current target, establish the state invariant and an allowed interleaving. Individual thread-safe operations do not necessarily make a sequence atomic; do not assume a particular map API, lifecycle or default race window."
       },
-      "source_digest": "sha256:b1449e8c6275c0a5e239c79a5bbaea038daad5c90e8c6994b00ca2f9e03fe163",
-      "evidence_state": "battle_observed",
+      "source_digest": "sha256:708fb892c758bee8e34575f1a9f01331e46554ce632fc50a4b63fa935f04690d",
+      "evidence_state": "seeded",
       "review_status": "approved"
     },
     "PROV-java-08-d4d06dd540c1": {
@@ -919,23 +924,24 @@
       "evidence_state": "battle_observed",
       "review_status": "approved"
     },
-    "PROV-java-09-e1b20d9776d4": {
-      "source_type": "v3_language_issue_inventory",
+    "PROV-java-09-7cb39562f3bf": {
+      "source_type": "language_specific_seeded_refinement",
       "source_record_id": "INV-java-020",
+      "refinement_id": "java-iteration-resource-budget-v1",
       "source_digest_basis": {
         "id": "INV-java-020",
         "lang": "java",
-        "title": "无界集合累积: 分页参数直通 skip/limit 无钳制 (java 形态)",
+        "title": "Attacker-controlled iteration exceeds the effective work budget",
         "family": "RESOURCE-DOS",
         "cwe": [
           "CWE-789"
         ],
-        "pattern": "HTTP 分页参数 (first/max) 直通 skip/limit 无上界钳制; skip-before-limit 顺序的放大杠杆; provider 侧全量物化在 limit 之前",
-        "sink_hint": "skip/limit 流操作点; provider 全量遍历点",
-        "pitfall": "first 是独立放大杠杆 (skip 施加于 limit 之前); 只钳 max 不钳 first 的常规缓解不完整; 默认请求 (max=10) 也强制全量遍历的形态"
+        "pattern": "Peer-controlled traversal, skipping or result construction may perform more work than a visible result limit suggests",
+        "sink_hint": "iteration, filtering, pagination or materialization of results",
+        "pitfall": "For the current target, trace effective offsets, limits, evaluation order and backing-store behavior. A result count alone does not bound traversal work; do not assume parameter names, default values or eager evaluation."
       },
-      "source_digest": "sha256:e1b20d9776d4921526e0e8c4d4ee0f64882ceac8806e4c77c095bd7472136e5c",
-      "evidence_state": "battle_observed",
+      "source_digest": "sha256:7cb39562f3bf188608782252a6000208fee8cb0309b4bbfdb35bb7683b130eb9",
+      "evidence_state": "seeded",
       "review_status": "approved"
     },
     "PROV-java-10-e28919f16e43": {

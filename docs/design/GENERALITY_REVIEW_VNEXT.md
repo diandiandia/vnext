@@ -1,10 +1,9 @@
 # Generality and Engineering Review
 
 Initial review: 2026-10-20. Base: `a3b969c` plus that review's uncommitted changes.
-Latest reassessment: 2026-11-01, base `1ca7a67` plus the reviewed and repaired
-worktree changes recorded in
-[the latest review](#latest-review-2026-11-01-worktree-contracts-and-generality-boundaries).
-The 2026-10-25 section remains the prior dated review.
+Latest reassessment: 2026-11-04, base `494a698` plus the reviewed and repaired
+changes in [the latest review](#latest-review-2026-11-04-generality-and-evaluation-integrity).
+Earlier sections are dated historical evidence, not the current backlog or audit plan.
 This is a bounded engineering review and repair record, not a security certification,
 exhaustive dead-code proof, Google internal approval, or ISO conformity assessment.
 The historical [quality reassessment](QUALITY_REASSESSMENT_VNEXT.md) is retained as
@@ -1270,3 +1269,104 @@ This corrects policy 55's overstatement of shared direct-object validation rathe
 than treating its previous passing suite as proof. Representative host/target
 acceptance, independently measured discovery quality and actual context isolation
 remain required before an “excellent production-grade” claim.
+
+## Latest Review (2026-11-04): Generality and Evaluation Integrity
+
+### Scope and decision
+
+Baseline: clean `494a698`. Inspected the Skill, README/runbook, requirements,
+system/software design and acceptance/lifecycle documents; traced catalog loading,
+migration and release-evaluation inputs. Screened all 53 runtime Python files for
+imports, top-level references and exact function-body duplication, and all 150
+profile counterevidence/pitfall rows. This is a bounded engineering reassessment,
+not an exhaustive semantic audit of every branch or knowledge field.
+
+| Question | Current conclusion |
+|---|---|
+| General Skill? | General within authorized source-security auditing and its declared portfolio, not every task/language/framework. The event/artifact/task architecture supports resumable mixed-language work. Excellent real discovery quality is not yet demonstrated. |
+| Clean of history? | Runtime loaders do not load candidate plans or dated audit reports. However, six reviewed mechanisms contained historical rule references, implementation-specific assumptions or predetermined classifications. These were generalized below. No evidence supports a universal zero-contamination claim. |
+| Bias? | Training/rank/portfolio/provider asymmetry remains. Corrected concrete historical decision bias; retained conditional language APIs, counterevidence and out-of-catalog candidates. No balanced blind benchmark establishes unbiased recall. |
+| Dead/redundant code? | No unused-import, unreferenced top-level-definition or exact function-body duplicate candidate of at least 12 lines in the bounded AST screen, including source/test/tool name uses. This does not prove all methods/branches live or rule out semantic duplication. Public interfaces were not deleted on name-count evidence. |
+| Architecture? | Reuse of canonical events, artifacts and validators is appropriate. Large orchestration modules (4,443/2,414/2,152 baseline lines for execution/Batch/Campaign closure) and accumulated dated design updates remain maintenance debt. No safe wholesale rewrite was justified. |
+| Documentation? | Operational history boundaries and R3.5 amendment guidance clarified. Current acceptance documentation had contradicted its real test entry point; corrected. Historical evidence remains dated, not silently deleted or promoted into current guarantees. |
+| Google internal requirements? | NOT ASSESSED: no authorized internal criteria or acceptance authority. Public engineering-practice comparison is not internal approval. |
+| ISO/IEC/IEEE 12207? | NOT ESTABLISHED: local traceability/maintenance evidence cannot establish controlled applicability, organizational tailoring, process ownership and lifecycle outcomes. No clause-level assessment was performed. |
+
+Public comparison references:
+[review standard](https://google.github.io/eng-practices/review/reviewer/standard.html)
+and [review dimensions](https://google.github.io/eng-practices/review/reviewer/looking-for.html).
+Their Markdown sources were inspected through the official `google/eng-practices`
+repository. Design, functionality, complexity, tests and documentation are useful
+review dimensions, not a certification checklist. No controlled ISO text was supplied;
+this review does not choose an edition or assert its publication status.
+
+### Confirmed problems and repairs
+
+- **Evaluation parity:** RG13 omitted compact R2 and accepted arbitrary per-axis
+  suffixes. Enumerate base/compact operations and the six existing `DiscoveryAxis`
+  values; apply the same primary-input snapshot/history checks to each.
+- **Evaluation input integrity:** truthy run/language/issue flags and RG9 scan
+  labels could be treated as true; non-finite tolerances were accepted. Validate
+  booleans explicitly, require finite numeric tolerances and preserve conservative
+  omission defaults. This is not a claim that every domain parser is universally strict.
+- **Operational scan gap:** the required runbook was outside residue scanning.
+  Scan both declared operating prompts and require both at RG8/RG9. Partial
+  low-level scans still support fixtures but cannot qualify a release. This is
+  bounded pattern detection, not a host filesystem or model-context boundary.
+- **Historical decision bias:** C resource/authentication and C++ decoded-length
+  entries retained old rule IDs, implementation names, a particular handshake or
+  fixed severity advice; Java race/iteration entries assumed specific operations,
+  parameter defaults or evaluation order. Regenerated six entries through the
+  existing offline generator with conditional current-target checks and genuine
+  limiting conditions. IDs/ranks/families/CWEs remain unchanged; rewritten
+  profiles/cards/provenance are digest-backed seeded guidance, not new battle evidence.
+- **Mislabelled counterevidence:** migration copied arbitrary pitfall text into
+  counterevidence, including statements describing a vulnerability rather than a
+  blocking condition. Stop that fallback; preserve explicit reviewed counterevidence.
+  Existing untouched entries still require semantic curation; do not infer a full
+  catalog-quality certificate from these six repairs.
+- **Documentation drift:** the acceptance guide still described RG12 as
+  unimplemented despite an ACCEPTED-result held-out entry point. Align the guide,
+  current design/requirements and TR-24 with evaluator policy 8. Clarify external
+  CLI state versus legacy `.audit_vnext`, and the supported R3.5 amendment path.
+
+No target audit, original Campaign, candidate-project plan, scope/category default,
+provider default, language roster, new ledger or runtime target blacklist was added
+or modified. Knowledge content binding remains enforced: preserve a frozen engine/
+catalog for an existing Campaign; do not replace its installed knowledge in place
+and bypass a mismatch. Use a new Campaign for revised knowledge.
+
+### Verification
+
+The original mechanical baseline was **719 passed, 1 skipped**. Focused reproduction
+first produced **30 failures / 4 passes** for evaluator/scan checks and **13 failures**
+for the knowledge checks (two migration cases initially used incorrect source IDs;
+those IDs were corrected before verification). Post-repair evaluator/CLI/helper
+tests passed **125 cases**; catalog/migration tests passed **25 cases**.
+The final expanded regression covers every registered R2 axis in both clean and
+history-bearing input cases, and exactly recreates all six shipped revised issues,
+cards and provenance records through the offline generator.
+
+Validation environment: Python **3.14.4**, task policy **56**, release policy **8**,
+baseline `494a698` plus the changes recorded in this review's commit. Full command:
+`env -u PYTHONPATH python3 -m pytest tests -o addopts='' -q -rs --tb=short`.
+
+- Full suite: **782 passed, 1 skipped**. The protected real held-out test is skipped
+  because its manifest is not configured; no real discovery/release qualification
+  is inferred from this result.
+- Compatibility/residue scan: **PASS**, zero findings across **53 Python files,
+  2 parser helpers, 167 knowledge JSON files and 2 operating prompts**, using
+  reviewer-supplied historical tokens rather than a runtime target blacklist.
+- Catalog validation: **15 languages, 150 cards, 150 provenance records**. All six
+  rewritten entries retain their issue/card IDs, ranks, families and CWEs.
+- Validated **258 local file/heading links in 12 changed Markdown documents**,
+  scalar Skill frontmatter, the **500-line** Skill bound and patch whitespace.
+- Pylance reported no diagnostics for the changed evaluator, compatibility scanner
+  and migration tool; checked Python syntax passed. Editor test-file import
+  resolution still reports missing modules despite successful terminal tests; no
+  complete project-wide type-check is claimed.
+
+Remaining work includes balanced independent discovery-quality evidence, full
+semantic knowledge curation, large-source coverage, additional hotspot providers,
+mixed-language boundary discovery and host-context enforcement. These are not
+replaced by passing unit tests or by deleting historical assessment evidence.

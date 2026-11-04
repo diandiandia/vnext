@@ -211,7 +211,7 @@
     {
       "issue_id": "c-issue-07",
       "rank": 7,
-      "title": "资源门禁强制点=计数分配器包装层: 裸 malloc/mmap/第三方分配器站点逐一枚举——限额类缺陷的旁路族",
+      "title": "Attacker-controlled allocations bypass an enforced resource budget",
       "family": "RESOURCE-DOS",
       "weakness_refs": [
         "CWE-789"
@@ -220,26 +220,25 @@
         "MECH-c-07"
       ],
       "source_cues": [
-        "资源门禁强制点=计数分配器包装层: 裸 malloc/mmap/第三方分配器站点逐一枚举——限额类缺陷的旁路族"
+        "Attacker-influenced allocation sizes or repetition may bypass a resource-accounting boundary"
       ],
       "sink_cues": [
-        "malloc 家族"
+        "allocation, mapping, commitment or retention of memory"
       ],
       "language_pitfalls": [
-        "分配请求 ≠ 资源耗尽: 提交内存受输入限制时判 Low (PREC-ALLOC-VIRTUAL-001) | 累积型 (逐块预留) 与一次性分配的量级判定不同 | 子执行上下文 (worker/线程/子 rt) 的资源参数继承矩阵逐项核对; 哨兵值 (0/-1/非法) 语义 fail-open 还是 fail-closed"
+        "For the current target, distinguish requested address space, committed memory, cumulative retention and process-wide limits. Establish attacker control and actual availability impact; do not prescribe severity from allocation size alone."
       ],
       "counterevidence": [
-        "A guard dominates the sensitive operation for every relevant path.",
-        "The effective principal cannot control the source or the impact is not security relevant.",
-        "分配请求 ≠ 资源耗尽: 提交内存受输入限制时判 Low (PREC-ALLOC-VIRTUAL-001) | 累积型 (逐块预留) 与一次性分配的量级判定不同 | 子执行上下文 (worker/线程/子 rt) 的资源参数继承矩阵逐项核对; 哨兵值 (0/-1/非法) 语义 fail-open 还是 fail-closed"
+        "An enforced aggregate budget dominates all relevant allocation and retention paths.",
+        "The principal cannot control sufficient size, repetition or lifetime to exhaust the protected resource."
       ],
       "verification_steps": [
-        "Trace the relevant source cue to the malloc 家族 operation.",
-        "Establish attacker control, effective principal, guards, and security impact.",
-        "Test the listed counterevidence and record source anchors for every edge."
+        "Trace the language-specific source cue to allocation, mapping, commitment or retention of memory.",
+        "Establish attacker control, effective principal, guarding order, and security impact.",
+        "Test the stated language-specific counterevidence against source and runtime behavior."
       ],
       "provenance_refs": [
-        "PROV-c-07-5c595fa8611f"
+        "PROV-c-07-137d2811c279"
       ]
     },
     {
@@ -279,7 +278,7 @@
     {
       "issue_id": "c-issue-09",
       "rank": 9,
-      "title": "集群同步协议默认无认证 (无 secret 机制载体)",
+      "title": "Protocol messages cross a privileged boundary without peer authentication",
       "family": "AUTHN",
       "weakness_refs": [
         "CWE-306"
@@ -288,32 +287,31 @@
         "MECH-c-09"
       ],
       "source_cues": [
-        "集群同步协议默认无认证 (无 secret 机制载体)"
+        "A peer-controlled message may trigger protected operations without an authenticated peer identity"
       ],
       "sink_cues": [
-        "入站同步监听的三段纯文本握手 (版本/主机名/对端名)"
+        "protocol dispatch or state changes requiring an authenticated peer"
       ],
       "language_pitfalls": [
-        "判据: 配置启用即攻击面; '无认证是可选关闭的默认' 与 '无认证机制载体' 是两种强度——grep 全文件无 secret/sign/hmac 标识符才可下后者结论"
+        "For the current target, establish transport, deployment, peer identity and operation privileges. Missing authentication-related names or a particular handshake shape do not prove authentication is absent."
       ],
       "counterevidence": [
-        "A guard dominates the sensitive operation for every relevant path.",
-        "The effective principal cannot control the source or the impact is not security relevant.",
-        "判据: 配置启用即攻击面; '无认证是可选关闭的默认' 与 '无认证机制载体' 是两种强度——grep 全文件无 secret/sign/hmac 标识符才可下后者结论"
+        "Authenticated transport or an enforced peer-identity check dominates every protected message path.",
+        "The exposed protocol cannot perform operations beyond the initiating principal's authority."
       ],
       "verification_steps": [
-        "Trace the relevant source cue to the 入站同步监听的三段纯文本握手 (版本/主机名/对端名) operation.",
-        "Establish attacker control, effective principal, guards, and security impact.",
-        "Test the listed counterevidence and record source anchors for every edge."
+        "Trace the language-specific source cue to protocol dispatch or state changes requiring an authenticated peer.",
+        "Establish attacker control, effective principal, guarding order, and security impact.",
+        "Test the stated language-specific counterevidence against source and runtime behavior."
       ],
       "provenance_refs": [
-        "PROV-c-09-2ebdb946a155"
+        "PROV-c-09-679183ffa32f"
       ]
     },
     {
       "issue_id": "c-issue-10",
       "rank": 10,
-      "title": "协议滥用节流阈值默认 0=fail-open (上游 opt-in 加固)",
+      "title": "Protocol-controlled work bypasses an effective resource limit",
       "family": "RESOURCE-DOS",
       "weakness_refs": [
         "CWE-770"
@@ -322,26 +320,25 @@
         "MECH-c-10"
       ],
       "source_cues": [
-        "协议滥用节流阈值默认 0=fail-open (上游 opt-in 加固)"
+        "Peer-controlled work may continue without a bound on admitted cost, retained state or repetition"
       ],
       "sink_cues": [
-        "glitch 计数 + thres&&门控的强制路径"
+        "protocol work admission, resource retention or throttling"
       ],
       "language_pitfalls": [
-        "量级驱动权判据: 默认配置 sink 零强制效果 + 每事件成本为协议固有处理 → 不得报 remote 级 DoS, 按防御规避内核/加固缺口口径 (CK-MAGNITUDE-OWNERSHIP)"
+        "For the current target, establish effective configuration and sentinel semantics from source and deployment evidence. Measure attacker cost, amplification and availability impact before classifying a vulnerability or hardening gap; do not assume any threshold default."
       ],
       "counterevidence": [
-        "A guard dominates the sensitive operation for every relevant path.",
-        "The effective principal cannot control the source or the impact is not security relevant.",
-        "量级驱动权判据: 默认配置 sink 零强制效果 + 每事件成本为协议固有处理 → 不得报 remote 级 DoS, 按防御规避内核/加固缺口口径 (CK-MAGNITUDE-OWNERSHIP)"
+        "An effective upstream or local limit bounds aggregate work before resource consumption.",
+        "The principal cannot amplify or sustain work enough to affect the protected availability requirement."
       ],
       "verification_steps": [
-        "Trace the relevant source cue to the glitch 计数 + thres&&门控的强制路径 operation.",
-        "Establish attacker control, effective principal, guards, and security impact.",
-        "Test the listed counterevidence and record source anchors for every edge."
+        "Trace the language-specific source cue to protocol work admission, resource retention or throttling.",
+        "Establish attacker control, effective principal, guarding order, and security impact.",
+        "Test the stated language-specific counterevidence against source and runtime behavior."
       ],
       "provenance_refs": [
-        "PROV-c-10-7a2cfe267ebb"
+        "PROV-c-10-71db491dfe42"
       ]
     }
   ]

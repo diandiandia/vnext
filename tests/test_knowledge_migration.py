@@ -235,6 +235,63 @@ def test_runtime_task_context_omits_legacy_template_directives() -> None:
     assert "stub 复刻" not in serialized
 
 
+def test_migration_separates_pitfalls_from_counterevidence() -> None:
+    import runpy
+
+    migration = runpy.run_path(str(
+        Path(__file__).resolve().parents[1] / "tools" / "migrate_legacy_knowledge.py"
+    ))
+    original = {
+        "id": "test-pattern", "lang": "java", "title": "conditional race",
+        "family": "RACE", "cwe": ["CWE-362"], "pattern": "concurrent access",
+        "sink_hint": "state mutation", "pitfall": "A check may race with mutation.",
+    }
+    issue, card, _ = migration["_issue_and_card"](
+        original, language="java", rank=1, version="test-v1", approved=True,
+    )
+    assert original["pitfall"] in issue["language_pitfalls"]
+    assert original["pitfall"] not in card["counterevidence"]
+    assert len(card["counterevidence"]) >= 2
+
+
+@pytest.mark.parametrize(("language", "source_id"), [
+    ("c", "INV-c-006"), ("c", "INV-c-016"), ("c", "INV-c-017"),
+    ("cpp", "INV-cpp-001"), ("java", "INV-java-017"), ("java", "INV-java-020"),
+])
+def test_migration_recreates_reviewed_refinements_without_observed_claims(
+    language: str, source_id: str,
+) -> None:
+    import runpy
+
+    migration = runpy.run_path(str(
+        Path(__file__).resolve().parents[1] / "tools" / "migrate_legacy_knowledge.py"
+    ))
+    catalog = KnowledgeCatalog.load(default_knowledge_root())
+    profile = catalog.profiles[language]
+    expected_issue = next(
+        item for item in profile["entries"]
+        if catalog.provenance[item["provenance_refs"][0]]["source_record_id"] == source_id
+    )
+    provenance = catalog.provenance[expected_issue["provenance_refs"][0]]
+    original = {
+        **provenance["source_digest_basis"],
+        "verify": {"status": "battle_confirmed"},
+        "source": {"tier": "battle_verified"},
+    }
+    prepared = migration["_prepare_source_entry"](language, original)
+    issue, card, records = migration["_issue_and_card"](
+        prepared, language=language, rank=expected_issue["rank"],
+        version=profile["portfolio_version"], approved=True,
+    )
+    assert issue == expected_issue
+    assert card == catalog.cards[issue["mechanism_card_ids"][0]]
+    assert records == {issue["provenance_refs"][0]: provenance}
+    assert "current target" in " ".join(issue["language_pitfalls"])
+    assert card["evidence_state"] == "seeded"
+    assert next(iter(records.values()))["evidence_state"] == "seeded"
+    assert not set(issue["language_pitfalls"]) & set(card["counterevidence"])
+
+
 def test_draft_migration_is_rejected_by_runtime_catalog(tmp_path: Path) -> None:
     source = tmp_path / "legacy.json"
     source.write_text(json.dumps(_legacy_inventory()), encoding="utf-8")
