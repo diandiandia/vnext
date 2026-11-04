@@ -1,6 +1,6 @@
 # Lifecycle Conformance Self-Assessment
 
-Status: preliminary engineering self-assessment, not certification. An authorized controlled ISO/IEC/IEEE 12207 edition, organizational tailoring rules, and clause-by-clause verification evidence were not supplied. The adopter must fix the applicable edition and process set before formal assessment. This document maps selected lifecycle concepts at a high level; it neither reproduces normative text nor establishes edition publication/withdrawal status or conformity.
+Status: preliminary engineering self-assessment, not certification. ISO's public catalog lists ISO/IEC/IEEE 12207:2026 (Edition 2, published April 2026) as the current edition ([official catalog entry](https://www.iso.org/standard/90219.html); checked 2026-11-04). The repository does not contain a controlled copy, approved applicability/tailoring decision, or clause-by-clause verification evidence. The adopter must determine the contractually applicable edition and process set before formal assessment. This document maps selected lifecycle concepts at a high level; it neither reproduces normative text nor establishes organizational conformity.
 
 ## Assessment Basis
 
@@ -56,6 +56,14 @@ child exit. This corrects the earlier scope of local verification evidence; it d
 not establish organizational approval, controlled standards applicability, independent
 quality assessment or compliance.
 
+2026-11-04 task policy 57 maintenance record: opt-in, revision-bound Coverage Critics,
+versioned all-Batch Plan replay, bounded source-selected domain guidance, structured
+unresolved delivery, event-backed internal budget admission, and safe artifact transfer
+were added and locally tested. These work products add requirements, implementation,
+maintenance, and verification evidence only. They do not constitute a clause mapping
+against the 2026 edition, qualified host isolation, organizational tailoring, or
+independent acceptance.
+
 Statuses mean:
 
 - **Implemented in tool:** a tested software mechanism exists.
@@ -63,7 +71,12 @@ Statuses mean:
 - **Not evidenced:** the repository does not establish the process outcome.
 - **Not applicable to this tool:** the process belongs to the adopting organization; applicability must be confirmed during project tailoring.
 
-## Process-Group Mapping
+## Preliminary Process-Concept Observations (Not a 2026 Clause Mapping)
+
+The following table is retained as a high-level engineering self-assessment from
+earlier work. Its process-group labels are not verified against the 2026 text and
+must not be treated as clause names, a complete process set, or a current-edition
+conformity matrix. Revalidate it against a controlled edition before formal use.
 
 | 12207 process area (paraphrased) | vNext evidence | Self-assessment and gap |
 |---|---|---|

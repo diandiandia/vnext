@@ -2,6 +2,8 @@
 
 ## Optional coverage/delivery extension (task policy 57)
 
+Current as-implemented baseline: **2026-11-04**, task policy 57, release policy 8.
+
 The [adoption contract](CLOUDFLARE_DESIGN_ADOPTION_PROPOSAL_ZH.md#14-实施记录与验收边界)
 defines CFA-005–027. New requirements are bounded to opt-in coverage review and
 versioned replay, source-selected compact domain guidance, unresolved delivery,

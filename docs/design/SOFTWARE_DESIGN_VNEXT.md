@@ -2,6 +2,8 @@
 
 ## Optional policy 57 implementation
 
+Current as-implemented baseline: **2026-11-04**, task policy 57, release policy 8.
+
 - `coverage_critic.py`: `coverage-critic/v1`, initial/final scheduling, source checks,
   exact current revisions, declared worker separation, evidenced operator rejection,
   and approved `coverage-extend`. Extension uses nested SQLite savepoints for Plan,

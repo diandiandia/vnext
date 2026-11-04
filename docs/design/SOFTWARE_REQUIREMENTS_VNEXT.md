@@ -2,6 +2,8 @@
 
 ## Optional policy 57 requirements
 
+Current as-implemented baseline: **2026-11-04**, task policy 57, release policy 8.
+
 | Requirement | Implementation/verification | Assurance boundary |
 |---|---|---|
 | CFA-005–011: revision-bound initial/final coverage review and explicit proposal handling | `coverage_critic.py`, `test_coverage_critic.py` | No semantic completeness or verified host identity |

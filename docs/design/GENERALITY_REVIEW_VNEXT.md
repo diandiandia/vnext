@@ -1370,3 +1370,69 @@ Remaining work includes balanced independent discovery-quality evidence, full
 semantic knowledge curation, large-source coverage, additional hotspot providers,
 mixed-language boundary discovery and host-context enforcement. These are not
 replaced by passing unit tests or by deleting historical assessment evidence.
+
+## Latest Review (2026-11-04): Policy 57 and Discovery Onboarding
+
+### Scope and conclusion
+
+Baseline: clean `e4ae580` on `main`. Rechecked the active Skill, README, runbook,
+Chinese overview, current system/software requirements and designs, lifecycle
+self-assessment, policy 57 runtime additions, and repository history/evaluation
+boundaries. Reviewed the latest available full-suite and compatibility-scan outputs.
+This is a bounded engineering and documentation review, not a vulnerability audit,
+complete line-by-line code review, external security certification, or standards
+conformity assessment.
+
+| Question | Evidence-bounded conclusion |
+|---|---|
+| General-purpose Skill? | It is reusable across authorized source-security audits within its declared 15-language portfolio and supported workflow. It is not a general software-engineering skill or universal analyzer. No independent quality study establishes it as an excellent production skill. |
+| Clean of target/history contamination? | No historical target names or findings were found in active Skill, runtime source, or runtime knowledge by the inspected searches/compatibility scan. Historical project/candidate plans, including QuickJS and Apache Tomcat examples, remain in evaluator-side development documents. The Skill/runbook explicitly prohibit forwarding them to fresh discovery workers. This is a policy/context boundary, not physical isolation; README's direct named QuickJS link was removed to reduce accidental promotion from the project landing page. |
+| Per-audit plans embedded in the Skill? | No target-specific audit plan, scope, expected finding, or campaign ID is embedded in the active Skill or automatically added to fresh Campaign task inputs. Current plans are generated from each Campaign's frozen inventory and approved categories. Repository history documents prior evaluations; a human or host can still deliberately load that material. |
+| Bias? | Material risks remain: fixed 15-language/150-entry ranked portfolio, training-derived curation, Python-only static hotspot implementation, unequal provider depth, and explicit-selection-only three-domain pilot guidance. Current-target evidence and counterevidence rules reduce but do not eliminate bias. The 862-test suite and compatibility scan do not measure blind-spot recall or false-positive rates. |
+| Dead code? | No deletion is justified by the current bounded evidence. The 2026-10-25/11-04 AST screen predates the newest policy-57 modules; this review did not rerun an equivalent whole-program dead-code analyzer. Grep, tests, and importability cannot prove liveness. No exhaustive dead-code-free claim is made. |
+| Redundant design / architecture? | Dated maintenance sections and repeated assurance caveats increase documentation navigation cost. They preserve change provenance and must not be erased as if historical evidence were current behavior. Runtime orchestration remains concentrated: 4,492 lines in `execution.py`, 2,418 in `batch_workflow.py`, 2,184 in `campaign_closure.py`, and 1,502 in `store.py`. This is real maintainability debt, but a broad module split without measured interfaces is not a safe audit-quality repair. |
+| Documentation accuracy? | Found and repaired stale policy 56 in the Chinese overview, updated the current policy-57 baseline across requirements/design documents, clarified README's historical-record boundary, and corrected the 12207 edition-status caveat. Historical dated records remain labeled as such. |
+| Google internal engineering requirements? | **NOT ASSESSED.** No authorized controlled internal criteria or acceptance authority were supplied. |
+| ISO/IEC/IEEE 12207? | **NOT ESTABLISHED.** The ISO public catalog lists Edition 2, ISO/IEC/IEEE 12207:2026, published April 2026 as current ([official catalog](https://www.iso.org/standard/90219.html), checked 2026-11-04). The repo does not contain a controlled standard, applicability/tailoring approval, clause-level evidence, accountable organizational owners, or an independent assessment. The retained process-concept table is explicitly not a 2026 clause mapping. |
+
+### Problems repaired in this review
+
+1. `docs/PROJECT_OVERVIEW_ZH.md` still identified the current task policy as 56 and
+   dated its contract baseline November 1, despite policy 57 and release policy 8.
+   Updated the current baseline and documented the opt-in experimental extensions.
+2. The lifecycle self-assessment said edition publication/withdrawal status was not
+   established. Verified the official ISO catalog's 2026 Edition 2 listing and
+   recorded that fact without implying the repo holds the controlled normative text
+   or has assessed conformity. Labeled the old conceptual process table as not a
+   current-edition clause mapping.
+3. README prominently linked a named target-specific QuickJS supplement. Kept the
+   historical document, but replaced the named link with a generic statement that
+   evaluator-side records are not discovery instructions; linked the Skill's
+   context boundary instead.
+4. System/software requirements and designs lacked a concise current policy-57
+   baseline line despite the newly added feature sections. Added date and policy
+   identifiers; did not rewrite dated historical maintenance notes.
+
+No evidence justified deleting knowledge cards, target-evaluation files, or public
+interfaces. The opt-in features remain disabled unless selected on a new Campaign;
+they add no target-specific default, finding expectation, or history import.
+
+### Verification and limits
+
+- Latest full suite after policy-57 implementation: **862 passed, 1 skipped**.
+  The skip is the protected real held-out manifest, which is not configured; it is
+  not a pass or discovery-quality result.
+- Compatibility/residue scan: **PASS**, zero findings across **57 Python files,
+  2 helpers, 167 knowledge files and 2 prompt files**. This bounded scan does not
+  semantically prove absence of historical influence.
+- Skills CLI found one root `vnext` Skill and displayed the updated description
+  from both the public GitHub repository and local checkout.
+- This documentation-only review's patch passes local-link/heading, frontmatter,
+  500-line Skill-bound and whitespace checks. No full test rerun is necessary for
+  these documentation changes.
+
+Next evidence needed for stronger claims: independently labeled equal-budget
+discovery trials; multi-host/context-isolation and qualified R5 testing; full
+semantic review of ranked knowledge; measured maintainability refactoring; an
+authorized Google criteria set (if that comparison is required); and an adopter-led
+assessment against a controlled, tailored 12207:2026 process set.

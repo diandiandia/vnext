@@ -16,7 +16,7 @@ counterevidence, and resume long-running work without relying on chat history al
 > drop-in replacement for v3. Its audit and host capabilities remain under
 > evaluation; passing workflow checks does not prove a repository is secure.
 
-[Install](#install) · [Quick start](#quick-start) · [Runnable demo](#runnable-demo) ·
+[Install](#install) · [Quick start](#quick-start-runtime) · [Runnable demo](#runnable-demo) ·
 [Limitations](#current-limitations) · [Operating guide](docs/ORCHESTRATOR_RUNBOOK.md)
 
 ## What It Solves
@@ -388,17 +388,18 @@ host contexts or authorize loading prior project plans into discovery workers.
 - [Historical quality reassessment](docs/design/QUALITY_REASSESSMENT_VNEXT.md)
 - [Current generality and architecture review](docs/design/GENERALITY_REVIEW_VNEXT.md)
 
-### Project-Specific Development Evidence
+### Development and Evaluation Records
 
-The [QuickJS audit supplement](docs/design/QUICKJS_REAL_AUDIT_SUPPLEMENT_PLAN.md)
-and dated pilot records are development/evaluation material, not universal audit
-requirements or discovery input. Do not load a prior target's plan, results or lessons
-into a fresh discovery worker merely because a repository document links to them.
+Dated candidate plans and real-target records under `docs/design/` document
+development/evaluation work; they are not universal audit requirements or discovery
+input. Fresh discovery workers must not receive prior target plans, findings or
+lessons merely because an evaluator-side document links to them. See the [Skill's
+context boundary](SKILL.md#host-agent-loop).
 
 ### Assurance Boundaries
 
 The lifecycle document is a preliminary engineering self-assessment, not an ISO/IEC/IEEE
-12207 conformity claim or certification. Formal assessment requires an authorized,
-controlled edition, organizational tailoring, and clause-level evidence; these were not
-supplied. This assessment does not establish edition publication/withdrawal status.
+12207 conformity claim or certification. ISO lists the 2026 second edition as current,
+but this repository has no controlled text, approved applicability/tailoring decision,
+or clause-level evidence; see the linked lifecycle document for the bounded basis.
 Google internal engineering requirements were not supplied and have not been assessed.

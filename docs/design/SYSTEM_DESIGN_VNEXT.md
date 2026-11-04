@@ -2,6 +2,8 @@
 
 ## Optional policy 57 extension
 
+Current as-implemented baseline: **2026-11-04**, task policy 57, release policy 8.
+
 The Campaign coordinator owns critic scheduling and source-backed proposal
 disposition; workers remain read-only. Critic completion is bound to the current
 snapshot, Plan and stage artifact revisions. Approved extension preserves immutable

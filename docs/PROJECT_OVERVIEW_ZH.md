@@ -1,6 +1,6 @@
 # Reachable Audit：我们为什么这样设计，以及还要证明什么
 
-当前合同校订：2026-11-01（task policy 56）。下文的大仓库数字是注明范围的历史运行记录，
+当前合同校订：2026-11-04（task policy 57，release policy 8）。下文的大仓库数字是注明范围的历史运行记录，
 不是当前能力总表；最新复评与验证见
 [通用性评估](design/GENERALITY_REVIEW_VNEXT.md)。
 运行合同以 [Skill](../SKILL.md)、[运行手册](ORCHESTRATOR_RUNBOOK.md)
@@ -11,6 +11,8 @@
 Reachable Audit 是一套帮助 AI 参与大型代码审计的“工作台”：它把审计拆成可分配、可恢复的工作，记录代码版本与证据，并把已检查、未检查和仍有疑问的部分分开呈现。
 
 它不是一个单独运行就能找出所有漏洞的扫描器。真正读代码、分析问题的是接入的 AI Agent 和审阅者；本项目负责组织审计流程、保存材料、检查提交格式，并根据记录整理结果。
+
+当前另有可选的 Coverage Critic、领域指导、任务预算与未决项交付机制，须在新 Campaign 显式启用；它们仍是实验性能力，不证明覆盖完整、无偏发现或目标隔离。详见[当前通用性评估](design/GENERALITY_REVIEW_VNEXT.md#latest-review-2026-11-04-policy-57-and-discovery-onboarding)。
 
 ## 如何阅读本文
 
