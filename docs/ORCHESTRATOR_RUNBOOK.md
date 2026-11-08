@@ -592,6 +592,29 @@ snapshot identity alongside the component ID.
 
 ### Scoped planning
 
+After `inventory` and `graph`, but before `plan`, the host coordinator identifies
+likely test-related source paths using common directory names (`test`, `tests`,
+`testing`, `spec`, `specs`, `__tests__`) and filename forms (`test_*`, `*_test.*`,
+`*_tests.*`, `*_spec.*`, `spec_*`). Treat these only as candidates: naming is
+incomplete and can produce false positives. Show the operator the count and complete
+path list (group large lists by directory) and ask whether to include all candidates,
+exclude selected paths from the primary audit scope, or choose paths individually.
+Call out any candidate that appears shipped, installed, or executed in production.
+Do not silently exclude candidates, infer that test code is irrelevant, or create the
+Plan before receiving the operator's decision. If the host cannot ask the operator,
+pause planning and report the blocker. The CLI has no interactive test-path prompt and
+does not automatically exclude tests.
+
+The recommended default is to exclude ordinary test-only code from the primary
+source-review scope while retaining the ability to include selected tests when they
+help trace behavior, establish counterevidence, or explain an attack scenario.
+Tests included in the Plan are reviewed within normal Work Unit scope; do not inspect
+excluded files from a worker task unless a supported workflow explicitly supplies
+them. Test files shipped, installed, or executed in production should normally remain
+INCLUDED unless the operator explicitly decides otherwise. Record each approved
+EXCLUDED/DEFERRED path using the normal path-disposition contract and evidence
+requirements. Undecided paths remain INCLUDED.
+
 Use explicit per-path INCLUDED/EXCLUDED/DEFERRED decisions; unspecified paths remain
 INCLUDED. Plans project wholly out-of-scope graph edges away while retaining incoming
 and outgoing cross-scope boundary obligations. A boundary-only Work Unit can therefore
@@ -599,7 +622,6 @@ remain without included source files; it must explain unresolved external premis
 not claim excluded code was reviewed. A fully excluded/deferred repository can have
 zero Batches. That is an empty declared audit scope, not evidence of repository safety.
 Truly empty repositories and manifest-only components retain their existing behavior.
-Tests/generated files are not automatically inapplicable; use evidenced axis dispositions.
 For an excluded or deferred zero-byte inventory source, path-scope evidence may use
 `EMPTY-FILE:<path>:sha256:<64-lowercase-hex-digest>`. Closure accepts it only when the
 path matches that disposition and the digest matches both the empty file and its frozen

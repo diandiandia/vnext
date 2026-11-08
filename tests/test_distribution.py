@@ -7,6 +7,27 @@ import sys
 import zipfile
 
 
+def test_test_source_scope_requires_operator_decision_before_planning() -> None:
+    repository = Path(__file__).resolve().parents[1]
+    skill = (repository / "SKILL.md").read_text(encoding="utf-8")
+    runbook = (repository / "docs" / "ORCHESTRATOR_RUNBOOK.md").read_text(
+        encoding="utf-8"
+    )
+    assert len(skill.splitlines()) <= 500
+    skill_text = " ".join(skill.split())
+    runbook_text = " ".join(runbook.split())
+    assert "Before the first R0" in skill
+    assert "Do not generate the Plan until the operator has decided." in skill_text
+    assert (
+        "does not itself prompt or automatically exclude test paths" in skill_text
+    )
+    assert "pause planning and report the blocker" in runbook_text
+    assert (
+        "Tests included in the Plan are reviewed within normal Work Unit scope"
+        in runbook_text
+    )
+
+
 def test_wheel_includes_runtime_knowledge_without_development_history(
     tmp_path: Path,
 ) -> None:

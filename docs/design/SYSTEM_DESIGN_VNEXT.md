@@ -287,6 +287,18 @@ coverage and reports. Exclusions/deferments require rationale, evidence refs, an
 approver declaration that is not authenticated identity. Closure-level declared
 unreviewed scope remains a separate broader decision and does not rewrite Plan ownership.
 
+Before creating a Plan, the host coordinator identifies likely test-related source
+paths from common directory and filename conventions, presents the candidates to the
+operator, and obtains an explicit include/exclude/individual-selection decision.
+Detection is heuristic, is not implemented as automatic inventory exclusion, and does
+not modify the frozen inventory. The CLI does not prompt; if the host cannot obtain an
+operator decision, planning pauses. Production-shipped or production-executed test code
+is normally kept in scope. Paths not explicitly excluded remain INCLUDED. Selected
+tests can be included when useful for focused review, attack scenarios, or counterevidence;
+excluded source files are not silently read as though they belonged to a Work Unit.
+This host interaction is specified by SYSR-046/SWDR-052; it is not an engine-enforced
+inventory or planner behavior.
+
 Closure classifies a Work Unit as screening-only when all planned axes are
 NOT_APPLICABLE and it has no hypotheses; any APPLICABLE axis contributes to the
 substantive Work Unit count. These are axis-derived counts, not path-level review

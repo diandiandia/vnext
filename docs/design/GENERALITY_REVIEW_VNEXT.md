@@ -1491,3 +1491,32 @@ files and 2 prompt files**. `compileall` and `git diff --check` passed. No dedic
 dead-code analyzer was available. These are local regression and bounded pattern
 results only; they do not establish target-audit quality, ISO conformity, Google
 internal compliance, or real-host isolation.
+
+## Follow-up (2026-11-08): Test-Scope Decision and Skill Size
+
+This follow-up reviewed the test-source scope interaction added to the Skill,
+runbook, README, and SYSR-046/SWDR-052, along with the prior uncommitted changes.
+The test-path detector is a host-side naming heuristic; it does not change inventory,
+CLI behavior, or planner defaults. The operator must decide before planning, so no
+test path is silently excluded. The recommendation to exclude ordinary test-only
+code from the primary scope is a declared, operator-overridable scope policy, not a
+universal claim that tests are irrelevant. Test fixtures can contain attack scenarios
+or counterevidence, and shipped or production-executed tests normally remain in scope.
+
+The expanded Skill had reached 523 lines, exceeding the repository's previously
+recorded 500-line context/maintenance bound. Redundant operation-specific schema
+detail was condensed in favor of the existing runbook and software-design references;
+the Skill is now 435 lines, and the distribution tests enforce the bound. Detailed
+contracts remain in the referenced documents and task `output_contract`.
+
+Historical QuickJS/Tomcat candidate plans and dated reviews remain evaluator-side
+development records, not runtime knowledge or default task inputs. This review found
+no reason to delete those records or claim physical host-context isolation. No
+dead-code deletion was justified: a whole-program liveness analyzer was unavailable,
+and text searches/tests are insufficient proof. Google internal requirements remain
+**NOT ASSESSED**; ISO/IEC/IEEE 12207 conformity remains **NOT ESTABLISHED**.
+
+Validation for this follow-up: full local suite **866 passed, 1 skipped** (the
+protected held-out manifest is not configured); `compileall`, `git diff --check`,
+and the 500-line bound passed. These checks are not release qualification, dead-code
+proof, discovery-quality evidence, or a standards-conformity assessment.

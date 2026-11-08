@@ -101,6 +101,7 @@ TARGET=/absolute/path/to/authorized-frozen-copy
 STATE_DIR=/absolute/path/outside-target/audit-state
 CAMPAIGN_ID=audit-local-001
 CATEGORIES=INJECTION,AUTHN,STATE
+PATH_DISPOSITIONS=/absolute/path/to/path-dispositions.json
 
 vnext() { python3 "$VNEXT_ROOT/tools/vnext.py" "$@"; }
 vnext --help
@@ -108,10 +109,30 @@ vnext init "$TARGET" --state-dir "$STATE_DIR" \
   --campaign-id "$CAMPAIGN_ID" --audit-mode fresh --static-only
 vnext inventory "$TARGET" "$CAMPAIGN_ID" --state-dir "$STATE_DIR"
 vnext graph "$TARGET" "$CAMPAIGN_ID" --state-dir "$STATE_DIR"
+```
+
+**Before running `plan`, pause for the test-scope decision.** The host Agent should
+list likely test-related source paths found by common directory/filename conventions
+and ask whether to include all, exclude selected paths from the primary audit scope,
+or choose paths individually. The CLI does not ask and does not auto-exclude tests.
+Undecided paths remain included. Treat test-path detection as a heuristic; production-
+shipped or production-executed test code is normally in scope. See the [runbook's
+scoped-planning procedure](docs/ORCHESTRATOR_RUNBOOK.md#scoped-planning).
+
+After the operator decides, run `plan`; pass `--path-dispositions <json-file>` for
+approved per-path exclusions or deferrals. Tests included in the Plan are reviewed
+under the ordinary Work Unit contract and may consume audit effort. Excluded tests
+can be added selectively when relevant; do not silently read files outside a task's
+scope.
+
+```bash
 vnext plan "$TARGET" "$CAMPAIGN_ID" --state-dir "$STATE_DIR" \
-  --categories "$CATEGORIES"
+  --categories "$CATEGORIES" --path-dispositions "$PATH_DISPOSITIONS"
 vnext status "$TARGET" --state-dir "$STATE_DIR"
 ```
+
+Use an empty JSON array (`[]`) in `PATH_DISPOSITIONS` when the operator chooses to
+include every candidate; never create exclusion records without that decision.
 
 Automatic snapshot detection requires a clean Git worktree. For a non-Git frozen
 copy, add an approved immutable `--snapshot-id` and retain its provenance; do not

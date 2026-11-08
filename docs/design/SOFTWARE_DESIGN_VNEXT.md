@@ -214,6 +214,10 @@ release-certification claim. The as-implemented sections below remain the baseli
    and exposes R3.5/R4 disposition disagreements. These are traceability controls.
    Evidence relevance, correct classification, and reviewer independence remain
    semantic/operator responsibilities and must not be reported as mechanically proven.
+7. Before Plan creation, the host coordinator identifies likely test-related source paths,
+   presents candidates to the operator, and records an explicit scope decision. Detection
+   is heuristic and never auto-excludes; production-shipped or production-executed tests
+   normally remain included. The CLI does not implement prompting or test-path detection.
 
 The minimum vertical acceptance scenario must exercise a mixed-language boundary,
 a late candidate routed to verification, source/input invalidation, interrupted-task
@@ -655,7 +659,9 @@ checks exact inventory classification, included-path ownership, and resolvable e
 the final report and Markdown export retain every path decision. The approver string is
 not authenticated identity, and this ledger is not host-observed review evidence.
 Closure-level `scope_dispositions` remain separate decisions for broader unreviewed
-scope statements.
+scope statements. Before Plan creation, the host coordinator must ask the operator about
+likely test-source candidates as described in SYSR-046/SWDR-052; this is a Skill/host
+contract, not an interactive runtime feature.
 
 ## 5. Source and Build Adapter Contracts
 

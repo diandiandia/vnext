@@ -87,6 +87,26 @@ are evidence, not code call-chain steps or reviewed-source coverage. Never remov
 evidence merely to pass a validator.
 R4 checks concrete LOC/artifact references in individual, bundled and direct records.
 
+After inventory and graph review, but before creating the Plan, identify likely
+test-related source paths using common directory names (`test`, `tests`, `testing`,
+`spec`, `specs`, `__tests__`) and filename forms (`test_*`, `*_test.*`, `*_tests.*`,
+`*_spec.*`, `spec_*`). This is a candidate heuristic, not a complete detector or a
+reason to exclude paths automatically. Show the operator the candidate count and
+paths (group long lists by directory and provide the complete list), then ask whether
+to include all, exclude selected paths from the primary audit scope, or choose paths
+individually. Point out candidates that appear shipped, installed, or executed in
+production; do not recommend excluding those without an explicit operator decision.
+Recommend excluding ordinary test-only code from the primary scope while allowing
+selected tests to be included when they help trace behavior or provide counterevidence.
+Explain that excluded tests may still contain useful attack scenarios or counterevidence.
+Record approved exclusions as explicit Plan path dispositions with the operator's
+rationale and evidence; paths left undecided remain INCLUDED. Do not generate the Plan
+until the operator has decided.
+If the host cannot obtain that decision, pause and report the blocker rather than
+silently excluding test paths or proceeding as if they were out of scope. The CLI
+does not itself prompt or automatically exclude test paths; use the host's structured
+user-input interaction when available.
+
 ## Host Agent Loop
 
 Freeze opt-in `--coverage-critic`, `--domain-guidance`, `--task-budget-policy` at initialization; never silently change old Campaigns.
@@ -395,109 +415,21 @@ detailed contracts. Do not use direct stage-import paths to bypass task validati
 
 ## Detailed Stage Contracts
 
-`r5-observation-register` requires `VNA_R5_EXTERNAL_OBSERVATION_HMAC_KEY` in the host
-environment and a signed observation bound to the current Campaign, snapshot, Batch,
-hypothesis, observer, method, timestamp, and Campaign-owned `sha256:` evidence artifacts.
-It records provenance only; it never confirms or refutes an R5 hypothesis.
-R5 tasks expose only registered observations for their hypothesis; assessments may cite
-their IDs in both `external_observation_refs` and `evidence_refs`. Cross-hypothesis or
-cross-Batch references are rejected; cited observations remain non-confirming evidence.
+Use the task's `output_contract` unchanged and consult the operation-specific
+procedures in the [runbook](./docs/ORCHESTRATOR_RUNBOOK.md), [software design](./docs/design/SOFTWARE_DESIGN_VNEXT.md),
+and CLI help for exact schemas. Do not copy illustrative IDs or bypass validators.
 
-For `handoff-resolve`, an `EDGE_PROVEN` resolution requires `boundary_proof` bound to
-the planned edge: edge/component IDs, interface kind, direction, principal, premises,
-source/target evidence refs, and data mappings. Each mapping must cite evidence from
-both endpoint sets. The resolver verifies component ownership and that each LOC anchor
-or Campaign artifact resolves, but these Agent declarations do not prove semantic truth
-or complete boundary discovery. Other resolution outcomes cannot carry `boundary_proof`.
-Use the schema and example in the [software design Handoff contract](./docs/design/SOFTWARE_DESIGN_VNEXT.md); copy only current Plan/Campaign IDs and resolvable evidence.
-
-`path-scope.json` is an array of `{path, state, rationale, approved_by,
-evidence_refs}` records. `state` is `INCLUDED`, `EXCLUDED`, or `DEFERRED`; paths
-omitted from the file default to `INCLUDED`. EXCLUDED/DEFERRED records require an
-approver declaration and evidence refs that resolve at Campaign closure to current
-inventory LOC anchors or artifacts owned by that Campaign. For an inventoried
-zero-byte source, use `EMPTY-FILE:<path>:sha256:<64-lowercase-hex-digest>` with an exact
-path and digest matching the current empty file and frozen snapshot.
-Only INCLUDED paths enter Work Units; all inventory paths
-and their decisions remain in the Plan and final report.
-The approver string is not authenticated identity, and a scope decision does not prove
-that a host or Agent reviewed the path.
-
-After a `task-collect` validation error, the task remains leased and non-terminal;
-correct the result JSON and resubmit it with the same task/worker before the lease
-expires, or use `task-release` with a reason. Use `task-list --batch-id` to inspect a
-partial batch. If a successful task output must be corrected after collection but before
-its R1/R2/R3/R3.5/R4/R5/R6 stage commits, use `task-amend` with a replacement output, reason, and
-content-addressed evidence refs. The prior output remains immutable. A supported R1-R5 or R3.5
-amendment after stage commit appends the replacement and affected-descendant invalidation
-events; use `recovery-plan` and recommit affected stages; no automatic result reuse. Stale
-tasks cannot satisfy new revisions. Terminal R6 output may be amended after its Batch
-projection while the Campaign is not `COMPLETE`; run `task-commit-r6` again and then
-`campaign-close` to rebuild projections. Campaign closure rejects an amended R6 task
-until a newer R6 projection exists, and amendments are rejected after Campaign
-completion. This does not provide automatic late-candidate insertion into committed
-stages; use an explicitly declared follow-up Campaign for that case.
-
-`shadow-evaluate` requires a valid HMAC-signed manifest and
-`VNA_EVALUATION_HMAC_KEY`; the key must be held only by the independent evaluation
-authority, never by discovery Agents.
-
-`category-plan-options.json` contains an optional `budget` and optional `card_ids`. When
-`card_ids` is omitted, the planner uses all approved cards applicable to the planned
-Work Unit languages and categories. Inline card definitions are rejected; knowledge is
-loaded from the versioned catalog under `<vnext>/knowledge/`.
-
-Individual R4 inputs and every bundled `category_item` include `allowed_hypothesis_ids`
-for that Work Unit and family. A CategoryRun may reference only those IDs; use an empty
-array when none apply. New late candidates must remain unresolved follow-up risks,
-not invented IDs. Omit `work_unit_id` from each R4 `AxisRun`; it is inherited from the
-parent `CategoryRun`. A supplied AxisRun ID must match that parent. Bundled R4 inputs
-carry shared `mechanism_cards` once at bundle scope; each item may use only its plan's
-`seed_card_ids`. Every scoped candidate needs exactly one `hypothesis_reviews` record
-with `SUPPORTED`, `REJECTED`, or `NEEDS_REVIEW`, source/artifact evidence refs, and a
-rationale. Every previously recorded, applicable Finding must also appear exactly once
-in `finding_ids` for its matching CategoryRun. These checks enforce traceability, not
-semantic correctness of the review or evidence.
-
-R6 is a Batch closure task over canonical stage artifacts, not a
-source-discovery task: do not require an absent Work Unit inventory or invent LOC anchors.
-For every R1 Surface ID, R6 output must contain exactly one `surface_dispositions`
-entry. Use `REVIEWED`, `DEFERRED`, `NOT_APPLICABLE`, or `UNREVIEWED`; include a
-rationale and evidence refs for every state except `UNREVIEWED`. Missing, extra, or
-duplicate IDs are rejected. Use `UNREVIEWED` when a stronger disposition is unsupported.
-R6 must also provide exactly one `finding_reviews` record per recorded Finding, using
-`CONSISTENT`, `CONFLICT`, or `NEEDS_REVIEW`; the first two require evidence refs. The
-closure report exposes review-state totals and R3.5/R4 disposition disagreements.
-These are Agent declarations, not independent human review, host-observed file-reading
-evidence, proof that a Surface is safe, or semantic verification that evidence supports
-the claim. Host wrappers must follow these operation-specific contracts instead of
-applying source-discovery instructions to every task.
-
-`shadow-evaluate` never promotes vNext or retires v3. It only reports whether supplied
-evidence satisfies the release gates. Synthetic runs cannot satisfy held-out,
-representative-project, 20GB+, Handoff reconciliation, or traceability gates.
-
-`campaign-close` automatically cancels unfinished durable tasks and releases registered
-resources after all Campaign gates pass. `campaign-abort` is the explicit terminal path
-for an abandoned audit; it always requires a `skill_issues` array, even when empty, and
-writes `<state-dir>/campaigns/<campaign-id>/lessons.md`. Every successful
-`campaign-close` also writes that per-Campaign lessons file. Retryable gate failures do
-not trigger cleanup; resume them or explicitly abort. The review input and Campaign closure JSON must
-contain a `skill_issues` array. Each item requires `issue_id`, `kind` (`ERROR` or
-`DEFECT`), `stage`, `summary`, non-empty `evidence_refs`, `regression_expectation`, and
-`status` (`REGRESSION_PENDING` or `RESOLVED`). The consolidated backlog is written to
-`<state-dir>/skill-regression.json` and `<state-dir>/lessons.md`.
-
-Campaign closure JSON must contain `scope_dispositions`, including an empty array when
-there is no coordinator-declared unreviewed scope. Each submitted `unreviewed_scope` item must match exactly one record
-with `scope_ref`, `disposition` (`EXCLUDED` or `DEFERRED`), current `snapshot_id`,
-`rationale`, `approved_by`, and evidence references. Evidence must resolve to a current
-source `LOC-<path>:<line>` or an artifact recorded by the current Campaign. A follow-up
-may cite an artifact from a declared history source, but the decision still requires
-current-snapshot approval. Fresh Campaigns reject historical artifact references.
-Inherited Batch gaps and derived unresolved hypotheses remain in the final report
-without fabricated scope approvals. Check `hypothesis_outcomes` and
-`resource_assessment` separately; a recorded Finding is not a confirmed vulnerability.
-
-The complete intended workflow is specified in
-`docs/design/SYSTEM_DESIGN_VNEXT.md` in the development repository.
+- External R5 observations are signed, scope-bound provenance only; keep
+  `VNA_R5_EXTERNAL_OBSERVATION_HMAC_KEY` on the host and never treat an observation
+  as confirmation or refutation.
+- `EDGE_PROVEN` requires a typed proof bound to the planned edge and both endpoints.
+  Structural validation does not establish semantic truth or complete discovery.
+- EXCLUDED/DEFERRED paths require explicit evidence and an approver declaration;
+  declarations do not authenticate identity or prove review. Fresh Campaigns do not
+  consume historical artifacts as current evidence.
+- Use the runbook's recovery and amendment procedures. Corrections are append-only,
+  invalidate dependent work, and do not authorize reuse of stale results.
+- `NOT_FEASIBLE` remains unresolved. `shadow-evaluate` checks supplied evidence but
+  never promotes vNext; synthetic tests do not satisfy real-project release gates.
+- Keep `VNA_EVALUATION_HMAC_KEY` with the evaluation authority, never discovery
+  Agents. Campaign closure is not a security verdict.
