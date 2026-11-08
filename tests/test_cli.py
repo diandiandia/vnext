@@ -752,6 +752,33 @@ def test_cli_runs_inventory_graph_plan_in_order(tmp_path: Path, capsys: object) 
     assert amendment["batches"] == 1
 
 
+@pytest.mark.parametrize(
+    ("limit", "expected_work_units"), [(None, 2), (200, 3), (500, 1)],
+)
+def test_cli_plan_work_unit_default_and_override(
+    tmp_path: Path, capsys: object, limit: int | None, expected_work_units: int,
+) -> None:
+    target = tmp_path / "target"
+    target.mkdir()
+    state_dir = tmp_path / "state"
+    for index in range(401):
+        (target / f"module_{index:03}.py").write_text("VALUE = 1\n", encoding="utf-8")
+    common = ["--state-dir", str(state_dir)]
+    assert main([
+        "init", str(target), "--snapshot-id", "fixture:size", "--campaign-id", "CMP-size",
+        *common,
+    ]) == 0
+    assert main(["inventory", str(target), "CMP-size", *common]) == 0
+    assert main(["graph", str(target), "CMP-size", *common]) == 0
+    capsys.readouterr()  # type: ignore[attr-defined]
+    command = ["plan", str(target), "CMP-size", "--categories", "STATE", *common]
+    if limit is not None:
+        command.extend(["--max-work-unit-files", str(limit)])
+    assert main(command) == 0
+    result = json.loads(capsys.readouterr().out)  # type: ignore[attr-defined]
+    assert result["work_units"] == expected_work_units
+
+
 def test_cli_plan_accepts_path_dispositions_and_reports_them(
     tmp_path: Path, capsys: object,
 ) -> None:

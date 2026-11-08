@@ -356,6 +356,11 @@ knowledge, main Skill and operating-runbook scan coverage. A wheel-only installa
 qualification requirement.
 
 `plan` records planned Batches and prints their IDs and scope summaries. An optional
+`--max-work-unit-files` overrides the provisional default of 400 source files per
+Work Unit; existing Plans are not automatically repartitioned. A larger limit does
+not guarantee lower cost or complete inspection. Compare total usage including retries,
+coverage and review quality, and lower the limit when host capacity requires it.
+An optional
 `--cost-profile <json>` adds task-fanout and cost scenarios from caller-supplied measured
 rates and explicit assumptions; it does not replan. For R4, the default remains one task
 per CategoryAuditPlan. `task-schedule-r4 --bundle-work-units 2` opts into bundling same-

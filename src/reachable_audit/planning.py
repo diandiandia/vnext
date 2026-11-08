@@ -26,6 +26,7 @@ from .runtime_policy import TASK_OUTPUT_MAX_BYTES
 
 
 REQUIRED_STAGES = ("R0", "R1", "R2", "R3", "R3.5", "R4", "R5", "R6")
+DEFAULT_MAX_SOURCE_FILES_PER_WORK_UNIT = 400
 DEFAULT_DISCOVERY_AXES = (
     "surface",
     "mechanism",
@@ -263,7 +264,7 @@ def create_audit_plan(
     boundary_edges: Sequence[BoundaryEdge] = (),
     path_dispositions: Sequence[PlanPathDisposition] = (),
     discovery_axes: Sequence[str] = DEFAULT_DISCOVERY_AXES,
-    max_source_files_per_work_unit: int = 200,
+    max_source_files_per_work_unit: int = DEFAULT_MAX_SOURCE_FILES_PER_WORK_UNIT,
     max_source_files_per_batch: int = 2000,
     max_work_units_per_batch: int = 4,
 ) -> AuditPlan:

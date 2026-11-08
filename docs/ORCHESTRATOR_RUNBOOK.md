@@ -592,6 +592,12 @@ snapshot identity alongside the component ID.
 
 ### Scoped planning
 
+New Plans default to at most 400 source files per Work Unit; this is a provisional
+test setting, not a measured cost optimum or a guarantee of worker coverage. Set
+`--max-work-unit-files` explicitly for the source and host limits, and compare total
+attempt usage, retries, actual inspection and review quality. Existing Plans are not
+automatically repartitioned when the default changes.
+
 After `inventory` and `graph`, but before `plan`, the host coordinator identifies
 likely test-related source paths using common directory names (`test`, `tests`,
 `testing`, `spec`, `specs`, `__tests__`) and filename forms (`test_*`, `*_test.*`,

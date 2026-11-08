@@ -96,7 +96,7 @@ def test_default_work_unit_size_is_bounded_for_single_worker_review(
 ) -> None:
     target = tmp_path / "large-component"
     target.mkdir()
-    for index in range(201):
+    for index in range(401):
         _write(target / "src" / f"module_{index:03}.py", f"VALUE = {index}\n")
 
     inventory = build_inventory(target, "fixture:default-work-unit-size")
@@ -107,7 +107,15 @@ def test_default_work_unit_size_is_bounded_for_single_worker_review(
     )
 
     assert len(plan.work_units) == 2
-    assert max(len(unit.source_files) for unit in plan.work_units) == 200
+    assert sorted(len(unit.source_files) for unit in plan.work_units) == [1, 400]
+
+    overridden = create_audit_plan(
+        campaign_id="CMP-default-work-unit-size",
+        inventory=inventory,
+        category_families=["STATE"],
+        max_source_files_per_work_unit=200,
+    )
+    assert sorted(len(unit.source_files) for unit in overridden.work_units) == [1, 200, 200]
 
 
 def test_validate_plan_binds_plan_to_inventory_snapshot_and_digest(

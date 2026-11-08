@@ -52,7 +52,8 @@ from .knowledge import create_category_audit_plans
 from .knowledge_catalog import KnowledgeCatalog, default_knowledge_root
 from .plan_models import BoundaryEdge, PlanPathDisposition, PlanPathState, WorkUnit
 from .planning import (
-    amend_plan, create_audit_plan, discovery_output_floor_bytes, forecast_plan_cost,
+    DEFAULT_MAX_SOURCE_FILES_PER_WORK_UNIT, amend_plan, create_audit_plan,
+    discovery_output_floor_bytes, forecast_plan_cost,
 )
 from .resource_cleanup import (
     cleanup_campaign_resources,
@@ -1238,7 +1239,9 @@ def _parser() -> argparse.ArgumentParser:
             "default to INCLUDED"
         ),
     )
-    plan.add_argument("--max-work-unit-files", type=int, default=200)
+    plan.add_argument(
+        "--max-work-unit-files", type=int, default=DEFAULT_MAX_SOURCE_FILES_PER_WORK_UNIT,
+    )
     plan.add_argument("--max-batch-files", type=int, default=2000)
     plan.add_argument("--max-batch-work-units", type=int, default=4)
     plan.add_argument(

@@ -1520,3 +1520,13 @@ Validation for this follow-up: full local suite **866 passed, 1 skipped** (the
 protected held-out manifest is not configured); `compileall`, `git diff --check`,
 and the 500-line bound passed. These checks are not release qualification, dead-code
 proof, discovery-quality evidence, or a standards-conformity assessment.
+
+## Follow-up: Provisional Work Unit Default
+
+The operator selected a provisional default of 400 source files per Work Unit for
+future Plans after reporting increased token use at 200. This changes neither existing
+Plans nor explicit planner limits. CLI and library planning share the same default.
+Tests check 401 files split as 400 and 1, plus explicit 200/500 overrides. These
+synthetic checks do not measure token savings, inspection completeness, or discovery
+quality. Compare fresh, equivalently scoped runs and include retries, coverage and
+host capacity before drawing conclusions or changing the default again.

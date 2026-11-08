@@ -229,8 +229,8 @@ An optional `--cost-profile <json>` adds low/expected/high task-fanout and cost 
 The caller must supply measured cost per operation and explicit hypothesis/reachability
 assumptions; the forecast never changes the plan and omits retries, revival sampling, and
 host repair costs.
-The default Work Unit limit is 200 source files as a conservative starting point, not
-a guarantee that a worker can inspect every such unit. Choose a lower explicit
+The default Work Unit limit is 400 source files as a provisional test starting point,
+not a validated cost optimum or a guarantee that a worker can inspect every unit. Choose a lower explicit
 `--max-work-unit-files` when source size or host context limits require it. This changes
 Work Unit IDs and task counts, so compare full-campaign token/cost, retry rate, and coverage;
 do not assume smaller Work Units are cheaper.
