@@ -189,9 +189,9 @@ this runbook provides the lifecycle and recovery guide.
 | R4 | Current required prior stages and category plans | `task-schedule-r4`, `task-commit-r4` | One canonical CategoryRun per plan, exact axes/variants, hypothesis-by-hypothesis dispositions and applicable Finding reconciliation; no finding quota |
 | R5 | Current verdicts and applicable experimental evidence | `task-schedule-r5`, `task-commit-r5` | Registered managed evidence for empirical upgrades; honest infeasibility/uncertainty |
 | Finding | Adjudicated evidence and required R5 support | Explicit finding commands from CLI help | Canonical finding workflow, not invented R4 finding IDs |
-| R6 | Required Batch artifacts and scope reconciliation | `task-schedule-r6`, `task-commit-r6` | Surface states, one review per recorded Finding, residual risks, actual coverage, skill issues and Batch gates |
+| R6 | Required Batch artifacts and scope reconciliation | `task-schedule-r6`, then dispatch workers, then `task-commit-r6` | Schedule before dispatch; an early claim can return `null` because the task does not exist yet. Reconcile Surface states, every recorded Finding, residual risks, actual coverage, skill issues and Batch gates |
 | Handoffs | Declared boundary, source/receiver ownership and evidence | `handoff-resolve`, `handoff-integrate` | Both endpoint evidence and matching joins; report unresolved/undiscovered boundary limitations |
-| Campaign | All required Batches/Handoffs reconciled | `campaign-close` | CG1-CG10, explicit unreviewed dispositions and cleanup; not proof of exhaustive safety |
+| Campaign | All required Batches/Handoffs reconciled | `campaign-close` | CG1-CG11, including R4 SUPPORTED-to-Finding reconciliation, explicit unreviewed dispositions and cleanup; not proof of exhaustive safety |
 
 CG2 may account for a component with no Work Unit only when the current Plan assigns
 every source path owned by that component an explicit, evidence-backed EXCLUDED or

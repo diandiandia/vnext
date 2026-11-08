@@ -154,7 +154,8 @@ independence.
 ### TR-06: CLI and Campaign Closure Behavior
 
 **Coverage:** each CLI command family, canonical JSON and errors, Campaign close/abort,
-all CG1-CG10 decisions, stage stale/ancestry gates, and durable artifacts.
+all CG1-CG11 decisions, including R4 SUPPORTED-to-Finding reconciliation, stage
+stale/ancestry gates, and durable artifacts.
 
 **Required tests:** `test_cli.py`, `test_campaign_closure.py`, `test_batch_closure.py`, and
 `test_snapshot_drift.py` pin output, exit codes, cleanup, report idempotence, gate details,

@@ -263,7 +263,7 @@ def create_audit_plan(
     boundary_edges: Sequence[BoundaryEdge] = (),
     path_dispositions: Sequence[PlanPathDisposition] = (),
     discovery_axes: Sequence[str] = DEFAULT_DISCOVERY_AXES,
-    max_source_files_per_work_unit: int = 1000,
+    max_source_files_per_work_unit: int = 200,
     max_source_files_per_batch: int = 2000,
     max_work_units_per_batch: int = 4,
 ) -> AuditPlan:

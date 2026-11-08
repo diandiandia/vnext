@@ -168,7 +168,7 @@ class BatchWorkflow:
             )
         campaign = self.manager.store.get_campaign(self.campaign_id)
         if campaign.status is CampaignStatus.PLANNING:
-            self.manager.store.transition_campaign(
+            self.manager.transition_campaign(
                 self.campaign_id, CampaignStatus.RUNNING
             )
         return artifact_id

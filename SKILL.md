@@ -17,7 +17,7 @@ The approved Top15-language / Top10-issue portfolio is versioned product scope, 
 Ten issues per language guide review, not finding quotas or exhaustive coverage. Establish framework, platform, privilege and deployment preconditions from current source.
 Training provenance is not target evidence. Test counterevidence and preserve source-evidenced candidates outside the catalog.
 
-The experimental build provides Campaign/Batch state, events, artifacts, recovery, inventory, deterministic Work Units, cross-Batch Handoffs, R0-R6, CG1-CG10, durable leases and source-drift invalidation.
+The experimental build provides Campaign/Batch state, events, artifacts, recovery, inventory, deterministic Work Units, cross-Batch Handoffs, R0-R6, CG1-CG11, durable leases and source-drift invalidation.
 It includes 15 source-language and 14 build-ecosystem adapters, the 150-issue catalog, R5 recipes, bounded toolchain probes and derived reports.
 It remains a shadow candidate until RG1-RG15 acceptance on representative projects, including all 15 language certifications, mixed-language and 20GB+ Campaigns.
 See `docs/design/ACCEPTANCE_PLAN_VNEXT.md`.
@@ -76,6 +76,9 @@ a fresh copy does not erase an operator's prior knowledge of the target.
   in a worker context. Dynamic evidence requires explicit host authorization and a
   Campaign-registered managed R5 harness; `init --static-only` forbids dynamic
   execution. This task contract is not an OS sandbox.
+16. Every R4 `SUPPORTED` hypothesis must be linked to a recorded Finding before
+  Campaign closure; CG11 blocks omissions. `NEEDS_REVIEW` candidates remain visible
+  in the unresolved queue.
 
 Before the first R0, inventory source files and component build manifests are frozen in
 the snapshot baseline. Use `evidence-register` for additional supporting resource files
@@ -206,11 +209,11 @@ An optional `--cost-profile <json>` adds low/expected/high task-fanout and cost 
 The caller must supply measured cost per operation and explicit hypothesis/reachability
 assumptions; the forecast never changes the plan and omits retries, revival sampling, and
 host repair costs.
-If R1 coverage retries exhaust on a large Work Unit, compare a new plan using
-`--max-work-unit-files 500` and `250` against the current default of `1000`. This changes
+The default Work Unit limit is 200 source files as a conservative starting point, not
+a guarantee that a worker can inspect every such unit. Choose a lower explicit
+`--max-work-unit-files` when source size or host context limits require it. This changes
 Work Unit IDs and task counts, so compare full-campaign token/cost, retry rate, and coverage;
-do not assume smaller Work Units are cheaper. Keep the default unchanged until that paired
-measurement shows a repeatable benefit.
+do not assume smaller Work Units are cheaper.
 R2 hypotheses are schema-checked at collection; `mechanism` must be an object containing
 non-empty `family` and `variant` strings, with optional `freeform`. Shape errors leave the
 task leased and return an actionable `ModelError` rather than failing later during commit.

@@ -220,6 +220,34 @@ def _derive_finding_deduplication_gate(
     }
 
 
+def _derive_supported_hypothesis_finding_gate(
+    category_runs: Sequence[Mapping[str, Any]],
+    findings: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    supported_hypothesis_ids = {
+        str(review["hypothesis_id"])
+        for run in category_runs
+        for review in run.get("hypothesis_reviews", [])
+        if review.get("disposition") == "SUPPORTED"
+    }
+    recorded_hypothesis_ids = {
+        str(hypothesis_id)
+        for finding in findings
+        for hypothesis_id in finding.get("hypothesis_ids", [])
+    }
+    missing = sorted(supported_hypothesis_ids - recorded_hypothesis_ids)
+    return {
+        "pass": not missing,
+        "detail": {
+            "supported_hypothesis_count": len(supported_hypothesis_ids),
+            "finding_linked_count": len(
+                supported_hypothesis_ids & recorded_hypothesis_ids
+            ),
+            "missing_from_findings": missing,
+        },
+    }
+
+
 def _derive_r5_strength_gate(
     assessments: Sequence[Mapping[str, Any]],
 ) -> dict[str, Any]:
@@ -1364,6 +1392,9 @@ class CampaignCloser:
         gates["CG7"] = _derive_r5_strength_gate(r5_assessments)
         gates["CG8"] = _derive_snapshot_drift_gate(events)
         gates["CG9"] = _derive_finding_report_gate(batch_reports, findings)
+        gates["CG11"] = _derive_supported_hypothesis_finding_gate(
+            category_runs, findings,
+        )
         closure_statements = {
             "unreviewed_scope": effective_unreviewed_scope,
             "residual_risks": closure.residual_risks,
@@ -1514,6 +1545,9 @@ class CampaignCloser:
                 for axis in sorted({item["axis"] for item in discovery_axis_runs})
             },
             "findings": merged_findings,
+            "supported_hypothesis_finding_reconciliation": (
+                gates["CG11"]["detail"]
+            ),
             "finding_classification_counts": _counts(
                 str(item.get("classification", "INSUFFICIENT_EVIDENCE"))
                 for item in merged_findings
@@ -1718,12 +1752,12 @@ class CampaignCloser:
         )
         campaign = self.manager.store.get_campaign(self.campaign_id)
         if campaign.status is CampaignStatus.RUNNING:
-            self.manager.store.transition_campaign(
+            self.manager.transition_campaign(
                 self.campaign_id, CampaignStatus.INTEGRATING
             )
         campaign = self.manager.store.get_campaign(self.campaign_id)
         if campaign.status is CampaignStatus.INTEGRATING:
-            self.manager.store.transition_campaign(
+            self.manager.transition_campaign(
                 self.campaign_id, CampaignStatus.COMPLETE
             )
         return {**report, "artifact_id": artifact.artifact_id}

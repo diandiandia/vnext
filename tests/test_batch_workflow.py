@@ -40,6 +40,7 @@ def _workflow(
     source: str = "def handle(value):\n    return value\n",
     *,
     constraints: tuple[str, ...] | None = None,
+    max_source_files_per_work_unit: int = 200,
 ):
     (tmp_path / "app.py").write_text(source, encoding="utf-8")
     inventory = build_inventory(tmp_path, "fixture:slice")
@@ -47,6 +48,7 @@ def _workflow(
         campaign_id=campaign_id,
         inventory=inventory,
         category_families=["INJECTION"],
+        max_source_files_per_work_unit=max_source_files_per_work_unit,
     )
     manager = CampaignManager(tmp_path)
     manager.create_campaign(
@@ -623,7 +625,9 @@ def test_r1_r3_validate_one_thousand_source_files(tmp_path: Path) -> None:
         (tmp_path / f"scale_{index:04}.py").write_text(
             f"VALUE_{index} = {index}\n", encoding="utf-8"
         )
-    manager, workflow, plan = _workflow(tmp_path, "CMP-1k-r1-r3")
+    manager, workflow, plan = _workflow(
+        tmp_path, "CMP-1k-r1-r3", max_source_files_per_work_unit=1000,
+    )
     try:
         work_unit = plan.work_units[0]
         assert len(work_unit.source_files) == 1000

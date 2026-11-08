@@ -357,6 +357,14 @@ def test_r4_category_plan_runs_as_durable_task(
             manager.artifacts.get_bytes(scheduled[0].task.input_refs[0])
         )
         assert "Omit work_unit_id from each AxisRun" in task_input["analysis_contract"]
+        example = task_input["output_example"]["category_run"]
+        assert example["mechanism_variants_examined"] == list(
+            category_plan.mechanism_variants
+        )
+        assert {
+            item["review_altitude"] for item in example["axis_runs"]
+        } == {"INSPECTED"}
+        assert "must not be split" in task_input["analysis_contract"]
         assert task_input["mechanism_cards"][0]["mechanism_id"] == state_card["mechanism_id"]
         assert task_input["knowledge_context"]["issue_entries"]
         assert task_input["knowledge_context"]["knowledge_version"] == "portfolio-2026-09-v1"

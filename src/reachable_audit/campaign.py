@@ -190,6 +190,13 @@ class CampaignManager:
         self._write_skill_regression_exports()
         return artifact.artifact_id
 
+    def transition_campaign(
+        self, campaign_id: str, target: CampaignStatus, *, actor: str = "tool",
+    ) -> CampaignRecord:
+        record = self.store.transition_campaign(campaign_id, target, actor=actor)
+        self._write_campaign_export(record)
+        return record
+
     def abort_campaign(
         self,
         campaign_id: str,
@@ -224,7 +231,7 @@ class CampaignManager:
         )
         campaign = self.store.get_campaign(campaign_id)
         if campaign.status.value != "BLOCKED":
-            self.store.transition_campaign(campaign_id, type(campaign.status).BLOCKED)
+            self.transition_campaign(campaign_id, type(campaign.status).BLOCKED)
         cleanup_error = None
         try:
             cleanup = cleanup_campaign_resources(self, campaign_id)

@@ -1,8 +1,9 @@
 # Generality and Engineering Review
 
 Initial review: 2026-10-20. Base: `a3b969c` plus that review's uncommitted changes.
-Latest reassessment: 2026-11-04, base `494a698` plus the reviewed and repaired
-changes in [the latest review](#latest-review-2026-11-04-generality-and-evaluation-integrity).
+Latest reassessment: 2026-11-08, base `aeef4b4` plus the reviewed and repaired
+changes in
+[the latest review](#latest-review-2026-11-08-post-repair-generality-and-traceability).
 Earlier sections are dated historical evidence, not the current backlog or audit plan.
 This is a bounded engineering review and repair record, not a security certification,
 exhaustive dead-code proof, Google internal approval, or ISO conformity assessment.
@@ -1436,3 +1437,57 @@ discovery trials; multi-host/context-isolation and qualified R5 testing; full
 semantic review of ranked knowledge; measured maintainability refactoring; an
 authorized Google criteria set (if that comparison is required); and an adopter-led
 assessment against a controlled, tailored 12207:2026 process set.
+
+## Latest Review (2026-11-08): Post-Repair Generality and Traceability
+
+### Scope and conclusion
+
+Baseline: `main` at `aeef4b4` plus the then-uncommitted repair set. Rechecked the
+pending Campaign-closure, state-export, task-contract and planner changes; their
+focused/full regression coverage; the active Skill and README boundaries; current
+system/software requirements, designs and lifecycle self-assessment; and bounded
+searches for project-specific identifiers in runtime and user-facing files. This is
+a source-backed engineering reassessment, not a complete line-by-line code review,
+security audit, discovery-quality study or external conformity assessment. The
+historical Tomcat report path supplied with the request was unavailable in this
+checkout; no target Campaign state was loaded or modified.
+
+| Question | Evidence-bounded conclusion |
+|---|---|
+| Clean, reusable Skill? | Yes within the stated authorized source-security-audit niche, not as a general software-engineering Skill or universal scanner. The root Skill describes capability and host limits, and README distinguishes installing the Skill from running the Campaign runtime. Product-facing text does not include target findings or audit plans. |
+| Historical/project contamination? | Historical candidate plans and quality records remain in evaluator-side development documents, and repository copies are not a physical isolation boundary. The Skill/README identify those records as coordinator/evaluator material and prohibit forwarding them to fresh discovery workers. Searches found examples and historical names in those development records, not evidence that the default runtime loader injects them into fresh task inputs. This is a policy boundary, not proof of host-context isolation. |
+| Audit-specific plan information? | No live target Campaign or per-audit plan is embedded in the active Skill/runtime configuration. The README's `audit-local-001` and `demo-001` are runnable-example identifiers; real Plan scope is generated from the current Campaign inventory and operator-selected categories. |
+| Bias? | Material risk remains from the fixed ranked 15-language/150-entry portfolio, provenance and curation choices, Python-first default hotspot provider, uneven provider depth, and model/host differences. The 200-source-file Work Unit default is a conservative operational choice introduced after a single real-target failure; no cross-project paired benchmark establishes it as optimal. Current-target preconditions, counterevidence and explicit unsupported-language disclosure reduce but do not eliminate bias. |
+| Dead code / redundant design? | No deletion is justified by this review. `ruff`, `vulture`, and `pyflakes` are not installed; compile checks, tests, and text searches are not whole-program liveness analysis. Earlier bounded AST screens predate the latest modules. Large orchestration files and dated design histories remain maintainability/navigation debt, not proof of dead code; no broad refactor is justified without measured module boundaries and regression evidence. |
+| Traceability and implementation? | CG11 was implemented but lacked a system/software requirement row and a closure-level negative regression. Added SYSR-045/SWDR-051, aligned the system design, and added a test that verifies closure blocks a supported hypothesis without a Finding while leaving the Campaign open. R2 task examples also used a non-contract field for entrypoint reviews and showed only one axis for compact mode; corrected the examples to use `AxisRun.entrypoint_reviews` and all six axes, with structural assertions. The gate checks declared linkage only; it does not validate semantic correctness. |
+| ISO/IEC/IEEE 12207? | **Conformity is not established.** The lifecycle self-assessment states that its older process-area table is not a clause mapping to the 2026 edition and that no controlled text, applicability/tailoring approval, clause evidence, or independent assessment is available. Local requirements, tests and traceability do not substitute for those inputs. |
+| Google internal engineering requirements? | **Not assessed.** No authorized internal criteria or acceptance authority were supplied. Public Google Engineering Practices are guidance for code review, not evidence of internal approval or compliance by this repository. |
+
+No evidence justified deleting evaluator-side history, knowledge entries, or public
+interfaces. Keep historical records clearly labeled and out of normal discovery
+context; do not claim zero historical influence, unbiased coverage, dead-code
+freedom, Google approval, ISO conformity, or production-ready audit quality.
+
+### Repairs and validation
+
+- Added SYSR-045/SWDR-051 traceability for CG11 and documented the closure gate in
+  the system design.
+- Added a Campaign-level regression proving that an R4 `SUPPORTED` hypothesis with
+  no linked Finding blocks closure and leaves the Campaign in `RUNNING`.
+- Corrected per-axis and compact R2 output examples to match the validator's
+  `AxisRun.entrypoint_reviews` shape; compact examples now contain all six required
+  axes and checklist reviews on their declared axes.
+- Renamed the closure test to reflect the 11-gate report.
+- Kept the 200-file default explicitly provisional; reverting to the previous
+  1,000-file default would reinstate a known oversized-work-unit failure without
+  establishing a better general default. Paired measurements across targets remain
+  necessary before optimizing it.
+
+Validation: `env -u PYTHONPATH python3 -m pytest tests -o addopts='' -q -rs
+--tb=short` reported **865 passed, 1 skipped**; the skip is the protected held-out
+acceptance test because no signed manifest is configured. The compatibility scan
+passed with zero findings across **57 Python files, 2 helper files, 167 knowledge
+files and 2 prompt files**. `compileall` and `git diff --check` passed. No dedicated
+dead-code analyzer was available. These are local regression and bounded pattern
+results only; they do not establish target-audit quality, ISO conformity, Google
+internal compliance, or real-host isolation.

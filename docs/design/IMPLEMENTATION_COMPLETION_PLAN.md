@@ -254,7 +254,7 @@ Status: **LOCAL IMPLEMENTATION AND SYNTHETIC ACCEPTANCE COMPLETE**. Campaign
 screening/substantive classification and ceiling state are pure and boundary-tested. All
 CLI command families dispatch through focused handlers, including R3.5, R4/R5, Finding,
 R6, signed observation registration, drift resolution, and Batch addition. CampaignCloser
-gate decisions CG1-CG10 are decomposed into bounded helpers or explicit stale/ancestry
+gate decisions CG1-CG11 are decomposed into bounded helpers or explicit stale/ancestry
 checks with direct behavior tests. R4 v2 removes repeated Work Unit/category/axis and
 language/knowledge context fields while preserving v1 parsing and canonical reports.
 Scoped CLI and CampaignCloser code has no catch-all Exception/BaseException handlers.

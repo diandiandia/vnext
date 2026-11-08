@@ -2,7 +2,7 @@
 
 ## Optional policy 57 requirements
 
-Current as-implemented baseline: **2026-11-04**, task policy 57, release policy 8.
+Current as-implemented baseline: **2026-11-08**, task policy 57, release policy 8.
 
 | Requirement | Implementation/verification | Assurance boundary |
 |---|---|---|
@@ -141,6 +141,7 @@ See TR-21 for bounded regression evidence and its semantic-assurance limits.
 | SWDR-048 | Closure shall union current Batch unresolved scope with Campaign declarations, expose stage-backed per-hypothesis outcomes and revival outcome splits, and report local resource assessment separately. Task contracts shall disclose anchor format, provider coverage and unknown liveness; an optional Campaign claim deadline shall include pauses. | SYSR-042, SYSR-033, SYSR-037 | §1.1, §6.1, §6.2 | **Implemented with host boundaries.** See TR-13 and closure/refutation/execution/CLI/hotspot regressions. No provider cap, physical source-read proof, automatic worker termination or independent semantic approval is implied. |
 | SWDR-049 | Concrete R4 evidence shall share schema/LOC/artifact checks across all entry paths; supporting files shall be digest-registered before first R0. Explicit late collection shall bind the original attempt/output and reuse normal validation; monotone budget amendments shall retain original clock and breaches. Static challenges shall be frozen opt-in and non-promoting. | SYSR-043, 014, 033, 042 | §3.8, §6.1, §6.2.1 | **Locally implemented, host qualification outstanding.** TR-15 covers source/resource drift, nested evidence, recovery isolation/atomicity, budget resumption/reporting and static challenge coverage. See [test_resource_evidence.py](../../tests/test_resource_evidence.py), [test_task_recovery.py](../../tests/test_task_recovery.py), [test_budget_amendment.py](../../tests/test_budget_amendment.py), [test_category_runs.py](../../tests/test_category_runs.py), [test_refutation.py](../../tests/test_refutation.py). |
 | SWDR-050 | Path-scope evidence shall support a digest-bound exclusion/deferment for a zero-byte inventoried source without treating a nonexistent LOC line as evidence. | SYSR-044 | §5.4, §6.2.1 | **Implemented.** `EMPTY-FILE:<path>:sha256:<digest>` is accepted only when path matches the disposition and the digest matches the zero-byte file in the frozen snapshot baseline. It does not establish review. Evidence: [campaign_closure.py](../../src/reachable_audit/campaign_closure.py), [test_campaign_closure.py](../../tests/test_campaign_closure.py). |
+| SWDR-051 | Campaign closure shall reject any R4 `SUPPORTED` hypothesis absent from all recorded Finding `hypothesis_ids`; one Finding may link multiple supported hypotheses, and unresolved/rejected hypotheses are not promoted by this check. | SYSR-045 | §6.1, §9.2 | **Implemented.** CG11 checks the canonical R4/Finding projections before closure; tests cover both linked/unlinked gate behavior and Campaign-level blocking. The check validates linkage only, not finding quality or semantic correctness. Evidence: [campaign_closure.py](../../src/reachable_audit/campaign_closure.py), [test_campaign_closure.py](../../tests/test_campaign_closure.py). |
 
 ## 3. Audit Summary
 
@@ -165,7 +166,7 @@ Explicit `jvm-bounded` does not change ordinary or Go defaults or inject JVM opt
 records the regression obligations; no discovery-quality or host-isolation assurance
 is inferred.
 
-All 50 IDs retain system and software-design references. This revision does not reuse
+All 51 IDs retain system and software-design references. This revision does not reuse
 the old 27/14/4 status tally: the contracts are now explicitly bounded and a tally would
 obscure retained target gaps and reproduced defects.
 

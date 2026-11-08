@@ -2129,7 +2129,35 @@ class DiscoveryCoordinator:
                     "surfaces": "array<Surface>",
                     "boundary_reviews": (
                         "array<BoundaryReview>, exactly one per supplied edge, with this "
-                        "Work Unit ID, valid disposition, non-empty evidence_refs and rationale"
+                        "Work Unit ID, disposition confirmed|rejected|unresolved, "
+                        "non-empty evidence_refs and rationale"
+                    ),
+                },
+                "output_example": {
+                    "schema_version": "1.0",
+                    "reviewed_scope": "ALL_SOURCE_FILES",
+                    "review_altitude": "INSPECTED",
+                    "surfaces": [{
+                        "surface_id": "SURF-<unique-id>",
+                        "work_unit_id": str(work_unit["work_unit_id"]),
+                        "component_id": str(work_unit["component_id"]),
+                        "kind": "<entry surface kind>",
+                        "entry_path": "<path from this Work Unit>",
+                        "entry_symbol": "<symbol or null>",
+                        "principal": "<evidenced caller or actor>",
+                        "evidence_refs": ["LOC-<path>:<line>"],
+                    }],
+                    "boundary_reviews": [{
+                        "edge_id": "<edge_id from supplied boundary edges>",
+                        "work_unit_id": str(work_unit["work_unit_id"]),
+                        "disposition": "unresolved",
+                        "evidence_refs": ["LOC-<path>:<line>"],
+                        "rationale": "<specific source-backed disposition>",
+                    }],
+                    "example_contract_note": (
+                        "Shape example only. Replace placeholders with current-source "
+                        "evidence; return exactly one boundary review per supplied edge. "
+                        "Use an empty array only when no boundary edges were supplied."
                     ),
                 },
             })
@@ -2281,12 +2309,37 @@ class DiscoveryCoordinator:
                         ),
                         "entrypoint_reviews": (
                             "AxisRun.entrypoint_reviews must contain exactly one "
-                            "evidence-linked review for every required_entrypoints ID"
+                            "evidence-linked review for every required_entrypoints ID; "
+                            "use evidence_refs and disposition ANALYZED|NO_CANDIDATE|"
+                            "DEFERRED|NOT_APPLICABLE"
                         ),
                         "hypotheses": (
                             "array<Hypothesis>; each mechanism is an object with required "
                             "family and variant fields, optional freeform; hypothesis_id must "
                             "be HYP-<work_unit_id>-<origin_axis>-<positive ordinal>"
+                        ),
+                    },
+                    "output_example": {
+                        "schema_version": "1.0",
+                        "reviewed_scope": "ALL_SOURCE_FILES",
+                        "axis_run": {
+                            "axis": axis.value,
+                            "applicability": "APPLICABLE",
+                            "evidence_refs": ["LOC-<path>:<line>"],
+                            "rationale": "<specific source-backed review>",
+                            "review_altitude": "INSPECTED",
+                            "entrypoint_reviews": [{
+                                "entrypoint_id": item["entrypoint_id"],
+                                "disposition": "ANALYZED",
+                                "evidence_refs": list(item["source_refs"]),
+                                "rationale": "<source-backed checklist result>",
+                            } for item in required_entrypoints],
+                        },
+                        "hypotheses": [],
+                        "example_contract_note": (
+                            "Return the task's axis and all required checklist entries. "
+                            "When there are no required entrypoints, use an empty "
+                            "entrypoint_reviews array. Replace every placeholder."
                         ),
                     },
                 })
@@ -2329,6 +2382,10 @@ class DiscoveryCoordinator:
             work_unit_id = str(work_unit["work_unit_id"])
             hotspot_report = self._hotspot_context(work_unit)
             boundary_edge_context = self._r2_boundary_edge_context(work_unit)
+            required_entrypoints = [
+                item for item in normalized_checklist
+                if item["work_unit_id"] == work_unit_id
+            ]
             knowledge_context = self.knowledge_catalog.task_context(
                 work_unit.get("languages", []),
                 families=work_unit.get("category_families", []),
@@ -2343,10 +2400,7 @@ class DiscoveryCoordinator:
                 "hotspot_contract": _HOTSPOT_CONTRACT,
                 "boundary_edge_context": boundary_edge_context,
                 "surfaces": surfaces_by_work_unit.get(work_unit_id, []),
-                "required_entrypoints": [
-                    item for item in normalized_checklist
-                    if item["work_unit_id"] == work_unit_id
-                ],
+                "required_entrypoints": required_entrypoints,
                 "language_adapters": self._language_adapter_context(work_unit),
                 "knowledge_context": knowledge_context,
                 "analysis_contract": {
@@ -2366,7 +2420,8 @@ class DiscoveryCoordinator:
                     ),
                     "entrypoint_reviews": (
                         "exactly one source-backed review for every required entrypoint "
-                        "on its predeclared required_axis"
+                        "on its predeclared required_axis; use evidence_refs and "
+                        "disposition ANALYZED|NO_CANDIDATE|DEFERRED|NOT_APPLICABLE"
                     ),
                     "hypotheses": (
                         "array<Hypothesis>, each with its origin_axis; mechanism is an "
@@ -2384,14 +2439,20 @@ class DiscoveryCoordinator:
                     "reviewed_paths": ["<reviewed path from this Work Unit>"],
                     "review_altitude": "INSPECTED",
                     "axis_runs": [{
-                        "axis": axes[0],
+                        "axis": axis,
                         "applicability": "APPLICABLE",
                         "evidence_refs": ["LOC-<path>:<line>"],
                         "rationale": "<specific source-backed review>",
                         "work_unit_id": work_unit_id,
                         "review_altitude": "INSPECTED",
-                        "entrypoint_reviews": [],
-                    }],
+                        "entrypoint_reviews": [{
+                            "entrypoint_id": item["entrypoint_id"],
+                            "disposition": "ANALYZED",
+                            "evidence_refs": list(item["source_refs"]),
+                            "rationale": "<source-backed checklist result>",
+                        } for item in required_entrypoints
+                            if item["required_axis"] == axis],
+                    } for axis in axes],
                     "hypotheses": [],
                     "hypothesis_shape": {
                         "hypothesis_id": f"HYP-{work_unit_id}-{axes[0]}-1",
@@ -3257,6 +3318,9 @@ class DiscoveryCoordinator:
                 "required_finding_ids": required_finding_ids,
                 "analysis_contract": (
                     "Execute every planned discovery axis and mechanism variant. Record "
+                    "mechanism_variants_examined as the exact strings from category_plan; "
+                    "these values may be compound and must not be split, paraphrased, or "
+                    "replaced with sibling variants. "
                     "SCREENED/INSPECTED altitude for each APPLICABLE AxisRun; use "
                     "NOT_RECORDED for NOT_APPLICABLE or DEFERRED. These are Agent "
                     "declarations, not host-observed inspection. "
@@ -3288,6 +3352,41 @@ class DiscoveryCoordinator:
                         "from the parent), with review_altitude on every APPLICABLE axis, "
                         "exactly one hypothesis_reviews entry per allowed hypothesis ID, "
                         "and finding_ids exactly matching required_finding_ids"
+                    ),
+                },
+                "output_example": {
+                    "category_run": {
+                        "category_run_id": "CR-<unique-id>",
+                        "category_plan_id": str(category_plan_id),
+                        "work_unit_id": work_unit_id,
+                        "family": str(category_plan["family"]),
+                        "mechanism_variants_examined": list(
+                            category_plan.get("mechanism_variants", [])
+                        ),
+                        "axis_runs": [{
+                            "axis": str(axis),
+                            "applicability": "APPLICABLE",
+                            "evidence_refs": ["LOC-<path>:<line>"],
+                            "rationale": "<specific source-backed result>",
+                            "review_altitude": "INSPECTED",
+                        } for axis in category_plan.get("discovery_axes", [])],
+                        "applicability": "APPLICABLE",
+                        "status": "COMPLETE",
+                        "evidence_refs": ["LOC-<path>:<line>"],
+                        "rationale": "<coverage summary and unresolved limitations>",
+                        "hypothesis_ids": list(allowed_hypothesis_ids),
+                        "finding_ids": list(required_finding_ids),
+                        "hypothesis_reviews": [{
+                            "hypothesis_id": hypothesis_id,
+                            "disposition": "NEEDS_REVIEW",
+                            "evidence_refs": ["LOC-<path>:<line>"],
+                            "rationale": "<evidence-backed disposition>",
+                        } for hypothesis_id in allowed_hypothesis_ids],
+                    },
+                    "example_contract_note": (
+                        "Shape example only. Copy all planned variant strings verbatim, "
+                        "return exactly one review per allowed hypothesis, and replace "
+                        "placeholders with current-source evidence."
                     ),
                 },
             })

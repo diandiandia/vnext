@@ -81,12 +81,14 @@ def _ready_for_r5(
     tmp_path: Path,
     *,
     static_hypothesis: bool = False,
+    supported_hypothesis: bool = False,
     surface_without_hypothesis: bool = False,
     screening_work_unit: bool = False,
     path_dispositions: tuple[PlanPathDisposition, ...] = (),
     path_review_claims: tuple[dict[str, str], ...] = (),
     axis_review_altitudes: dict[str, str] | None = None,
 ):  # type: ignore[no-untyped-def]
+    static_hypothesis = static_hypothesis or supported_hypothesis
     manager, workflow, plan = _ready_for_r4(
         tmp_path, static_hypothesis=static_hypothesis,
         surface_without_hypothesis=surface_without_hypothesis,
@@ -119,8 +121,16 @@ def _ready_for_r5(
         ("EVID-r4",), "all planned coverage executed",
         ("HYP-static",) if static_hypothesis else (), (),
         (HypothesisReview(
-            "HYP-static", HypothesisReviewDisposition.NEEDS_REVIEW,
-            ("EVID-r4",), "retain the unresolved static hypothesis",
+            "HYP-static",
+            (
+                HypothesisReviewDisposition.SUPPORTED
+                if supported_hypothesis else HypothesisReviewDisposition.NEEDS_REVIEW
+            ),
+            ("EVID-r4",),
+            (
+                "the R4 review supports this hypothesis"
+                if supported_hypothesis else "retain the unresolved static hypothesis"
+            ),
         ),) if static_hypothesis else (),
     )])
     return manager, workflow

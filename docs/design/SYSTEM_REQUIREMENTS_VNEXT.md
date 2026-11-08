@@ -2,7 +2,7 @@
 
 ## Optional coverage/delivery extension (task policy 57)
 
-Current as-implemented baseline: **2026-11-04**, task policy 57, release policy 8.
+Current as-implemented baseline: **2026-11-08**, task policy 57, release policy 8.
 
 The [adoption contract](CLOUDFLARE_DESIGN_ADOPTION_PROPOSAL_ZH.md#14-实施记录与验收边界)
 defines CFA-005–027. New requirements are bounded to opt-in coverage review and
@@ -112,6 +112,7 @@ target discovery-quality evidence.
 | SYSR-042 | Campaign reports shall preserve current Batch unresolved scope, give every hypothesis a derived report outcome, distinguish revival review from overturn, and separate resource assessment from workflow completion. | §3.4; §6 | SWDR-048 | Implemented at recorded-event scope; inherited unresolved items are not implicit approvals, and derived outcomes do not establish semantic correctness. |
 | SYSR-043 | Scope planning, supporting resource evidence and interrupted work shall preserve explicit boundaries and immutable history: concrete evidence remains digest-bound, late collection is operator-authorized and attempt-bound, and budget extensions cannot erase original breaches. | §5; §6; §9 | SWDR-049 | Locally tested in TR-15; real host outage recovery, trusted authorization and provider enforcement remain external. Optional static challenges never promote evidence grade. |
 | SYSR-044 | Path-scope validation shall allow an excluded/deferred zero-byte inventoried source to be evidenced by a digest tied to its path and frozen snapshot, without treating a nonexistent line as a source anchor. | §5.4; §6.2.1 | SWDR-050 | Implemented with a dedicated evidence form and regression tests; it proves file identity/emptiness only, not review or safety. |
+| SYSR-045 | Campaign closure shall reconcile every R4 `SUPPORTED` hypothesis to at least one recorded Finding and block closure when a supported hypothesis is unlinked. | §6; §9 | SWDR-051 | Implemented by CG11 and a closure-level regression; this is structural traceability, not semantic validation of the hypothesis or Finding. |
 
 ## 3. Software-Design Coverage Result
 

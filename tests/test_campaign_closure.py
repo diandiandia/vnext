@@ -37,6 +37,7 @@ from reachable_audit.campaign_closure import (
     _derive_r5_strength_gate,
     _derive_screening_coverage,
     _derive_snapshot_drift_gate,
+    _derive_supported_hypothesis_finding_gate,
     _derive_hypothesis_outcomes,
 )
 from reachable_audit.cli import main
@@ -64,6 +65,7 @@ from test_experiments_metrics import _ready_for_r5
 def _closable_campaign(
     tmp_path: Path, *, surface_without_hypothesis: bool = False,
     static_hypothesis: bool = False,
+    supported_hypothesis: bool = False,
     screening_work_unit: bool = False, not_feasible: bool = False,
     path_dispositions: tuple[PlanPathDisposition, ...] = (),
     path_review_claims: tuple[dict[str, str], ...] = (),
@@ -72,7 +74,8 @@ def _closable_campaign(
 ):  # type: ignore[no-untyped-def]
     manager, workflow = _ready_for_r5(
         tmp_path,
-        static_hypothesis=static_hypothesis or not_feasible,
+        static_hypothesis=static_hypothesis or not_feasible or supported_hypothesis,
+        supported_hypothesis=supported_hypothesis,
         surface_without_hypothesis=surface_without_hypothesis,
         screening_work_unit=screening_work_unit,
         path_dispositions=path_dispositions,
@@ -92,7 +95,7 @@ def _closable_campaign(
             evidence_refs=("EVID-environment-blocker",),
             rationale="the required target runtime is unavailable",
         )])
-    elif static_hypothesis:
+    elif static_hypothesis or supported_hypothesis:
         workflow.record_r5([], [R5Assessment(
             hypothesis_id="HYP-static",
             experiment_required=False,
@@ -128,6 +131,14 @@ def test_campaign_inherits_batch_unreviewed_scope_without_coordinator_approval(
             knowledge_nominations=(), skill_issues=(),
         ))
         assert report["status"] == "PASS"
+        assert report["gates"]["CG11"]["pass"] is True
+        assert report["supported_hypothesis_finding_reconciliation"][
+            "missing_from_findings"
+        ] == []
+        campaign_export = json.loads(
+            (tmp_path / ".audit_vnext/campaign.json").read_text(encoding="utf-8")
+        )
+        assert campaign_export["status"] == CampaignStatus.COMPLETE.value
         assert report["scope_completeness"] == "WITH_DECLARED_UNREVIEWED_SCOPE"
         assert report["unreviewed_scope"] == ["runtime precondition not verified"]
         assert report["inherited_unreviewed_scope"] == [{
@@ -288,7 +299,7 @@ def test_campaign_rejects_impossible_completion_timeline(tmp_path: Path) -> None
         manager.close()
 
 
-def test_campaign_closure_passes_ten_gates_and_writes_reports(tmp_path: Path) -> None:
+def test_campaign_closure_passes_eleven_gates_and_writes_reports(tmp_path: Path) -> None:
     manager, plan = _closable_campaign(tmp_path)
     try:
         lessons_path = tmp_path / ".audit_vnext" / "campaigns" / "CMP-r4" / "lessons.md"
@@ -340,7 +351,7 @@ def test_campaign_closure_passes_ten_gates_and_writes_reports(tmp_path: Path) ->
         assert report["status"] == "PASS"
         assert report["audit_mode"] == "fresh"
         assert report["scope_completeness"] == "NO_DECLARED_UNREVIEWED_SCOPE"
-        assert set(report["gates"]) == {f"CG{index}" for index in range(1, 11)}
+        assert set(report["gates"]) == {f"CG{index}" for index in range(1, 12)}
         assert all(gate["pass"] for gate in report["gates"].values())
         assert report["knowledge_published"] is False
         task_measurements = report["execution_measurements"]["tasks"]
@@ -391,6 +402,26 @@ def test_campaign_report_preserves_not_feasible_r5_as_unresolved(tmp_path: Path)
         assert "Required Experiments Not Feasible" in markdown
         assert "not evidence of safety, confirmation, or refutation" in markdown
         assert "`HYP-static`" in markdown
+    finally:
+        manager.close()
+
+
+def test_campaign_closure_blocks_supported_hypothesis_without_finding(
+    tmp_path: Path,
+) -> None:
+    manager, plan = _closable_campaign(tmp_path, supported_hypothesis=True)
+    try:
+        with pytest.raises(ModelError, match="CG11"):
+            CampaignCloser(manager, "CMP-r4", plan).close(CampaignClosure(
+                architecture_overview="A supported hypothesis without a Finding.",
+                unreviewed_scope=(),
+                residual_risks=(),
+                limitations=(),
+                lessons=(),
+                knowledge_nominations=(),
+                skill_issues=(),
+            ))
+        assert manager.store.get_campaign("CMP-r4").status is CampaignStatus.RUNNING
     finally:
         manager.close()
 
@@ -1406,6 +1437,34 @@ def test_finding_gate_rejects_duplicate_root_causes() -> None:
     assert _derive_finding_deduplication_gate(findings, [findings[0]]) == {
         "pass": True,
         "detail": {"batch_findings": 2, "root_causes": 1},
+    }
+
+
+def test_supported_hypotheses_must_be_linked_to_a_finding() -> None:
+    category_runs = [{
+        "hypothesis_reviews": [
+            {"hypothesis_id": "HYP-supported", "disposition": "SUPPORTED"},
+            {"hypothesis_id": "HYP-review", "disposition": "NEEDS_REVIEW"},
+            {"hypothesis_id": "HYP-rejected", "disposition": "REJECTED"},
+        ],
+    }]
+    assert _derive_supported_hypothesis_finding_gate(category_runs, [
+        {"hypothesis_ids": ["HYP-supported", "HYP-other"]},
+    ]) == {
+        "pass": True,
+        "detail": {
+            "supported_hypothesis_count": 1,
+            "finding_linked_count": 1,
+            "missing_from_findings": [],
+        },
+    }
+    assert _derive_supported_hypothesis_finding_gate(category_runs, []) == {
+        "pass": False,
+        "detail": {
+            "supported_hypothesis_count": 1,
+            "finding_linked_count": 0,
+            "missing_from_findings": ["HYP-supported"],
+        },
     }
 
 

@@ -31,7 +31,7 @@ from reachable_audit.execution import (
     TaskSpec,
     TaskStatus,
 )
-from reachable_audit.models import ModelError
+from reachable_audit.models import CampaignStatus, ModelError
 from reachable_audit.plan_models import BoundaryEdge
 from reachable_audit.knowledge_catalog import KnowledgeCatalog, default_knowledge_root
 from reachable_audit.store import ConflictError
@@ -1004,6 +1004,13 @@ def test_r1_blank_anchor_is_rejected_before_collection(tmp_path: Path) -> None:
         task = coordinator.schedule_r1()[0].task
         task_input = json.loads(manager.artifacts.get_bytes(task.input_refs[0]))
         assert "review_altitude" in task_input["output_contract"]
+        assert task_input["output_example"]["boundary_reviews"][0] == {
+            "edge_id": "<edge_id from supplied boundary edges>",
+            "work_unit_id": plan.work_units[0].work_unit_id,
+            "disposition": "unresolved",
+            "evidence_refs": ["LOC-<path>:<line>"],
+            "rationale": "<specific source-backed disposition>",
+        }
         assert "SCREENED" in task_input["analysis_contract"]
         assert "INSPECTED" in task_input["analysis_contract"]
         assert "HIGH for direct handling" in task_input["analysis_contract"]
@@ -1339,6 +1346,10 @@ def test_abort_cancels_retryable_tasks_and_preserves_host_notes(
         assert task.task_id in report["resource_cleanup"]["cancelled_task_ids"]
         assert backend.claim("late-worker") is None
         assert notes.read_text(encoding="utf-8").startswith(host_content)
+        campaign_export = json.loads(
+            (manager.state_dir / "campaign.json").read_text(encoding="utf-8")
+        )
+        assert campaign_export["status"] == CampaignStatus.BLOCKED.value
         manager.record_skill_review(task.campaign_id, ())
         assert notes.read_text(encoding="utf-8").count("vnext-skill-issues:") == 1
     finally:
@@ -2021,6 +2032,10 @@ def test_discovery_coordinator_commits_r1_and_six_axis_r2(tmp_path: Path) -> Non
     manager, workflow, plan = _workflow(tmp_path, "CMP-coordinator")
     try:
         workflow.run_r0()
+        campaign_export = json.loads(
+            (manager.state_dir / "campaign.json").read_text(encoding="utf-8")
+        )
+        assert campaign_export["status"] == CampaignStatus.RUNNING.value
         backend = ManualExecutionBackend(manager, "CMP-coordinator")
         coordinator = DiscoveryCoordinator(workflow, backend)
         assert len(coordinator.schedule_r1()) == 1
@@ -2064,6 +2079,10 @@ def test_discovery_coordinator_commits_r1_and_six_axis_r2(tmp_path: Path) -> Non
         assert all(item["knowledge_context"]["mechanism_cards"] for item in r2_inputs)
         assert all("SCREENED" in item["analysis_contract"] for item in r2_inputs)
         assert all("review_altitude" in item["output_contract"]["axis_run"] for item in r2_inputs)
+        assert all(
+            item["output_example"]["axis_run"]["entrypoint_reviews"] == []
+            for item in r2_inputs
+        )
         axis_output_refs = {}
         while (axis_lease := backend.claim("hypothesis-worker")) is not None:
             axis = axis_lease.task.operation.split(":", 1)[1]
@@ -2405,6 +2424,19 @@ def test_compact_r2_runs_all_axes_in_one_task_per_work_unit(tmp_path: Path) -> N
             "family": "<planned family>",
             "variant": "<specific variant>",
         }
+        example_axis_runs = task_input["output_example"]["axis_runs"]
+        assert {item["axis"] for item in example_axis_runs} == {
+            axis.value for axis in DiscoveryAxis
+        }
+        surface_example = next(
+            item for item in example_axis_runs if item["axis"] == "surface"
+        )
+        assert surface_example["entrypoint_reviews"] == [{
+            "entrypoint_id": "process-handler",
+            "disposition": "ANALYZED",
+            "evidence_refs": ["LOC-app.py:3"],
+            "rationale": "<source-backed checklist result>",
+        }]
         assert "replace every placeholder" in task_input["output_example"][
             "example_contract_note"
         ]

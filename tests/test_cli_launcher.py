@@ -44,7 +44,7 @@ def test_readme_demo_plans_and_reopens_external_state(tmp_path: Path) -> None:
     readme = (REPOSITORY / "README.md").read_text(encoding="utf-8")
     demo_section = readme.split("## Runnable Demo\n", 1)[1].split("\n## ", 1)[0]
     demo_script = demo_section.split("```bash\n", 1)[1].split("\n```", 1)[0]
-    quick_start = readme.split("## Quick Start\n", 1)[1].split("\n## ", 1)[0]
+    quick_start = readme.split("## Quick Start (Runtime)\n", 1)[1].split("\n## ", 1)[0]
     launcher_function = next(
         line for line in quick_start.splitlines() if line.startswith("vnext()")
     )

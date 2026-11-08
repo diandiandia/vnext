@@ -91,6 +91,25 @@ def test_empty_repository_retains_one_planned_work_unit(tmp_path: Path) -> None:
         )
 
 
+def test_default_work_unit_size_is_bounded_for_single_worker_review(
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "large-component"
+    target.mkdir()
+    for index in range(201):
+        _write(target / "src" / f"module_{index:03}.py", f"VALUE = {index}\n")
+
+    inventory = build_inventory(target, "fixture:default-work-unit-size")
+    plan = create_audit_plan(
+        campaign_id="CMP-default-work-unit-size",
+        inventory=inventory,
+        category_families=["STATE"],
+    )
+
+    assert len(plan.work_units) == 2
+    assert max(len(unit.source_files) for unit in plan.work_units) == 200
+
+
 def test_validate_plan_binds_plan_to_inventory_snapshot_and_digest(
     tmp_path: Path,
 ) -> None:

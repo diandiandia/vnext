@@ -1238,7 +1238,7 @@ def _parser() -> argparse.ArgumentParser:
             "default to INCLUDED"
         ),
     )
-    plan.add_argument("--max-work-unit-files", type=int, default=1000)
+    plan.add_argument("--max-work-unit-files", type=int, default=200)
     plan.add_argument("--max-batch-files", type=int, default=2000)
     plan.add_argument("--max-batch-work-units", type=int, default=4)
     plan.add_argument(

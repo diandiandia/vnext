@@ -2,7 +2,7 @@
 
 ## Optional policy 57 implementation
 
-Current as-implemented baseline: **2026-11-04**, task policy 57, release policy 8.
+Current as-implemented baseline: **2026-11-08**, task policy 57, release policy 8.
 
 - `coverage_critic.py`: `coverage-critic/v1`, initial/final scheduling, source checks,
   exact current revisions, declared worker separation, evidenced operator rejection,
@@ -51,7 +51,7 @@ or declared follow-up workflow, never a higher-level empty array.
 `hypothesis_outcomes` joins canonical Findings by `hypothesis_ids` even if no Finding
 existed at R4; it retains R3/R4/R5 evidence and conservative unresolved outcomes.
 `revival_summaries` distinguishes review from overturn without changing old field
-semantics. `resource_assessment` is separate from CG1-CG10: missing measurements,
+semantics. `resource_assessment` is separate from CG1-CG11: missing measurements,
 configuration or wall limits mean NOT ASSESSED; an observed deadline overrun means
 FAIL. Elapsed time ends at the last recorded task completion/failure or R6 completion,
 not the sum of concurrent worker durations. Claim deadlines include pauses and do
@@ -912,6 +912,8 @@ external container or VM.
   Findings separately, while canonical finding count/yield come from
   `FINDING_RECORDED` events, including Findings recorded after R5. R6 requires one
   `finding_reviews` declaration per recorded Finding and reports R3.5/R4 disagreements.
+  At Campaign closure, CG11 requires every R4 `SUPPORTED` hypothesis to link to a
+  canonical Finding; missing links block closure and are reported by hypothesis ID.
   These checks establish identity, coverage, and resolvable references, not semantic
   correctness or independent human review.
 - **R5:** the experiment artifact records target reference, fidelity, prerequisites,

@@ -2,7 +2,7 @@
 
 ## Optional policy 57 extension
 
-Current as-implemented baseline: **2026-11-04**, task policy 57, release policy 8.
+Current as-implemented baseline: **2026-11-08**, task policy 57, release policy 8.
 
 The Campaign coordinator owns critic scheduling and source-backed proposal
 disposition; workers remain read-only. Critic completion is bound to the current
@@ -318,6 +318,11 @@ Campaign closure is separate from Batch closure. No Batch completion may be repo
 whole-project completion. A finding cannot be promoted to reachable without an evidenced
 path from a declared principal to the affected operation. An unsupported strong impact
 claim must be downgraded or marked NEEDS_REVIEW.
+
+CG11 reconciles every R4 `SUPPORTED` hypothesis with at least one canonical Finding
+before Campaign completion. A missing link blocks closure and is reported by hypothesis
+ID; a Finding may link multiple hypotheses. This is a traceability gate, not a semantic
+validation of the finding or proof of vulnerability.
 
 R4 tasks receive the scoped hypotheses and already-recorded canonical Findings.
 CategoryRuns must review every scoped hypothesis exactly once and attribute each
